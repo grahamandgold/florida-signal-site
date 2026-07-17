@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#ffffff">
+  <meta name="description" content="Explore recent Fort Lauderdale permit activity across official City neighborhood boundaries.">
+  <title>Neighborhood Signal Map — Florida Signal</title>
+  <link rel="icon" href="assets/mark-square.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="neighborhoods">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="live-bar"><div class="shell live-bar__inner"><p><span class="pulse"></span><strong>Florida feed is live</strong></p><p class="live-bar__story" id="live-bar-story">Reading the newest Fort Lauderdale records…</p><p class="live-bar__time" id="live-bar-time">Connecting</p></div></div>
+  <header class="site-header"><div class="shell site-header__inner">
+    <a class="brand" href="index.html" aria-label="Florida Signal home"><img src="assets/lockup-horizontal-transparent.png" alt="Florida Signal — Development Intelligence" width="1000" height="248"></a>
+    <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav"><span></span><span></span><span></span><span class="sr-only">Open navigation</span></button>
+    <nav class="site-nav" id="site-nav" aria-label="Primary navigation"><a href="index.html#signals">Signals</a><a href="neighborhoods.html" aria-current="page">Neighborhoods</a><a href="broward.html">Broward record</a><a href="storm.html">Storm window</a><a href="method.html">How it works</a></nav>
+    <a class="brief-button" href="index.html#brief">Get the 6:15 Brief ↗</a>
+  </div></header>
+  <main id="main">
+    <section class="page-hero"><div class="shell page-hero__grid"><div><p class="eyebrow">86 official neighborhood areas</p><h1>The field desk.</h1></div><div><p class="page-hero__dek">Search the public record before you canvass—or before you fly in: an address, permit, contractor or kind of work. Then drop into the official City neighborhood map and see what is moving nearby.</p><p class="page-hero__meta" data-updated>Connecting to the record…</p></div></div></section>
+    <section class="field-desk" aria-label="Development record search"><div class="shell">
+      <form class="record-search" id="record-search" role="search">
+        <label for="record-search-input"><span>Search the development record</span>Address · permit · contractor · project type</label>
+        <div class="record-search__bar"><input id="record-search-input" name="q" type="search" placeholder="What are you looking for?" autocomplete="off"><button type="submit">Find records <span aria-hidden="true">→</span></button></div>
+        <div class="record-search__quick" aria-label="Quick searches"><span>Quick look:</span><button type="button" data-quick-search="roof">Roofs</button><button type="button" data-quick-search="seawall">Seawalls</button><button type="button" data-quick-search="demolition">Demolition</button><button type="button" data-quick-search="generator">Generators</button></div>
+      </form>
+      <div class="record-search-results" id="record-search-results" hidden aria-live="polite"></div>
+    </div></section>
+    <section class="lead-desk page-section page-section--white"><div class="shell">
+      <div class="section-head"><div><p class="eyebrow"><span class="pulse" aria-hidden="true"></span>Lead desk</p><h2>Turn filings into a field list.</h2></div><p>For contractors, developers, brokers and agents: qualify newly applied work by place, value, operator and scope—then open the underlying public record context.</p></div>
+      <div class="lead-lenses" aria-label="Lead filters"><button class="is-active" type="button" data-lead-lens="new">New applications</button><button type="button" data-lead-lens="unassigned">Operator not listed</button><button type="button" data-lead-lens="high">$250K+ value</button><button type="button" data-lead-lens="storm">Storm + hardening</button><button type="button" data-lead-lens="association">HOA + condo</button></div>
+      <div class="lead-list" id="lead-list"><p class="muted">Building the field list from application-dated records…</p></div>
+      <p class="lead-standard">Lead means a public-record signal worth qualifying. It does not mean the owner is soliciting work, and Florida Signal does not sell private contact data.</p>
+    </div></section>
+    <section class="page-section section--mint"><div class="shell full-map-shell">
+      <aside class="full-map-sidebar"><p class="eyebrow">Neighborhood index</p><h2>Where is it moving?</h2><p><strong id="map-point-count">—</strong> of the newest mapped records. Pick a neighborhood for a current field brief, or use the storm lens for roofs, seawalls, openings, drainage and generator work.</p>
+        <div class="lens-switch" aria-label="Map lens"><button class="is-active" type="button" data-map-lens="all">All activity</button><button type="button" data-map-lens="storm">Storm-ready</button></div>
+        <div class="map-layer-tools">
+          <p class="data-label">Field layers · tap to toggle</p>
+          <div class="map-layer-buttons" aria-label="Map overlays">
+            <button class="is-active" type="button" data-map-overlay="points"><i class="layer-dot layer-dot--points"></i>Records</button>
+            <button type="button" data-map-overlay="heat"><i class="layer-dot layer-dot--heat"></i>Heat</button>
+            <button class="is-active" type="button" data-map-overlay="neighborhoods"><i class="layer-dot layer-dot--areas"></i>Neighborhoods</button>
+            <button type="button" data-map-overlay="zip"><i class="layer-dot layer-dot--zip"></i>ZIP areas</button>
+            <button type="button" data-map-overlay="congress"><i class="layer-dot layer-dot--congress"></i>U.S. House</button>
+            <button type="button" data-map-overlay="senate"><i class="layer-dot layer-dot--senate"></i>FL Senate</button>
+            <button type="button" data-map-overlay="house"><i class="layer-dot layer-dot--house"></i>FL House</button>
+            <button type="button" data-map-overlay="corridor"><i class="layer-dot layer-dot--corridor"></i>Broward corridor</button>
+          </div>
+          <p class="map-layer-status" id="map-layer-status">Neighborhoods: City GIS · legislative + ZIP: U.S. Census TIGERweb</p>
+        </div>
+        <div class="full-neighborhood-list" id="full-neighborhood-list"><p class="muted">Matching filings to City boundaries…</p></div>
+      </aside>
+      <div id="full-map" class="full-map" role="application" aria-label="Interactive neighborhood permit map"></div>
+    </div></section>
+    <section class="corridor-editorial page-section page-section--white"><div class="shell corridor-editorial__grid">
+      <figure class="corridor-editorial__image"><img src="assets/photos/brightline-fort-lauderdale-station-editorial-adobe-561906123.jpg" alt="Brightline inter-city train at Fort Lauderdale station in November 2022" width="2400" height="1600"><figcaption>File image · Fort Lauderdale · November 13, 2022 · Editorial use only · Adobe Stock 561906123</figcaption></figure>
+      <div class="corridor-editorial__copy"><p class="eyebrow">Broward corridor lens</p><h2>The station changes the radius.</h2><p>Florida Signal’s corridor layer gives brokers, developers and frequent fliers a quick way to read filings near the transportation spine. Use it to compare the Fort Lauderdale station area with downtown, airport, Hollywood and Pompano activity—then open the exact public records behind the points.</p><a class="button button--ink" href="#full-map" data-open-map-overlay="corridor">Open the Broward corridor layer ↑</a><p class="corridor-editorial__license">Editorial context only. Brightline is not shown as a sponsor or endorser.</p></div>
+    </div></section>
+    <section class="standards section"><div class="shell standards__grid"><p class="eyebrow">Map standard</p><p>Counts describe the current map sample, not a complete neighborhood ranking. Boundary names and shapes are published by the City of Fort Lauderdale.</p><a class="text-link" href="method.html">Read the method →</a></div></section>
+  </main>
+  <footer class="site-footer"><div class="shell site-footer__grid"><div><img src="assets/lockup-horizontal-transparent.png" alt="Florida Signal" width="1000" height="248"><p>Development intelligence for Fort Lauderdale and Broward County.</p></div><div><p class="footer-title">Explore</p><a href="index.html#signals">Signals</a><a href="broward.html">Broward record</a><a href="storm.html">Storm window</a></div><div><p class="footer-title">About</p><a href="method.html">Method + sources</a><a href="mailto:desk@thefloridasignal.com">Send a tip</a></div><div class="footer-brief"><p class="footer-title">Tomorrow starts tonight.</p><p>Get the 6:15 Brief.</p><a href="index.html#brief">Join free →</a></div></div><div class="shell site-footer__bottom"><p>© <span data-year></span> Florida Signal · Powered by Graham &amp; Gold LLC</p><p>Official City boundaries · live public records</p></div></footer>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script><script src="app.js" defer></script>
+</body></html>

@@ -1,814 +1,433 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Florida Signal — Broward development intelligence, curated by a journalist</title>
-<meta name="description" content="Daily permit tracking and signal detection for Fort Lauderdale and Broward County. Assemblages, entitlements, and capital movement — surfaced before they become news. Curated by a journalist with 20+ years covering Florida." />
-
-<script src="https://cdn.tailwindcss.com"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
-
-<script>
-tailwind.config = {
-  theme: {
-    extend: {
-      fontFamily: {
-        display: ['Archivo', 'system-ui', 'sans-serif'],
-        sans: ['Instrument Sans', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
-      },
-      colors: {
-        ink: { 950: '#05080F', 900: '#0A0F1C', 850: '#0B1220', 800: '#0F172A', 700: '#1E293B', 600: '#334155' },
-        signal: { DEFAULT: '#22D3EE', 50: '#ECFEFF', 300: '#67E8F9', 400: '#22D3EE', 500: '#06B6D4', 600: '#0891B2' },
-        navy: { DEFAULT: '#0A2540', deep: '#041026' },
-        live: '#10B981', amber: '#F59E0B', violet: '#A78BFA',
-      },
-    },
-  },
-};
-</script>
-
-<style>
-  html, body { background: #05080F; }
-  body { font-family: 'Instrument Sans', system-ui, sans-serif; color: #E2E8F0; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-  .font-display { font-family: 'Archivo', system-ui, sans-serif; letter-spacing: -0.02em; }
-  .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
-
-  .bg-grid { background-image: linear-gradient(rgba(34, 211, 238, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(34, 211, 238, 0.04) 1px, transparent 1px); background-size: 48px 48px; }
-  .bg-grid-fine { background-image: linear-gradient(rgba(148, 163, 184, 0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.035) 1px, transparent 1px); background-size: 24px 24px; }
-  .glow-cyan { background: radial-gradient(ellipse 70% 60% at 50% 0%, rgba(34, 211, 238, 0.15) 0%, transparent 60%); }
-
-  @keyframes pulse-dot { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.35); opacity: 0.6; } }
-  .pulse-dot { animation: pulse-dot 1.8s ease-in-out infinite; }
-
-  @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-  .marquee-track { animation: marquee 45s linear infinite; }
-
-  @keyframes fade-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-  .fade-up { animation: fade-up 0.8s ease-out both; }
-  .fade-up-delay-1 { animation-delay: 0.1s; }
-  .fade-up-delay-2 { animation-delay: 0.2s; }
-  .fade-up-delay-3 { animation-delay: 0.3s; }
-
-  @keyframes modal-in { from { opacity: 0; transform: translateY(20px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
-  @keyframes backdrop-in { from { opacity: 0; } to { opacity: 1; } }
-  .modal-backdrop-anim { animation: backdrop-in 0.35s ease-out both; }
-  .modal-card-anim { animation: modal-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
-
-  .divider-dashed { background-image: linear-gradient(to right, rgba(148,163,184,0.3) 50%, transparent 50%); background-size: 8px 1px; background-repeat: repeat-x; height: 1px; }
-
-  .btn-signal { background: #22D3EE; color: #041026; border: 1px solid rgba(34, 211, 238, 0.5); box-shadow: 0 0 0 1px rgba(34,211,238,0.2), 0 10px 40px -10px rgba(34,211,238,0.4); transition: all 200ms ease; }
-  .btn-signal:hover { background: #67E8F9; box-shadow: 0 0 0 1px rgba(34,211,238,0.4), 0 14px 50px -8px rgba(34,211,238,0.6); transform: translateY(-1px); }
-  .btn-ghost { background: transparent; color: #E2E8F0; border: 1px solid rgba(148, 163, 184, 0.25); transition: all 200ms ease; }
-  .btn-ghost:hover { border-color: rgba(34, 211, 238, 0.6); color: #22D3EE; }
-
-  .card-hover { transition: all 250ms ease; border: 1px solid rgba(148, 163, 184, 0.12); }
-  .card-hover:hover { border-color: rgba(34, 211, 238, 0.35); transform: translateY(-2px); }
-
-  .map-glow { position: relative; background: linear-gradient(180deg, #0B1220 0%, #05080F 100%); border: 1px solid rgba(34, 211, 238, 0.18); box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.05), 0 40px 80px -20px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.04); }
-  .map-glow::before { content: ''; position: absolute; inset: -1px; border-radius: inherit; background: linear-gradient(135deg, rgba(34,211,238,0.3) 0%, transparent 40%, transparent 60%, rgba(34,211,238,0.15) 100%); z-index: -1; filter: blur(20px); opacity: 0.5; }
-
-  .pill { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 8px; border-radius: 3px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
-  .pill::before { content: ''; width: 6px; height: 6px; border-radius: 9999px; }
-  .pill-assemblage { background: rgba(167, 139, 250, 0.1); color: #C4B5FD; border: 1px solid rgba(167, 139, 250, 0.25); }
-  .pill-assemblage::before { background: #A78BFA; }
-  .pill-entitlement { background: rgba(245, 158, 11, 0.1); color: #FCD34D; border: 1px solid rgba(245, 158, 11, 0.25); }
-  .pill-entitlement::before { background: #F59E0B; }
-  .pill-execution { background: rgba(16, 185, 129, 0.1); color: #6EE7B7; border: 1px solid rgba(16, 185, 129, 0.25); }
-  .pill-execution::before { background: #10B981; }
-  .pill-reinvestment { background: rgba(34, 211, 238, 0.1); color: #67E8F9; border: 1px solid rgba(34, 211, 238, 0.25); }
-  .pill-reinvestment::before { background: #22D3EE; }
-
-  .scanlines::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0, transparent 2px, rgba(255,255,255,0.008) 2px, rgba(255,255,255,0.008) 3px); pointer-events: none; }
-
-  .input-signal { background: rgba(11, 18, 32, 0.9); border: 1px solid rgba(148, 163, 184, 0.2); color: #F8FAFC; transition: border 200ms ease; }
-  .input-signal:focus { outline: none; border-color: #22D3EE; box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15); }
-  .input-signal::placeholder { color: #64748B; }
-
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-  .nav-blur { background: rgba(5, 8, 15, 0.8); backdrop-filter: blur(12px) saturate(180%); -webkit-backdrop-filter: blur(12px) saturate(180%); border-bottom: 1px solid rgba(148, 163, 184, 0.08); }
-
-  .modal-glow { position: relative; }
-  .modal-glow::before { content: ''; position: absolute; inset: -1px; border-radius: inherit; background: linear-gradient(135deg, rgba(34,211,238,0.4) 0%, transparent 40%, transparent 60%, rgba(34,211,238,0.2) 100%); z-index: -1; filter: blur(24px); opacity: 0.6; }
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="Florida Signal turns Fort Lauderdale and Broward public records into useful development intelligence, block by block.">
+  <title>Florida Signal — Development intelligence before the headline</title>
+  <link rel="icon" href="assets/mark-square.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
+<body data-page="home">
+  <a class="skip-link" href="#main">Skip to content</a>
 
-<body class="font-sans bg-ink-950 text-slate-200 min-h-screen overflow-x-hidden">
-
-<!-- NAV -->
-<nav class="nav-blur fixed top-0 left-0 right-0 z-50">
-  <div class="max-w-[1400px] mx-auto px-6 lg:px-10 h-16 flex items-center justify-between">
-    <a href="https://www.thefloridasignal.com" class="flex items-center gap-2.5 group">
-      <span class="font-display font-black text-white text-[19px] tracking-[-0.02em]">FLORIDA</span>
-      <span class="font-display font-black text-signal text-[19px] tracking-[-0.02em]">SIGNAL</span>
-    </a>
-    <div class="flex items-center gap-6">
-      <a href="https://www.thefloridasignal.com" class="hidden md:inline-block font-mono text-[11px] tracking-[0.14em] uppercase text-slate-400 hover:text-signal transition-colors">View All Briefs</a>
-      <a href="#briefs" class="btn-signal font-mono text-[11px] tracking-[0.14em] uppercase font-semibold px-4 py-2.5 rounded-sm">Get the Free Brief</a>
+  <div class="live-bar" aria-label="Live data status">
+    <div class="shell live-bar__inner">
+      <p><span class="pulse" aria-hidden="true"></span><strong>Florida feed is live</strong></p>
+      <p class="live-bar__story" id="live-bar-story">Reading the newest Fort Lauderdale records…</p>
+      <p class="live-bar__time" id="live-bar-time">Connecting</p>
     </div>
   </div>
-</nav>
 
-<!-- HERO -->
-<section class="relative pt-40 pb-24 lg:pt-48 lg:pb-32 overflow-hidden">
-  <div class="absolute inset-0 bg-grid opacity-60 pointer-events-none"></div>
-  <div class="absolute inset-0 glow-cyan pointer-events-none"></div>
-  <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[120%] h-px bg-gradient-to-r from-transparent via-signal/30 to-transparent pointer-events-none"></div>
-
-  <div class="relative max-w-[1400px] mx-auto px-6 lg:px-10">
-    <div class="grid lg:grid-cols-12 gap-12 items-start">
-
-      <div class="lg:col-span-7 fade-up">
-        <div class="flex items-center gap-3 mb-8">
-          <span class="relative flex items-center justify-center w-2.5 h-2.5">
-            <span class="absolute inset-0 bg-live rounded-full pulse-dot"></span>
-          </span>
-          <span class="font-mono text-[10px] tracking-[0.2em] uppercase text-slate-400">Broward County · Live Intelligence Feed</span>
-        </div>
-
-        <h1 class="font-display font-black text-white text-[44px] sm:text-[56px] lg:text-[76px] leading-[0.95] tracking-[-0.03em] mb-6">
-          The signals behind<br/>
-          Broward's next<br/>
-          <span class="text-signal">billion dollars.</span>
-        </h1>
-
-        <p class="text-slate-400 text-lg lg:text-xl leading-relaxed max-w-2xl mb-4 fade-up fade-up-delay-1">
-          Every day we pull Fort Lauderdale permits and map signal activity across all 31 Broward municipalities — surfacing assemblages, entitlements, and capital movement <em class="text-white not-italic">before</em> they become news.
-        </p>
-        <p class="text-slate-500 text-base leading-relaxed max-w-2xl mb-10 fade-up fade-up-delay-1">
-          Curated by a journalist with <span class="text-slate-300 font-medium">20+ years covering Florida</span>. Broward first. The rest of the state next.
-        </p>
-
-        <form id="signup" data-members-form="signup" class="max-w-xl fade-up fade-up-delay-2">
-          <div class="flex flex-col sm:flex-row gap-2 p-1.5 border border-slate-700/60 rounded-sm bg-ink-900/80 backdrop-blur">
-            <input data-members-email type="email" required placeholder="you@firm.com" aria-label="Email address" class="input-signal flex-1 px-4 py-3.5 rounded-sm font-mono text-sm bg-transparent" style="border: none; box-shadow: none;" />
-            <button type="submit" class="btn-signal font-mono text-[12px] tracking-[0.12em] uppercase font-semibold px-6 py-3.5 rounded-sm whitespace-nowrap">
-              Get the Free Weekly Brief →
-            </button>
-          </div>
-          <p class="mt-3 font-mono text-[11px] tracking-[0.06em] text-slate-500">
-            Free · No spam · Read by builders, brokers, and capital allocators
-          </p>
-        </form>
-
-        <div class="mt-12 flex flex-wrap items-center gap-x-8 gap-y-3 fade-up fade-up-delay-3">
-          <div class="flex items-center gap-2">
-            <svg class="w-4 h-4 text-signal" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-            <span class="font-mono text-[11px] tracking-[0.08em] uppercase text-slate-400">20+ years of Florida journalism</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <svg class="w-4 h-4 text-signal" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-            <span class="font-mono text-[11px] tracking-[0.08em] uppercase text-slate-400">Daily permit tracking</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <svg class="w-4 h-4 text-signal" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-            <span class="font-mono text-[11px] tracking-[0.08em] uppercase text-slate-400">154,751 permits analyzed</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="lg:col-span-5 fade-up fade-up-delay-2">
-        <div class="relative">
-          <div class="absolute -inset-px bg-gradient-to-br from-signal/30 via-transparent to-violet/20 rounded-sm blur-xl opacity-60"></div>
-          <div class="relative bg-ink-900/90 border border-slate-700/40 rounded-sm overflow-hidden">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-slate-700/40 bg-ink-850">
-              <div class="flex items-center gap-2">
-                <span class="w-2 h-2 rounded-full bg-live pulse-dot"></span>
-                <span class="font-mono text-[10px] tracking-[0.14em] uppercase text-slate-400">live signal feed</span>
-              </div>
-              <span class="font-mono text-[10px] text-slate-500">BCPA · LauderBuild · DBPR</span>
-            </div>
-            <div class="divide-y divide-slate-800/80">
-              <div class="px-4 py-3.5 hover:bg-signal/[0.03] transition-colors">
-                <div class="flex items-center justify-between mb-1.5"><span class="pill pill-assemblage">Assemblage</span><span class="font-mono text-[10px] text-slate-500">2m ago</span></div>
-                <div class="text-white text-sm font-medium">Hollywood Beach Hotel Site</div>
-                <div class="font-mono text-[11px] text-slate-500 mt-0.5">3 parcels · coordinated acquisition</div>
-              </div>
-              <div class="px-4 py-3.5 hover:bg-signal/[0.03] transition-colors">
-                <div class="flex items-center justify-between mb-1.5"><span class="pill pill-entitlement">Entitlement</span><span class="font-mono text-[10px] text-slate-500">14m ago</span></div>
-                <div class="text-white text-sm font-medium">Modera Pompano — 348 units</div>
-                <div class="font-mono text-[11px] text-slate-500 mt-0.5">Federal Hwy corridor · approval stage</div>
-              </div>
-              <div class="px-4 py-3.5 hover:bg-signal/[0.03] transition-colors">
-                <div class="flex items-center justify-between mb-1.5"><span class="pill pill-execution">Execution</span><span class="font-mono text-[10px] text-slate-500">1h ago</span></div>
-                <div class="text-white text-sm font-medium">RISE Tower</div>
-                <div class="font-mono text-[11px] text-slate-500 mt-0.5">$45.0M · structural permit issued</div>
-              </div>
-              <div class="px-4 py-3.5 hover:bg-signal/[0.03] transition-colors">
-                <div class="flex items-center justify-between mb-1.5"><span class="pill pill-execution">Execution</span><span class="font-mono text-[10px] text-slate-500">3h ago</span></div>
-                <div class="text-white text-sm font-medium">1400 Progresso Storage</div>
-                <div class="font-mono text-[11px] text-slate-500 mt-0.5">$6.5M · multi-permit milestone</div>
-              </div>
-              <div class="px-4 py-3.5 hover:bg-signal/[0.03] transition-colors">
-                <div class="flex items-center justify-between mb-1.5"><span class="pill pill-reinvestment">Reinvestment</span><span class="font-mono text-[10px] text-slate-500">6h ago</span></div>
-                <div class="text-white text-sm font-medium">Galt Ocean Mile</div>
-                <div class="font-mono text-[11px] text-slate-500 mt-0.5">Capital cycle · 4 buildings</div>
-              </div>
-            </div>
-            <div class="px-4 py-3 border-t border-slate-700/40 bg-ink-850 flex items-center justify-between">
-              <span class="font-mono text-[10px] text-slate-500">showing 5 of 47</span>
-              <span class="font-mono text-[10px] text-signal tracking-[0.08em] uppercase">refreshing</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-</section>
-
-<!-- SIGNAL MAP -->
-<section class="relative py-24 lg:py-32 border-t border-slate-700/40">
-  <div class="max-w-[1400px] mx-auto px-6 lg:px-10">
-    <div class="max-w-2xl mb-8">
-      <div class="flex items-center gap-2 mb-4">
-        <span class="w-6 h-px bg-signal"></span>
-        <span class="font-mono text-[10px] tracking-[0.2em] uppercase text-signal">Intelligence Map</span>
-      </div>
-      <h2 class="font-display font-black text-white text-4xl lg:text-5xl tracking-[-0.03em] leading-[0.95] mb-3">Signals mapped across Broward County</h2>
-      <p class="text-slate-400 text-lg leading-relaxed">47 active signals · $361M in tracked development value</p>
-    </div>
-
-    <div class="relative rounded-sm overflow-hidden">
-      <a href="https://grahamandgold.github.io/florida-signal-map/?ref=brief.thefloridasignal.com" target="_blank" rel="noopener" class="map-glow group block">
-        <img src="https://grahamandgold.github.io/florida-signal-map/" alt="Broward County Intelligence Map" class="w-full h-auto opacity-95 group-hover:opacity-100 transition-opacity duration-300" />
-        <div class="absolute top-6 left-6 hidden md:flex flex-col gap-2">
-          <div class="bg-ink-900/90 backdrop-blur border border-slate-700/50 px-3 py-2 rounded-sm">
-            <div class="font-mono text-[9px] tracking-[0.14em] uppercase text-slate-400">Fort Lauderdale</div>
-            <div class="font-display font-bold text-white text-lg leading-none mt-0.5">23 <span class="text-slate-500 text-xs font-normal">signals</span></div>
-          </div>
-          <div class="bg-ink-900/90 backdrop-blur border border-slate-700/50 px-3 py-2 rounded-sm">
-            <div class="font-mono text-[9px] tracking-[0.14em] uppercase text-slate-400">Pompano Beach</div>
-            <div class="font-display font-bold text-white text-lg leading-none mt-0.5">11 <span class="text-slate-500 text-xs font-normal">signals</span></div>
-          </div>
-        </div>
-        <div class="absolute bottom-6 right-6 bg-ink-900/90 backdrop-blur border border-signal/30 px-4 py-3 rounded-sm">
-          <div class="font-mono text-[9px] tracking-[0.14em] uppercase text-signal flex items-center gap-1.5">
-            <span class="w-1.5 h-1.5 rounded-full bg-live pulse-dot"></span>Updated hourly
-          </div>
-          <div class="font-mono text-[10px] text-slate-400 mt-0.5">Last sync · moments ago</div>
-        </div>
+  <header class="site-header">
+    <div class="shell site-header__inner">
+      <a class="brand" href="index.html" aria-label="Florida Signal home">
+        <img src="assets/lockup-horizontal-transparent.png" alt="Florida Signal — Development Intelligence" width="1000" height="248">
       </a>
-    </div>
-
-    <div class="px-2 pt-4 pb-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-      <p class="font-mono text-xs text-slate-500 max-w-2xl">Interactive. Filter by category. Drill into any permit. 154,751 records · 31 Broward municipalities.</p>
-      <a href="https://grahamandgold.github.io/florida-signal-map/?ref=brief.thefloridasignal.com" target="_blank" rel="noopener" class="btn-signal font-mono text-[12px] tracking-[0.14em] uppercase font-semibold px-6 py-4 rounded-sm inline-flex items-center gap-2 whitespace-nowrap">
-        Open Interactive Signal Map
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
-      </a>
-    </div>
-  </div>
-</section>
-
-<!-- LATEST BRIEFS -->
-<section id="briefs" class="relative py-24 lg:py-28 border-t border-slate-700/40">
-  <div class="max-w-[1400px] mx-auto px-6 lg:px-10">
-    <div class="flex items-end justify-between mb-12 flex-wrap gap-4">
-      <div>
-        <div class="flex items-center gap-2 mb-4">
-          <span class="w-6 h-px bg-signal"></span>
-          <span class="font-mono text-[10px] tracking-[0.2em] uppercase text-signal">Dispatches</span>
-        </div>
-        <h2 class="font-display font-black text-white text-4xl lg:text-5xl tracking-[-0.03em] leading-[0.95]">Latest briefs</h2>
-      </div>
-      <a href="https://www.thefloridasignal.com" class="btn-ghost font-mono text-[11px] tracking-[0.14em] uppercase font-semibold px-5 py-3 rounded-sm inline-flex items-center gap-2">
-        All Briefs
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
-      </a>
-    </div>
-
-    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-
-      <a href="https://www.thefloridasignal.com" class="card-hover bg-ink-900/40 rounded-sm overflow-hidden group">
-        <div class="aspect-[16/10] overflow-hidden bg-ink-850 relative">
-          <img src="https://picsum.photos/id/1015/800/500" alt="" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"/>
-          <div class="absolute top-3 left-3"><span class="pill pill-assemblage">Assemblage</span></div>
-          <div class="absolute bottom-0 inset-x-0 h-20 bg-gradient-to-t from-ink-950 to-transparent"></div>
-        </div>
-        <div class="p-6">
-          <div class="font-mono text-[10px] tracking-[0.14em] uppercase text-slate-500 mb-3 flex items-center gap-3">
-            <span>Issue 007</span><span class="w-1 h-1 rounded-full bg-slate-600"></span><span>Apr 11, 2026</span>
-          </div>
-          <h3 class="font-display font-bold text-white text-xl leading-tight mb-3 group-hover:text-signal transition-colors">Bay Colony's quiet $30M assemblage</h3>
-          <p class="text-slate-400 text-sm leading-relaxed mb-5">Coordinated waterfront parcel acquisitions suggest institutional assemblage before any public listing. Three signals, one buyer pattern.</p>
-          <span class="font-mono text-[11px] tracking-[0.1em] uppercase text-signal inline-flex items-center gap-1.5">Read Brief<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></span>
-        </div>
-      </a>
-
-      <a href="https://www.thefloridasignal.com" class="card-hover bg-ink-900/40 rounded-sm overflow-hidden group">
-        <div class="aspect-[16/10] overflow-hidden bg-ink-850 relative">
-          <img src="https://picsum.photos/id/1067/800/500" alt="" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"/>
-          <div class="absolute top-3 left-3"><span class="pill pill-execution">Execution</span></div>
-          <div class="absolute bottom-0 inset-x-0 h-20 bg-gradient-to-t from-ink-950 to-transparent"></div>
-        </div>
-        <div class="p-6">
-          <div class="font-mono text-[10px] tracking-[0.14em] uppercase text-slate-500 mb-3 flex items-center gap-3">
-            <span>Issue 006</span><span class="w-1 h-1 rounded-full bg-slate-600"></span><span>Apr 04, 2026</span>
-          </div>
-          <h3 class="font-display font-bold text-white text-xl leading-tight mb-3 group-hover:text-signal transition-colors">Pier 66 finally moves dirt</h3>
-          <p class="text-slate-400 text-sm leading-relaxed mb-5">The south parcel crosses from planning to execution — first infrastructure permit filed after years of speculation. What it means for the basin.</p>
-          <span class="font-mono text-[11px] tracking-[0.1em] uppercase text-signal inline-flex items-center gap-1.5">Read Brief<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></span>
-        </div>
-      </a>
-
-      <a href="https://www.thefloridasignal.com" class="card-hover bg-ink-900/40 rounded-sm overflow-hidden group">
-        <div class="aspect-[16/10] overflow-hidden bg-ink-850 relative">
-          <img src="https://picsum.photos/id/164/800/500" alt="" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"/>
-          <div class="absolute top-3 left-3"><span class="pill pill-entitlement">Entitlement</span></div>
-          <div class="absolute bottom-0 inset-x-0 h-20 bg-gradient-to-t from-ink-950 to-transparent"></div>
-        </div>
-        <div class="p-6">
-          <div class="font-mono text-[10px] tracking-[0.14em] uppercase text-slate-500 mb-3 flex items-center gap-3">
-            <span>Issue 005</span><span class="w-1 h-1 rounded-full bg-slate-600"></span><span>Mar 28, 2026</span>
-          </div>
-          <h3 class="font-display font-bold text-white text-xl leading-tight mb-3 group-hover:text-signal transition-colors">348 units on Federal Highway</h3>
-          <p class="text-slate-400 text-sm leading-relaxed mb-5">A multifamily project enters formal approvals on the Federal corridor — density signal, parking waivers, and what the surrounding three blocks already told us.</p>
-          <span class="font-mono text-[11px] tracking-[0.1em] uppercase text-signal inline-flex items-center gap-1.5">Read Brief<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></span>
-        </div>
-      </a>
-
-      <a href="https://www.thefloridasignal.com" class="card-hover bg-ink-900/40 rounded-sm overflow-hidden group md:col-span-2 lg:col-span-3 lg:flex lg:items-stretch">
-        <div class="aspect-[16/10] lg:aspect-auto lg:w-1/2 overflow-hidden bg-ink-850 relative">
-          <img src="https://picsum.photos/id/260/1200/600" alt="" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"/>
-          <div class="absolute top-3 left-3 flex gap-2 flex-wrap">
-            <span class="pill pill-execution">Execution</span>
-            <span class="font-mono text-[10px] tracking-[0.14em] uppercase bg-signal text-navy-deep px-2 py-1 rounded-sm font-semibold">Signal of the Week</span>
-          </div>
-          <div class="absolute bottom-0 inset-x-0 h-32 bg-gradient-to-t from-ink-950 to-transparent"></div>
-        </div>
-        <div class="p-6 lg:p-10 lg:w-1/2 flex flex-col justify-center">
-          <div class="font-mono text-[10px] tracking-[0.14em] uppercase text-slate-500 mb-3 flex items-center gap-3">
-            <span>Issue 008</span><span class="w-1 h-1 rounded-full bg-slate-600"></span><span>Apr 18, 2026</span>
-          </div>
-          <h3 class="font-display font-bold text-white text-2xl lg:text-3xl leading-tight mb-4 group-hover:text-signal transition-colors">The Gore Building is coming down — here's what replaces it</h3>
-          <p class="text-slate-400 text-base leading-relaxed mb-6">Demolition permits at the Gore Building mark a pivotal step in the long-delayed government center redevelopment. We traced the filings, the contractor, and three adjacent parcels quietly assembled over 18 months.</p>
-          <span class="font-mono text-[11px] tracking-[0.1em] uppercase text-signal inline-flex items-center gap-1.5">Read the full dispatch<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></span>
-        </div>
-      </a>
-
-    </div>
-  </div>
-</section>
-
-<!-- BY THE NUMBERS -->
-<section class="relative py-24 border-t border-slate-700/40 bg-ink-900/40 overflow-hidden">
-  <div class="absolute inset-0 bg-grid opacity-30 pointer-events-none"></div>
-  <div class="relative max-w-[1400px] mx-auto px-6 lg:px-10">
-    <div class="max-w-3xl mb-12">
-      <div class="flex items-center gap-2 mb-4">
-        <span class="w-6 h-px bg-signal"></span>
-        <span class="font-mono text-[10px] tracking-[0.2em] uppercase text-signal">The Broward Pipeline</span>
-      </div>
-      <h2 class="font-display font-black text-white text-4xl lg:text-5xl tracking-[-0.03em] leading-[0.95]">By the numbers.</h2>
-      <p class="mt-4 text-slate-400 max-w-2xl">Broward is one of the fastest-building counties in the Southeast — 2 million residents, 31 municipalities, and a pipeline that moves faster than the news cycle covering it.</p>
-    </div>
-
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-px bg-slate-700/40 border border-slate-700/40 rounded-sm overflow-hidden">
-      <div class="bg-ink-950 p-8 lg:p-10">
-        <div class="font-mono text-[10px] tracking-[0.14em] uppercase text-slate-500 mb-3">Permits analyzed</div>
-        <div class="font-display font-black text-white text-5xl lg:text-6xl tracking-[-0.04em] leading-none">154,751</div>
-        <div class="font-mono text-[11px] text-slate-500 mt-3">cleaned · indexed · searchable</div>
-      </div>
-      <div class="bg-ink-950 p-8 lg:p-10">
-        <div class="font-mono text-[10px] tracking-[0.14em] uppercase text-slate-500 mb-3">Broward municipalities</div>
-        <div class="font-display font-black text-white text-5xl lg:text-6xl tracking-[-0.04em] leading-none">31</div>
-        <div class="font-mono text-[11px] text-slate-500 mt-3">covered in expansion roadmap</div>
-      </div>
-      <div class="bg-ink-950 p-8 lg:p-10">
-        <div class="font-mono text-[10px] tracking-[0.14em] uppercase text-slate-500 mb-3">Active signals</div>
-        <div class="font-display font-black text-signal text-5xl lg:text-6xl tracking-[-0.04em] leading-none">47</div>
-        <div class="font-mono text-[11px] text-slate-500 mt-3">tracked this week</div>
-      </div>
-      <div class="bg-ink-950 p-8 lg:p-10">
-        <div class="font-mono text-[10px] tracking-[0.14em] uppercase text-slate-500 mb-3">Tracked value</div>
-        <div class="font-display font-black text-white text-5xl lg:text-6xl tracking-[-0.04em] leading-none">$361M</div>
-        <div class="font-mono text-[11px] text-slate-500 mt-3">across active development</div>
-      </div>
-    </div>
-
-    <div class="mt-8 p-6 lg:p-8 border border-slate-700/40 rounded-sm bg-ink-950 flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-8">
-      <svg class="w-8 h-8 text-signal flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-      <p class="text-slate-300 text-base lg:text-lg leading-relaxed">
-        <span class="text-white font-semibold">Our average signal surfaces weeks before local news coverage.</span>
-        <span class="text-slate-400">&nbsp;Demolition permits, tenant build-outs, and quiet parcel acquisitions don't make headlines — until they do. We read them first.</span>
-      </p>
-    </div>
-  </div>
-</section>
-
-<!-- FREE NEWSLETTER CTA SECTION -->
-<section class="relative py-28 border-t border-slate-700/40 overflow-hidden">
-  <div class="absolute inset-0 glow-cyan pointer-events-none opacity-50"></div>
-  <div class="absolute inset-0 bg-grid opacity-20 pointer-events-none"></div>
-
-  <div class="relative max-w-4xl mx-auto px-6 lg:px-10 text-center">
-    <div class="inline-flex items-center gap-2.5 px-4 py-2 rounded-full border border-signal/40 bg-signal/5 mb-8 fade-up">
-      <span class="relative flex items-center justify-center w-2 h-2"><span class="absolute inset-0 bg-live rounded-full pulse-dot"></span></span>
-      <span class="font-mono text-[10px] tracking-[0.2em] uppercase text-signal">Free Weekly Brief · Every Friday</span>
-    </div>
-
-    <h2 class="font-display font-black text-white text-4xl sm:text-5xl lg:text-6xl tracking-[-0.03em] leading-[0.95] mb-6 fade-up fade-up-delay-1">
-      Get the signal.<br/><span class="text-signal">Free.</span>
-    </h2>
-
-    <p class="text-slate-400 text-lg lg:text-xl leading-relaxed max-w-2xl mx-auto mb-14 fade-up fade-up-delay-2">
-      One weekly brief. Permit-level development intelligence for Fort Lauderdale and Broward — curated by a veteran journalist, delivered every Friday morning.
-    </p>
-
-    <form data-members-form="signup" class="max-w-xl mx-auto fade-up fade-up-delay-3">
-      <div class="flex flex-col sm:flex-row gap-2 p-1.5 border border-slate-700/60 rounded-sm bg-ink-900/80 backdrop-blur">
-        <input data-members-email type="email" required placeholder="you@firm.com" aria-label="Email address" class="input-signal flex-1 px-4 py-4 rounded-sm font-mono text-sm bg-transparent" style="border: none; box-shadow: none;" />
-        <button type="submit" class="btn-signal font-mono text-[12px] tracking-[0.14em] uppercase font-semibold px-8 py-4 rounded-sm whitespace-nowrap">Get the Free Weekly Brief →</button>
-      </div>
-      <p class="mt-4 font-mono text-[11px] tracking-[0.06em] text-slate-500">Free · No spam · Read by builders, brokers, and capital allocators</p>
-    </form>
-  </div>
-</section>
-
-<!-- WHAT WE'VE TRACKED -->
-<section class="relative py-24 lg:py-32 border-t border-slate-700/40">
-  <div class="max-w-[1400px] mx-auto px-6 lg:px-10">
-    <div class="grid lg:grid-cols-12 gap-12 lg:gap-20">
-
-      <div class="lg:col-span-4 lg:sticky lg:top-24 lg:self-start">
-        <div class="flex items-center gap-2 mb-4">
-          <span class="w-6 h-px bg-signal"></span>
-          <span class="font-mono text-[10px] tracking-[0.2em] uppercase text-signal">Ledger</span>
-        </div>
-        <h2 class="font-display font-black text-white text-4xl lg:text-5xl tracking-[-0.03em] leading-[0.95] mb-6">What we've<br/>tracked so far.</h2>
-        <p class="text-slate-400 text-base leading-relaxed mb-6">Since launch, Florida Signal has identified early development activity across Fort Lauderdale using permit-level intelligence — revealing patterns before they become visible in traditional coverage.</p>
-        <p class="text-slate-500 text-sm leading-relaxed">Each entry was surfaced through public records analysis, cross-referenced across LauderBuild, BCPA filings, and municipal permit systems, then verified by a journalist before publication.</p>
-        <div class="mt-8 divider-dashed"></div>
-        <div class="mt-8 grid grid-cols-2 gap-4">
-          <div><div class="font-display font-black text-white text-3xl">12</div><div class="font-mono text-[10px] tracking-[0.14em] uppercase text-slate-500 mt-1">confirmed signals</div></div>
-          <div><div class="font-display font-black text-signal text-3xl">4</div><div class="font-mono text-[10px] tracking-[0.14em] uppercase text-slate-500 mt-1">signal categories</div></div>
-        </div>
-      </div>
-
-      <div class="lg:col-span-8">
-        <div class="space-y-px bg-slate-700/30 border border-slate-700/40 rounded-sm overflow-hidden">
-
-          <div class="bg-ink-950 p-6 lg:p-7 hover:bg-ink-900/60 transition-colors">
-            <div class="flex items-start justify-between gap-6 flex-wrap">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-3 mb-2 flex-wrap"><span class="pill pill-assemblage">Assemblage</span><span class="font-mono text-[10px] tracking-[0.1em] uppercase text-slate-500">Bay Colony · Fort Lauderdale</span></div>
-                <h3 class="font-display font-bold text-white text-lg lg:text-xl leading-tight">Waterfront assemblage — 3 parcels, coordinated acquisition</h3>
-                <p class="text-slate-400 text-sm mt-2 leading-relaxed">Quiet land acquisition pattern across contiguous waterfront parcels — likely institutional buyer with long-term hold strategy.</p>
-              </div>
-              <div class="font-mono text-[11px] text-slate-500 text-right">3 parcels</div>
-            </div>
-          </div>
-
-          <div class="bg-ink-950 p-6 lg:p-7 hover:bg-ink-900/60 transition-colors">
-            <div class="flex items-start justify-between gap-6 flex-wrap">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-3 mb-2 flex-wrap"><span class="pill pill-entitlement">Entitlement</span><span class="font-mono text-[10px] tracking-[0.1em] uppercase text-slate-500">Federal Hwy Corridor</span></div>
-                <h3 class="font-display font-bold text-white text-lg lg:text-xl leading-tight">348-unit multifamily enters approvals</h3>
-                <p class="text-slate-400 text-sm mt-2 leading-relaxed">Multifamily project moves into the formal approval pipeline — density, parking, and surrounding parcel activity all in motion.</p>
-              </div>
-              <div class="font-mono text-[11px] text-slate-500 text-right">348 units</div>
-            </div>
-          </div>
-
-          <div class="bg-ink-950 p-6 lg:p-7 hover:bg-ink-900/60 transition-colors">
-            <div class="flex items-start justify-between gap-6 flex-wrap">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-3 mb-2 flex-wrap"><span class="pill pill-execution">Execution</span><span class="font-mono text-[10px] tracking-[0.1em] uppercase text-slate-500">Pier 66 South Parcel</span></div>
-                <h3 class="font-display font-bold text-white text-lg lg:text-xl leading-tight">First infrastructure movement at Pier 66 south parcel</h3>
-                <p class="text-slate-400 text-sm mt-2 leading-relaxed">Marks the shift from long-term planning into execution after years of speculation — and signals movement in surrounding basin parcels.</p>
-              </div>
-              <div class="font-mono text-[11px] text-slate-500 text-right">Phase 1</div>
-            </div>
-          </div>
-
-          <div class="bg-ink-950 p-6 lg:p-7 hover:bg-ink-900/60 transition-colors">
-            <div class="flex items-start justify-between gap-6 flex-wrap">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-3 mb-2 flex-wrap"><span class="pill pill-execution">Execution</span><span class="font-mono text-[10px] tracking-[0.1em] uppercase text-slate-500">Downtown Fort Lauderdale</span></div>
-                <h3 class="font-display font-bold text-white text-lg lg:text-xl leading-tight">Early office leasing signals via tenant build-outs</h3>
-                <p class="text-slate-400 text-sm mt-2 leading-relaxed">Tenant build-out permits surface ahead of public leasing announcements — early read on occupancy momentum in downtown towers.</p>
-              </div>
-              <div class="font-mono text-[11px] text-slate-500 text-right">Multiple</div>
-            </div>
-          </div>
-
-          <div class="bg-ink-950 p-6 lg:p-7 hover:bg-ink-900/60 transition-colors">
-            <div class="flex items-start justify-between gap-6 flex-wrap">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-3 mb-2 flex-wrap"><span class="pill pill-execution">Execution</span><span class="font-mono text-[10px] tracking-[0.1em] uppercase text-slate-500">Southwest Fort Lauderdale</span></div>
-                <h3 class="font-display font-bold text-white text-lg lg:text-xl leading-tight">Infill construction cluster, adjacent parcels</h3>
-                <p class="text-slate-400 text-sm mt-2 leading-relaxed">Growing cluster of infill activity indicates coordinated development across adjacent parcels — a pattern worth watching.</p>
-              </div>
-              <div class="font-mono text-[11px] text-slate-500 text-right">Cluster</div>
-            </div>
-          </div>
-
-          <div class="bg-ink-950 p-6 lg:p-7 hover:bg-ink-900/60 transition-colors">
-            <div class="flex items-start justify-between gap-6 flex-wrap">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-3 mb-2 flex-wrap"><span class="pill pill-entitlement">Entitlement</span><span class="font-mono text-[10px] tracking-[0.1em] uppercase text-slate-500">Broward Health · multi-site</span></div>
-                <h3 class="font-display font-bold text-white text-lg lg:text-xl leading-tight">Coordinated activity across Broward Health properties</h3>
-                <p class="text-slate-400 text-sm mt-2 leading-relaxed">Multi-site permitting patterns point to phased institutional expansion — infrastructure first, announcements later.</p>
-              </div>
-              <div class="font-mono text-[11px] text-slate-500 text-right">Institutional</div>
-            </div>
-          </div>
-
-          <div class="bg-ink-950 p-6 lg:p-7 hover:bg-ink-900/60 transition-colors">
-            <div class="flex items-start justify-between gap-6 flex-wrap">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-3 mb-2 flex-wrap"><span class="pill pill-execution">Execution</span><span class="font-mono text-[10px] tracking-[0.1em] uppercase text-slate-500">Gore Building · Government Center</span></div>
-                <h3 class="font-display font-bold text-white text-lg lg:text-xl leading-tight">Demolition permitting at the Gore Building</h3>
-                <p class="text-slate-400 text-sm mt-2 leading-relaxed">A key step in the redevelopment of the government center — long discussed and now physically in motion.</p>
-              </div>
-              <div class="font-mono text-[11px] text-slate-500 text-right">Demo</div>
-            </div>
-          </div>
-
-          <div class="bg-ink-950 p-6 lg:p-7 hover:bg-ink-900/60 transition-colors">
-            <div class="flex items-start justify-between gap-6 flex-wrap">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-3 mb-2 flex-wrap"><span class="pill pill-execution">Execution</span><span class="font-mono text-[10px] tracking-[0.1em] uppercase text-slate-500">401 Las Olas</span></div>
-                <h3 class="font-display font-bold text-white text-lg lg:text-xl leading-tight">New tenant activity — Barry's build-out confirmed</h3>
-                <p class="text-slate-400 text-sm mt-2 leading-relaxed">Ground-floor tenant signals at a prestige Las Olas address, surfaced through build-out permits weeks ahead of leasing announcements.</p>
-              </div>
-              <div class="font-mono text-[11px] text-slate-500 text-right">$218K</div>
-            </div>
-          </div>
-
-          <div class="bg-ink-950 p-6 lg:p-7 hover:bg-ink-900/60 transition-colors">
-            <div class="flex items-start justify-between gap-6 flex-wrap">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-3 mb-2 flex-wrap"><span class="pill pill-execution">Execution</span><span class="font-mono text-[10px] tracking-[0.1em] uppercase text-slate-500">1400 Progresso</span></div>
-                <h3 class="font-display font-bold text-white text-lg lg:text-xl leading-tight">Multi-permit milestone at large-scale self-storage project</h3>
-                <p class="text-slate-400 text-sm mt-2 leading-relaxed">Full execution phase confirmed across a coordinated permit sequence — one of the larger storage footprints entering active build this cycle.</p>
-              </div>
-              <div class="font-mono text-[11px] text-slate-500 text-right">$6.5M</div>
-            </div>
-          </div>
-
-          <div class="bg-ink-950 p-6 lg:p-7 hover:bg-ink-900/60 transition-colors">
-            <div class="flex items-start justify-between gap-6 flex-wrap">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-3 mb-2 flex-wrap"><span class="pill pill-reinvestment">Reinvestment</span><span class="font-mono text-[10px] tracking-[0.1em] uppercase text-slate-500">Galt Ocean Mile</span></div>
-                <h3 class="font-display font-bold text-white text-lg lg:text-xl leading-tight">Capital reinvestment across aging beachfront assets</h3>
-                <p class="text-slate-400 text-sm mt-2 leading-relaxed">Maintenance and envelope-work cycles signal sustained capital commitment to older oceanfront buildings along the strip.</p>
-              </div>
-              <div class="font-mono text-[11px] text-slate-500 text-right">Ongoing</div>
-            </div>
-          </div>
-
-          <div class="bg-ink-950 p-6 lg:p-7 hover:bg-ink-900/60 transition-colors">
-            <div class="flex items-start justify-between gap-6 flex-wrap">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-3 mb-2 flex-wrap"><span class="pill pill-execution">Execution</span><span class="font-mono text-[10px] tracking-[0.1em] uppercase text-slate-500">Victoria Park</span></div>
-                <h3 class="font-display font-bold text-white text-lg lg:text-xl leading-tight">Townhouse development progression, unit-level permits</h3>
-                <p class="text-slate-400 text-sm mt-2 leading-relaxed">Movement from site-plan approvals to unit-level construction permits — a measurable step forward in a long-watched corridor.</p>
-              </div>
-              <div class="font-mono text-[11px] text-slate-500 text-right">$240K</div>
-            </div>
-          </div>
-
-          <div class="bg-ink-950 p-6 lg:p-7 hover:bg-ink-900/60 transition-colors">
-            <div class="flex items-start justify-between gap-6 flex-wrap">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-3 mb-2 flex-wrap"><span class="pill pill-execution">Execution</span><span class="font-mono text-[10px] tracking-[0.1em] uppercase text-slate-500">Coral Ridge</span></div>
-                <h3 class="font-display font-bold text-white text-lg lg:text-xl leading-tight">Full waterfront teardown-to-rebuild sequence</h3>
-                <p class="text-slate-400 text-sm mt-2 leading-relaxed">High-end residential redevelopment — demolition through new-construction permits filed against a single waterfront parcel.</p>
-              </div>
-              <div class="font-mono text-[11px] text-slate-500 text-right">$957K</div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-    </div>
-  </div>
-</section>
-
-<!-- HOW IT WORKS -->
-<section class="relative py-24 lg:py-32 border-t border-slate-700/40 bg-ink-900/40">
-  <div class="absolute inset-0 bg-grid-fine opacity-40 pointer-events-none"></div>
-  <div class="relative max-w-[1400px] mx-auto px-6 lg:px-10">
-    <div class="max-w-2xl mb-16">
-      <div class="flex items-center gap-2 mb-4">
-        <span class="w-6 h-px bg-signal"></span>
-        <span class="font-mono text-[10px] tracking-[0.2em] uppercase text-signal">Methodology</span>
-      </div>
-      <h2 class="font-display font-black text-white text-4xl lg:text-5xl tracking-[-0.03em] leading-[0.95]">Three inputs. One signal.</h2>
-      <p class="mt-4 text-slate-400 text-base lg:text-lg leading-relaxed">Every brief is built from three intersecting data streams, verified against public records, and filtered through the skepticism of a working journalist.</p>
-    </div>
-
-    <div class="grid md:grid-cols-3 gap-px bg-slate-700/40 border border-slate-700/40 rounded-sm overflow-hidden">
-      <div class="bg-ink-950 p-8 lg:p-10 group hover:bg-ink-900 transition-colors">
-        <div class="flex items-start justify-between mb-6">
-          <span class="font-mono text-xs tracking-[0.2em] text-signal">01</span>
-          <svg class="w-6 h-6 text-slate-700 group-hover:text-signal transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-        </div>
-        <h3 class="font-display font-bold text-white text-2xl lg:text-3xl mb-3 tracking-[-0.02em]">Permits</h3>
-        <p class="text-slate-400 text-sm leading-relaxed mb-6">Building, demolition, tenant build-out, and infrastructure filings pulled daily from LauderBuild, BCPA, and municipal systems across Broward.</p>
-        <div class="divider-dashed my-6"></div>
-        <div class="font-mono text-[10px] tracking-[0.14em] uppercase text-slate-500">154,751 records · daily refresh</div>
-      </div>
-
-      <div class="bg-ink-950 p-8 lg:p-10 group hover:bg-ink-900 transition-colors">
-        <div class="flex items-start justify-between mb-6">
-          <span class="font-mono text-xs tracking-[0.2em] text-signal">02</span>
-          <svg class="w-6 h-6 text-slate-700 group-hover:text-signal transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-        </div>
-        <h3 class="font-display font-bold text-white text-2xl lg:text-3xl mb-3 tracking-[-0.02em]">Land</h3>
-        <p class="text-slate-400 text-sm leading-relaxed mb-6">Parcel ownership, assemblage patterns, rezoning filings, and entitlement motion — cross-referenced against the permit feed to find coordinated activity.</p>
-        <div class="divider-dashed my-6"></div>
-        <div class="font-mono text-[10px] tracking-[0.14em] uppercase text-slate-500">BCPA · zoning · plat records</div>
-      </div>
-
-      <div class="bg-ink-950 p-8 lg:p-10 group hover:bg-ink-900 transition-colors">
-        <div class="flex items-start justify-between mb-6">
-          <span class="font-mono text-xs tracking-[0.2em] text-signal">03</span>
-          <svg class="w-6 h-6 text-slate-700 group-hover:text-signal transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        </div>
-        <h3 class="font-display font-bold text-white text-2xl lg:text-3xl mb-3 tracking-[-0.02em]">Capital</h3>
-        <p class="text-slate-400 text-sm leading-relaxed mb-6">Permit valuations, contractor filings, and project sequencing — used to estimate tracked value and identify which signals are backed by real capital commitment.</p>
-        <div class="divider-dashed my-6"></div>
-        <div class="font-mono text-[10px] tracking-[0.14em] uppercase text-slate-500">$361M · verified & categorized</div>
-      </div>
-    </div>
-
-    <div class="mt-10 p-8 lg:p-10 border border-slate-700/40 rounded-sm bg-ink-950 relative overflow-hidden">
-      <div class="absolute top-0 left-0 w-1 h-full bg-signal"></div>
-      <div class="relative pl-4">
-        <div class="font-mono text-[10px] tracking-[0.2em] uppercase text-slate-500 mb-3">Editorial principle</div>
-        <p class="font-display text-white text-xl lg:text-2xl leading-snug tracking-[-0.01em] max-w-4xl">Public records alone prove nothing. Scores are never inflated. The intelligence value is in what hasn't happened yet — not what's already underway.</p>
-        <div class="mt-5 flex items-center gap-3">
-          <div class="w-8 h-8 rounded-full bg-signal/10 border border-signal/30 flex items-center justify-center">
-            <svg class="w-4 h-4 text-signal" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-4 4z"/></svg>
-          </div>
-          <span class="font-mono text-[11px] tracking-[0.1em] uppercase text-slate-400">Curated by a journalist · 20+ years covering Florida</span>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- FINAL CTA -->
-<section class="relative py-28 lg:py-40 border-t border-slate-700/40 overflow-hidden">
-  <div class="absolute inset-0 glow-cyan pointer-events-none"></div>
-  <div class="absolute inset-0 bg-grid opacity-40 pointer-events-none"></div>
-  <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[120%] h-px bg-gradient-to-r from-transparent via-signal/40 to-transparent pointer-events-none"></div>
-
-  <div class="relative max-w-4xl mx-auto px-6 lg:px-10 text-center">
-    <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-signal/30 bg-signal/5 mb-8">
-      <span class="relative flex items-center justify-center w-2 h-2"><span class="absolute inset-0 bg-live rounded-full pulse-dot"></span></span>
-      <span class="font-mono text-[10px] tracking-[0.2em] uppercase text-signal">Weekly brief · every Friday morning</span>
-    </div>
-
-    <h2 class="font-display font-black text-white text-5xl sm:text-6xl lg:text-7xl tracking-[-0.03em] leading-[0.95] mb-6">
-      Read Broward<br/>
-      <span class="text-signal">before it's news.</span>
-    </h2>
-
-    <p class="text-slate-400 text-lg lg:text-xl leading-relaxed max-w-2xl mx-auto mb-12">Join builders, brokers, and capital allocators who rely on Florida Signal for permit-level intelligence the day it matters — not the day it breaks.</p>
-
-    <form data-members-form="signup" class="max-w-xl mx-auto">
-      <div class="flex flex-col sm:flex-row gap-2 p-1.5 border border-slate-700/60 rounded-sm bg-ink-900/80 backdrop-blur">
-        <input data-members-email type="email" required placeholder="you@firm.com" aria-label="Email address" class="input-signal flex-1 px-4 py-4 rounded-sm font-mono text-sm bg-transparent" style="border: none; box-shadow: none;" />
-        <button type="submit" class="btn-signal font-mono text-[12px] tracking-[0.14em] uppercase font-semibold px-8 py-4 rounded-sm whitespace-nowrap">Get the Free Weekly Brief →</button>
-      </div>
-      <p class="mt-4 font-mono text-[11px] tracking-[0.06em] text-slate-500">Free during founding period · No spam · Unsubscribe anytime</p>
-    </form>
-
-    <div class="mt-16 pt-12 border-t border-slate-700/40 grid grid-cols-3 gap-6 max-w-2xl mx-auto">
-      <div><div class="font-display font-black text-white text-2xl lg:text-3xl">Daily</div><div class="font-mono text-[10px] tracking-[0.14em] uppercase text-slate-500 mt-1">permit tracking</div></div>
-      <div><div class="font-display font-black text-white text-2xl lg:text-3xl">Weekly</div><div class="font-mono text-[10px] tracking-[0.14em] uppercase text-slate-500 mt-1">brief in your inbox</div></div>
-      <div><div class="font-display font-black text-white text-2xl lg:text-3xl">Always</div><div class="font-mono text-[10px] tracking-[0.14em] uppercase text-slate-500 mt-1">journalist-curated</div></div>
-    </div>
-  </div>
-</section>
-
-<!-- FOOTER -->
-<footer class="border-t border-slate-700/40 bg-ink-950">
-  <div class="max-w-[1400px] mx-auto px-6 lg:px-10 py-16">
-    <div class="grid md:grid-cols-12 gap-12 mb-16">
-      <div class="md:col-span-5">
-        <a href="https://www.thefloridasignal.com" class="flex items-center gap-2.5 mb-4">
-          <span class="font-display font-black text-white text-lg tracking-[-0.02em]">FLORIDA</span>
-          <span class="font-display font-black text-signal text-lg tracking-[-0.02em]">SIGNAL</span>
-        </a>
-        <p class="text-slate-400 text-sm leading-relaxed max-w-md">Permit-level development intelligence for Fort Lauderdale and Broward County. Curated by a veteran journalist. Read before it's news.</p>
-        <div class="mt-6 flex items-center gap-3">
-          <span class="relative flex items-center justify-center w-2 h-2"><span class="absolute inset-0 bg-live rounded-full pulse-dot"></span></span>
-          <span class="font-mono text-[10px] tracking-[0.14em] uppercase text-slate-500">Live feed · last sync moments ago</span>
-        </div>
-      </div>
-      <div class="md:col-span-2">
-        <div class="font-mono text-[10px] tracking-[0.2em] uppercase text-slate-500 mb-4">Product</div>
-        <ul class="space-y-2.5">
-          <li><a href="https://www.thefloridasignal.com" class="text-slate-300 hover:text-signal text-sm transition-colors">All Briefs</a></li>
-          <li><a href="https://grahamandgold.github.io/florida-signal-map/?ref=brief.thefloridasignal.com" class="text-slate-300 hover:text-signal text-sm transition-colors">Signal Map</a></li>
-          <li><a href="#" onclick="document.getElementById('signal-modal').classList.remove('hidden');document.getElementById('signal-modal').classList.add('flex');return false;" class="text-slate-300 hover:text-signal text-sm transition-colors">Free Newsletter</a></li>
-        </ul>
-      </div>
-      <div class="md:col-span-2">
-        <div class="font-mono text-[10px] tracking-[0.2em] uppercase text-slate-500 mb-4">Coverage</div>
-        <ul class="space-y-2.5">
-          <li><span class="text-slate-300 text-sm">Fort Lauderdale</span></li>
-          <li><span class="text-slate-300 text-sm">Pompano Beach</span></li>
-          <li><span class="text-slate-300 text-sm">Hollywood</span></li>
-          <li><span class="text-slate-500 text-sm">+28 more cities</span></li>
-        </ul>
-      </div>
-      <div class="md:col-span-3">
-        <div class="font-mono text-[10px] tracking-[0.2em] uppercase text-slate-500 mb-4">Contact</div>
-        <ul class="space-y-2.5">
-          <li><a href="mailto:signal@thefloridasignal.com" class="text-slate-300 hover:text-signal text-sm transition-colors">signal@thefloridasignal.com</a></li>
-          <li><a href="https://www.thefloridasignal.com" class="text-slate-300 hover:text-signal text-sm transition-colors">Tips & leads</a></li>
-          <li><a href="https://www.thefloridasignal.com" class="text-slate-300 hover:text-signal text-sm transition-colors">Editorial standards</a></li>
-        </ul>
-      </div>
-    </div>
-    <div class="divider-dashed"></div>
-    <div class="pt-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-      <div class="font-mono text-[10px] tracking-[0.1em] text-slate-500">© 2026 Florida Signal. All rights reserved. · thefloridasignal.com</div>
-      <div class="font-mono text-[10px] tracking-[0.1em] text-slate-600">BUILT FROM PUBLIC RECORDS · VERIFIED BEFORE PUBLICATION</div>
-    </div>
-  </div>
-</footer>
-
-<!-- POPUP MODAL (UPDATED) -->
-<div id="signal-modal" class="fixed inset-0 z-[100] hidden items-center justify-center p-4 modal-backdrop-anim" style="background: rgba(5, 8, 15, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);" role="dialog" aria-modal="true" aria-labelledby="signal-modal-title">
-  <div class="modal-glow modal-card-anim relative w-full max-w-md bg-ink-900 border border-slate-700/60 rounded-sm overflow-hidden">
-    <div class="h-px bg-gradient-to-r from-transparent via-signal to-transparent"></div>
-    <div class="p-8 lg:p-10 relative">
-      <button id="signal-modal-close" type="button" class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-slate-500 hover:text-signal hover:bg-ink-800 rounded-sm transition-colors" aria-label="Close">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav">
+        <span></span><span></span><span></span><span class="sr-only">Open navigation</span>
       </button>
-      <div class="flex items-center gap-2 mb-5">
-        <span class="relative flex items-center justify-center w-2 h-2"><span class="absolute inset-0 bg-live rounded-full pulse-dot"></span></span>
-        <span class="font-mono text-[10px] tracking-[0.2em] uppercase text-signal">Free Weekly Brief</span>
-      </div>
-      <h3 id="signal-modal-title" class="font-display font-black text-white text-2xl lg:text-3xl tracking-[-0.02em] leading-[1.05] mb-4">
-        Get Florida Signal<br/>in your inbox.
-      </h3>
-      <p class="text-slate-400 text-sm leading-relaxed mb-6">Free weekly brief plus real-time development signals from Broward County permits. Curated by a veteran journalist.</p>
-      <form data-members-form="signup" id="signal-modal-form">
-        <input data-members-email type="email" required placeholder="you@firm.com" aria-label="Email address" class="input-signal w-full px-4 py-3.5 rounded-sm font-mono text-sm mb-3" />
-        <button type="submit" class="btn-signal w-full font-mono text-[12px] tracking-[0.14em] uppercase font-semibold px-6 py-3.5 rounded-sm inline-flex items-center justify-center gap-2">
-          Subscribe Free
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
-        </button>
-      </form>
-      <p class="mt-4 font-mono text-[10px] tracking-[0.06em] text-slate-500 text-center leading-relaxed">Free during founding period · No spam · Unsubscribe anytime</p>
+      <nav class="site-nav" id="site-nav" aria-label="Primary navigation">
+        <a href="#signals">Signals</a>
+        <a href="neighborhoods.html">Neighborhoods</a>
+        <a href="broward.html">Broward record</a>
+        <a href="storm.html">Storm window</a>
+        <a href="method.html">How it works</a>
+      </nav>
+      <a class="brief-button" href="#brief">Get the 6:15 Brief <span aria-hidden="true">↗</span></a>
     </div>
-  </div>
-</div>
+  </header>
 
-<script>
-(function () {
-  var modal = document.getElementById('signal-modal');
-  var closeBtn = document.getElementById('signal-modal-close');
-  var form = document.getElementById('signal-modal-form');
-  var STORAGE_KEY = 'fl_signal_modal_dismissed_v1';
+  <section class="mobile-live-rail" aria-label="Live Florida Signal intelligence">
+    <div class="mobile-live-rail__head">
+      <p><span class="pulse" aria-hidden="true"></span><strong>Live now in Broward</strong></p>
+      <p data-updated>Connecting to the public record…</p>
+    </div>
+    <div class="mobile-live-rail__viewport" data-mobile-live-rail tabindex="0" aria-label="Swipe through current Florida Signal data">
+      <div class="mobile-live-rail__track">
+        <a class="mobile-live-card mobile-live-card--signal" href="#signals" data-mobile-live-card>
+          <span>Newest consequential filing</span>
+          <strong id="mobile-live-story" aria-live="polite">Reading the newest application…</strong>
+          <small>Application clock · open the cited record <b>→</b></small>
+        </a>
+        <a class="mobile-live-card" href="neighborhoods.html#full-map" data-mobile-live-card>
+          <span>Permit universe</span>
+          <strong data-stat="permits">—</strong>
+          <small><b data-stat="mapped">—</b> mapped · open the live field map →</small>
+        </a>
+        <a class="mobile-live-card mobile-live-card--gold" href="broward.html" data-mobile-live-card>
+          <span>Broward record</span>
+          <strong data-stat="broward-docs">—</strong>
+          <small>Deeds, liens + NOCs · through <b data-stat="broward-fresh">—</b></small>
+        </a>
+        <a class="mobile-live-card mobile-live-card--meeting" href="meetings.html" data-mobile-live-card>
+          <span>Next room watched</span>
+          <strong data-mobile-meeting-title>Checking official calendars…</strong>
+          <small data-mobile-meeting-date>Meeting clock connecting</small>
+        </a>
+      </div>
+    </div>
+    <div class="mobile-live-rail__foot"><span>Swipe the desk</span><i aria-hidden="true"></i><a href="neighborhoods.html#full-map">Open live map ↗</a></div>
+  </section>
 
-  function dismissed() {
-    try { return !!localStorage.getItem(STORAGE_KEY); } catch (e) { return false; }
-  }
-  function markDismissed() {
-    try { localStorage.setItem(STORAGE_KEY, '1'); } catch (e) {}
-  }
-  function showModal() {
-    if (dismissed()) return;
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-    document.body.style.overflow = 'hidden';
-    var input = modal.querySelector('input[type="email"]');
-    if (input) setTimeout(function () { try { input.focus(); } catch (e) {} }, 120);
-  }
-  function hideModal() {
-    modal.classList.add('hidden');
-    modal.classList.remove('flex');
-    document.body.style.overflow = '';
-    markDismissed();
-  }
+  <section class="mobile-field-test" data-mobile-field-test aria-label="Mobile Field Test">
+    <button class="mobile-field-test__trigger" type="button" data-mobile-field-toggle aria-expanded="false" aria-controls="mobile-field-panel">
+      <span><small>Mobile Field Test</small><strong>What’s moving around me?</strong></span>
+      <i aria-hidden="true"><b></b></i>
+    </button>
+    <div class="mobile-field-test__panel" id="mobile-field-panel" data-mobile-field-panel hidden>
+      <p class="mobile-field-test__privacy">Your location stays in this browser. Florida Signal does not store it.</p>
+      <button class="mobile-field-test__locate" type="button" data-mobile-field-locate><span aria-hidden="true">◎</span> Use my current location</button>
+      <div class="mobile-field-test__or"><span>or enter a field point</span></div>
+      <form class="mobile-field-test__search" data-mobile-field-search>
+        <label class="sr-only" for="mobile-field-query">Address, neighborhood, ZIP or permit</label>
+        <input id="mobile-field-query" name="field_query" type="search" placeholder="Address, neighborhood, ZIP or permit" autocomplete="street-address" required>
+        <button type="submit">Scan →</button>
+      </form>
+      <p class="mobile-field-test__status" data-mobile-field-status aria-live="polite">Tap your location or enter a field point to scan the current mapped permit sample.</p>
+      <div class="mobile-field-test__map" id="mobile-field-map" role="application" aria-label="Map of your field point and nearby public permit records"></div>
+      <div class="mobile-field-test__results" data-mobile-field-results></div>
+    </div>
+  </section>
 
-  if (closeBtn) closeBtn.addEventListener('click', hideModal);
-  modal.addEventListener('click', function (e) { if (e.target === modal) hideModal(); });
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && !modal.classList.contains('hidden')) hideModal();
-  });
-  if (form) form.addEventListener('submit', markDismissed);
+  <main id="main">
+    <section class="hero">
+      <div class="shell hero__grid">
+        <div class="hero__copy">
+          <p class="eyebrow">Fort Lauderdale + Broward · Public-record intelligence</p>
+          <h1>The city moves<br>before the skyline does.</h1>
+          <p class="hero__dek">We follow permits, parcels, companies, meetings and courthouse filings to show what is changing—block by block—before you walk the site or book the flight.</p>
+          <form class="signup signup--hero" data-signup-form>
+            <label class="sr-only" for="hero-email">Email address</label>
+            <input id="hero-email" name="email" type="email" autocomplete="email" placeholder="Your email address" required>
+            <label class="sr-only" for="hero-zip">ZIP code</label>
+            <input id="hero-zip" name="zip" type="text" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{5}(-[0-9]{4})?" maxlength="10" placeholder="ZIP you watch" required>
+            <button type="submit">Send me the brief <span aria-hidden="true">→</span></button>
+            <p class="signup__message" data-signup-message aria-live="polite"></p>
+          </form>
+          <p class="signup-note">Free. One sharp email. Every claim linked to the record.</p>
+          <p class="audience-line"><strong>Built for the flight in:</strong> brokers, builders, out-of-state developers and Broward’s frequent fliers.</p>
+          <div class="source-line" aria-label="Data sources">
+            <span>Accela</span><i></i><span>BCPA</span><i></i><span>Sunbiz</span><i></i><span>Broward Clerk</span><i></i><span>NOAA</span>
+          </div>
+        </div>
 
-  if (!dismissed()) {
-    setTimeout(showModal, 7000);
-  }
-})();
-</script>
+        <div class="hero__visual">
+          <picture>
+            <source media="(max-width: 680px)" srcset="assets/fort_laud_beach_mobile.jpeg">
+            <source media="(max-width: 1024px)" srcset="assets/fort_laud_beach_tablet.jpeg">
+            <img src="assets/fort_laud_beach.jpeg" alt="Aerial view of Fort Lauderdale beach, buildings and neighborhoods" width="2048" height="1365">
+          </picture>
+          <div class="hero__caption">Fort Lauderdale · Broward County</div>
+          <div class="hero__live-card data-flipper" id="live-data" aria-label="Live data highlights">
+            <div class="data-flipper__emblem" aria-hidden="true"><img src="assets/mark-square.png" alt="" width="192" height="192"><i></i></div>
+            <div class="data-flipper__head">
+              <p class="data-label"><span class="pulse pulse--dark" aria-hidden="true"></span>Live public record</p>
+              <div class="data-flipper__controls">
+                <button type="button" data-flip-prev aria-label="Previous data point">←</button>
+                <span data-flip-index>1 / 6</span>
+                <button type="button" data-flip-next aria-label="Next data point">→</button>
+              </div>
+            </div>
+            <div class="data-flipper__track">
+              <div class="data-flipper__panel is-active" data-flip-panel>
+                <p class="data-flipper__kicker">Permit universe</p>
+                <div class="hero__live-number" data-stat="permits">—</div>
+                <p class="data-flipper__label">Fort Lauderdale permits tracked</p>
+                <div class="data-flipper__sub"><strong data-stat="mapped">—</strong><span>mapped in the latest exact cache</span></div>
+              </div>
+              <div class="data-flipper__panel" data-flip-panel hidden>
+                <p class="data-flipper__kicker">Broward record</p>
+                <div class="hero__live-number" data-stat="broward-docs">—</div>
+                <p class="data-flipper__label">deeds, liens, NOCs and instruments</p>
+                <div class="data-flipper__sub"><strong data-stat="broward-fresh">—</strong><span>latest recording date loaded</span></div>
+              </div>
+              <div class="data-flipper__panel" data-flip-panel hidden>
+                <p class="data-flipper__kicker">Company lens</p>
+                <div class="hero__live-number" data-stat="sunbiz">—</div>
+                <p class="data-flipper__label">estimated permit records linked to Sunbiz</p>
+                <div class="data-flipper__sub"><strong data-stat="owner-change">—</strong><span>owner changes detected</span></div>
+              </div>
+              <div class="data-flipper__panel" data-flip-panel hidden>
+                <p class="data-flipper__kicker">Deep history</p>
+                <div class="hero__live-number" data-stat="workflow">—</div>
+                <p class="data-flipper__label">permit workflow events indexed</p>
+                <div class="data-flipper__sub"><strong>26 yrs</strong><span>of Fort Lauderdale permit history</span></div>
+              </div>
+              <div class="data-flipper__panel diagram-watch" data-flip-panel hidden>
+                <p class="data-flipper__kicker">Diagram of the day</p>
+                <a class="diagram-watch__link" href="graphics.html#place-lens" aria-label="Open today’s Place Lens graphic">
+                  <div class="diagram-watch__preview" aria-hidden="true"><span>VP</span><span>33301</span><span>RV</span><i></i><b></b></div>
+                  <div class="diagram-watch__title"><strong>PLACE LENS</strong><span>Neighborhood constellation + ZIP signal rings</span></div>
+                  <em>Open today’s graphic →</em>
+                </a>
+              </div>
+              <div class="data-flipper__panel meeting-watch" data-flip-panel hidden>
+                <p class="data-flipper__kicker">Rooms we’re watching</p>
+                <p class="meeting-watch__date" data-meeting-date>Checking the public calendar…</p>
+                <h3 data-meeting-title>Upcoming hearings and development meetings</h3>
+                <p class="meeting-watch__meta" data-meeting-meta>Official agendas and live-stream links only</p>
+                <div class="meeting-watch__actions">
+                  <a class="meeting-watch__link" data-meeting-agenda href="https://fortlauderdale.legistar.com/Calendar.aspx" target="_blank" rel="noreferrer">Official calendar ↗</a>
+                  <a class="meeting-watch__link meeting-watch__link--tv" data-meeting-video href="https://www.fortlauderdale.gov/government/departments-i-z/strategic-communications/fltv" target="_blank" rel="noreferrer" hidden><span class="meeting-tv" aria-hidden="true"></span>Watch FLTV</a>
+                  <a class="meeting-watch__all" href="meetings.html">All meetings →</a>
+                </div>
+              </div>
+            </div>
+            <div class="data-flipper__progress" aria-hidden="true"><span></span></div>
+            <a class="sponsor-slot sponsor-slot--flipper" href="mailto:desk@thefloridasignal.com?subject=Florida%20Signal%20live%20data%20sponsorship"><span>Founding sponsor</span><strong>Your logo here</strong></a>
+            <p class="hero__updated" data-updated>Waiting for feed timestamp</p>
+          </div>
+        </div>
+      </div>
+    </section>
 
+    <section class="signals section" id="signals">
+      <div class="shell">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">On the record now</p>
+            <h2>What moved.</h2>
+          </div>
+          <p>Not press releases. Not rumors. The newest consequential filings in the live permit feed.</p>
+        </div>
+        <div class="spyglass" data-spotlight="signals" data-signal-tags="format:spotlight topic:development source:city-permit audience:field-desk">
+          <div class="spyglass__map" id="signal-spotlight-map" role="application" aria-label="Signal Spyglass map of the newest consequential filings"></div>
+          <div class="spyglass__desk"><p class="eyebrow"><span class="pulse" aria-hidden="true"></span>Signal Spyglass · What Moved Spotlight</p><h3 id="signal-spotlight-title">Plotting the newest filings…</h3><p id="signal-spotlight-meta">Every pin uses the same permit ID, neighborhood resolver and application date as the full live map.</p><a class="spyglass__open" id="signal-spotlight-link" href="neighborhoods.html#full-map">Open this filing on the full map →</a><a class="sponsor-slot sponsor-slot--spyglass" href="mailto:desk@thefloridasignal.com?subject=Sponsor%20the%20What%20Moved%20Spyglass"><span>What Moved Spotlight partner</span><strong>Your logo here</strong></a></div>
+        </div>
+        <div class="signal-list" id="signal-list" aria-live="polite">
+          <div class="loading-row">Loading current filings from Supabase…</div>
+        </div>
+        <div class="section-link-row">
+          <a class="text-link" href="neighborhoods.html">See every mapped filing <span aria-hidden="true">→</span></a>
+          <p id="signal-source-note">Source: City of Fort Lauderdale permit feed</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="intel-section section" aria-label="Live development intelligence">
+      <div class="shell">
+        <div class="section-head intel-section__head">
+          <div>
+            <p class="eyebrow"><span class="pulse" aria-hidden="true"></span>Live intelligence</p>
+            <h2>The city has a pulse.</h2>
+          </div>
+          <p>Fort Lauderdale permit applications by their public filing date, plus declared value and contractor activity—drawn directly from the public record, never from demo data.</p>
+        </div>
+        <div class="intel-grid">
+          <article class="intel-card intel-card--pulse">
+            <div class="intel-card__head">
+              <div><p class="data-label">Fort Lauderdale permits · 14 application dates</p><h3 id="activity-total">Loading the permit pulse…</h3></div>
+              <div class="intel-legend"><span><i class="intake"></i>Permit applications</span></div>
+            </div>
+            <div class="activity-chart" id="activity-chart" aria-label="Permit applications grouped by public application date for the last fourteen days"></div>
+            <p class="intel-source" id="activity-source">Reading permit application dates…</p>
+          </article>
+
+          <article class="intel-card intel-card--value">
+            <div class="intel-card__head"><div><p class="data-label">Property-value universe</p><h3>Where the record sits</h3></div></div>
+            <div class="value-bars" id="value-bars"><p class="muted">Loading value distribution…</p></div>
+            <p class="intel-source">Best-available property value · enriched records</p>
+          </article>
+
+          <article class="intel-card intel-card--operators">
+            <div class="intel-card__head"><div><p class="data-label">Operator activity</p><h3>Who keeps filing</h3></div><a href="broward.html">Open record ↗</a></div>
+            <ol class="operator-list" id="operator-list"><li class="muted">Loading contractor activity…</li></ol>
+            <p class="intel-source">Normalized contractor names · current public cache</p>
+          </article>
+        </div>
+        <div class="intel-method">
+          <button class="intel-method__toggle" type="button" data-method-toggle aria-expanded="false">Flip to methodology <span aria-hidden="true">↻</span></button>
+          <div class="intel-method__panel" data-method-panel hidden>
+            <div class="intel-method__head"><p class="eyebrow">How the pulse is coded</p><p>Market dates and system dates never substitute for one another.</p></div>
+            <div class="method-flow" aria-label="Florida Signal data flow">
+              <div><span>01</span><strong>Public event</strong><p>Application or recording date</p></div><b aria-hidden="true">→</b>
+              <div><span>02</span><strong>Pull</strong><p>Upstream, one to two times daily</p></div><b aria-hidden="true">→</b>
+              <div><span>03</span><strong>Resolve</strong><p>Address, parcel, company, neighborhood</p></div><b aria-hidden="true">→</b>
+              <div><span>04</span><strong>Publish</strong><p>Supabase RLS + named cache timestamp</p></div><b aria-hidden="true">→</b>
+              <div><span>05</span><strong>Deliver</strong><p>Site now · Mailchimp sync next</p></div>
+            </div>
+            <div class="clock-rules"><p><strong>Market clock</strong> Charts use <code>applied_date</code> or Clerk <code>recording_date_iso</code>.</p><p><strong>System clock</strong> Pull, seen and enrichment timestamps describe pipeline freshness only.</p><a href="method.html">Full sources, cadence + limitations →</a></div>
+          </div>
+        </div>
+        <div class="graphic-desk-cta">
+          <img src="assets/mark-full-color.png" alt="" aria-hidden="true">
+          <div><p>Florida Signal Graphic Desk</p><h3>Ten animated, emblem-stamped views built to embed and share.</h3></div>
+          <a class="button" href="graphics.html">Open the graphic desk →</a>
+        </div>
+        <div class="visual-recon-strip" aria-label="Florida Signal visual reconnaissance">
+          <a href="graphics.html#place-lens"><img src="social/graphic-desk/place-lens.png" alt="Florida Signal Place Lens neighborhood and ZIP infographic" width="1200" height="620"><span><small>Diagram of the day</small><strong>Neighborhood + ZIP Place Lens</strong></span></a>
+          <a href="neighborhoods.html#full-map"><img src="assets/photos/fort-lauderdale-waterfront-neighborhoods-aerial-adobe-428926084.jpg" alt="Aerial view of Fort Lauderdale homes, streets and connected waterways" width="2400" height="1800"><span><small>Field intelligence</small><strong>Open the neighborhood map</strong></span></a>
+          <a href="neighborhoods.html#full-map"><img src="assets/photos/fort-lauderdale-barrier-island-skyline-adobe-257427799.jpg" alt="Fort Lauderdale skyline and waterways over the Barrier Island" width="2400" height="1601"><span><small>Barrier Island field file</small><strong>Read the skyline from the water</strong></span></a>
+          <a href="neighborhoods.html?q=las%20olas"><img src="assets/photos/las-olas-boulevard-street-scene-adobe-861811982.jpg" alt="Las Olas Boulevard street scene with downtown buildings and tropical landscaping" width="2400" height="1600"><span><small>Corridor watch</small><strong>Search Las Olas filings</strong></span></a>
+          <a href="neighborhoods.html?q=construction"><img src="assets/photos/fort-lauderdale-construction-cranes-adobe-490952530.jpg" alt="Two tower cranes above an active construction site in downtown Fort Lauderdale" width="2400" height="1551"><span><small>Construction watch</small><strong>See the active build pipeline</strong></span></a>
+          <a href="neighborhoods.html#full-map"><img src="assets/photos/fort-lauderdale-skyline-panorama-adobe-125666941.jpg" alt="Panoramic Fort Lauderdale skyline beneath a bright blue sky" width="2800" height="737"><span><small>Skyline field file</small><strong>Trace the projects behind the view</strong></span></a>
+          <a href="neighborhoods.html?q=las%20olas"><img src="assets/photos/las-olas-financial-district-towers-adobe-1935934410.jpg" alt="Palm trees and glass office towers along the Las Olas Boulevard financial district" width="2400" height="1600"><span><small>Financial district watch</small><strong>Open the Las Olas corridor</strong></span></a>
+        </div>
+      </div>
+    </section>
+
+    <section class="map-section section section--mint">
+      <div class="shell map-intro">
+        <div>
+          <p class="eyebrow">Hyperlocal intelligence</p>
+          <h2>The block is the market.</h2>
+        </div>
+        <p>Official City boundaries meet the newest mapped permit records. Built for the developer, broker or agent who needs to know what changed before walking the next block.</p>
+      </div>
+      <form class="shell field-entry" id="field-search-launcher" role="search">
+        <label for="field-search-home"><span>Field brief</span>Start with a neighborhood, address, permit, contractor or project type</label>
+        <div><input id="field-search-home" name="q" type="search" placeholder="Try “seawall”, “Las Olas” or a permit number" autocomplete="off"><button type="submit">Search the city <span aria-hidden="true">→</span></button></div>
+      </form>
+      <div class="shell map-shell">
+        <div class="map-panel">
+          <div class="map-toolbar">
+            <div>
+              <p class="data-label"><span class="pulse" aria-hidden="true"></span>Live Fort Lauderdale map</p>
+              <p><strong id="map-point-count">—</strong> recent filings on screen</p>
+            </div>
+            <a href="neighborhoods.html">Open full map ↗</a>
+          </div>
+          <div id="home-map" class="map" role="application" aria-label="Interactive map of recent Fort Lauderdale permit filings"></div>
+          <p class="map-credit">Neighborhood polygons: City of Fort Lauderdale GIS · Records: Florida Signal / Supabase</p>
+        </div>
+        <aside class="neighborhood-rank" aria-label="Active neighborhoods">
+          <p class="eyebrow">Fresh activity</p>
+          <h3>Neighborhoods to watch</h3>
+          <div id="neighborhood-list" class="neighborhood-list">
+            <p class="muted">Matching filings to official boundaries…</p>
+          </div>
+          <a class="text-link" href="neighborhoods.html">Explore all 86 areas →</a>
+        </aside>
+      </div>
+      <div class="shell neighborhood-showcase">
+        <div class="neighborhood-showcase__head"><div><p class="eyebrow">Live neighborhood briefs</p><p>Current mapped-record sample · tap an area to open it in the field desk</p></div><a class="sponsor-slot sponsor-slot--inline" href="mailto:desk@thefloridasignal.com?subject=Florida%20Signal%20neighborhood%20sponsorship"><span>Neighborhood intelligence partner</span><strong>Your logo here</strong></a></div>
+        <div class="neighborhood-profiles" id="neighborhood-profiles"><p class="muted">Building hyperlocal profiles from the mapped record…</p></div>
+      </div>
+    </section>
+
+    <section class="broward-tease section">
+      <div class="shell broward-tease__grid">
+        <div class="broward-tease__copy">
+          <p class="eyebrow">The Broward gold layer</p>
+          <h2>A permit tells you what.<br>The record tells you who—and why now.</h2>
+          <p>Florida Signal joins the city feed to the ownership, property, court and company records that make an ordinary filing intelligible.</p>
+          <a class="button button--ink" href="broward.html">Open the Broward record <span aria-hidden="true">→</span></a>
+        </div>
+        <div class="record-flow" aria-label="Florida Signal source pipeline">
+          <div class="record-flow__item record-flow__item--permit">
+            <div class="record-flow__icon"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M18 9h22l8 8v38H18z"></path><path d="M40 9v10h9M24 29h18M24 37h18M24 45h11"></path></svg></div><span>01 · Accela</span><strong>City permit</strong><p>Scope, value, timing</p>
+          </div>
+          <b aria-hidden="true">→</b>
+          <div class="record-flow__item record-flow__item--parcel">
+            <div class="record-flow__icon"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M9 14l17-5 14 6 15-5v40l-15 5-14-6-17 5z"></path><path d="M26 9v40M40 15v40M9 33l17-5 14 6 15-5"></path></svg></div><span>02 · BCPA</span><strong>Parcel lens</strong><p>Ownership, sale, flood</p>
+          </div>
+          <b aria-hidden="true">→</b>
+          <div class="record-flow__item record-flow__item--network">
+            <div class="record-flow__icon"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="16" cy="18" r="7"></circle><circle cx="48" cy="15" r="7"></circle><circle cx="50" cy="48" r="7"></circle><circle cx="18" cy="49" r="7"></circle><circle cx="33" cy="32" r="8"></circle><path d="M21 21l7 7M42 20l-5 7M39 38l7 7M27 39l-6 6"></path></svg></div><span>03 · State + Clerk</span><strong>Entity network</strong><p>Companies, deeds, liens</p>
+          </div>
+          <b aria-hidden="true">→</b>
+          <div class="record-flow__item record-flow__item--signal">
+            <div class="record-flow__icon record-flow__icon--mark"><img src="assets/mark-square.png" alt="" width="72" height="71"></div><span>04 · Florida Signal</span><strong>The signal</strong><p>What changed, sourced</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="storm-tease section section--blue">
+      <div class="shell storm-tease__grid">
+        <div class="storm-window">
+          <div class="storm-window__head">
+            <div>
+              <p class="eyebrow">NOAA · Atlantic basin</p>
+              <h3 id="storm-status">Checking the storm window…</h3>
+            </div>
+            <span class="storm-window__date" id="storm-updated">Live</span>
+          </div>
+          <img src="https://www.nhc.noaa.gov/xgtwo/two_atl_7d0.png" alt="Current National Hurricane Center seven-day Atlantic tropical weather outlook" loading="lazy" width="900" height="555">
+          <p>Official seven-day outlook · National Hurricane Center · image updates in place</p>
+        </div>
+        <div class="storm-tease__copy">
+          <p class="eyebrow">Storm intelligence, at street level</p>
+          <h2>The cone is only half the story.</h2>
+          <p>Track the local work that changes readiness: roofs, impact openings, seawalls, generators, drainage and elevation—by neighborhood and before landfall anxiety spikes.</p>
+          <div class="storm-count">
+            <strong id="storm-permit-count">—</strong>
+            <span>storm-relevant recent filings in the live map sample</span>
+          </div>
+          <a class="button button--light" href="storm.html">Open the storm window <span aria-hidden="true">→</span></a>
+        </div>
+      </div>
+    </section>
+
+    <section class="brief section" id="brief">
+      <div class="shell brief__grid">
+        <div>
+          <p class="eyebrow">The Florida Signal · 6:15 a.m.</p>
+          <h2>Five minutes.<br>Ahead all day.</h2>
+        </div>
+        <div>
+          <p class="brief__dek">The filings worth knowing, the ownership behind them, the neighborhood context, and the room to watch—before you land.</p>
+          <a class="sponsor-slot sponsor-slot--brief" href="mailto:desk@thefloridasignal.com?subject=Florida%20Signal%20615%20Brief%20sponsorship"><span>Underwrite the 6:15 Brief</span><strong>Your logo here</strong></a>
+          <form class="signup signup--brief" data-signup-form>
+            <label class="sr-only" for="brief-email">Email address</label>
+            <input id="brief-email" name="email" type="email" autocomplete="email" placeholder="you@company.com" required>
+            <label class="sr-only" for="brief-zip">ZIP code</label>
+            <input id="brief-zip" name="zip" type="text" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{5}(-[0-9]{4})?" maxlength="10" placeholder="ZIP you watch" required>
+            <button type="submit">Join the daily brief <span aria-hidden="true">→</span></button>
+            <p class="signup__message" data-signup-message aria-live="polite"></p>
+          </form>
+          <p class="signup-note">For local decision-makers and frequent fliers tracking Broward from somewhere else. Unsubscribe anytime.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="standards section">
+      <div class="shell standards__grid">
+        <p class="eyebrow">Signal standard</p>
+        <p>Every number is pulled from a named public source. Every record carries its identifier. Analysis is labeled. Corrections are visible. We would rather publish nothing than publish a guess.</p>
+        <a class="text-link" href="method.html">Read the method →</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell site-footer__grid">
+      <div>
+        <img src="assets/lockup-horizontal-transparent.png" alt="Florida Signal" width="1000" height="248">
+        <p>Development intelligence for Fort Lauderdale and Broward County.</p>
+      </div>
+      <div>
+        <p class="footer-title">Explore</p>
+        <a href="#signals">Signals</a>
+        <a href="neighborhoods.html">Neighborhoods</a>
+        <a href="broward.html">Broward record</a>
+        <a href="storm.html">Storm window</a>
+      </div>
+      <div>
+        <p class="footer-title">About</p>
+        <a href="method.html">Method + sources</a>
+        <a href="mailto:desk@thefloridasignal.com">Send a tip</a>
+        <a href="mailto:desk@thefloridasignal.com">Corrections</a>
+      </div>
+      <div class="footer-brief">
+        <p class="footer-title">Tomorrow starts tonight.</p>
+        <p>Get the 6:15 Brief.</p>
+        <a href="#brief">Join free →</a>
+      </div>
+    </div>
+    <div class="shell site-footer__bottom">
+      <p>© <span data-year></span> Florida Signal · Powered by Graham &amp; Gold LLC</p>
+      <p>Fort Lauderdale, Florida · Data timestamps shown in Eastern Time</p>
+    </div>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js" defer></script>
 </body>
 </html>
