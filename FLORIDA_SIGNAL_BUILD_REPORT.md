@@ -18,7 +18,9 @@ Delivered:
 - the Signal Spyglass mini-map/Spotlight system for filings, readiness and watched rooms;
 - a meetings desk with government and industry sources, agenda links, video actions and source-gated Agenda Recon;
 - a three-phase Storm Window and a publisher-controlled red Storm Watch mode with storm icon, official track/outlook, satellite, coordinates and a red information ticker;
-- ten visually distinct Graphic Desk diagrams with embedded Florida Signal branding, explicit data spans, share pages, embeds and 1200-pixel social exports;
+- an investigation-first Data Room with its live map and heat-density view first, followed by organized Now, Places, Property and Watch rooms;
+- ten visually distinct Data Room diagrams with centered full-color Florida Signal crests, explicit data spans, direct source destinations, share pages, embeds and 1200-pixel social exports;
+- consistent larger map branding, a right-side social rail and a separate document-plus Field Brief control so the report builder cannot be mistaken for the Florida emblem;
 - a city-scoped briefs home and **The Data Wire**, a private source-gated CMS derived from the useful Michigan desk patterns without altering the Michigan repositories;
 - a restrained site/CMS taxonomy that tags stories, neighborhoods, entities, sources, audiences and urgency without a wall of AI-looking pills;
 - a ten-second, dismissible daily-brief signup for email plus watched ZIP;
@@ -72,7 +74,7 @@ The current production cadence was verified from the existing Florida pipeline d
 | Agenda PDF/property recon | Draft extraction only; only cited, geocoded and human-cleared rows publish | On agenda publication; increase on meeting days | Meeting date plus cited packet page | CMS gate complete; collector agents not scheduled |
 | NHC storm state | Same-origin official-source request | Five-minute cache | NHC publication/update time | Connected |
 | Storm Watch mode | Audience sees publisher state | Manual editorial control | Mode publication time | Complete; off by default |
-| Graphic Desk | Renders from current site values | Re-export after successful source refresh | Printed event span | Exporter installed; ten images generated |
+| Data Room | Live map renders the current mapped sample; diagrams render current site values | Re-export affected diagrams after successful source refresh | Printed event span | Map/heat investigation first; ten social images generated |
 | Signup | Immediate private local write | Immediate Mailchimp upsert when key exists | Consent time | Local capture works; Mailchimp key absent |
 | Daily Intel Brief | Human-curated downstream view | Daily editor review before send | Each record's event date | Template ready; send automation not running |
 | Analytics | Same-origin event endpoint | Immediate | Event occurrence time | Local SQLite only; production store not deployed |
@@ -182,7 +184,7 @@ Mailchimp configuration:
 - watched-ZIP merge field: `WATCHZIP`; and
 - API key: intentionally absent.
 
-No existing subscriber was edited and no campaign was sent. Until `MAILCHIMP_API_KEY` is configured server-side, new consented rows remain in the private local queue. The responsive HTML template is `brand/newsletter/florida-signal-daily-intel-brief.html` and preserves Mailchimp merge tags.
+No existing subscriber was edited and no campaign was sent. Until `MAILCHIMP_API_KEY` is configured server-side, new consented rows remain in the private local queue. The responsive HTML template is `fort-lauderdale/brand/newsletter/daily-intel-brief.html` and preserves Mailchimp merge tags.
 
 Sponsor inventory appears on the public-record flipper, Graphic Desk, Signal Spyglass Spotlights, meeting watch, storm surfaces and supporting rails. “Your logo here” is intentionally dim. Sponsor treatment cannot resemble an official record or overwrite record context.
 
@@ -193,7 +195,7 @@ Analytics records privacy-minimized events such as page views, signup completion
 - `brand-kit.html` is the visual brand kit.
 - `BRAND_KIT.md` defines logo clearance, palette, typography, voice, channel use and export checks.
 - `brand/templates/` contains portable, editable LinkedIn/Facebook, Instagram square, Instagram story and X SVG masters with embedded lockups.
-- `brand/newsletter/` contains the responsive Mailchimp template.
+- `fort-lauderdale/brand/newsletter/` contains the responsive Mailchimp template.
 - `graphics.html`, `social/graphic-desk/` and `share/` contain ten diagram families, exported social images and canonical share pages.
 - `robots.txt`, `sitemap.xml`, `llms.txt`, `data/site-catalog.json`, canonical metadata and JSON-LD make public content legible to search engines and AI discovery systems.
 

@@ -1,0 +1,167 @@
+# Florida Signal live data operations handoff
+
+**Market:** Broward County  
+**Live city:** Fort Lauderdale  
+**Publisher:** Graham & Gold LLC  
+**Last local verification:** July 17, 2026, 5:45 p.m. ET
+
+This document is the operational truth for the public site. It separates the date an event happened from the time Florida Signal collected, synchronized, enriched or published it.
+
+## The non-negotiable date rule
+
+Analysis uses the public event clock:
+
+- permits: `applied_date`;
+- recorded instruments: `recording_date_iso`;
+- companies: application, filing or registration date;
+- meetings: scheduled meeting time; and
+- stories: the date of the cited event, plus a separate publication time.
+
+Pull, synchronization, enrichment, snapshot and publication timestamps describe freshness only. A batch arrival must never become the event date. If the event date is absent, the item stays visibly undated or out of an event-date chart.
+
+## Verified source health snapshot
+
+The local `/api/data-health` endpoint returned this state on July 17, 2026 at 5:45 p.m. ET:
+
+| Feed | Public status | Event data through | Last system observation | Expected cadence | What must happen next |
+|---|---|---:|---:|---|---|
+| Public mirror | Current | Varies by row | Jul 17, 5:30 p.m. ET | Every 30 minutes | Continue heartbeat monitoring; the latest observed run reported 859 rows and 0 errors. |
+| Permit applications | Current | Jul 16 | Jul 16, 10:02 p.m. ET | Source intake nightly; mirror every 30 minutes | Continue nightly intake; analyze by `applied_date`. |
+| Aggregate dashboard | Stale | Jul 10 | Jul 11, 5:20 p.m. ET | After each successful aggregate build | Rebuild only from verified inputs, then replace snapshot ID 1. |
+| Broward instruments | Stale | Jul 7 | Jul 11, 5:20 p.m. ET | Daily at 9:30 a.m. | Restore the daily collector and verify the recording-date span before publishing new totals. |
+| Meeting Watch | Current | Varies by meeting | Jul 17, 5:41 p.m. ET | Legistar every 15 minutes; DRC/industry editorial check | Continue source polling and keep every row linked to its public source. |
+| Sunbiz | Unverified | Not exposed | Not exposed | Raw ingest nightly at 11:30 p.m.; exact-match enrichment | Expose a health timestamp before calling it current; fuzzy entity writes remain off. |
+
+The site intentionally shows stale and unverified states instead of manufacturing freshness.
+
+## What each public number means
+
+| Surface / number | Definition | Query or input | Update behavior | Important limitation |
+|---|---|---|---|---|
+| `2,263 applications in 14 days` | Count of permit application rows in the current 14-calendar-day window | Paginated `permits.applied_date >= window start` | Recomputed in the browser whenever the page loads after the mirror changes | Zero-count dates are retained; it is an application count, not completed construction. |
+| `700 newest mapped filings` | Current-month permit rows with latitude and longitude, ordered by application date/freshness | `permits`, `applied_date >= first of month`, non-null coordinates, limit 700 | Recomputed on page load | A capped geocoded sample, never a complete monthly total. |
+| `54 storm-related filings` | Mapped sample records whose permit text matches roofs, windows, shutters, drainage, seawalls, generators and related hardening terms | Current mapped sample plus explicit classifier in `app.js` | Recomputed on page load | Applications, not completed installations, damage reports or a forecast. |
+| Application Pulse | Daily counts for the 14-day application window | Same application-date query | Recomputed on page load; social image must be re-exported after a verified refresh | Uses `applied_date`, never batch time. |
+| Work Mix / Diagram of the Day | Counts of mapped records classified into trade/work families | Current 700-record mapped sample | Recomputed on page load | Categories may overlap when one filing names multiple trades. |
+| Place Lens | Mapped sample resolved to official City neighborhood polygons and Census ZIP areas | Permit coordinates + City ArcGIS neighborhood layer + Census TIGERweb | Recomputed when map data loads | Area values represent the displayed sample only. |
+| High-value queue | First 40 current-month records with declared value of at least $100,000, ordered by application date and value | `permits.valuation_usd_clean >= 100000`, limit 40 | Recomputed on page load | Not a monthly total; values are applicant-declared where supplied. |
+| Value Ladder, Operator Board, Records Desk, Company Lens | Enriched aggregate/property/operator/entity context | `dashboard_cache` snapshot ID 1 and its source tables | Changes only after a successful aggregate rebuild | Each card keeps its own observed span; stale values remain stamped stale. |
+| Broward record totals | Deeds, mortgages, liens, NOCs and other recorded instruments | Broward collector / Supabase aggregate | Intended daily at 9:30 a.m. | Must be grouped by recording date and visibly state the covered recording span. |
+| Meeting Watch | Upcoming public and industry rooms | Fort Lauderdale Legistar, DRC source, cited industry calendars | Legistar every 15 minutes; other sources editorially checked | No invented meetings, directions, stream links or agendas. A TV icon appears only for a verified stream URL. |
+| Storm Watch | Official Atlantic outlook plus local hardening/recovery filing views | NHC/NOAA official products + classified local permit sample | Official products refresh while active; local records follow permit cadence | Florida Signal is not a warning service. Publisher controls red Storm Watch mode. |
+| Approved briefs | Human-approved WirePackets for Fort Lauderdale | Private Data Wire CMS adapter | Appears only after city, source, claims, taxonomy and named-human gates pass | No CMS draft or needs-verification item is public. |
+
+## Live Data Room behavior
+
+`/fort-lauderdale/graphics/` now opens with:
+
+1. the three current definitions above;
+2. the interactive mapped-record view;
+3. a real heat-density toggle;
+4. a direct path to the full field map; and
+5. four organized rooms: **Now**, **Places**, **Property**, and **Watch**.
+
+Every diagram names its application or recording window, links to the underlying field surface, carries a centered full-color Florida Signal emblem, supports social sharing/embedding, and can be added to a Field Brief. The heat layer shows density inside the current mapped application sample; it is not a demand forecast or property valuation.
+
+## Daily operating sequence
+
+### After the nightly permit intake
+
+1. Confirm the intake completed without schema or authentication errors.
+2. Confirm the mirror heartbeat and row count in `/api/data-health`.
+3. Query the newest and oldest `applied_date` values; do not infer coverage from `last_seen_at`.
+4. Spot-check coordinates, neighborhood resolution and duplicate permit numbers.
+5. Load Home, Live Map and Data Room; verify their printed application windows agree.
+6. Re-export affected Graphic Desk social images only after the data check passes.
+
+### After the Broward 9:30 a.m. job
+
+1. Confirm deed, mortgage, lien, NOC and instrument collectors completed.
+2. Verify the newest `recording_date_iso` and the observed recording-date span.
+3. Rebuild the aggregate snapshot only when the source job is complete.
+4. Confirm Broward Record and Data Room carry the new span and system observation separately.
+5. If the job fails, leave the previous total stamped stale and alert the operator.
+
+### Meetings and agendas
+
+1. Poll the Fort Lauderdale Legistar source every 15 minutes.
+2. Editorially recheck DRC and industry listings against their public source.
+3. Store agenda, details and stream URLs separately; show only verified links.
+4. Agenda Recon output remains draft until the official packet, property identity, coordinates, citations and named-human approval clear.
+
+### Sunbiz and entity resolution
+
+1. Run the raw ingest at 11:30 p.m.
+2. Join only exact/defensible entity identifiers in enrichment.
+3. Keep fuzzy writes disabled.
+4. Expose the source event span and health timestamp before publishing the feed as current.
+
+### Storm operations
+
+1. Official NHC/NOAA products remain the authority.
+2. Set `FLORIDA_SIGNAL_STORM_MODE=on` or update `data/site_mode.json` only as a publisher decision.
+3. Verify the red mode, official outlook/track, coordinates and timestamps against the official source.
+4. Do not describe local hardening filings as damage, completed work or an official preparedness score.
+
+## Commands and endpoints
+
+Run the local public site:
+
+```sh
+python3 server.py --bind 127.0.0.1 --port 4173
+```
+
+Run the private local Data Wire starter:
+
+```sh
+DATA_WIRE_ADMIN_TOKEN='set-a-private-token' python3 cms/server.py --port 8788
+```
+
+Health checks:
+
+```sh
+curl -s http://127.0.0.1:4173/api/health
+curl -s http://127.0.0.1:4173/api/data-health
+curl -s http://127.0.0.1:4173/api/site-mode
+curl -s http://127.0.0.1:8788/api/health
+```
+
+Regenerate the ten social graphics and their canonical share pages after a successful verified refresh:
+
+```sh
+node social/export_graphic_desk.cjs http://127.0.0.1:4173
+```
+
+Export selected diagrams:
+
+```sh
+FLORIDA_SIGNAL_EXPORT_SLUGS='application-pulse,trades-pulse' node social/export_graphic_desk.cjs
+```
+
+## Environment and secrets
+
+Start from `.env.example`. Keep CMS admin tokens, Mailchimp API keys and any service-role database key server-side. The browser uses only a publishable Supabase key protected by RLS.
+
+Mailchimp is **not currently configured** in the local server. The audience/list metadata exists, but `/api/health` reports `mailchimp_configured: false`. Until a scoped API key and optional city/topic merge fields are configured, consented signups remain in the private local queue and must not be described as synced to Mailchimp.
+
+## Stop-the-line conditions
+
+Do not silently publish or refresh a number when any of these is true:
+
+- event date is missing or replaced by a pull timestamp;
+- source span unexpectedly shrinks;
+- a capped query is presented as a total;
+- duplicate permits/entities inflate the result;
+- a map point cannot be tied to a cited record;
+- a meeting, stream or agenda URL is not verified;
+- a Storm Watch statement could be mistaken for official safety guidance; or
+- a source-health timestamp is absent but the label says live/current.
+
+## Production work still required
+
+- Restore/monitor the stale aggregate and Broward collectors.
+- Expose Sunbiz health and event-span metadata.
+- Deploy the Python APIs (or serverless equivalents); static hosting alone cannot run signup, analytics or the CMS adapter.
+- Deploy the Data Wire behind real user authentication with persistent Postgres/Supabase, backups and retained audit logs.
+- Configure Mailchimp server-side and replay only explicit-consent rows with retry/alerting.
+- Add persistent analytics storage and a retention policy.

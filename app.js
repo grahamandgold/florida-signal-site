@@ -807,7 +807,7 @@
     badge.className = "map-signal-control";
     badge.href = PUBLIC_ROUTES.home;
     badge.setAttribute("aria-label", "Florida Signal Development Intelligence home");
-    badge.innerHTML = '<span class="map-signal-control__mark"><img src="/assets/mark-square.png" alt=""></span><span><b>Florida Signal</b><small>Live field map</small></span>';
+    badge.innerHTML = '<span class="map-signal-control__mark"><img src="/assets/mark-full-color.png" alt=""></span><span><b>Florida Signal</b><small>Live field map</small></span>';
     L.DomEvent.disableClickPropagation(badge);
     container.appendChild(badge);
   }
@@ -935,7 +935,7 @@
   }
 
   async function initMaps() {
-    const node = el("#home-map") || el("#full-map");
+    const node = el("#home-map") || el("#full-map") || el("#data-room-map");
     if (!node || !window.L || !state.records.length) return;
     try { await buildMap(node); }
     catch (error) {
@@ -1430,16 +1430,19 @@
       const embedCode = '<iframe src="' + embedUrl + '" width="100%" height="620" loading="lazy" title="Florida Signal — ' + title.replace(/<[^>]+>/g, "") + '"></iframe>';
       const shareTitle = "Florida Signal · " + title.replace(/<[^>]+>/g, "");
       const tags = uniqueTags(["format:graphic", "source:florida-signal", "topic:" + tagSlug(slug)].concat(settings.tags || []));
+      const openLink = settings.href ? '<a class="graphic-card__open" href="' + escapeHtml(settings.href) + '">' + escapeHtml(settings.linkLabel || "Open the connected intelligence") + ' →</a>' : '';
       return '<article class="graphic-card ' + (settings.tone === "navy" ? "graphic-card--navy " : "") + (settings.wide ? "graphic-card--wide" : "") + '" data-signal-tags="' + taxonomyAttribute(tags) + '" id="' + slug + '">' +
         '<div class="graphic-card__top"><p>' + escapeHtml(kicker) + '</p><span>' + escapeHtml(settings.status || "REAL RECORD") + '</span></div>' +
-        '<h2>' + title + '</h2><p class="graphic-card__dek">' + dek + '</p><div class="graphic-card__body">' + body + '</div>' +
+        '<span class="graphic-card__crest" aria-hidden="true"><img src="/assets/mark-full-color.png" alt=""></span>' +
+        '<h2>' + title + '</h2><p class="graphic-card__dek">' + dek + '</p>' + openLink + '<div class="graphic-card__body">' + body + '</div>' +
         '<p class="graphic-card__clock">' + escapeHtml(settings.clock || "Public event date · data update shown") + '</p><a class="graphic-card__sponsor" href="mailto:desk@thefloridasignal.com?subject=' + encodeURIComponent("Sponsor Florida Signal graphic: " + slug) + '"><span>Present this intelligence</span><strong>Your logo here ↗</strong></a>' +
         '<div class="graphic-card__brand"><span><img src="/assets/' + (settings.tone === "navy" ? "mark-white.png" : "mark-full-color.png") + '" alt=""><b>Florida Signal</b><small>Development intelligence</small></span><time>' + escapeHtml(settings.stamp || applicationWindowStamp) + '</time><div>' +
         '<a class="publish-social publish-social--x" data-network="X" href="https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareTitle) + '&url=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on X">X</a>' +
         '<a class="publish-social publish-social--linkedin" data-network="LinkedIn" href="https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on LinkedIn">in</a>' +
         '<a class="publish-social publish-social--facebook" data-network="Facebook" href="https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on Facebook">f</a>' +
         '<button type="button" data-share-card data-share-url="' + escapeHtml(pageUrl) + '" data-share-title="' + escapeHtml(shareTitle) + '" aria-label="Share this graphic">↗</button>' +
-        '<button type="button" data-copy-embed data-embed-code="' + escapeHtml(embedCode) + '">&lt;/&gt; Embed</button></div></div></article>';
+        '<button type="button" data-copy-embed data-embed-code="' + escapeHtml(embedCode) + '">&lt;/&gt; Embed</button>' +
+        '<button type="button" data-report-add data-report-id="graphic:' + escapeHtml(slug) + '" data-report-title="' + escapeHtml(shareTitle) + '" data-report-meta="' + escapeHtml(settings.stamp || applicationWindowStamp) + '" data-report-url="' + escapeHtml(settings.href || pageUrl) + '" data-report-tags="' + taxonomyAttribute(tags) + '" aria-label="Add graphic to Field Brief" title="Add to Field Brief">＋</button></div></div></article>';
     }
 
     const pulseBody = '<div class="graphic-pulse">' + applicationDays.map(function (day, index) {
@@ -1459,24 +1462,50 @@
       { value: formatNumber(stats.eff_value), label: "Values joined" },
       { value: formatNumber(stats.p_parcel), label: "Parcel links" }
     ]);
-    const stormRadar = '<div class="graphic-radar"><div class="graphic-radar__sweep"></div><div class="graphic-radar__core"><strong>' + formatNumber(stormRecords.length) + '</strong><span>local hardening<br>records</span></div>' + (state.storms.length ? state.storms.slice(0, 3).map(function (storm, index) { return '<i class="graphic-radar__blip graphic-radar__blip--' + (index + 1) + '" title="' + escapeHtml(storm.name) + '"></i>'; }).join("") : '<b class="graphic-radar__standby">NHC STANDBY</b>') + '</div>';
+    const stormFamilies = [
+      { label: "Roofs", test: /roof/i },
+      { label: "Windows + shutters", test: /(window|door|glazing|shutter|opening)/i },
+      { label: "Drainage", test: /(drain|flood|elevation|sewer)/i },
+      { label: "Seawalls + marine", test: /(seawall|sea wall|marine|dock)/i },
+      { label: "Generators + electric", test: /(generator|electric|solar)/i }
+    ];
+    const stormMix = stormFamilies.map(function (family) {
+      return { label: family.label, value: stormRecords.filter(function (record) { return family.test.test([record.permit_type, record.permit_category, record.description, record.work_type].join(" ")); }).length };
+    }).filter(function (item) { return item.value > 0; });
     const cards = [
-      card("application-pulse", "APPLICATION DATES · 14 CALENDAR DAYS", formatNumber(applicationTotal) + " <em>FILED</em>", "Fort Lauderdale permit applications grouped by the date the public application was filed—not by the day a batch arrived.", pulseBody, { tone: "navy", wide: true, status: "LIVE QUERY", stamp: applicationWindowStamp, clock: "City permit table · applied_date · window " + spanDate(APPLICATION_WINDOW_START, now.toISOString().slice(0, 10)) + " · latest filing present " + stampDate(applicationThrough) + " · zero days retained" }),
-      card("place-lens", "HYPERLOCAL · OFFICIAL BOUNDARIES", "PLACE <em>LENS</em>", "The newest geocoded application sample resolved into official City neighborhoods and Census ZIP areas. Circle size expresses relative filing count inside this sample.", placeBody, { wide: true, status: "CITY + CENSUS", stamp: mappedStamp, clock: "Newest " + formatNumber(state.records.length) + " geocoded permit applications returned · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · City neighborhoods + Census ZCTAs" }),
-      card("trades-pulse", "DIAGRAM OF THE DAY · LIVE WORK MIX", "WHAT FORT LAUDERDALE IS <em>BUILDING</em>", "Permit categories become momentum intelligence when trade mix, place and filing time are read together.", bars(trades), { tone: "navy", wide: true, status: "LIVE QUERY", stamp: mappedStamp, clock: "Newest " + formatNumber(state.records.length) + " geocoded applications · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · categories may overlap when one filing names more than one trade" }),
-      card("high-value", "CAPPED HIGH-VALUE FILING QUEUE", highValueTop ? escapeHtml(moneyFormat.format(Number(highValueTop.valuation_usd_clean))) + " <em>TOP FILING</em>" : "VALUE <em>PENDING</em>", highValueTop ? escapeHtml(recordHeadline(highValueTop)) : "No valued high-dollar filing is available in the current query.", tiles([{ value: highValue.length ? formatNumber(highValue.length) : "0", label: "valued records returned" }, { value: highValueTotal ? compactFormat.format(highValueTotal) : "$0", label: "declared value in returned queue" }]), { stamp: featuredStamp, clock: "First " + formatNumber(state.featured.length) + " records in ordered current-month $100K+ query · applied_date span " + spanDate(featuredDates[0], featuredDates.slice(-1)[0]) + " · not a complete monthly total" }),
-      card("value-universe", "ENRICHED PROPERTY CONTEXT", "VALUE <em>LADDER</em>", "Where parcel-linked permit records sit across the best-available property-value universe.", bars(values), { tone: "navy", stamp: cacheStamp, clock: "Verified dashboard snapshot · enriched property values · update time shown" }),
-      card("operator-board", "NORMALIZED CONTRACTOR NAMES", "OPERATOR <em>BOARD</em>", "A true leaderboard—not another bar chart—of names appearing most often in the normalized public record set.", ranks(contractors), { stamp: cacheStamp, clock: "Verified dashboard snapshot · normalized contractor names · not a performance ranking" }),
-      card("records-desk", "BROWARD RECORD · CIRCULAR COVERAGE", "RECORDS <em>DESK</em>", "Clerk and parcel layers that power ownership and lien intelligence. Relative rings compare record-set scale; they do not imply the categories share a denominator.", recordRings + '<p class="graphic-inline-stat"><strong>' + formatNumber(parcelCoverage) + '%</strong> of tracked permit records parcel-linked</p>', { tone: "navy", stamp: browardStamp, clock: "Broward records · latest recording date " + (stats.broward_fresh ? formatDate(stats.broward_fresh, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "pending") }),
-      card("company-lens", "SUNBIZ + OWNERSHIP RESOLUTION", "WHO IS <em>BEHIND IT</em>", "The geeky part: an address becomes an entity trail through public company filings, parcel joins and recorded instruments.", companyNetwork, { stamp: cacheStamp, clock: "Verified data snapshot · state registration/filing dates drive company movement; pull time shows freshness only" }),
-      card("storm-window", "NHC + STORM-RELEVANT FILINGS", state.storms.length ? formatNumber(state.storms.length) + " <em>ATLANTIC ACTIVE</em>" : "STORM <em>STANDBY</em>", state.storms.length ? state.storms.map(function (storm) { return escapeHtml(storm.name + " · " + storm.classification); }).join(" · ") : "No named Atlantic system is currently active. Preparation and recovery filings remain searchable.", stormRadar, { tone: "navy", stamp: sourceCheckStamp, clock: "NHC source checked " + stampDate(now.toISOString()) + " · local hardening count uses mapped applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) }),
-      card("meetings-watch", "PUBLIC + INDUSTRY ROOMS", nextMeeting ? escapeHtml(formatDate(nextMeeting.date, { month: "short", day: "numeric", timeZone: "America/New_York" })) + " <em>ON DECK</em>" : "ROOMS <em>WATCHED</em>", nextMeeting ? escapeHtml(nextMeeting.title) : "The official calendar is being checked; no meeting is inferred from stale data.", state.meetings.length ? meetingTimeline(state.meetings) : '<div class="graphic-empty">Official calendar check in progress…</div>', { stamp: meetingStamp, clock: "Scheduled meeting span " + spanDate(meetingDates[0], meetingDates.slice(-1)[0]) + " · official/public and named industry calendars · refreshed every 15 minutes" })
+      card("application-pulse", "APPLICATION DATES · 14 CALENDAR DAYS", formatNumber(applicationTotal) + " <em>FILED</em>", "Fort Lauderdale permit applications grouped by the date the public application was filed—not by the day a batch arrived.", pulseBody, { tone: "navy", wide: true, status: "LIVE QUERY", stamp: applicationWindowStamp, clock: "City permit table · applied_date · window " + spanDate(APPLICATION_WINDOW_START, now.toISOString().slice(0, 10)) + " · latest filing present " + stampDate(applicationThrough) + " · zero days retained", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Explore these filings on the live map" }),
+      card("place-lens", "HYPERLOCAL · OFFICIAL BOUNDARIES", "PLACE <em>LENS</em>", "The newest geocoded application sample resolved into official City neighborhoods and Census ZIP areas. Circle size expresses relative filing count inside this sample.", placeBody, { wide: true, status: "CITY + CENSUS", stamp: mappedStamp, clock: "Newest " + formatNumber(state.records.length) + " geocoded permit applications returned · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · City neighborhoods + Census ZCTAs", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Open the neighborhood and ZIP map" }),
+      card("trades-pulse", "DIAGRAM OF THE DAY · LIVE WORK MIX", "WHAT FORT LAUDERDALE IS <em>BUILDING</em>", "Permit categories become momentum intelligence when trade mix, place and filing time are read together.", bars(trades), { tone: "navy", wide: true, status: "LIVE QUERY", stamp: mappedStamp, clock: "Newest " + formatNumber(state.records.length) + " geocoded applications · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · categories may overlap when one filing names more than one trade", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Investigate the work mix on the map" }),
+      card("high-value", "CAPPED HIGH-VALUE FILING QUEUE", highValueTop ? escapeHtml(moneyFormat.format(Number(highValueTop.valuation_usd_clean))) + " <em>TOP FILING</em>" : "VALUE <em>PENDING</em>", highValueTop ? escapeHtml(recordHeadline(highValueTop)) : "No valued high-dollar filing is available in the current query.", tiles([{ value: highValue.length ? formatNumber(highValue.length) : "0", label: "valued records returned" }, { value: highValueTotal ? compactFormat.format(highValueTotal) : "$0", label: "declared value in returned queue" }]), { stamp: featuredStamp, clock: "First " + formatNumber(state.featured.length) + " records in ordered current-month $100K+ query · applied_date span " + spanDate(featuredDates[0], featuredDates.slice(-1)[0]) + " · not a complete monthly total", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Open the exact high-value filings" }),
+      card("value-universe", "ENRICHED PROPERTY CONTEXT", "VALUE <em>LADDER</em>", "Where parcel-linked permit records sit across the best-available property-value universe.", bars(values), { tone: "navy", stamp: cacheStamp, clock: "Verified dashboard snapshot · enriched property values · update time shown", href: PUBLIC_ROUTES.broward, linkLabel: "Open the Broward property record" }),
+      card("operator-board", "NORMALIZED CONTRACTOR NAMES", "OPERATOR <em>BOARD</em>", "Names appearing most often in the normalized public record set. This measures filing activity—not quality or performance.", ranks(contractors), { stamp: cacheStamp, clock: "Verified dashboard snapshot · normalized contractor names · not a performance ranking", href: PUBLIC_ROUTES.broward, linkLabel: "Open the operator evidence" }),
+      card("records-desk", "BROWARD RECORD · COVERAGE", "RECORDS <em>DESK</em>", "Recorded instruments, parcel links, ownership changes and permit joins—shown with their separate scales and source dates.", recordRings + '<p class="graphic-inline-stat"><strong>' + formatNumber(parcelCoverage) + '%</strong> of tracked permit records parcel-linked</p>', { tone: "navy", stamp: browardStamp, clock: "Broward records · latest recording date " + (stats.broward_fresh ? formatDate(stats.broward_fresh, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "pending"), href: PUBLIC_ROUTES.broward, linkLabel: "Open deeds, liens and ownership intelligence" }),
+      card("company-lens", "SUNBIZ + OWNERSHIP RESOLUTION", "WHO IS <em>BEHIND IT</em>", "An address becomes an entity trail through public company filings, parcel joins and recorded instruments.", companyNetwork, { stamp: cacheStamp, clock: "Verified data snapshot · state registration/filing dates drive company movement; pull time shows freshness only", href: PUBLIC_ROUTES.broward, linkLabel: "Follow the ownership trail" }),
+      card("storm-window", "ROOFS · WINDOWS · DRAINAGE · GENERATORS", formatNumber(stormRecords.length) + " <em>LOCAL FILINGS</em>", "What the current permit sample says people are hardening. These are applications—not completed installations or evidence of storm damage.", stormMix.length ? bars(stormMix, "graphic-bar--storm") : '<div class="graphic-empty">No classified hardening filings are present in this mapped application window.</div>', { tone: "navy", stamp: mappedStamp, status: "STORM WATCH DATA", clock: "Mapped hardening applications · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · categories may overlap", href: PUBLIC_ROUTES.storm, linkLabel: "Open the filings and official outlook on Storm Watch" }),
+      card("meetings-watch", "PUBLIC + INDUSTRY ROOMS", nextMeeting ? escapeHtml(formatDate(nextMeeting.date, { month: "short", day: "numeric", timeZone: "America/New_York" })) + " <em>ON DECK</em>" : "ROOMS <em>WATCHED</em>", nextMeeting ? escapeHtml(nextMeeting.title) : "The official calendar is being checked; no meeting is inferred from stale data.", state.meetings.length ? meetingTimeline(state.meetings) : '<div class="graphic-empty">Official calendar check in progress…</div>', { stamp: meetingStamp, clock: "Scheduled meeting span " + spanDate(meetingDates[0], meetingDates.slice(-1)[0]) + " · official/public and named industry calendars · refreshed every 15 minutes", href: PUBLIC_ROUTES.meetings, linkLabel: "Open agendas, rooms and stream links" })
     ];
 
     const embedSlug = new URLSearchParams(window.location.search).get("embed");
     const visibleCards = embedSlug ? cards.filter(function (html) { return html.includes('id="' + embedSlug + '"'); }) : cards;
     if (embedSlug) document.body.classList.add("graphic-embed");
-    root.innerHTML = visibleCards.join("") || '<p class="loading-row">That graphic is not available.</p>';
+    const applicationCount = el("#data-room-application-count");
+    const mapCount = el("#data-room-map-count");
+    const stormCount = el("#data-room-storm-count");
+    const mapWindow = el("#data-room-map-window");
+    if (applicationCount) applicationCount.textContent = formatNumber(applicationTotal);
+    if (mapCount) mapCount.textContent = formatNumber(state.records.length);
+    if (stormCount) stormCount.textContent = formatNumber(stormRecords.length);
+    if (mapWindow) mapWindow.textContent = "Application window · " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · " + formatNumber(state.records.length) + " mapped filings";
+    function cardWithId(slug) { return cards.find(function (html) { return html.includes('id="' + slug + '"'); }) || ""; }
+    function group(id, kicker, title, dek, slugs, featured) {
+      return '<section class="graphic-group' + (featured ? ' graphic-group--featured' : '') + '" id="' + id + '"><header class="graphic-group__head"><div><p>' + escapeHtml(kicker) + '</p><h2>' + escapeHtml(title) + '</h2></div><span>' + escapeHtml(dek) + '</span></header><div class="graphic-group__grid">' + slugs.map(cardWithId).join("") + '</div></section>';
+    }
+    root.innerHTML = embedSlug ? (visibleCards.join("") || '<p class="loading-row">That graphic is not available.</p>') : [
+      group("today", "01 · Now", "The live picture", "The application clock and today’s work mix.", ["application-pulse", "trades-pulse"], true),
+      group("places", "02 · Places", "Where it is moving", "Neighborhood, ZIP, value and operator context.", ["place-lens", "high-value", "operator-board"]),
+      group("property", "03 · Property", "Who and what sit behind it", "Parcel, instrument, ownership and entity joins.", ["records-desk", "value-universe", "company-lens"]),
+      group("watch", "04 · Watch", "What is coming next", "Hardening filings, official outlooks, agendas and rooms.", ["storm-window", "meetings-watch"])
+    ].join("");
     els("[data-copy-embed]", root).forEach(function (button) {
       button.addEventListener("click", async function () {
         const code = button.getAttribute("data-embed-code") || "";
@@ -2399,6 +2428,7 @@
       { selector: "#value-bars", title: "Florida Signal · Value Ladder", url: absolute(CITY_ROOT + "/share/value-universe.html"), embed: graphicsEmbed("value-universe") },
       { selector: "#operator-list", title: "Florida Signal · Operator Board", url: absolute(CITY_ROOT + "/share/operator-board.html"), embed: graphicsEmbed("operator-board") },
       { selector: "#home-map", title: "Florida Signal · Live Broward field map", url: absolute(PUBLIC_ROUTES.neighborhoods + "#full-map"), embed: absolute(PUBLIC_ROUTES.neighborhoods + "?embed=map#full-map"), map: true },
+      { selector: "#data-room-map", title: "Florida Signal · Live Broward field map", url: absolute(PUBLIC_ROUTES.neighborhoods + "#full-map"), embed: absolute(PUBLIC_ROUTES.neighborhoods + "?embed=map#full-map"), map: true },
       { selector: ".method-flow", title: "Florida Signal · Public-record methodology", url: absolute(PUBLIC_ROUTES.method + "#method-flow") },
       { selector: "#meeting-spotlight-map", title: "Florida Signal · Rooms Watched map", url: absolute(PUBLIC_ROUTES.meetings + "#meeting-board"), overlay: true },
       { selector: "#agenda-recon-map", title: "Florida Signal · Agenda Recon map", url: absolute(PUBLIC_ROUTES.meetings + "#agenda-recon-title"), map: true },
@@ -2476,7 +2506,7 @@
     launcher.setAttribute("data-field-brief-open", "");
     launcher.setAttribute("aria-label", "Open your Florida Signal Field Brief");
     launcher.title = "Open your collected Florida Signal report";
-    launcher.innerHTML = '<img src="/assets/mark-square.png" alt=""><span><small>Your report</small><strong>Field Brief</strong></span><b data-field-brief-count>0</b>';
+    launcher.innerHTML = '<svg class="field-brief-launcher__icon" viewBox="0 0 32 32" aria-hidden="true"><path d="M8.5 6.5h12l3 3v16h-15z"></path><path d="M20.5 6.5v4h4"></path><path d="M12 15h8M12 19h5"></path><path class="field-brief-launcher__plus" d="M23.5 18.5v9M19 23h9"></path></svg><span><small>Your report</small><strong>Field Brief</strong></span><b data-field-brief-count>0</b>';
 
     const drawer = document.createElement("section");
     drawer.className = "field-brief-drawer";

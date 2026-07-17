@@ -33,6 +33,9 @@ The local server provides same-origin meeting, storm, CMS, agenda-recon and subs
 ## Operating handoff
 
 - [`FLORIDA_SIGNAL_BUILD_REPORT.md`](FLORIDA_SIGNAL_BUILD_REPORT.md) — source cadence, live versus scheduled updates, date methodology, CMS/Mailchimp state and production runbook.
+- [`LIVE_DATA_OPERATIONS_HANDOFF.md`](LIVE_DATA_OPERATIONS_HANDOFF.md) — exact live-stat definitions, observed source health, update/recovery procedures and daily operating sequence.
+- [`AI_HANDOFF.md`](AI_HANDOFF.md) — data, editorial, multi-city, Storm Watch and implementation rules for the next AI or developer.
+- [`SOCIAL_MEDIA_ASSET_GUIDE.md`](SOCIAL_MEDIA_ASSET_GUIDE.md) — logo inventory, channel masters, export command, captions and sharing rules.
 - [`FLORIDA_SIGNAL_TAGGING_SYSTEM.md`](FLORIDA_SIGNAL_TAGGING_SYSTEM.md) — controlled site and CMS taxonomy.
 - [`cms/README.md`](cms/README.md) — Data Wire endpoints, Story Packet gates and production hardening.
 - [`BRAND_KIT.md`](BRAND_KIT.md) and [`fort-lauderdale/brand/`](fort-lauderdale/brand/) — brand rules, social masters and newsletter assets.

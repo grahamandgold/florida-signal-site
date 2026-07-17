@@ -24,7 +24,7 @@
     {"name": "Approved briefs", "url": "https://thefloridasignal.com/fort-lauderdale/briefs/", "update_target": "after city, source, claims, taxonomy and human-editor gates pass"},
     {"name": "Neighborhood and field map", "url": "https://thefloridasignal.com/fort-lauderdale/neighborhoods/", "update_target": "permit intake nightly; public mirror and detail every 30 minutes; enrichment every two hours"},
     {"name": "Broward record", "url": "https://thefloridasignal.com/fort-lauderdale/broward-record/", "update_target": "Broward collector daily at 9:30 AM; always show the observed recording-date span"},
-    {"name": "Graphic Desk", "url": "https://thefloridasignal.com/fort-lauderdale/graphics/", "update_target": "regenerate after each successful source refresh"},
+    {"name": "Data Room", "url": "https://thefloridasignal.com/fort-lauderdale/graphics/", "update_target": "live map follows the current mapped permit sample; regenerate affected diagram exports after each successful source refresh"},
     {"name": "Meetings and Agenda Recon", "url": "https://thefloridasignal.com/fort-lauderdale/meetings/", "update_target": "Fort Lauderdale Legistar every 15 minutes; source-cited DRC and industry listings editorially rechecked"},
     {"name": "Storm Window", "url": "https://thefloridasignal.com/fort-lauderdale/storm/", "update_target": "official NHC/NOAA refresh while active"},
     {"name": "Methodology", "url": "https://thefloridasignal.com/fort-lauderdale/method/", "update_target": "when source, clock or editorial rules change"}
