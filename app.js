@@ -15,6 +15,8 @@
   };
   const ACTIVE_CITY = "fort-lauderdale";
   const CITY_ROOT = "/fort-lauderdale";
+  const OFFICIAL_PERMIT_PORTAL = "https://aca3.accela.com/FTL";
+  const FIELD_BRIEF_STORAGE_KEY = "florida-signal-field-brief-v1";
   const PUBLIC_ROUTES = {
     home: CITY_ROOT + "/",
     briefs: CITY_ROOT + "/briefs/",
@@ -37,6 +39,11 @@
     ["pembroke-pines", "Pembroke Pines"], ["plantation", "Plantation"], ["pompano-beach", "Pompano Beach"],
     ["sea-ranch-lakes", "Sea Ranch Lakes"], ["southwest-ranches", "Southwest Ranches"], ["sunrise", "Sunrise"],
     ["tamarac", "Tamarac"], ["west-park", "West Park"], ["weston", "Weston"], ["wilton-manors", "Wilton Manors"]
+  ];
+  const BRIEF_INTERESTS = [
+    ["development", "Development + permits"], ["neighborhoods", "Neighborhood intelligence"],
+    ["meetings", "Meetings + agendas"], ["property", "Property + ownership"],
+    ["liens", "Liens + courthouse"], ["storm", "Storm readiness"]
   ];
   const recordSelect = "permit_number,address,permit_type,permit_category,description,valuation_usd_clean,applied_date,issued_date,last_seen_at,lat,lon,region,contractor_name,applicant_name,owner_name,status,work_type,is_commercial";
   const numberFormat = new Intl.NumberFormat("en-US");
@@ -108,7 +115,7 @@
 
   function recordTaxonomy(record) {
     const text = [record.permit_type, record.permit_category, record.description, record.work_type].join(" ").toLowerCase();
-    const tags = ["source:city-permit", "geography:" + tagSlug(recordPlace(record)), "audience:field-desk"];
+    const tags = ["market:broward", "county:broward-county", "city:fort-lauderdale", "source:city-permit", "geography:" + tagSlug(recordPlace(record)), "audience:field-desk"];
     if (isStormRecord(record)) tags.push("topic:storm-readiness");
     if (isAssociationRecord(record)) tags.push("topic:association-condo");
     if (/(demo|demolition)/.test(text)) tags.push("topic:demolition");
@@ -130,6 +137,47 @@
     return visible.length ? '<span class="taxonomy-line"><b>' + escapeHtml(prefix || "Filed under") + ' ·</b>' + escapeHtml(visible.join(" · ")) + '</span>' : "";
   }
 
+  function initTaxonomyDefaults() {
+    const page = tagSlug(document.body.getAttribute("data-page") || "home");
+    const base = ["market:broward", "county:broward-county", "city:fort-lauderdale"];
+    const selectors = "main > section, main article, [data-flip-panel], [data-signal-tags], .visual-recon-strip > a, .sponsor-slot, .site-sponsor-rail";
+    function decorate(node) {
+      if (!(node instanceof Element) || !node.matches(selectors)) return;
+      const existing = String(node.getAttribute("data-signal-tags") || "").split(/\s+/).filter(Boolean);
+      const tags = existing.slice();
+      base.forEach(function (baseTag) {
+        const namespace = baseTag.split(":")[0] + ":";
+        if (!existing.some(function (tag) { return tag.indexOf(namespace) === 0; })) tags.push(baseTag);
+      });
+      if (!existing.some(function (tag) { return tag.indexOf("topic:") === 0; })) tags.push("topic:" + page);
+      if (!existing.some(function (tag) { return tag.indexOf("format:") === 0; })) {
+        if (node.matches("[data-flip-panel]")) tags.push("format:live-panel");
+        else if (node.matches(".visual-recon-strip > a")) tags.push("format:visual-promo");
+        else if (node.matches(".sponsor-slot,.site-sponsor-rail")) tags.push("format:sponsorship");
+        else tags.push(node.tagName === "ARTICLE" ? "format:card" : "format:section");
+      }
+      node.setAttribute("data-signal-tags", uniqueTags(tags).join(" "));
+    }
+    function scan(root) {
+      if (root instanceof Element) decorate(root);
+      els(selectors, root instanceof Element ? root : document).forEach(decorate);
+    }
+    scan(document);
+    const observer = new MutationObserver(function (mutations) {
+      mutations.forEach(function (mutation) { Array.from(mutation.addedNodes).forEach(scan); });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    [
+      ["florida-signal:market", "broward"],
+      ["florida-signal:county", "broward-county"],
+      ["florida-signal:city", "fort-lauderdale"]
+    ].forEach(function (entry) {
+      let meta = el('meta[name="' + entry[0] + '"]');
+      if (!meta) { meta = document.createElement("meta"); meta.name = entry[0]; document.head.appendChild(meta); }
+      meta.content = entry[1];
+    });
+  }
+
   function placeSignature(record) {
     return '<span class="place-signature"><i aria-hidden="true"></i>' + escapeHtml(recordPlace(record)) + '</span>';
   }
@@ -138,20 +186,28 @@
     return new URL(recordUrl(record), window.location.href).href;
   }
 
+  function recordInvestigationUrls(record) {
+    const hasPoint = Number.isFinite(Number(record.lat)) && Number.isFinite(Number(record.lon));
+    const point = hasPoint ? Number(record.lat) + "," + Number(record.lon) : encodeURIComponent(String(record.address || "Fort Lauderdale, FL"));
+    return {
+      street: hasPoint ? "https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=" + point : "https://www.google.com/maps/search/?api=1&query=" + point,
+      satellite: hasPoint ? "https://www.google.com/maps/@?api=1&map_action=map&center=" + point + "&zoom=19&basemap=satellite" : "https://www.google.com/maps/search/?api=1&query=" + point,
+      official: OFFICIAL_PERMIT_PORTAL,
+      floridaSignal: shareRecordUrl(record)
+    };
+  }
+
   function recordShareMarkup(record) {
     const url = shareRecordUrl(record);
     const title = "Florida Signal · " + recordPlace(record) + " · " + titleCase(String(record.address || record.permit_number || "development record").replace(/\s+/g, " "));
     const message = title + " — " + (record.permit_number || "public filing") + " " + url;
-    const hasPoint = Number.isFinite(Number(record.lat)) && Number.isFinite(Number(record.lon));
-    const point = hasPoint ? Number(record.lat) + "," + Number(record.lon) : encodeURIComponent(String(record.address || "Fort Lauderdale, FL"));
-    const streetUrl = hasPoint ? "https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=" + point : "https://www.google.com/maps/search/?api=1&query=" + point;
-    const satelliteUrl = hasPoint ? "https://www.google.com/maps/@?api=1&map_action=map&center=" + point + "&zoom=19&basemap=satellite" : "https://www.google.com/maps/search/?api=1&query=" + point;
+    const investigate = recordInvestigationUrls(record);
     return '<div class="record-share" aria-label="Share this Florida Signal record">' +
-      '<a class="record-action record-action--street" href="' + escapeHtml(streetUrl) + '" target="_blank" rel="noreferrer" aria-label="Open nearby Street View">Street view</a>' +
-      '<a class="record-action record-action--satellite" href="' + escapeHtml(satelliteUrl) + '" target="_blank" rel="noreferrer" aria-label="Open satellite map">Satellite</a>' +
-      '<a class="record-action record-action--text" href="sms:?&body=' + encodeURIComponent(message) + '" aria-label="Text this record">Text</a>' +
-      '<button class="record-action record-action--share" type="button" data-share-record data-share-url="' + escapeHtml(url) + '" data-share-title="' + escapeHtml(title) + '">Share</button>' +
-      '<button class="record-action record-action--copy" type="button" data-copy-record data-share-url="' + escapeHtml(url) + '">Copy link</button></div>';
+      '<a class="record-action record-action--street" data-action-label="Street View" href="' + escapeHtml(investigate.street) + '" target="_blank" rel="noreferrer" aria-label="Open nearby Street View">Street view</a>' +
+      '<a class="record-action record-action--satellite" data-action-label="Satellite" href="' + escapeHtml(investigate.satellite) + '" target="_blank" rel="noreferrer" aria-label="Open satellite map">Satellite</a>' +
+      '<a class="record-action record-action--text" data-action-label="Text" href="sms:?&body=' + encodeURIComponent(message) + '" aria-label="Text this record">Text</a>' +
+      '<button class="record-action record-action--share" data-action-label="Share" type="button" data-share-record data-share-url="' + escapeHtml(url) + '" data-share-title="' + escapeHtml(title) + '">Share</button>' +
+      '<button class="record-action record-action--brief" data-action-label="Add to report" type="button" data-report-add data-report-id="permit:' + escapeHtml(record.permit_number || url) + '" data-report-title="' + escapeHtml(title) + '" data-report-meta="' + escapeHtml((record.permit_number || "Public filing") + " · applied " + formatDate(record.applied_date, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '" data-report-url="' + escapeHtml(url) + '" data-report-tags="' + taxonomyAttribute(recordTaxonomy(record)) + '">Add to report</button></div>';
   }
 
   function bindRecordSharing(root) {
@@ -259,6 +315,9 @@
     renderInfographics();
     renderStormRecords();
     renderGraphicDesk();
+    renderLiveWindows();
+    renderDiagramPromo();
+    renderStormPromo();
     await initMaps();
     renderLeadDesk();
     initRecordSpotlights();
@@ -296,7 +355,7 @@
     if (!grid || !reader) return;
     const stories = state.cms && Array.isArray(state.cms.stories) ? state.cms.stories : [];
     if (loadError) {
-      if (status) status.textContent = "The approved public wire is temporarily unavailable. No cached draft is being substituted.";
+      if (status) status.textContent = "The approved public wire is temporarily unavailable. No older draft is being substituted.";
       grid.innerHTML = '<div class="stories-empty"><p class="eyebrow">Source gate closed</p><h2>No brief is being inferred.</h2><p>The permit, meeting and map surfaces remain available while the editorial wire reconnects.</p><a class="button" href="' + PUBLIC_ROUTES.neighborhoods + '">Open live field map →</a></div>';
       return;
     }
@@ -315,7 +374,7 @@
       reader.hidden = false;
       reader.innerHTML = '<a class="story-reader__back" href="' + PUBLIC_ROUTES.briefs + '">← All approved briefs</a>' +
         (selected.hero_image ? '<figure><img src="' + escapeHtml(selected.hero_image) + '" alt=""><figcaption>Florida Signal story image · source and licensing retained by the desk</figcaption></figure>' : '') +
-        '<header>' + taxonomyLine(tags, "Filed under") + '<p class="story-reader__date">Event date ' + escapeHtml(formatDate(selected.event_date || selected.published_at, { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + ' · approved ' + escapeHtml(formatDate(selected.published_at, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })) + ' ET</p><h1>' + escapeHtml(selected.title) + '</h1><p class="story-reader__dek">' + escapeHtml(selected.summary || "") + '</p><span>By ' + escapeHtml(selected.byline || "Florida Signal Desk") + '</span></header><div class="story-reader__body">' + body + '</div><footer><strong>Sources</strong>' + sourceLinks.filter(Boolean).map(function (url, index) { return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noreferrer">Open cited source ' + (index + 1) + ' ↗</a>'; }).join("") + '<small>Florida Signal separates event dates from pull, enrichment and publication times.</small></footer>';
+        '<header>' + taxonomyLine(tags, "Filed under") + '<p class="story-reader__date">Event date ' + escapeHtml(formatDate(selected.event_date || selected.published_at, { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + ' · approved ' + escapeHtml(formatDate(selected.published_at, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })) + ' ET</p><h1>' + escapeHtml(selected.title) + '</h1><p class="story-reader__dek">' + escapeHtml(selected.summary || "") + '</p><span>By ' + escapeHtml(selected.byline || "Florida Signal Desk") + '</span><button class="story-report-add" type="button" data-report-add data-report-id="story:' + escapeHtml(selected.slug || selected.id || publicStoryUrl(selected)) + '" data-report-title="' + escapeHtml(selected.title) + '" data-report-meta="Approved Florida Signal brief · ' + escapeHtml(formatDate(selected.event_date || selected.published_at, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '" data-report-url="' + escapeHtml(publicStoryUrl(selected)) + '" data-report-tags="' + taxonomyAttribute(tags) + '">＋ Add to report</button></header><div class="story-reader__body">' + body + '</div><footer><strong>Sources</strong>' + sourceLinks.filter(Boolean).map(function (url, index) { return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noreferrer">Open cited source ' + (index + 1) + ' ↗</a>'; }).join("") + '<small>Florida Signal separates event dates from pull, enrichment and publication times.</small></footer>';
       grid.hidden = true;
       document.title = selected.title + " — Florida Signal";
       return;
@@ -330,7 +389,7 @@
       const tags = Array.isArray(story.tags) ? story.tags : [];
       return '<article class="story-card ' + (index === 0 ? "story-card--lead" : "") + '">' +
         (story.hero_image ? '<a class="story-card__image" href="' + publicStoryUrl(story) + '"><img src="' + escapeHtml(story.hero_image) + '" alt=""></a>' : '<a class="story-card__mark" href="' + publicStoryUrl(story) + '" aria-label="Open ' + escapeHtml(story.title) + '"><img src="/assets/mark-full-color.png" alt=""></a>') +
-        '<div>' + taxonomyLine(tags, "Filed under") + '<p class="story-card__date">' + escapeHtml(formatDate(story.event_date || story.published_at, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '</p><h2><a href="' + publicStoryUrl(story) + '">' + escapeHtml(story.title) + '</a></h2><p>' + escapeHtml(story.summary || "Approved Florida Desk report") + '</p><footer><span>' + escapeHtml(story.byline || "Florida Signal Desk") + '</span><a href="' + publicStoryUrl(story) + '">Read + sources →</a></footer></div></article>';
+        '<div>' + taxonomyLine(tags, "Filed under") + '<p class="story-card__date">' + escapeHtml(formatDate(story.event_date || story.published_at, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '</p><h2><a href="' + publicStoryUrl(story) + '">' + escapeHtml(story.title) + '</a></h2><p>' + escapeHtml(story.summary || "Approved Florida Desk report") + '</p><footer><span>' + escapeHtml(story.byline || "Florida Signal Desk") + '</span><a href="' + publicStoryUrl(story) + '">Read + sources →</a><button type="button" data-report-add data-report-id="story:' + escapeHtml(story.slug || story.id || publicStoryUrl(story)) + '" data-report-title="' + escapeHtml(story.title) + '" data-report-meta="Approved Florida Signal brief · ' + escapeHtml(formatDate(story.event_date || story.published_at, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '" data-report-url="' + escapeHtml(publicStoryUrl(story)) + '" data-report-tags="' + taxonomyAttribute(tags) + '">＋ Add to report</button></footer></div></article>';
     }).join("");
   }
 
@@ -342,6 +401,7 @@
     const liveHeadline = cmsStories[0] ? cmsStories[0].title : (state.records[0] ? recordHeadline(state.records[0]) : "The public feed is connecting…");
     if (ticker) ticker.textContent = liveHeadline;
     if (mobileTicker) mobileTicker.textContent = liveHeadline;
+    startSignalTicker((cmsStories.length ? cmsStories.map(function (story) { return story.title; }) : state.records.slice(0, 8).map(recordHeadline)).filter(Boolean));
     if (document.body.classList.contains("storm-mode")) startStormTicker(state.storms[0] || null);
     if (!list) return;
     if (cmsStories.length) {
@@ -378,6 +438,29 @@
     if (note && candidates[0]) note.textContent = "Latest displayed application date " + formatDate(candidates[0].applied_date, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) + " · City of Fort Lauderdale";
   }
 
+  let signalTickerTimer = null;
+  function startSignalTicker(headlines) {
+    if (signalTickerTimer) window.clearInterval(signalTickerTimer);
+    if (!headlines || !headlines.length || document.body.classList.contains("storm-mode")) return;
+    const ticker = el("#live-bar-story");
+    const mobileTicker = el("#mobile-live-story");
+    let index = 0;
+    function flip() {
+      const headline = headlines[index % headlines.length];
+      [ticker, mobileTicker].forEach(function (node) {
+        if (!node) return;
+        node.classList.remove("is-flipping");
+        window.requestAnimationFrame(function () {
+          node.textContent = headline;
+          node.classList.add("is-flipping");
+        });
+      });
+      index += 1;
+    }
+    flip();
+    signalTickerTimer = window.setInterval(flip, 5200);
+  }
+
   function renderInfographics() {
     const payload = state.dashboard && state.dashboard.payload;
     const chart = el("#activity-chart");
@@ -403,7 +486,7 @@
       const pulled = pipeline.reduce(function (sum, day) { return sum + Number(day.intake || 0); }, 0);
       const enriched = pipeline.reduce(function (sum, day) { return sum + Number(day.enriched || 0); }, 0);
       const source = el("#activity-source");
-      if (source) source.textContent = "City of Fort Lauderdale permit records · grouped by applied_date · live query · pipeline processing is separate: " + formatNumber(pulled) + " pulled / " + formatNumber(enriched) + " enriched in the latest cache window";
+      if (source) source.textContent = "City of Fort Lauderdale permit records · grouped by applied_date · live query · pipeline processing is separate: " + formatNumber(pulled) + " pulled / " + formatNumber(enriched) + " enriched in the latest verified run";
     } else if (chart) {
       chart.innerHTML = '<p class="muted">Application-date activity is temporarily unavailable. Batch-ingestion dates are not being substituted.</p>';
       if (totalNode) totalNode.textContent = "Permit application-date feed unavailable";
@@ -420,10 +503,26 @@
     }
 
     const contractors = payload && Array.isArray(payload.contractors) ? payload.contractors : [];
+    const verifiedOperatorProfiles = {
+      "c-craig-edewaard-inc": { base: "Fort Lauderdale", url: "https://www.edewaarddevelopment.com/", label: "Official site" },
+      "sdg-services-llc": { base: "Weston", url: "https://www.myfloridalicense.com/LicenseDetail.asp?SID=&id=5AEFAED3D91A5FDDB6A26397E7B2ADFF", label: "Florida license" },
+      "gulf-building-llc": { base: "Fort Lauderdale", url: "https://www.gulfbuilding.com/", label: "Official site" }
+    };
     const operatorList = el("#operator-list");
     if (operatorList && contractors.length) {
       operatorList.innerHTML = contractors.slice(0, 6).map(function (operator, index) {
-        return '<li><span>' + String(index + 1).padStart(2, "0") + '</span><strong>' + escapeHtml(titleCase(operator.c)) + '</strong><em>' + formatNumber(operator.n) + ' records</em></li>';
+        const name = String(operator.c || "").trim();
+        const key = tagSlug(name);
+        const verified = verifiedOperatorProfiles[key];
+        const filings = state.records.filter(function (record) { return tagSlug(record.contractor_name) === key; });
+        const places = filings.reduce(function (result, record) {
+          const place = recordPlace(record);
+          result[place] = (result[place] || 0) + 1;
+          return result;
+        }, {});
+        const target = Object.keys(places).sort(function (a, b) { return places[b] - places[a] || a.localeCompare(b); })[0];
+        const footprint = (verified ? 'Based: ' + verified.base + ' · ' : '') + (target ? 'Newest mapped footprint: ' + target + ' · ' + formatNumber(filings.length) + ' exact-name filing' + (filings.length === 1 ? '' : 's') : 'Target footprint not resolved in the newest mapped sample');
+        return '<li><span>' + String(index + 1).padStart(2, "0") + '</span><div><strong>' + escapeHtml(titleCase(name)) + '</strong><small>' + escapeHtml(footprint) + '</small></div><em>' + formatNumber(operator.n) + ' records</em><div class="operator-list__links"><a href="' + PUBLIC_ROUTES.neighborhoods + '?q=' + encodeURIComponent(name) + '">Filings ↗</a>' + (verified ? '<a href="' + escapeHtml(verified.url) + '" target="_blank" rel="noopener">' + escapeHtml(verified.label) + ' ↗</a>' : '') + '</div></li>';
       }).join("");
     }
   }
@@ -478,9 +577,20 @@
 
   function mapPopup(record) {
     const value = Number(record.valuation_usd_clean);
+    const investigate = recordInvestigationUrls(record);
+    const title = "Florida Signal · " + recordPlace(record) + " · " + titleCase(String(record.address || record.permit_number || "development record").replace(/\s+/g, " "));
+    const tags = recordTaxonomy(record);
     return placeSignature(record) + '<div class="popup-kicker">' + escapeHtml(record.permit_type || "Permit record") + '</div>' +
       '<div class="popup-title">' + escapeHtml(titleCase(String(record.address || "Address pending").replace(/\s+/g, " "))) + '</div>' +
-      '<div class="popup-meta">' + escapeHtml(record.description || record.permit_number || "Public record") + (Number.isFinite(value) && value > 0 ? "<br><strong>" + escapeHtml(moneyFormat.format(value)) + " declared value</strong>" : "") + "</div>";
+      '<div class="popup-meta">' + escapeHtml(record.description || record.permit_number || "Public record") + (Number.isFinite(value) && value > 0 ? "<br><strong>" + escapeHtml(moneyFormat.format(value)) + " declared value</strong>" : "") + '</div>' +
+      '<p class="popup-record-clock">Applied ' + escapeHtml(formatDate(record.applied_date, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + ' · ' + escapeHtml(record.permit_number || "record ID pending") + '</p>' +
+      '<div class="popup-actions" aria-label="Investigate this filing">' +
+        '<a href="' + escapeHtml(investigate.street) + '" target="_blank" rel="noreferrer" title="Open nearby Google Street View"><span aria-hidden="true">◉</span>Street</a>' +
+        '<a href="' + escapeHtml(investigate.satellite) + '" target="_blank" rel="noreferrer" title="Open a satellite view"><span aria-hidden="true">◇</span>Satellite</a>' +
+        '<a href="' + escapeHtml(investigate.official) + '" target="_blank" rel="noreferrer" title="Open the official City portal; search the displayed record number"><span aria-hidden="true">↗</span>City source</a>' +
+        '<button type="button" data-popup-share data-share-url="' + escapeHtml(investigate.floridaSignal) + '" data-share-title="' + escapeHtml(title) + '" title="Share this filing"><span aria-hidden="true">↑</span>Share</button>' +
+        '<button type="button" data-report-add data-report-id="permit:' + escapeHtml(record.permit_number || investigate.floridaSignal) + '" data-report-title="' + escapeHtml(title) + '" data-report-meta="' + escapeHtml((record.permit_number || "Public filing") + " · applied " + formatDate(record.applied_date, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '" data-report-url="' + escapeHtml(investigate.floridaSignal) + '" data-report-tags="' + taxonomyAttribute(tags) + '" title="Add to your Florida Signal report"><span aria-hidden="true">＋</span>Add to report</button>' +
+      '</div><p class="popup-source-note">Cross-check against the City portal using the record ID above.</p>';
   }
 
   function markerColor(record) {
@@ -691,15 +801,15 @@
   }
 
   function addMapBrand(map) {
-    const signalControl = L.control({ position: "bottomleft" });
-    signalControl.onAdd = function () {
-      const badge = L.DomUtil.create("div", "map-signal-control");
-      badge.setAttribute("aria-label", "Florida Signal Development Intelligence");
-      badge.innerHTML = '<img src="/assets/mark-square.png" alt=""><span><b>Florida Signal</b><small>Development intelligence</small></span>';
-      L.DomEvent.disableClickPropagation(badge);
-      return badge;
-    };
-    signalControl.addTo(map);
+    const container = map.getContainer();
+    if (!container || container.querySelector(".map-signal-control")) return;
+    const badge = document.createElement("a");
+    badge.className = "map-signal-control";
+    badge.href = PUBLIC_ROUTES.home;
+    badge.setAttribute("aria-label", "Florida Signal Development Intelligence home");
+    badge.innerHTML = '<span class="map-signal-control__mark"><img src="/assets/mark-square.png" alt=""></span><span><b>Florida Signal</b><small>Live field map</small></span>';
+    L.DomEvent.disableClickPropagation(badge);
+    container.appendChild(badge);
   }
 
   function renderSpyglass(name, items, options) {
@@ -734,7 +844,7 @@
       const point = [Number(item.lat), Number(item.lon)];
       bounds.push(point);
       const marker = L.circleMarker(point, { radius: Math.min(12, 6 + Number(item.weight || 0)), color: "#fff", weight: 2, fillColor: item.color || settings.color || "#009f91", fillOpacity: .94 }).addTo(map);
-      marker.bindPopup('<div class="popup-kicker">' + escapeHtml(settings.popupKicker || "Signal Spyglass") + '</div><div class="popup-title">' + escapeHtml(item.title) + '</div><div class="popup-meta">' + escapeHtml(item.meta) + '<br><a href="' + escapeHtml(item.url) + '">' + escapeHtml(item.linkLabel || "Open the connected map") + '</a></div>');
+      marker.bindPopup(item.record ? mapPopup(item.record) : '<div class="popup-kicker">' + escapeHtml(settings.popupKicker || "Signal Spyglass") + '</div><div class="popup-title">' + escapeHtml(item.title) + '</div><div class="popup-meta">' + escapeHtml(item.meta) + '<br><a href="' + escapeHtml(item.url) + '">' + escapeHtml(item.linkLabel || "Open the connected map") + '</a></div>');
       marker.on("click", function () { select(item); });
       if (index === 0) select(item);
     });
@@ -754,13 +864,19 @@
       linkLabel: "Open exact filing on the full map →",
       color: markerColor(record),
       weight: Number(record.valuation_usd_clean || 0) >= 500000 ? 2 : 0,
-      tags: tags
+      tags: tags,
+      record: record
     };
   }
 
   function initRecordSpotlights() {
     const signalRecords = (state.featured.length ? state.featured : state.records).slice(0, 8);
-    renderSpyglass("signal", signalRecords.map(recordSpotlightItem), { color: "#009f91", popupKicker: "What Moved Spotlight" });
+    const windowNode = el("#signals-window");
+    if (windowNode) {
+      const dates = signalRecords.map(function (record) { return record.applied_date; }).filter(Boolean).sort();
+      windowNode.textContent = dates.length ? "Application window · " + formatDate(dates[0], { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) + "–" + formatDate(dates[dates.length - 1], { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) + " · " + formatNumber(signalRecords.length) + " mapped signals" : "Application-date window unavailable; batch time not substituted.";
+    }
+    renderSpyglass("signal", signalRecords.map(recordSpotlightItem), { color: "#009f91", popupKicker: "What’s Moving Spotlight" });
     const stormRecords = state.records.filter(isStormRecord);
     renderSpyglass("storm", stormRecords.map(recordSpotlightItem), { color: "#a81920", popupKicker: "Storm Readiness Spotlight", maxZoom: 13 });
   }
@@ -827,21 +943,31 @@
     }
   }
 
+  function applyMapLens(lens, options) {
+    const settings = options || {};
+    state.lens = lens === "storm" ? "storm" : "all";
+    els("[data-map-lens]").forEach(function (button) { button.classList.toggle("is-active", button.dataset.mapLens === state.lens); });
+    if (!state.map || !state.neighborhoods) return;
+    const records = state.lens === "storm" ? state.records.filter(isStormRecord) : state.records;
+    drawMarkers(state.map, records);
+    if (state.overlayVisibility.heat) {
+      const heat = rebuildHeatLayer();
+      if (heat) heat.addTo(state.map);
+    }
+    renderNeighborhoodLists(neighborhoodCounts(state.neighborhoods.features || [], records), state.map);
+    if (settings.fit) {
+      const points = records.filter(function (record) { return Number.isFinite(Number(record.lat)) && Number.isFinite(Number(record.lon)); }).map(function (record) { return [Number(record.lat), Number(record.lon)]; });
+      if (points.length === 1) state.map.setView(points[0], 15);
+      else if (points.length > 1) state.map.fitBounds(points, { padding: [38, 38], maxZoom: 14 });
+    }
+  }
+
   function initLensSwitch() {
     if (new URLSearchParams(window.location.search).get("storm") === "ready") state.lens = "storm";
     els("[data-map-lens]").forEach(function (button) {
       button.classList.toggle("is-active", button.dataset.mapLens === state.lens);
       button.addEventListener("click", function () {
-        state.lens = button.dataset.mapLens;
-        els("[data-map-lens]").forEach(function (other) { other.classList.toggle("is-active", other === button); });
-        if (!state.map || !state.neighborhoods) return;
-        const records = state.lens === "storm" ? state.records.filter(isStormRecord) : state.records;
-        drawMarkers(state.map, records);
-        if (state.overlayVisibility.heat) {
-          const heat = rebuildHeatLayer();
-          if (heat) heat.addTo(state.map);
-        }
-        renderNeighborhoodLists(neighborhoodCounts(state.neighborhoods.features || [], records), state.map);
+        applyMapLens(button.dataset.mapLens, { fit: true });
       });
     });
   }
@@ -981,7 +1107,7 @@
   async function loadStorms() {
     const status = el("#storm-status");
     const updated = el("#storm-updated");
-    if (!status && !updated && !el("#graphic-desk") && !el("#storm-operations")) return;
+    if (!status && !updated && !el("#graphic-desk") && !el("#storm-operations") && !el(".storm-promise")) return;
     try {
       let response = await fetch("/api/storms", { cache: "no-store" });
       if (!response.ok) response = await fetch("https://www.nhc.noaa.gov/CurrentStorms.json", { cache: "no-store" });
@@ -991,20 +1117,33 @@
       state.storms = storms;
       state.stormPayload = data;
       if (status) status.textContent = storms.length ? storms.map(function (storm) { return storm.name + " · " + storm.classification + " " + storm.intensity + " kt"; }).join(" · ") : "No named Atlantic storms active";
+      const promiseStatus = el("#promise-storm-status");
+      if (promiseStatus) promiseStatus.textContent = storms.length ? formatNumber(storms.length) + " Atlantic system" + (storms.length === 1 ? "" : "s") + " active · NHC live" : "NHC outlook live · standing by";
       const responseState = el("#storm-response-state");
       if (responseState) responseState.textContent = storms.length ? formatNumber(storms.length) + " Atlantic system" + (storms.length === 1 ? "" : "s") : "Standby";
       const newest = storms[0];
       if (updated) updated.textContent = newest && newest.lastUpdate ? "NHC " + formatDate(newest.lastUpdate, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "NHC live";
       renderStormOperations(data);
       renderGraphicDesk();
+      renderStormPromo();
     } catch (error) {
       if (status) status.textContent = "Open the official NHC outlook";
+      const promiseStatus = el("#promise-storm-status");
+      if (promiseStatus) promiseStatus.textContent = "Official NHC outlook · open source";
       const responseState = el("#storm-response-state");
       if (responseState) responseState.textContent = "Source check needed";
       if (updated) updated.textContent = "Source link active";
       renderStormOperations(null);
       renderGraphicDesk();
+      renderStormPromo();
     }
+  }
+
+  function renderStormPromo() {
+    const active = el("[data-storm-active-count]");
+    const records = el("[data-storm-record-count]");
+    if (active) active.textContent = formatNumber(state.storms.length);
+    if (records) records.textContent = formatNumber(state.records.filter(isStormRecord).length);
   }
 
   async function loadMeetings() {
@@ -1067,7 +1206,7 @@
     const count = el("#meeting-count");
     const updated = el("#meeting-feed-updated");
     if (count) count.textContent = formatNumber(meetings.length) + " upcoming meetings watched";
-    if (updated) updated.textContent = "Official calendar checked " + formatDate(payload.updated_at, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET · 15-minute cache";
+    if (updated) updated.textContent = "Official calendar checked " + formatDate(payload.updated_at, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET · refreshed every 15 minutes";
 
     function meetingType(meeting) {
       const value = meeting.title.toLowerCase();
@@ -1083,13 +1222,16 @@
         const daysAway = Math.max(0, Math.ceil((meetingDate.getTime() - new Date().setHours(0, 0, 0, 0)) / 86400000));
         const agendaLabel = (meeting.link_label || (meeting.agenda_available ? "Agenda" : "Agenda source")) + " ↗";
         const type = meetingType(meeting);
-        const tags = ["format:meeting", "topic:" + type, "source:" + tagSlug(meeting.source), "geography:" + tagSlug(meeting.location || "broward"), meeting.agenda_available ? "urgency:agenda-posted" : "urgency:agenda-watch"];
+        const tags = ["format:meeting", "market:" + tagSlug(meeting.market || "broward"), "county:" + tagSlug(meeting.county || "broward-county"), "city:" + tagSlug(meeting.city || "fort-lauderdale"), "topic:" + type, "source:" + tagSlug(meeting.source), "geography:" + tagSlug(meeting.location || meeting.city || "broward"), meeting.agenda_available ? "urgency:agenda-posted" : "urgency:agenda-watch"];
+        const meetingUrl = meeting.agenda_url || meeting.details_url || payload.calendar_url;
+        const watchLabel = type === "industry" ? "Industry" : type === "development" ? "Development review" : type === "commission" ? "Commission" : "Public board";
         return '<article class="meeting-row" data-signal-tags="' + taxonomyAttribute(tags) + '">' +
           '<div class="meeting-row__date"><span>' + escapeHtml(formatDate(meetingDate, { weekday: "short" })) + '</span><strong>' + escapeHtml(formatDate(meetingDate, { day: "numeric" })) + '</strong><small>' + escapeHtml(formatDate(meetingDate, { month: "short" })) + ' · ' + escapeHtml(meeting.time || "Time pending") + '</small></div>' +
-          '<div class="meeting-row__body"><p>' + escapeHtml(meeting.source) + ' · ' + escapeHtml(meeting.status || (daysAway ? "in " + daysAway + " days" : "today")) + (daysAway ? " · in " + daysAway + " days" : "") + '</p>' + taxonomyLine(tags, "Watch") + '<h2>' + escapeHtml(meeting.title) + '</h2><span>' + escapeHtml(meeting.location || "Location pending") + '</span></div>' +
-          '<div class="meeting-row__actions"><a href="' + escapeHtml(meeting.agenda_url || meeting.details_url || payload.calendar_url) + '" target="_blank" rel="noreferrer">' + agendaLabel + '</a>' +
-          (meeting.watch_url ? '<a class="meeting-row__watch" href="' + escapeHtml(meeting.watch_url) + '" target="_blank" rel="noreferrer"><span class="meeting-tv" aria-hidden="true"></span>Watch</a>' : '<span>Agenda watch</span>') +
-          (meeting.ical_url ? '<a href="' + escapeHtml(meeting.ical_url) + '" target="_blank" rel="noreferrer">Add to calendar ↗</a>' : '') + '</div></article>';
+          '<div class="meeting-row__body"><p>' + escapeHtml(watchLabel) + ' · ' + escapeHtml(daysAway ? "in " + daysAway + " days" : "today") + '</p><h2>' + escapeHtml(meeting.title) + '</h2><span>' + escapeHtml(meeting.location || "Location pending") + '</span><small>' + escapeHtml(meeting.source) + '</small></div>' +
+          '<div class="meeting-row__actions"><a class="meeting-row__details" href="' + escapeHtml(meetingUrl) + '" target="_blank" rel="noreferrer">' + agendaLabel + '</a>' +
+          (meeting.watch_url ? '<a class="meeting-row__watch" href="' + escapeHtml(meeting.watch_url) + '" target="_blank" rel="noreferrer"><span class="meeting-tv" aria-hidden="true"></span>Watch live</a>' : '') +
+          (meeting.ical_url ? '<a class="meeting-row__calendar" href="' + escapeHtml(meeting.ical_url) + '" target="_blank" rel="noreferrer" aria-label="Add ' + escapeHtml(meeting.title) + ' to calendar">＋ Calendar</a>' : '') +
+          '<button class="meeting-row__brief" type="button" data-report-add data-report-id="meeting:' + escapeHtml((meeting.date || "") + ":" + meeting.title) + '" data-report-title="' + escapeHtml(meeting.title) + '" data-report-meta="' + escapeHtml(formatDate(meetingDate, { month: "short", day: "numeric", year: "numeric" }) + " · " + (meeting.time || "Time pending") + " · " + (meeting.location || "Location pending")) + '" data-report-url="' + escapeHtml(meetingUrl) + '" data-report-tags="' + taxonomyAttribute(tags) + '">＋ Add to report</button></div></article>';
       }).join("") || '<p class="meeting-empty">No published meetings match this view.</p>';
       renderMeetingSpotlight(visible);
     }
@@ -1126,16 +1268,20 @@
         items.forEach(function (item) {
           const point = [Number(item.lat), Number(item.lon)];
           bounds.push(point);
-          L.circleMarker(point, { radius: 8, color: "#071b32", weight: 2, fillColor: "#ffcf4a", fillOpacity: .95 }).addTo(reconMap).bindPopup('<strong>' + escapeHtml(item.property_address) + '</strong><br>' + escapeHtml(item.meeting_title) + ' · item ' + escapeHtml(item.item_number));
+          const street = "https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=" + point.join(",");
+          const satellite = "https://www.google.com/maps/@?api=1&map_action=map&center=" + point.join(",") + "&zoom=19&basemap=satellite";
+          const reconTags = uniqueTags(["format:agenda-recon", "market:" + tagSlug(item.market || "broward"), "county:" + tagSlug(item.county || "broward-county"), "city:" + tagSlug(item.city || "fort-lauderdale"), "topic:agenda-recon", "source:official-agenda"].concat(item.neighborhood ? ["neighborhood:" + tagSlug(item.neighborhood)] : []).concat(item.zip ? ["zip:" + tagSlug(item.zip)] : []));
+          L.circleMarker(point, { radius: 8, color: "#071b32", weight: 2, fillColor: "#ffcf4a", fillOpacity: .95 }).addTo(reconMap).bindPopup('<div class="popup-kicker">Agenda Recon · item ' + escapeHtml(item.item_number) + '</div><div class="popup-title">' + escapeHtml(item.property_address) + '</div><div class="popup-meta">' + escapeHtml(item.meeting_title) + '</div><div class="popup-actions"><a href="' + escapeHtml(street) + '" target="_blank" rel="noreferrer"><span>◉</span>Street</a><a href="' + escapeHtml(satellite) + '" target="_blank" rel="noreferrer"><span>◇</span>Satellite</a><a href="' + escapeHtml(item.source_url) + '" target="_blank" rel="noreferrer"><span>↗</span>Packet</a><button type="button" data-report-add data-report-id="agenda:' + escapeHtml(item.source_hash || item.source_url) + '" data-report-title="' + escapeHtml(item.property_address + " · " + item.meeting_title) + '" data-report-meta="' + escapeHtml(item.meeting_date + " · item " + item.item_number) + '" data-report-url="' + escapeHtml(item.source_url) + '" data-report-tags="' + taxonomyAttribute(reconTags) + '"><span>＋</span>Add to report</button></div>');
         });
         if (bounds.length) reconMap.fitBounds(bounds, { padding: [35, 35], maxZoom: 15 });
       }
       if (status) status.textContent = items.length ? formatNumber(items.length) + " source-cleared agenda propert" + (items.length === 1 ? "y" : "ies") : "No future property item has cleared the source gate yet";
       results.innerHTML = items.length ? items.map(function (item) {
-        return '<article class="recon-result"><p>' + escapeHtml(item.meeting_date) + ' · item ' + escapeHtml(item.item_number) + '</p><h3>' + escapeHtml(item.property_address) + '</h3><span>' + escapeHtml(item.proposed_action || item.meeting_title) + '</span><div><a href="' + escapeHtml(item.source_url) + '" target="_blank" rel="noreferrer">Open cited packet ↗</a><a href="' + PUBLIC_ROUTES.neighborhoods + '?q=' + encodeURIComponent(item.property_address) + '">Open field map →</a></div></article>';
+        const tags = uniqueTags(["format:agenda-recon", "market:" + tagSlug(item.market || "broward"), "county:" + tagSlug(item.county || "broward-county"), "city:" + tagSlug(item.city || "fort-lauderdale"), "topic:agenda-recon", "source:official-agenda"].concat(item.neighborhood ? ["neighborhood:" + tagSlug(item.neighborhood)] : []).concat(item.zip ? ["zip:" + tagSlug(item.zip)] : []));
+        return '<article class="recon-result" data-signal-tags="' + taxonomyAttribute(tags) + '"><p>' + escapeHtml(item.meeting_date) + ' · item ' + escapeHtml(item.item_number) + '</p><h3>' + escapeHtml(item.property_address) + '</h3><span>' + escapeHtml(item.proposed_action || item.meeting_title) + '</span><div><a href="' + escapeHtml(item.source_url) + '" target="_blank" rel="noreferrer">Open cited packet ↗</a><a href="' + PUBLIC_ROUTES.neighborhoods + '?q=' + encodeURIComponent(item.property_address) + '">Open field map →</a><button type="button" data-report-add data-report-id="agenda:' + escapeHtml(item.source_hash || item.source_url) + '" data-report-title="' + escapeHtml(item.property_address + " · " + item.meeting_title) + '" data-report-meta="' + escapeHtml(item.meeting_date + " · item " + item.item_number) + '" data-report-url="' + escapeHtml(item.source_url) + '" data-report-tags="' + taxonomyAttribute(tags) + '">＋ Add to report</button></div></article>';
       }).join("") : '<p class="meeting-empty"><strong>Watching, not guessing.</strong> No upcoming official packet currently contains a property item that has completed extraction, coordinate resolution and editorial clearance.</p>';
     } catch (error) {
-      results.innerHTML = '<p class="meeting-empty">Agenda sweep is temporarily unavailable. No cached or inferred property pins are being substituted.</p>';
+      results.innerHTML = '<p class="meeting-empty">Agenda sweep is temporarily unavailable. No older or inferred property pins are being substituted.</p>';
       const status = el("#recon-map-status");
       if (status) status.textContent = "Source check needed";
     }
@@ -1145,11 +1291,19 @@
     const records = state.records.filter(isStormRecord);
     const count = el("#storm-permit-count");
     if (count) count.textContent = formatNumber(records.length);
+    const mapWindow = el("#storm-map-window");
+    if (mapWindow) {
+      const dates = records.map(function (record) { return record.applied_date; }).filter(Boolean).sort();
+      mapWindow.textContent = dates.length ? "Application window · " + formatDate(dates[0], { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) + "–" + formatDate(dates[dates.length - 1], { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) + " · mapped points only" : "Application-date window unavailable; no batch-pull date substituted.";
+    }
     const preparation = state.records.filter(function (record) { return /(roof|impact|shutter|generator|seawall|sea wall|drain|flood|elevation|window|door)/i.test([record.permit_type, record.permit_category, record.description].join(" ")); });
+    const openings = state.records.filter(function (record) { return /(impact|shutter|window|door|glazing|opening)/i.test([record.permit_type, record.permit_category, record.description, record.work_type].join(" ")); });
     const recovery = state.records.filter(function (record) { return /(repair|restore|restoration|remediation|damage|roof|demolition|rebuild)/i.test([record.permit_type, record.permit_category, record.description].join(" ")); });
     const preCount = el("#storm-phase-pre");
     const recoveryCount = el("#storm-phase-recovery");
     if (preCount) preCount.textContent = formatNumber(preparation.length) + " records";
+    const openingCount = el("#storm-opening-count");
+    if (openingCount) openingCount.textContent = formatNumber(openings.length);
     if (recoveryCount) recoveryCount.textContent = formatNumber(recovery.length) + " records";
     const list = el("#storm-records");
     if (!list) return;
@@ -1279,11 +1433,11 @@
       return '<article class="graphic-card ' + (settings.tone === "navy" ? "graphic-card--navy " : "") + (settings.wide ? "graphic-card--wide" : "") + '" data-signal-tags="' + taxonomyAttribute(tags) + '" id="' + slug + '">' +
         '<div class="graphic-card__top"><p>' + escapeHtml(kicker) + '</p><span>' + escapeHtml(settings.status || "REAL RECORD") + '</span></div>' +
         '<h2>' + title + '</h2><p class="graphic-card__dek">' + dek + '</p><div class="graphic-card__body">' + body + '</div>' +
-        '<p class="graphic-card__clock">' + escapeHtml(settings.clock || "Public event date · source cache shown") + '</p><a class="graphic-card__sponsor" href="mailto:desk@thefloridasignal.com?subject=' + encodeURIComponent("Sponsor Florida Signal graphic: " + slug) + '"><span>Present this intelligence</span><strong>Your logo here ↗</strong></a>' +
+        '<p class="graphic-card__clock">' + escapeHtml(settings.clock || "Public event date · data update shown") + '</p><a class="graphic-card__sponsor" href="mailto:desk@thefloridasignal.com?subject=' + encodeURIComponent("Sponsor Florida Signal graphic: " + slug) + '"><span>Present this intelligence</span><strong>Your logo here ↗</strong></a>' +
         '<div class="graphic-card__brand"><span><img src="/assets/' + (settings.tone === "navy" ? "mark-white.png" : "mark-full-color.png") + '" alt=""><b>Florida Signal</b><small>Development intelligence</small></span><time>' + escapeHtml(settings.stamp || applicationWindowStamp) + '</time><div>' +
-        '<a href="https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareTitle) + '&url=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on X">X</a>' +
-        '<a href="https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on LinkedIn">in</a>' +
-        '<a href="https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on Facebook">f</a>' +
+        '<a class="publish-social publish-social--x" data-network="X" href="https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareTitle) + '&url=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on X">X</a>' +
+        '<a class="publish-social publish-social--linkedin" data-network="LinkedIn" href="https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on LinkedIn">in</a>' +
+        '<a class="publish-social publish-social--facebook" data-network="Facebook" href="https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on Facebook">f</a>' +
         '<button type="button" data-share-card data-share-url="' + escapeHtml(pageUrl) + '" data-share-title="' + escapeHtml(shareTitle) + '" aria-label="Share this graphic">↗</button>' +
         '<button type="button" data-copy-embed data-embed-code="' + escapeHtml(embedCode) + '">&lt;/&gt; Embed</button></div></div></article>';
     }
@@ -1309,14 +1463,14 @@
     const cards = [
       card("application-pulse", "APPLICATION DATES · 14 CALENDAR DAYS", formatNumber(applicationTotal) + " <em>FILED</em>", "Fort Lauderdale permit applications grouped by the date the public application was filed—not by the day a batch arrived.", pulseBody, { tone: "navy", wide: true, status: "LIVE QUERY", stamp: applicationWindowStamp, clock: "City permit table · applied_date · window " + spanDate(APPLICATION_WINDOW_START, now.toISOString().slice(0, 10)) + " · latest filing present " + stampDate(applicationThrough) + " · zero days retained" }),
       card("place-lens", "HYPERLOCAL · OFFICIAL BOUNDARIES", "PLACE <em>LENS</em>", "The newest geocoded application sample resolved into official City neighborhoods and Census ZIP areas. Circle size expresses relative filing count inside this sample.", placeBody, { wide: true, status: "CITY + CENSUS", stamp: mappedStamp, clock: "Newest " + formatNumber(state.records.length) + " geocoded permit applications returned · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · City neighborhoods + Census ZCTAs" }),
-      card("trades-pulse", "NEWEST MAPPED APPLICATION SAMPLE", "TRADES <em>PULSE</em>", "A circular read of storm-hardening, mechanical and building work visible in the newest mapped public-record sample.", rings(trades), { tone: "navy", stamp: mappedStamp, clock: "Newest " + formatNumber(state.records.length) + " geocoded applications · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · classified from permit fields" }),
+      card("trades-pulse", "DIAGRAM OF THE DAY · LIVE WORK MIX", "WHAT FORT LAUDERDALE IS <em>BUILDING</em>", "Permit categories become momentum intelligence when trade mix, place and filing time are read together.", bars(trades), { tone: "navy", wide: true, status: "LIVE QUERY", stamp: mappedStamp, clock: "Newest " + formatNumber(state.records.length) + " geocoded applications · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · categories may overlap when one filing names more than one trade" }),
       card("high-value", "CAPPED HIGH-VALUE FILING QUEUE", highValueTop ? escapeHtml(moneyFormat.format(Number(highValueTop.valuation_usd_clean))) + " <em>TOP FILING</em>" : "VALUE <em>PENDING</em>", highValueTop ? escapeHtml(recordHeadline(highValueTop)) : "No valued high-dollar filing is available in the current query.", tiles([{ value: highValue.length ? formatNumber(highValue.length) : "0", label: "valued records returned" }, { value: highValueTotal ? compactFormat.format(highValueTotal) : "$0", label: "declared value in returned queue" }]), { stamp: featuredStamp, clock: "First " + formatNumber(state.featured.length) + " records in ordered current-month $100K+ query · applied_date span " + spanDate(featuredDates[0], featuredDates.slice(-1)[0]) + " · not a complete monthly total" }),
-      card("value-universe", "ENRICHED PROPERTY CONTEXT", "VALUE <em>LADDER</em>", "Where parcel-linked permit records sit across the best-available property-value universe.", bars(values), { tone: "navy", stamp: cacheStamp, clock: "Supabase dashboard cache · enriched property values · cache timestamp shown by site" }),
-      card("operator-board", "NORMALIZED CONTRACTOR NAMES", "OPERATOR <em>BOARD</em>", "A true leaderboard—not another bar chart—of names appearing most often in the normalized public cache.", ranks(contractors), { stamp: cacheStamp, clock: "Supabase dashboard cache · normalized contractor names · not a performance ranking" }),
-      card("records-desk", "BROWARD RECORD · CIRCULAR COVERAGE", "RECORDS <em>DESK</em>", "Clerk and parcel layers that power ownership and lien intelligence. Relative rings compare cache scale; they do not imply the categories share a denominator.", recordRings + '<p class="graphic-inline-stat"><strong>' + formatNumber(parcelCoverage) + '%</strong> of tracked permit records parcel-linked</p>', { tone: "navy", stamp: browardStamp, clock: "Broward/Supabase cache · latest recording date " + (stats.broward_fresh ? formatDate(stats.broward_fresh, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "pending") }),
-      card("company-lens", "SUNBIZ + OWNERSHIP RESOLUTION", "WHO IS <em>BEHIND IT</em>", "The geeky part: an address becomes an entity trail through public company filings, parcel joins and recorded instruments.", companyNetwork, { stamp: cacheStamp, clock: "Supabase cache · state registration/filing dates for company movement; pull time is freshness only" }),
+      card("value-universe", "ENRICHED PROPERTY CONTEXT", "VALUE <em>LADDER</em>", "Where parcel-linked permit records sit across the best-available property-value universe.", bars(values), { tone: "navy", stamp: cacheStamp, clock: "Verified dashboard snapshot · enriched property values · update time shown" }),
+      card("operator-board", "NORMALIZED CONTRACTOR NAMES", "OPERATOR <em>BOARD</em>", "A true leaderboard—not another bar chart—of names appearing most often in the normalized public record set.", ranks(contractors), { stamp: cacheStamp, clock: "Verified dashboard snapshot · normalized contractor names · not a performance ranking" }),
+      card("records-desk", "BROWARD RECORD · CIRCULAR COVERAGE", "RECORDS <em>DESK</em>", "Clerk and parcel layers that power ownership and lien intelligence. Relative rings compare record-set scale; they do not imply the categories share a denominator.", recordRings + '<p class="graphic-inline-stat"><strong>' + formatNumber(parcelCoverage) + '%</strong> of tracked permit records parcel-linked</p>', { tone: "navy", stamp: browardStamp, clock: "Broward records · latest recording date " + (stats.broward_fresh ? formatDate(stats.broward_fresh, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "pending") }),
+      card("company-lens", "SUNBIZ + OWNERSHIP RESOLUTION", "WHO IS <em>BEHIND IT</em>", "The geeky part: an address becomes an entity trail through public company filings, parcel joins and recorded instruments.", companyNetwork, { stamp: cacheStamp, clock: "Verified data snapshot · state registration/filing dates drive company movement; pull time shows freshness only" }),
       card("storm-window", "NHC + STORM-RELEVANT FILINGS", state.storms.length ? formatNumber(state.storms.length) + " <em>ATLANTIC ACTIVE</em>" : "STORM <em>STANDBY</em>", state.storms.length ? state.storms.map(function (storm) { return escapeHtml(storm.name + " · " + storm.classification); }).join(" · ") : "No named Atlantic system is currently active. Preparation and recovery filings remain searchable.", stormRadar, { tone: "navy", stamp: sourceCheckStamp, clock: "NHC source checked " + stampDate(now.toISOString()) + " · local hardening count uses mapped applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) }),
-      card("meetings-watch", "PUBLIC + INDUSTRY ROOMS", nextMeeting ? escapeHtml(formatDate(nextMeeting.date, { month: "short", day: "numeric", timeZone: "America/New_York" })) + " <em>ON DECK</em>" : "ROOMS <em>WATCHED</em>", nextMeeting ? escapeHtml(nextMeeting.title) : "The official calendar is being checked; no meeting is inferred from stale data.", state.meetings.length ? meetingTimeline(state.meetings) : '<div class="graphic-empty">Official calendar check in progress…</div>', { stamp: meetingStamp, clock: "Scheduled meeting span " + spanDate(meetingDates[0], meetingDates.slice(-1)[0]) + " · official/public and named industry calendars · 15-minute site cache" })
+      card("meetings-watch", "PUBLIC + INDUSTRY ROOMS", nextMeeting ? escapeHtml(formatDate(nextMeeting.date, { month: "short", day: "numeric", timeZone: "America/New_York" })) + " <em>ON DECK</em>" : "ROOMS <em>WATCHED</em>", nextMeeting ? escapeHtml(nextMeeting.title) : "The official calendar is being checked; no meeting is inferred from stale data.", state.meetings.length ? meetingTimeline(state.meetings) : '<div class="graphic-empty">Official calendar check in progress…</div>', { stamp: meetingStamp, clock: "Scheduled meeting span " + spanDate(meetingDates[0], meetingDates.slice(-1)[0]) + " · official/public and named industry calendars · refreshed every 15 minutes" })
     ];
 
     const embedSlug = new URLSearchParams(window.location.search).get("embed");
@@ -1353,10 +1507,90 @@
     /* Page-level freshness is rendered in loadPublicRecord; each Graphic Desk card carries its own source clock. */
   }
 
+  function renderDiagramPromo() {
+    const panel = el(".diagram-watch");
+    if (!panel || !state.records.length) return;
+    const chart = el(".diagram-watch__chart", panel);
+    const title = el(".diagram-watch__title strong", panel);
+    const detail = el(".diagram-watch__title span", panel);
+    const insight = el("[data-diagram-insight]", panel);
+    const day = el("[data-diagram-day]", panel);
+    if (!chart) return;
+    const categories = [
+      { label: "Mechanical", pattern: /mechanical|hvac|air condition|a\/c/i },
+      { label: "Plumbing", pattern: /plumb|drain|sewer/i },
+      { label: "Electrical", pattern: /electr|solar/i },
+      { label: "Roofs", pattern: /roof/i },
+      { label: "Windows + doors", pattern: /window|door|shutter|opening/i },
+      { label: "Pools + spas", pattern: /\bpool\b|\bspa\b/i }
+    ].map(function (category) {
+      const value = state.records.filter(function (record) {
+        return category.pattern.test([record.permit_type, record.permit_category, record.description, record.work_type].join(" "));
+      }).length;
+      return { label: category.label, value: value };
+    }).sort(function (a, b) { return b.value - a.value; });
+    const maximum = Math.max.apply(null, categories.map(function (category) { return category.value; }).concat([1]));
+    const classifiedTotal = categories.reduce(function (sum, category) { return sum + category.value; }, 0);
+    chart.innerHTML = categories.map(function (category) {
+      return '<div><span>' + escapeHtml(category.label) + '</span><i><b style="width:' + Math.max(category.value ? 6 : 0, Math.round((category.value / maximum) * 100)) + '%"></b></i><strong>' + formatNumber(category.value) + '</strong></div>';
+    }).join("");
+    const dates = state.records.map(function (record) { return record.applied_date; }).filter(Boolean).sort();
+    const leader = categories[0];
+    const share = classifiedTotal && leader ? Math.round((leader.value / classifiedTotal) * 100) : 0;
+    if (day) day.textContent = "Diagram of the day · " + new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: "America/New_York" }).format(new Date());
+    if (title) title.textContent = "What Fort Lauderdale is building";
+    if (detail) detail.textContent = dates.length ? "Mapped permits · applied " + formatDate(dates[0], { month: "short", day: "numeric" }) + "–" + formatDate(dates[dates.length - 1], { month: "short", day: "numeric" }) : "Current mapped application window";
+    if (insight) insight.textContent = leader && leader.value ? leader.label + " leads: " + formatNumber(leader.value) + " records · " + formatNumber(share) + "% of the categories shown. We connect trade mix, place and filing time to uncover momentum intelligence." : "No classified permit mix is available in the current mapped sample.";
+    chart.setAttribute("aria-label", categories.map(function (category) { return category.label + " " + formatNumber(category.value); }).join(", ") + ". Current mapped permit application sample.");
+  }
+
+  function renderLiveWindows() {
+    const dates = state.applicationDates.filter(Boolean).slice().sort();
+    const dayCount = el("[data-window-24-count]");
+    const dayDate = el("[data-window-24-date]");
+    const weekCount = el("[data-window-7-count]");
+    const weekTrend = el("[data-window-7-trend]");
+    const weekDates = el("[data-window-7-dates]");
+    if (!dayCount && !weekCount) return;
+    if (!dates.length) {
+      if (dayCount) dayCount.textContent = "—";
+      if (dayDate) dayDate.textContent = "Application-date feed unavailable";
+      if (weekCount) weekCount.textContent = "—";
+      if (weekTrend) weekTrend.textContent = "Comparison unavailable";
+      if (weekDates) weekDates.textContent = "No system time substituted";
+      return;
+    }
+    const latestKey = dates[dates.length - 1];
+    const latest = new Date(latestKey + "T12:00:00-04:00");
+    function keyOffset(days) {
+      const date = new Date(latest);
+      date.setDate(date.getDate() + days);
+      return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
+    }
+    const latestDayCount = dates.filter(function (date) { return date === latestKey; }).length;
+    const currentStart = keyOffset(-6);
+    const priorStart = keyOffset(-13);
+    const priorEnd = keyOffset(-7);
+    const currentTotal = dates.filter(function (date) { return date >= currentStart && date <= latestKey; }).length;
+    const priorTotal = dates.filter(function (date) { return date >= priorStart && date <= priorEnd; }).length;
+    let trend = "No prior-window comparison";
+    if (priorTotal > 0) {
+      const change = Math.round(((currentTotal - priorTotal) / priorTotal) * 100);
+      trend = change === 0 ? "Flat" : (change > 0 ? "+" + formatNumber(change) + "%" : formatNumber(change) + "%");
+    }
+    if (dayCount) dayCount.textContent = formatNumber(latestDayCount);
+    if (dayDate) dayDate.textContent = "Applied " + formatDate(latestKey, { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" });
+    if (weekCount) weekCount.textContent = formatNumber(currentTotal);
+    if (weekTrend) weekTrend.textContent = trend;
+    if (weekDates) weekDates.textContent = "Applied " + formatDate(currentStart, { month: "short", day: "numeric", timeZone: "America/New_York" }) + "–" + formatDate(latestKey, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) + " →";
+  }
+
   function initDataFlipper() {
     const flipper = el(".data-flipper");
     if (!flipper) return;
     const panels = els("[data-flip-panel]", flipper);
+    const diagramIndex = panels.findIndex(function (panel) { return panel.classList.contains("diagram-watch"); });
+    if (diagramIndex > 1) panels.splice(1, 0, panels.splice(diagramIndex, 1)[0]);
     const indexLabel = el("[data-flip-index]", flipper);
     const progress = el(".data-flipper__progress span", flipper);
     let index = 0;
@@ -1389,21 +1623,91 @@
     show(0, false);
   }
 
+  function initHeroSequence() {
+    const sequence = el("[data-hero-sequence]");
+    if (!sequence) return;
+    const photos = els("[data-hero-photo]", sequence);
+    const caption = el("[data-hero-caption]", sequence);
+    const counter = el("[data-hero-photo-index]", sequence);
+    const rails = els(".hero-sequence-rail i", sequence);
+    if (photos.length < 2) return;
+    let index = 0;
+    let timer = null;
+    function show(next) {
+      index = (next + photos.length) % photos.length;
+      photos.forEach(function (photo, photoIndex) { photo.classList.toggle("is-active", photoIndex === index); });
+      rails.forEach(function (rail, railIndex) { rail.classList.toggle("is-active", railIndex === index); });
+      if (caption) caption.textContent = photos[index].getAttribute("data-caption") || "Fort Lauderdale field view";
+      if (counter) counter.textContent = String(index + 1).padStart(2, "0") + " / " + String(photos.length).padStart(2, "0");
+    }
+    function start() {
+      window.clearInterval(timer);
+      timer = window.setInterval(function () { if (!document.hidden) show(index + 1); }, 5200);
+    }
+    sequence.addEventListener("mouseenter", function () { window.clearInterval(timer); });
+    sequence.addEventListener("mouseleave", start);
+    sequence.addEventListener("focusin", function () { window.clearInterval(timer); });
+    sequence.addEventListener("focusout", start);
+    show(0);
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) start();
+  }
+
   function initMobileLiveRail() {
     const viewport = el("[data-mobile-live-rail]");
     if (!viewport) return;
     const cards = els("[data-mobile-live-card]", viewport);
-    if (cards.length < 2 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const position = el("[data-mobile-live-position]");
+    if (cards.length < 2) return;
     let index = 0;
     let pauseUntil = 0;
+    let scrollFrame = 0;
+    function updatePosition() {
+      if (position) position.textContent = "Auto · " + (index + 1) + " / " + cards.length;
+    }
+    function syncIndex() {
+      let nearest = 0;
+      let distance = Infinity;
+      cards.forEach(function (card, cardIndex) {
+        const delta = Math.abs(card.offsetLeft - 14 - viewport.scrollLeft);
+        if (delta < distance) { distance = delta; nearest = cardIndex; }
+      });
+      index = nearest;
+      updatePosition();
+    }
     function advance() {
       if (window.innerWidth > 620 || document.hidden || Date.now() < pauseUntil) return;
       index = (index + 1) % cards.length;
       viewport.scrollTo({ left: Math.max(0, cards[index].offsetLeft - 14), behavior: "smooth" });
+      updatePosition();
     }
     viewport.addEventListener("pointerdown", function () { pauseUntil = Date.now() + 15000; });
     viewport.addEventListener("focusin", function () { pauseUntil = Date.now() + 15000; });
+    viewport.addEventListener("scroll", function () {
+      window.cancelAnimationFrame(scrollFrame);
+      scrollFrame = window.requestAnimationFrame(syncIndex);
+    }, { passive: true });
+    updatePosition();
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     window.setInterval(advance, 4600);
+  }
+
+  function initHomepagePriority() {
+    const main = el("main#main");
+    const signals = el("#signals", main);
+    const intel = el(".intel-section", main);
+    const map = el(".map-section", main);
+    if (!main || !signals || !intel || !map) return;
+    const mobile = window.matchMedia("(max-width: 620px)");
+    function arrange() {
+      if (mobile.matches) {
+        if (map.previousElementSibling !== signals) main.insertBefore(map, signals.nextElementSibling);
+      } else if (intel.previousElementSibling !== signals) {
+        main.insertBefore(intel, signals.nextElementSibling);
+      }
+    }
+    arrange();
+    if (mobile.addEventListener) mobile.addEventListener("change", arrange);
+    else mobile.addListener(arrange);
   }
 
   function initMobileFieldTest() {
@@ -1420,7 +1724,9 @@
     let pointLayer = null;
 
     function validRecords() {
-      return state.records.filter(function (record) { return Number.isFinite(Number(record.lat)) && Number.isFinite(Number(record.lon)); });
+      return state.records.filter(function (record) {
+        return Number.isFinite(Number(record.lat)) && Number.isFinite(Number(record.lon)) && (!document.body.classList.contains("storm-mode") || isStormRecord(record));
+      });
     }
 
     function ensureMap() {
@@ -1534,25 +1840,53 @@
 
   function addCityInterests(form, formIndex) {
     if (el(".city-interests", form)) return;
+    const preferences = document.createElement("details");
+    preferences.className = "signup-preferences";
+    preferences.innerHTML = '<summary><span>Personalize your brief</span><strong>Fort Lauderdale · All intel</strong></summary><div class="signup-preferences__body"></div>';
+    const preferenceBody = el(".signup-preferences__body", preferences);
     const fieldset = document.createElement("fieldset");
     fieldset.className = "city-interests";
-    fieldset.innerHTML = '<legend>Cities you care about</legend><details><summary><span>Cities you watch</span><strong>Fort Lauderdale</strong></summary><div class="city-interests__grid">' +
+    fieldset.innerHTML = '<legend>City desks</legend><div class="city-interests__grid">' +
       BROWARD_CITIES.map(function (city, cityIndex) {
         const id = "city-interest-" + formIndex + "-" + cityIndex;
         return '<label for="' + id + '"><input id="' + id + '" name="cities" type="checkbox" value="' + escapeHtml(city[0]) + '"' + (city[0] === ACTIVE_CITY ? ' checked' : '') + '><span>' + escapeHtml(city[1]) + '</span></label>';
-      }).join("") + '</div><p>Fort Lauderdale is live. Other selections tell the Broward Audience what you care about; they do not promise coverage.</p></details>';
+      }).join("") + '</div>';
     const message = el("[data-signup-message]", form);
-    form.insertBefore(fieldset, message || null);
-    const summary = el("summary strong", fieldset);
+    preferenceBody.appendChild(fieldset);
+    const summary = el("summary strong", preferences);
+    let selectedCityLabel = "Fort Lauderdale";
+    let selectedInterestLabel = "All intel";
+    function updatePreferenceSummary() { summary.textContent = selectedCityLabel + " · " + selectedInterestLabel; }
     function updateSummary() {
       const selected = els('input[name="cities"]:checked', fieldset).map(function (input) {
         const city = BROWARD_CITIES.find(function (entry) { return entry[0] === input.value; });
         return city ? city[1] : input.value;
       });
-      summary.textContent = selected.length === 1 ? selected[0] : selected.length + " cities selected";
+      selectedCityLabel = selected.length === 1 ? selected[0] : selected.length + " cities";
+      updatePreferenceSummary();
     }
     fieldset.addEventListener("change", updateSummary);
     updateSummary();
+
+    const interestSet = document.createElement("fieldset");
+    interestSet.className = "brief-interests";
+    interestSet.innerHTML = '<legend>Intelligence topics</legend><div class="brief-interests__grid">' +
+      BRIEF_INTERESTS.map(function (interest, interestIndex) {
+        const id = "brief-interest-" + formIndex + "-" + interestIndex;
+        return '<label for="' + id + '"><input id="' + id + '" name="interests" type="checkbox" value="' + escapeHtml(interest[0]) + '" checked><span>' + escapeHtml(interest[1]) + '</span></label>';
+      }).join("") + '</div>';
+    preferenceBody.appendChild(interestSet);
+    const note = document.createElement("p");
+    note.textContent = "Fort Lauderdale is live. Other city choices record your interests—no coverage promises.";
+    preferenceBody.appendChild(note);
+    form.insertBefore(preferences, message || null);
+    function updateInterestSummary() {
+      const selected = els('input[name="interests"]:checked', interestSet);
+      selectedInterestLabel = selected.length === BRIEF_INTERESTS.length ? "All intel" : selected.length ? selected.length + " topics" : "Choose topics";
+      updatePreferenceSummary();
+    }
+    interestSet.addEventListener("change", updateInterestSummary);
+    updateInterestSummary();
   }
 
   function initSignupForms() {
@@ -1566,10 +1900,11 @@
         const message = el("[data-signup-message]", form);
         if (!input || !zip || !message) return;
         const cities = els('input[name="cities"]:checked', form).map(function (checkbox) { return checkbox.value; });
+        const interests = els('input[name="interests"]:checked', form).map(function (checkbox) { return checkbox.value; });
         if (!cities.length) {
           message.classList.add("is-error");
           message.textContent = "Choose at least one Broward city.";
-          const selector = el(".city-interests details", form);
+          const selector = el(".signup-preferences", form);
           if (selector) selector.open = true;
           return;
         }
@@ -1579,7 +1914,7 @@
           const response = await fetch("/api/subscribe", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: input.value, zip: zip.value, cities: cities, source: form.getAttribute("data-signup-source") || (form.classList.contains("signup--hero") ? "homepage-hero" : "homepage-brief") })
+            body: JSON.stringify({ email: input.value, zip: zip.value, cities: cities, interests: interests, source: form.getAttribute("data-signup-source") || (form.classList.contains("signup--hero") ? "homepage-hero" : "homepage-brief") })
           });
           const data = await response.json();
           if (!response.ok) throw new Error(data.error || "Could not save subscription");
@@ -1589,8 +1924,9 @@
           input.value = "";
           zip.value = "";
           els('input[name="cities"]', form).forEach(function (checkbox) { checkbox.checked = checkbox.value === ACTIVE_CITY; });
-          const citySummary = el(".city-interests summary strong", form);
-          if (citySummary) citySummary.textContent = "Fort Lauderdale";
+          els('input[name="interests"]', form).forEach(function (checkbox) { checkbox.checked = true; });
+          const preferenceSummary = el(".signup-preferences summary strong", form);
+          if (preferenceSummary) preferenceSummary.textContent = "Fort Lauderdale · All intel";
           const prompt = form.closest(".brief-prompt");
           if (prompt) window.setTimeout(function () { const close = el("[data-brief-prompt-close]", prompt); if (close) close.click(); }, 900);
         } catch (error) {
@@ -1658,13 +1994,40 @@
     const rail = document.createElement("aside");
     rail.className = "site-sponsor-rail";
     rail.setAttribute("aria-label", "Florida Signal sponsorship availability");
-    rail.innerHTML = '<div class="shell"><span>Available inventory · ' + escapeHtml(pageName) + '</span><strong>Own this intelligence surface</strong><a href="mailto:desk@thefloridasignal.com?subject=' + encodeURIComponent("Florida Signal " + pageName + " sponsorship") + '">Your logo here · sponsorship desk ↗</a></div>';
+    rail.innerHTML = '<div class="shell"><i class="site-sponsor-rail__signal" aria-hidden="true"><b></b><b></b><b></b><b></b></i><span>Presented intelligence · ' + escapeHtml(pageName) + '</span><strong>Put your brand beside the data people use.</strong><a href="mailto:desk@thefloridasignal.com?subject=' + encodeURIComponent("Florida Signal " + pageName + " sponsorship") + '">Sponsor this desk →</a></div>';
     footer.parentNode.insertBefore(rail, footer);
+  }
+
+  function initCrossPagePromo() {
+    const page = document.body.getAttribute("data-page") || "home";
+    if (page === "home" || el(".cross-page-promo")) return;
+    const promos = {
+      neighborhoods: { image: "/social/graphic-desk/place-lens.png", alt: "Florida Signal neighborhood and ZIP intelligence diagram", kicker: "From the field to the pattern", title: "See what the mapped filings add up to.", copy: "Live diagrams turn block-level records into neighborhood momentum.", label: "Open the Data Room", url: PUBLIC_ROUTES.graphics + "#place-lens", target: ".live-map-stage" },
+      meetings: { image: "/assets/photos/fort-lauderdale-barrier-island-skyline-adobe-257427799.jpg", alt: "Fort Lauderdale skyline and waterways", kicker: "From agenda to address", title: "Take the meeting into the field.", copy: "Open cited properties, nearby filings and neighborhood context on the live map.", label: "Open the live map", url: PUBLIC_ROUTES.neighborhoods + "#full-map", target: ".meeting-board" },
+      storm: { image: "/assets/photos/fort-lauderdale-construction-cranes-adobe-490952530.jpg", alt: "Tower cranes above Fort Lauderdale construction", kicker: "Beyond the weather window", title: "See the development pipeline still moving.", copy: "Switch from readiness records to the wider live permit and neighborhood map.", label: "Open the live map", url: PUBLIC_ROUTES.neighborhoods + "#full-map", target: ".storm-map-focus" },
+      graphics: { image: "/assets/photos/fort-lauderdale-waterfront-neighborhoods-aerial-adobe-428926084.jpg", alt: "Aerial view of Fort Lauderdale waterfront neighborhoods", kicker: "Take the diagram outside", title: "Move from pattern to parcel.", copy: "Search the block, inspect the filing and cross-check Street View or satellite.", label: "Open field intelligence", url: PUBLIC_ROUTES.neighborhoods + "#full-map", target: ".graphic-desk-section" },
+      broward: { image: "/assets/photos/las-olas-boulevard-street-scene-adobe-861811982.jpg", alt: "Las Olas Boulevard street scene", kicker: "The record enters the room", title: "Watch what is discussed before it moves.", copy: "Official meetings, agendas and source-cleared property intelligence.", label: "Open Meetings", url: PUBLIC_ROUTES.meetings, target: "main > section:nth-of-type(2)" },
+      method: { image: "/social/graphic-desk/application-pulse.png", alt: "Florida Signal application-date pulse diagram", kicker: "See the method working", title: "Open the live diagrams.", copy: "Every visual carries its event window, update time and source note.", label: "Enter the Data Room", url: PUBLIC_ROUTES.graphics, target: "main > section:nth-of-type(2)" },
+      stories: { image: "/assets/photos/fort-lauderdale-skyline-panorama-adobe-125666941.jpg", alt: "Fort Lauderdale skyline panorama", kicker: "Reporting meets reconnaissance", title: "Investigate the place behind the story.", copy: "Move from an approved brief to the cited map and public-record surface.", label: "Open the live map", url: PUBLIC_ROUTES.neighborhoods + "#full-map", target: "main > section:first-of-type" },
+      "brand-kit": { image: "/social/graphic-desk/place-lens.png", alt: "Florida Signal branded Place Lens diagram", kicker: "The brand in motion", title: "See Florida Signal on live intelligence.", copy: "Embeddable diagrams and maps carry the source, window and emblem with them.", label: "Open the Data Room", url: PUBLIC_ROUTES.graphics, target: "main > section:first-of-type" }
+    };
+    const promo = promos[page];
+    if (!promo) return;
+    const section = document.createElement("aside");
+    section.className = "cross-page-promo";
+    section.setAttribute("data-signal-tags", "format:visual-promo city:fort-lauderdale county:broward-county");
+    section.innerHTML = '<div class="shell cross-page-promo__grid"><a class="cross-page-promo__image" href="' + escapeHtml(promo.url) + '"><img src="' + escapeHtml(promo.image) + '" alt="' + escapeHtml(promo.alt) + '" loading="lazy"><span>Florida Signal · Live intelligence</span></a><div class="cross-page-promo__copy"><p>' + escapeHtml(promo.kicker) + '</p><h2>' + escapeHtml(promo.title) + '</h2><span>' + escapeHtml(promo.copy) + '</span><div><a href="' + escapeHtml(promo.url) + '">' + escapeHtml(promo.label) + ' →</a><button type="button" data-report-add data-report-id="promo:' + escapeHtml(page) + '" data-report-title="' + escapeHtml(promo.title) + '" data-report-meta="Florida Signal cross-desk intelligence" data-report-url="' + escapeHtml(promo.url) + '" data-report-tags="format:visual-promo city:fort-lauderdale county:broward-county">＋ Add to report</button></div></div></div>';
+    const target = el(promo.target);
+    if (target) target.insertAdjacentElement("afterend", section);
+    else {
+      const main = el("main");
+      if (main) main.appendChild(section);
+    }
   }
 
   async function initDataHealth() {
     const page = document.body.getAttribute("data-page") || "home";
-    if (!["home", "neighborhoods", "broward", "graphics", "storm", "method"].includes(page) || el("#source-health")) return;
+    if (page !== "method" || el("#source-health")) return;
     const details = document.createElement("details");
     details.className = "source-health";
     details.id = "source-health";
@@ -1779,29 +2142,18 @@
     const button = el(".menu-button");
     if (!button) return;
     const navigation = el(".site-nav");
-    if (navigation && !el('a[href="' + PUBLIC_ROUTES.briefs + '"]', navigation)) {
-      const storiesLink = document.createElement("a");
-      storiesLink.href = PUBLIC_ROUTES.briefs;
-      storiesLink.textContent = "Briefs";
-      if (document.body.getAttribute("data-page") === "stories") storiesLink.setAttribute("aria-current", "page");
-      const neighborhoodsLink = el('a[href="' + PUBLIC_ROUTES.neighborhoods + '"]', navigation);
-      navigation.insertBefore(storiesLink, neighborhoodsLink || navigation.firstChild);
-    }
-    if (navigation && !el('a[href="' + PUBLIC_ROUTES.graphics + '"]', navigation)) {
-      const graphicsLink = document.createElement("a");
-      graphicsLink.href = PUBLIC_ROUTES.graphics;
-      graphicsLink.textContent = "Graphic desk";
-      if (document.body.getAttribute("data-page") === "graphics") graphicsLink.setAttribute("aria-current", "page");
-      const stormLink = el('a[href="' + PUBLIC_ROUTES.storm + '"]', navigation);
-      navigation.insertBefore(graphicsLink, stormLink || null);
-    }
-    if (navigation && !el('a[href="' + PUBLIC_ROUTES.meetings + '"]', navigation)) {
-      const meetingsLink = document.createElement("a");
-      meetingsLink.href = PUBLIC_ROUTES.meetings;
-      meetingsLink.textContent = "Meetings";
-      if (document.body.getAttribute("data-page") === "meetings") meetingsLink.setAttribute("aria-current", "page");
-      const methodLink = el('a[href="' + PUBLIC_ROUTES.method + '"]', navigation);
-      navigation.insertBefore(meetingsLink, methodLink || null);
+    if (navigation) {
+      const page = document.body.getAttribute("data-page");
+      const signalHref = page === "home" ? "#signals" : PUBLIC_ROUTES.home + "#signals";
+      const items = [
+        { href: PUBLIC_ROUTES.neighborhoods + "#full-map", label: "Live map", className: "nav-live-map", current: page === "neighborhoods" },
+        { href: signalHref, label: "Signals", current: page === "home" },
+        { href: PUBLIC_ROUTES.graphics, label: "Data room", current: page === "graphics" },
+        { href: PUBLIC_ROUTES.meetings, label: "Meetings", current: page === "meetings" }
+      ];
+      navigation.innerHTML = items.map(function (item) {
+        return '<a href="' + item.href + '"' + (item.className ? ' class="' + item.className + '"' : '') + (item.current ? ' aria-current="page"' : '') + '>' + item.label + '</a>';
+      }).join("");
     }
     button.addEventListener("click", function () {
       const open = !document.body.classList.contains("nav-open");
@@ -1882,7 +2234,7 @@
     if (status) {
       status.classList.toggle("is-active", active);
       status.setAttribute("aria-label", "Publisher-controlled Florida Signal Storm Watch is " + (active ? "active" : "on standby"));
-      status.innerHTML = '<span class="storm-mode-toggle__icon" aria-hidden="true">🌀</span><span>Storm watch ' + (active ? "active" : "standby") + '</span>';
+      status.innerHTML = '<span class="storm-mode-toggle__icon" aria-hidden="true">&#127744;</span><span>Storm watch ' + (active ? "active" : "standby") + '</span>';
       status.title = "Publisher-controlled site state" + (mode && mode.updated_at ? " · updated " + mode.updated_at : "");
     }
     const themeColor = el('meta[name="theme-color"]');
@@ -1891,15 +2243,29 @@
       document.body.dataset.stormAnalyticsSent = "yes";
       trackEvent("storm_watch_view", { mode: "publisher-controlled" });
     }
+    applyMapLens(active ? "storm" : "all", { fit: active });
+    const mapSidebar = el(".full-map-sidebar");
+    if (mapSidebar) {
+      let notice = el(".storm-map-notice", mapSidebar);
+      if (active && !notice) {
+        notice = document.createElement("p");
+        notice.className = "storm-map-notice";
+        const lensSwitch = el(".lens-switch", mapSidebar);
+        notice.innerHTML = '<strong>Storm lens active</strong><span>Showing hardening and recovery-type permit applications by application date. These records do not prove storm cause or damage.</span>';
+        if (lensSwitch) mapSidebar.insertBefore(notice, lensSwitch);
+      }
+      if (notice) notice.hidden = !active;
+    }
     renderStormOperations(state.stormPayload);
   }
 
   function initStormMode() {
     const bar = el(".live-bar__inner");
     if (!bar) return;
-    const status = document.createElement("span");
+    const status = document.createElement("a");
     status.className = "storm-mode-toggle";
     status.id = "storm-mode-status";
+    status.href = PUBLIC_ROUTES.storm;
     status.setAttribute("role", "status");
     status.setAttribute("aria-live", "polite");
     bar.appendChild(status);
@@ -1937,19 +2303,305 @@
     });
   }
 
+  function easternParts(date) {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York", year: "numeric", month: "numeric", day: "numeric",
+      hour: "numeric", minute: "numeric", second: "numeric", hourCycle: "h23"
+    }).formatToParts(date).reduce(function (parts, part) {
+      if (part.type !== "literal") parts[part.type] = Number(part.value);
+      return parts;
+    }, {});
+  }
+
+  function easternOffsetMs(date) {
+    const parts = easternParts(date);
+    return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second) - date.getTime();
+  }
+
+  function nextEasternDaily(now, hour, minute) {
+    const current = easternParts(now);
+    function makeTarget(dayOffset) {
+      const daySeed = new Date(Date.UTC(current.year, current.month - 1, current.day + dayOffset, 12));
+      const day = easternParts(daySeed);
+      let guess = Date.UTC(day.year, day.month - 1, day.day, hour, minute, 0);
+      guess -= easternOffsetMs(new Date(guess));
+      return new Date(guess);
+    }
+    let target = makeTarget(0);
+    if (target <= now) target = makeTarget(1);
+    return target;
+  }
+
+  function initDataCountdown() {
+    const time = el("#live-bar-time");
+    const lead = el(".live-bar__inner p:first-child");
+    const label = lead ? el("strong", lead) : null;
+    if (!time || !lead || !label) return;
+    const mobile = document.createElement("span");
+    mobile.className = "live-bar__countdown-mobile";
+    lead.appendChild(mobile);
+    if (!el(".live-bar__processing", lead)) lead.insertAdjacentHTML("beforeend", '<span class="live-bar__processing" aria-label="Feeds processing"><i></i><i></i><i></i></span>');
+    label.textContent = "Newest signals";
+    label.dataset.defaultLabel = "Newest signals";
+
+    function clock(ms) {
+      const total = Math.max(0, Math.floor(ms / 1000));
+      const hours = Math.floor(total / 3600);
+      const minutes = Math.floor((total % 3600) / 60);
+      const seconds = total % 60;
+      return [hours, minutes, seconds].map(function (value) { return String(value).padStart(2, "0"); }).join(":");
+    }
+    function render() {
+      if (document.body.classList.contains("storm-mode")) { mobile.textContent = ""; return; }
+      const now = new Date();
+      const jobs = [
+        { label: "Permits", target: nextEasternDaily(now, 22, 0) },
+        { label: "Sunbiz", target: nextEasternDaily(now, 23, 30) }
+      ].sort(function (a, b) { return a.target - b.target; });
+      const job = jobs[0];
+      const remaining = clock(job.target - now);
+      time.textContent = "NEXT PULL · " + job.label.toUpperCase() + " · " + remaining;
+      time.title = job.label + " scheduled for " + job.target.toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
+      mobile.textContent = "NEXT " + job.label.toUpperCase() + " · " + remaining;
+    }
+    render();
+    window.setInterval(render, 1000);
+  }
+
+  function initMapPublishing() {
+    const share = el("[data-share-map]");
+    const embed = el("[data-copy-map-embed]");
+    if (!share && !embed) return;
+    const url = window.location.origin + PUBLIC_ROUTES.neighborhoods + "#full-map";
+    const embedUrl = window.location.origin + PUBLIC_ROUTES.neighborhoods + "?embed=map#full-map";
+    const embedCode = '<iframe src="' + embedUrl + '" width="100%" height="720" loading="lazy" title="Florida Signal live Broward field map"></iframe>';
+    if (new URLSearchParams(window.location.search).get("embed") === "map") document.body.classList.add("map-embed");
+    if (share) share.addEventListener("click", async function () {
+      if (navigator.share) {
+        try { await navigator.share({ title: "Florida Signal live Broward field map", url: url }); return; } catch (error) { if (error && error.name === "AbortError") return; }
+      }
+      try { await navigator.clipboard.writeText(url); share.textContent = "Link copied"; } catch (error) { window.prompt("Copy this map link", url); }
+      window.setTimeout(function () { share.textContent = "Share"; }, 1800);
+    });
+    if (embed) embed.addEventListener("click", async function () {
+      try { await navigator.clipboard.writeText(embedCode); embed.textContent = "Embed copied"; } catch (error) { window.prompt("Copy this embed code", embedCode); }
+      window.setTimeout(function () { embed.innerHTML = "&lt;/&gt; Embed"; }, 1800);
+    });
+  }
+
+  function initPublishingSurfaces() {
+    function absolute(path) { return window.location.origin + path; }
+    const graphicsEmbed = function (slug) { return absolute(PUBLIC_ROUTES.graphics + "?embed=" + encodeURIComponent(slug)); };
+    const surfaces = [
+      { selector: "#signal-spotlight-map", title: "Florida Signal · Newest signals map", url: absolute(PUBLIC_ROUTES.home + "#signals"), overlay: true },
+      { selector: "#mobile-field-map", title: "Florida Signal · Live field map", url: absolute(PUBLIC_ROUTES.neighborhoods + "#full-map"), map: true },
+      { selector: "#activity-chart", title: "Florida Signal · Application Pulse", url: absolute(CITY_ROOT + "/share/application-pulse.html"), embed: graphicsEmbed("application-pulse") },
+      { selector: "#value-bars", title: "Florida Signal · Value Ladder", url: absolute(CITY_ROOT + "/share/value-universe.html"), embed: graphicsEmbed("value-universe") },
+      { selector: "#operator-list", title: "Florida Signal · Operator Board", url: absolute(CITY_ROOT + "/share/operator-board.html"), embed: graphicsEmbed("operator-board") },
+      { selector: "#home-map", title: "Florida Signal · Live Broward field map", url: absolute(PUBLIC_ROUTES.neighborhoods + "#full-map"), embed: absolute(PUBLIC_ROUTES.neighborhoods + "?embed=map#full-map"), map: true },
+      { selector: ".method-flow", title: "Florida Signal · Public-record methodology", url: absolute(PUBLIC_ROUTES.method + "#method-flow") },
+      { selector: "#meeting-spotlight-map", title: "Florida Signal · Rooms Watched map", url: absolute(PUBLIC_ROUTES.meetings + "#meeting-board"), overlay: true },
+      { selector: "#agenda-recon-map", title: "Florida Signal · Agenda Recon map", url: absolute(PUBLIC_ROUTES.meetings + "#agenda-recon-title"), map: true },
+      { selector: ".recon-process ol", title: "Florida Signal · Agenda Recon clearance chain", url: absolute(PUBLIC_ROUTES.meetings + "#agenda-recon-title") },
+      { selector: ".storm-page-card img", title: "Florida Signal · Storm Window", url: absolute(CITY_ROOT + "/share/storm-window.html"), embed: graphicsEmbed("storm-window") },
+      { selector: ".storm-phases", title: "Florida Signal · Storm operating picture", url: absolute(PUBLIC_ROUTES.storm + "#storm-operating-picture") },
+      { selector: "#storm-spotlight-map", title: "Florida Signal · Storm Readiness map", url: absolute(PUBLIC_ROUTES.storm + "#storm-readiness"), overlay: true }
+    ];
+
+    function railFor(settings) {
+      const rail = document.createElement("div");
+      rail.className = "surface-publish" + (settings.overlay ? " surface-publish--overlay" : "") + (settings.compact ? " surface-publish--compact" : "");
+      rail.setAttribute("aria-label", "Share " + settings.title);
+      const embedCode = settings.embed ? '<iframe src="' + settings.embed + '" width="100%" height="720" loading="lazy" title="' + settings.title + '"></iframe>' : "";
+      const compactTools = settings.map || settings.overlay;
+      rail.innerHTML = '<span>Share this intelligence</span>' +
+        '<a class="publish-social publish-social--x" data-network="X" href="https://twitter.com/intent/tweet?text=' + encodeURIComponent(settings.title) + '&url=' + encodeURIComponent(settings.url) + '" target="_blank" rel="noreferrer" aria-label="Share on X">X</a>' +
+        '<a class="publish-social publish-social--linkedin" data-network="LinkedIn" href="https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(settings.url) + '" target="_blank" rel="noreferrer" aria-label="Share on LinkedIn">in</a>' +
+        '<a class="publish-social publish-social--facebook" data-network="Facebook" href="https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(settings.url) + '" target="_blank" rel="noreferrer" aria-label="Share on Facebook">f</a>' +
+        '<button type="button" data-surface-share aria-label="Share this visual" title="Share">' + (compactTools ? '↗' : 'Share') + '</button>' +
+        (embedCode ? '<button type="button" data-surface-embed aria-label="Copy embed code" title="Embed">' + (compactTools ? '&lt;/&gt;' : '&lt;/&gt; Embed') + '</button>' : '') +
+        '<button type="button" class="surface-report" data-report-add data-report-id="surface:' + escapeHtml(settings.url) + '" data-report-title="' + escapeHtml(settings.title) + '" data-report-meta="Florida Signal map or diagram · source window shown on the visual" data-report-url="' + escapeHtml(settings.url) + '" data-report-tags="format:visual city:fort-lauderdale county:broward-county" aria-label="Add to Field Brief" title="Add to Field Brief">' + (compactTools ? '＋' : '＋ Report') + '</button>';
+      const share = el("[data-surface-share]", rail);
+      const copy = el("[data-surface-copy]", rail);
+      const embed = el("[data-surface-embed]", rail);
+      share.addEventListener("click", async function () {
+        if (navigator.share) {
+          try { await navigator.share({ title: settings.title, url: settings.url }); return; }
+          catch (error) { if (error && error.name === "AbortError") return; }
+        }
+        try { await navigator.clipboard.writeText(settings.url); share.textContent = "Copied"; }
+        catch (error) { window.prompt("Copy this Florida Signal link", settings.url); }
+        window.setTimeout(function () { share.textContent = compactTools ? "↗" : "Share"; }, 1800);
+      });
+      if (copy) copy.addEventListener("click", async function () {
+        try { await navigator.clipboard.writeText(settings.url); copy.textContent = "Copied"; }
+        catch (error) { window.prompt("Copy this Florida Signal link", settings.url); }
+        window.setTimeout(function () { copy.textContent = "Copy link"; }, 1800);
+      });
+      if (embed) embed.addEventListener("click", async function () {
+        try { await navigator.clipboard.writeText(embedCode); embed.textContent = "Embed copied"; }
+        catch (error) { window.prompt("Copy this embed code", embedCode); }
+        window.setTimeout(function () { embed.innerHTML = "&lt;/&gt; Embed"; }, 1800);
+      });
+      return rail;
+    }
+
+    surfaces.forEach(function (settings) {
+      const target = el(settings.selector);
+      if (!target || target.dataset.publishReady === "true") return;
+      target.dataset.publishReady = "true";
+      const rail = railFor(settings);
+      if (settings.overlay) target.appendChild(rail);
+      else if (settings.map && target.parentNode) {
+        const frame = document.createElement("div");
+        frame.className = "surface-map-frame";
+        target.parentNode.insertBefore(frame, target);
+        frame.appendChild(target);
+        rail.classList.add("surface-publish--map");
+        frame.appendChild(rail);
+      } else target.insertAdjacentElement("afterend", rail);
+    });
+  }
+
+  function initFieldBrief() {
+    let items = [];
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(FIELD_BRIEF_STORAGE_KEY) || "[]");
+      if (Array.isArray(stored)) items = stored.slice(0, 50);
+    } catch (error) { items = []; }
+
+    const launcher = document.createElement("button");
+    launcher.className = "field-brief-launcher";
+    launcher.type = "button";
+    launcher.setAttribute("data-field-brief-open", "");
+    launcher.setAttribute("aria-label", "Open your Florida Signal Field Brief");
+    launcher.title = "Open your collected Florida Signal report";
+    launcher.innerHTML = '<img src="/assets/mark-square.png" alt=""><span><small>Your report</small><strong>Field Brief</strong></span><b data-field-brief-count>0</b>';
+
+    const drawer = document.createElement("section");
+    drawer.className = "field-brief-drawer";
+    drawer.hidden = true;
+    drawer.setAttribute("aria-label", "Florida Signal Field Brief builder");
+    drawer.innerHTML = '<button class="field-brief-drawer__backdrop" type="button" data-field-brief-close aria-label="Close Field Brief"></button><div class="field-brief-drawer__panel"><header><div><p>Florida Signal · field intelligence</p><h2>Build your report.</h2><span>Collect permits, meetings, maps and diagrams. Every item keeps its source link and place tags.</span></div><button type="button" data-field-brief-close aria-label="Close Field Brief">×</button></header><div class="field-brief-list" data-field-brief-list></div><footer><button type="button" data-field-brief-share>Send / Notes</button><button type="button" data-field-brief-copy>Copy report</button><button type="button" data-field-brief-print>Print / PDF</button><button type="button" data-field-brief-clear>Clear</button><p data-field-brief-status aria-live="polite"></p></footer></div>';
+    document.body.appendChild(launcher);
+    document.body.appendChild(drawer);
+
+    const list = el("[data-field-brief-list]", drawer);
+    const status = el("[data-field-brief-status]", drawer);
+    const count = el("[data-field-brief-count]", launcher);
+
+    function persist() {
+      try { window.localStorage.setItem(FIELD_BRIEF_STORAGE_KEY, JSON.stringify(items)); } catch (error) { /* Browser storage may be disabled. */ }
+    }
+
+    function reportText() {
+      const lines = ["FLORIDA SIGNAL — FIELD BRIEF", "Fort Lauderdale · Broward County", "Assembled " + new Date().toLocaleString("en-US", { timeZone: "America/New_York" }) + " ET", ""];
+      items.forEach(function (item, index) {
+        lines.push((index + 1) + ". " + item.title, item.meta || "", item.url || "", item.tags ? "Tags: " + item.tags.replace(/\s+/g, ", ") : "", "");
+      });
+      lines.push("Florida Signal · Development intelligence · Powered by Graham & Gold LLC");
+      return lines.join("\n");
+    }
+
+    function render() {
+      count.textContent = String(items.length);
+      launcher.classList.toggle("has-items", items.length > 0);
+      list.innerHTML = items.length ? items.map(function (item, index) {
+        return '<article><span>' + String(index + 1).padStart(2, "0") + '</span><div><h3>' + escapeHtml(item.title) + '</h3><p>' + escapeHtml(item.meta || "Saved Florida Signal intelligence") + '</p><a href="' + escapeHtml(item.url || window.location.href) + '" target="_blank" rel="noreferrer">Open evidence ↗</a></div><button type="button" data-field-brief-remove="' + escapeHtml(item.id) + '" aria-label="Remove ' + escapeHtml(item.title) + '">×</button></article>';
+      }).join("") : '<div class="field-brief-empty"><img src="/assets/mark-navy-mono.png" alt=""><h3>Your field report starts here.</h3><p>Use <strong>Add to report</strong> on any permit, meeting, map, diagram or story. Nothing is sent until you choose.</p></div>';
+      els("[data-report-add]").forEach(function (button) {
+        const id = button.getAttribute("data-report-id") || button.getAttribute("data-report-url");
+        button.classList.toggle("is-saved", items.some(function (item) { return item.id === id; }));
+      });
+    }
+
+    function openDrawer() { drawer.hidden = false; document.body.classList.add("field-brief-open"); render(); }
+    function closeDrawer() { drawer.hidden = true; document.body.classList.remove("field-brief-open"); }
+
+    document.addEventListener("click", async function (event) {
+      const add = event.target.closest("[data-report-add]");
+      if (add) {
+        event.preventDefault();
+        event.stopPropagation();
+        const id = add.getAttribute("data-report-id") || add.getAttribute("data-report-url") || window.location.href;
+        if (!items.some(function (item) { return item.id === id; })) {
+          items.unshift({ id: id, title: add.getAttribute("data-report-title") || "Florida Signal intelligence", meta: add.getAttribute("data-report-meta") || "", url: add.getAttribute("data-report-url") || window.location.href, tags: add.getAttribute("data-report-tags") || "", saved_at: new Date().toISOString() });
+          items = items.slice(0, 50);
+          persist();
+          trackEvent("field_brief_add", { item_id: id });
+        }
+        add.classList.add("is-saved");
+        launcher.classList.add("field-brief-launcher--pulse");
+        window.setTimeout(function () { launcher.classList.remove("field-brief-launcher--pulse"); }, 700);
+        render();
+        return;
+      }
+      const popupShare = event.target.closest("[data-popup-share]");
+      if (popupShare) {
+        const url = popupShare.getAttribute("data-share-url") || window.location.href;
+        const title = popupShare.getAttribute("data-share-title") || "Florida Signal filing";
+        if (navigator.share) {
+          try { await navigator.share({ title: title, url: url }); return; } catch (error) { if (error && error.name === "AbortError") return; }
+        }
+        try { await navigator.clipboard.writeText(url); popupShare.textContent = "Copied"; } catch (error) { window.prompt("Copy this filing", url); }
+        return;
+      }
+      if (event.target.closest("[data-field-brief-open]")) { openDrawer(); return; }
+      if (event.target.closest("[data-field-brief-close]")) { closeDrawer(); return; }
+      const remove = event.target.closest("[data-field-brief-remove]");
+      if (remove) { items = items.filter(function (item) { return item.id !== remove.getAttribute("data-field-brief-remove"); }); persist(); render(); return; }
+      if (event.target.closest("[data-field-brief-clear]")) { items = []; persist(); render(); status.textContent = "Field Brief cleared."; return; }
+      if (event.target.closest("[data-field-brief-copy]")) {
+        try { await navigator.clipboard.writeText(reportText()); status.textContent = "Report copied with links."; }
+        catch (error) { window.prompt("Copy your Florida Signal Field Brief", reportText()); }
+        return;
+      }
+      if (event.target.closest("[data-field-brief-share]")) {
+        if (!items.length) { status.textContent = "Add at least one item first."; return; }
+        if (navigator.share) {
+          try { await navigator.share({ title: "Florida Signal Field Brief", text: reportText(), url: window.location.origin + PUBLIC_ROUTES.home }); status.textContent = "Share sheet opened."; return; }
+          catch (error) { if (error && error.name === "AbortError") return; }
+        }
+        try { await navigator.clipboard.writeText(reportText()); status.textContent = "Report copied—paste it into Notes or a message."; }
+        catch (error) { window.prompt("Copy your Florida Signal Field Brief", reportText()); }
+        return;
+      }
+      if (event.target.closest("[data-field-brief-print]")) {
+        if (!items.length) { status.textContent = "Add at least one item first."; return; }
+        const printWindow = window.open("", "_blank");
+        if (!printWindow) { status.textContent = "Allow pop-ups to print this report."; return; }
+        const rows = items.map(function (item, index) { return '<article><span>' + String(index + 1).padStart(2, "0") + '</span><div><h2>' + escapeHtml(item.title) + '</h2><p>' + escapeHtml(item.meta || "") + '</p><a href="' + escapeHtml(item.url || "") + '">' + escapeHtml(item.url || "") + '</a><small>' + escapeHtml((item.tags || "").replace(/\s+/g, " · ")) + '</small></div></article>'; }).join("");
+        printWindow.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Florida Signal Field Brief</title><style>*{box-sizing:border-box}body{margin:38px;color:#071b32;font:14px Arial,sans-serif}header{position:relative;padding:24px 0;border-top:8px solid #00a596;border-bottom:1px solid #cbd8dc}header:after{content:"";position:absolute;right:10px;top:5px;width:120px;height:140px;background:url("' + window.location.origin + '/assets/mark-full-color.png") center/contain no-repeat;opacity:.1}header img{width:330px}header p{margin:8px 0 0;color:#63788b;text-transform:uppercase;letter-spacing:.12em;font-size:10px}main{margin-top:24px}article{display:grid;grid-template-columns:38px 1fr;gap:12px;padding:16px 0;border-bottom:1px solid #d8e1e4;break-inside:avoid}article>span{color:#009f91;font-weight:700}h2{margin:0 0 5px;font:24px Georgia,serif}p{margin:0 0 7px;color:#52697c}a{color:#007c72;font-size:10px;overflow-wrap:anywhere}small{display:block;margin-top:7px;color:#8797a3;font-size:8px;text-transform:uppercase}footer{margin-top:30px;padding-top:12px;border-top:2px solid #071b32;font-size:9px;color:#63788b}@media print{body{margin:12mm}}</style></head><body><header><img src="' + window.location.origin + '/assets/lockup-horizontal-transparent.png" alt="Florida Signal"><p>Field Brief · ' + escapeHtml(new Date().toLocaleString("en-US", { timeZone: "America/New_York" })) + ' ET · ' + items.length + ' saved item' + (items.length === 1 ? '' : 's') + '</p></header><main>' + rows + '</main><footer>Florida Signal · Development Intelligence · Powered by Graham &amp; Gold LLC · Every item links to its cited public-record surface.</footer></body></html>');
+        printWindow.document.close();
+        printWindow.focus();
+        window.setTimeout(function () { printWindow.print(); }, 500);
+      }
+    });
+
+    render();
+  }
+
   function init() {
     els("[data-year]").forEach(function (node) { node.textContent = String(new Date().getFullYear()); });
     initAnalytics();
+    initTaxonomyDefaults();
     initStormMode();
+    initDataCountdown();
+    initMapPublishing();
+    initPublishingSurfaces();
+    initFieldBrief();
     initDataHealth();
     initMethodologyToggle();
     initCitySwitcher();
     initNavigation();
     initBriefPrompt();
     initSignupForms();
+    initCrossPagePromo();
     initSponsorInventory();
+    initHeroSequence();
     initDataFlipper();
     initMobileLiveRail();
+    initHomepagePriority();
     initMobileFieldTest();
     initLensSwitch();
     initMapOverlayTools();

@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#ffffff">
-  <meta name="description" content="Explore recent Fort Lauderdale permit activity across official City neighborhood boundaries.">
+  <meta name="description" content="Search Florida Signal's live Fort Lauderdale field map across current permits, official neighborhoods, ZIP areas and Broward intelligence layers.">
   <meta name="author" content="Graham &amp; Gold LLC"><meta name="publisher" content="Graham &amp; Gold LLC"><meta name="robots" content="index,follow,max-image-preview:large">
   <link rel="canonical" href="https://thefloridasignal.com/fort-lauderdale/neighborhoods/">
-  <meta property="og:type" content="website"><meta property="og:site_name" content="Florida Signal"><meta property="og:title" content="Neighborhood Signal Map — Florida Signal"><meta property="og:description" content="Search mapped Fort Lauderdale filings by address, permit, contractor, neighborhood and ZIP."><meta property="og:url" content="https://thefloridasignal.com/fort-lauderdale/neighborhoods/"><meta property="og:image" content="https://thefloridasignal.com/social/graphic-desk/place-lens.png"><meta property="og:image:alt" content="Florida Signal Place Lens neighborhood and ZIP map">
-  <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Neighborhood Signal Map — Florida Signal"><meta name="twitter:description" content="Search the live field desk and official neighborhood map."><meta name="twitter:image" content="https://thefloridasignal.com/social/graphic-desk/place-lens.png">
-  <title>Neighborhood Signal Map — Florida Signal</title>
+  <meta property="og:type" content="website"><meta property="og:site_name" content="Florida Signal"><meta property="og:title" content="Live Field Map — Florida Signal"><meta property="og:description" content="Search mapped Fort Lauderdale filings by address, permit, contractor, neighborhood and ZIP."><meta property="og:url" content="https://thefloridasignal.com/fort-lauderdale/neighborhoods/"><meta property="og:image" content="https://thefloridasignal.com/social/graphic-desk/place-lens.png"><meta property="og:image:alt" content="Florida Signal Place Lens neighborhood and ZIP map">
+  <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Live Field Map — Florida Signal"><meta name="twitter:description" content="Search the live field desk and official neighborhood map."><meta name="twitter:image" content="https://thefloridasignal.com/social/graphic-desk/place-lens.png">
+  <title>Live Field Map — Florida Signal</title>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png"><link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="/styles.css">
@@ -18,10 +18,46 @@
   <header class="site-header"><div class="shell site-header__inner">
     <a class="brand" href="/fort-lauderdale/" aria-label="Florida Signal home"><img src="/assets/lockup-horizontal-transparent.png" alt="Florida Signal — Development Intelligence" width="1000" height="248"></a>
     <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav"><span></span><span></span><span></span><span class="sr-only">Open navigation</span></button>
-    <nav class="site-nav" id="site-nav" aria-label="Primary navigation"><a href="/fort-lauderdale/#signals">Signals</a><a href="/fort-lauderdale/neighborhoods/" aria-current="page">Neighborhoods</a><a href="/fort-lauderdale/broward-record/">Broward record</a><a href="/fort-lauderdale/storm/">Storm window</a><a href="/fort-lauderdale/method/">How it works</a></nav>
+    <nav class="site-nav" id="site-nav" aria-label="Primary navigation"><a href="/fort-lauderdale/neighborhoods/" aria-current="page">Live map</a><a href="/fort-lauderdale/#signals">Signals</a><a href="/fort-lauderdale/graphics/">Data room</a><a href="/fort-lauderdale/meetings/">Meetings</a></nav>
     <a class="brief-button" href="/fort-lauderdale/#brief">Get the 6:15 Brief ↗</a>
   </div></header>
   <main id="main">
+    <section class="page-section section--mint live-map-stage" aria-labelledby="live-map-title">
+      <div class="shell live-map-stage__head">
+        <div><p class="eyebrow"><span class="pulse" aria-hidden="true"></span>Florida Signal field map · live</p><h1 id="live-map-title">Search the block.</h1><p>Current permit records, official neighborhoods, ZIP areas, heat, districts and the Broward corridor—one connected field view.</p></div>
+      </div>
+      <div class="shell full-map-shell">
+        <aside class="full-map-sidebar"><p class="eyebrow">Neighborhood index</p><h2>Where is it moving?</h2><p><strong id="map-point-count">—</strong> of the newest mapped records. Pick a neighborhood for a current field brief, or use the storm lens for roofs, seawalls, openings, drainage and generator work.</p>
+          <div class="lens-switch" aria-label="Map lens"><button class="is-active" type="button" data-map-lens="all">All activity</button><button type="button" data-map-lens="storm">Storm-ready</button></div>
+          <div class="map-layer-tools">
+            <p class="data-label">Field layers · tap to toggle</p>
+            <div class="map-layer-buttons" aria-label="Map overlays">
+              <button class="is-active" type="button" data-map-overlay="points"><i class="layer-dot layer-dot--points"></i>Records</button>
+              <button type="button" data-map-overlay="heat"><i class="layer-dot layer-dot--heat"></i>Heat map</button>
+              <button class="is-active" type="button" data-map-overlay="neighborhoods"><i class="layer-dot layer-dot--areas"></i>Neighborhoods</button>
+              <button type="button" data-map-overlay="zip"><i class="layer-dot layer-dot--zip"></i>ZIP areas</button>
+              <button type="button" data-map-overlay="congress"><i class="layer-dot layer-dot--congress"></i>U.S. House</button>
+              <button type="button" data-map-overlay="senate"><i class="layer-dot layer-dot--senate"></i>FL Senate</button>
+              <button type="button" data-map-overlay="house"><i class="layer-dot layer-dot--house"></i>FL House</button>
+              <button type="button" data-map-overlay="corridor"><i class="layer-dot layer-dot--corridor"></i>Broward corridor</button>
+            </div>
+            <p class="map-layer-status" id="map-layer-status">Neighborhoods: City GIS · legislative + ZIP: U.S. Census TIGERweb</p>
+          </div>
+          <div class="full-neighborhood-list" id="full-neighborhood-list"><p class="muted">Matching filings to City boundaries…</p></div>
+        </aside>
+        <div class="full-map-canvas">
+          <div id="full-map" class="full-map" role="region" aria-label="Interactive neighborhood permit map"></div>
+          <div class="map-publish-tools map-publish-tools--map" aria-label="Share or embed the Florida Signal live map">
+            <a class="publish-social publish-social--x" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fthefloridasignal.com%2Ffort-lauderdale%2Fneighborhoods%2F&text=Florida%20Signal%20live%20Broward%20field%20map" target="_blank" rel="noreferrer" aria-label="Share the live map on X" data-network="X">X</a>
+            <a class="publish-social publish-social--linkedin" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fthefloridasignal.com%2Ffort-lauderdale%2Fneighborhoods%2F" target="_blank" rel="noreferrer" aria-label="Share the live map on LinkedIn" data-network="LinkedIn">in</a>
+            <a class="publish-social publish-social--facebook" href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fthefloridasignal.com%2Ffort-lauderdale%2Fneighborhoods%2F" target="_blank" rel="noreferrer" aria-label="Share the live map on Facebook" data-network="Facebook">f</a>
+            <button type="button" data-share-map aria-label="Share the live map" title="Share">↗</button>
+            <button type="button" data-copy-map-embed aria-label="Copy live-map embed code" title="Embed">&lt;/&gt;</button>
+            <button type="button" class="map-publish-tools__brief" data-report-add data-report-id="map:fort-lauderdale-live" data-report-title="Florida Signal · Live Fort Lauderdale field map" data-report-meta="Current mapped public-record intelligence · open the map for its visible date window" data-report-url="/fort-lauderdale/neighborhoods/#full-map" data-report-tags="format:map city:fort-lauderdale county:broward-county" aria-label="Add map to Field Brief" title="Add to Field Brief">＋</button>
+          </div>
+        </div>
+      </div>
+    </section>
     <section class="page-hero"><div class="shell page-hero__grid"><div><p class="eyebrow">86 official neighborhood areas</p><h1>The field desk.</h1></div><div><p class="page-hero__dek">Search the public record before you canvass—or before you fly in: an address, permit, contractor or kind of work. Then drop into the official City neighborhood map and see what is moving nearby.</p><p class="page-hero__meta" data-updated>Connecting to the record…</p></div></div></section>
     <section class="field-desk" aria-label="Development record search"><div class="shell">
       <form class="record-search" id="record-search" role="search">
@@ -36,27 +72,6 @@
       <div class="lead-lenses" aria-label="Lead filters"><button class="is-active" type="button" data-lead-lens="new">New applications</button><button type="button" data-lead-lens="unassigned">Operator not listed</button><button type="button" data-lead-lens="high">$250K+ value</button><button type="button" data-lead-lens="storm">Storm + hardening</button><button type="button" data-lead-lens="association">HOA + condo</button></div>
       <div class="lead-list" id="lead-list"><p class="muted">Building the field list from application-dated records…</p></div>
       <p class="lead-standard">Lead means a public-record signal worth qualifying. It does not mean the owner is soliciting work, and Florida Signal does not sell private contact data.</p>
-    </div></section>
-    <section class="page-section section--mint"><div class="shell full-map-shell">
-      <aside class="full-map-sidebar"><p class="eyebrow">Neighborhood index</p><h2>Where is it moving?</h2><p><strong id="map-point-count">—</strong> of the newest mapped records. Pick a neighborhood for a current field brief, or use the storm lens for roofs, seawalls, openings, drainage and generator work.</p>
-        <div class="lens-switch" aria-label="Map lens"><button class="is-active" type="button" data-map-lens="all">All activity</button><button type="button" data-map-lens="storm">Storm-ready</button></div>
-        <div class="map-layer-tools">
-          <p class="data-label">Field layers · tap to toggle</p>
-          <div class="map-layer-buttons" aria-label="Map overlays">
-            <button class="is-active" type="button" data-map-overlay="points"><i class="layer-dot layer-dot--points"></i>Records</button>
-            <button type="button" data-map-overlay="heat"><i class="layer-dot layer-dot--heat"></i>Heat</button>
-            <button class="is-active" type="button" data-map-overlay="neighborhoods"><i class="layer-dot layer-dot--areas"></i>Neighborhoods</button>
-            <button type="button" data-map-overlay="zip"><i class="layer-dot layer-dot--zip"></i>ZIP areas</button>
-            <button type="button" data-map-overlay="congress"><i class="layer-dot layer-dot--congress"></i>U.S. House</button>
-            <button type="button" data-map-overlay="senate"><i class="layer-dot layer-dot--senate"></i>FL Senate</button>
-            <button type="button" data-map-overlay="house"><i class="layer-dot layer-dot--house"></i>FL House</button>
-            <button type="button" data-map-overlay="corridor"><i class="layer-dot layer-dot--corridor"></i>Broward corridor</button>
-          </div>
-          <p class="map-layer-status" id="map-layer-status">Neighborhoods: City GIS · legislative + ZIP: U.S. Census TIGERweb</p>
-        </div>
-        <div class="full-neighborhood-list" id="full-neighborhood-list"><p class="muted">Matching filings to City boundaries…</p></div>
-      </aside>
-      <div id="full-map" class="full-map" role="region" aria-label="Interactive neighborhood permit map"></div>
     </div></section>
     <section class="corridor-editorial page-section page-section--white"><div class="shell corridor-editorial__grid">
       <figure class="corridor-editorial__image"><img src="/assets/photos/brightline-fort-lauderdale-station-editorial-adobe-561906123.jpg" alt="Brightline inter-city train at Fort Lauderdale station in November 2022" width="2400" height="1600"><figcaption>File image · Fort Lauderdale · November 13, 2022 · Editorial use only · Adobe Stock 561906123</figcaption></figure>

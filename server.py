@@ -64,6 +64,7 @@ MAILCHIMP_SERVER_PREFIX = os.getenv("MAILCHIMP_SERVER_PREFIX", "us2").strip()
 MAILCHIMP_AUDIENCE_ID = os.getenv("MAILCHIMP_AUDIENCE_ID", "123540d751").strip()
 MAILCHIMP_ZIP_MERGE_TAG = os.getenv("MAILCHIMP_ZIP_MERGE_TAG", "WATCHZIP").strip()
 MAILCHIMP_CITIES_MERGE_TAG = os.getenv("MAILCHIMP_CITIES_MERGE_TAG", "").strip()
+MAILCHIMP_INTERESTS_MERGE_TAG = os.getenv("MAILCHIMP_INTERESTS_MERGE_TAG", "").strip()
 SUPABASE_URL = (os.getenv("FLORIDA_SIGNAL_SUPABASE_URL", "").strip() or "https://jrjewmzkyluxdywyusrw.supabase.co").rstrip("/")
 SUPABASE_PUBLISHABLE_KEY = os.getenv("FLORIDA_SIGNAL_SUPABASE_PUBLISHABLE_KEY", "").strip() or "sb_publishable_dEyBjKE_vcTj3YYx4p6XvA_xnkVW3Wb"
 _health_lock = threading.Lock()
@@ -78,6 +79,7 @@ BROWARD_CITIES = {
     "pompano-beach", "sea-ranch-lakes", "southwest-ranches", "sunrise", "tamarac", "west-park", "weston",
     "wilton-manors",
 }
+BRIEF_INTERESTS = {"development", "neighborhoods", "meetings", "property", "liens", "storm"}
 LEGACY_PUBLIC_ROUTES = {
     "/": "/fort-lauderdale/",
     "/index.html": "/fort-lauderdale/",
@@ -151,6 +153,9 @@ INDUSTRY_EVENTS_2026 = (
         "location": "Tower Club Fort Lauderdale · 100 SE 3rd Ave",
         "url": "https://calendar.rworld.com/events/meeting/9cb7b07a-71b5-4b22-bc26-e3876e115068",
         "source": "RWorld official calendar",
+        "market": "broward",
+        "county": "broward-county",
+        "city": "fort-lauderdale",
         "lat": 26.1216385,
         "lon": -80.1397718,
         "coordinate_source": "OpenStreetMap address match · 100 SE 3rd Ave",
@@ -162,6 +167,9 @@ INDUSTRY_EVENTS_2026 = (
         "location": "Kravis Center · West Palm Beach",
         "url": "https://www.casf.org/events/2026/07/23/networking/meet-the-general-contractors-2026-palm-beach/",
         "source": "Construction Association of South Florida",
+        "market": "palm-beaches",
+        "county": "palm-beach-county",
+        "city": "west-palm-beach",
     },
     {
         "title": "Networking Breakfast · Suffolk upcoming projects",
@@ -170,6 +178,9 @@ INDUSTRY_EVENTS_2026 = (
         "location": "Wyndham Boca Raton · 1950 Glades Road",
         "url": "https://www.casf.org/events/2026/08/05/networking/networking-breakfast-suffolk/",
         "source": "Construction Association of South Florida",
+        "market": "palm-beaches",
+        "county": "palm-beach-county",
+        "city": "boca-raton",
     },
     {
         "title": "Networking Breakfast · Rycon upcoming projects",
@@ -178,6 +189,9 @@ INDUSTRY_EVENTS_2026 = (
         "location": "Courtyard by Marriott · 2440 W Cypress Creek Road · Fort Lauderdale",
         "url": "https://www.casf.org/events/2026/08/26/networking/networking-breakfast-rycon-construction/",
         "source": "Construction Association of South Florida",
+        "market": "broward",
+        "county": "broward-county",
+        "city": "fort-lauderdale",
         "lat": 26.2017165,
         "lon": -80.1799911,
         "coordinate_source": "OpenStreetMap address match · 2440 W Cypress Creek Road",
@@ -251,6 +265,9 @@ def meeting_payload() -> dict[str, Any]:
                         "watch_url": video_url,
                         "ical_url": cells[2]["links"].get("ical"),
                         "source": "Fort Lauderdale Legistar",
+                        "market": "broward",
+                        "county": "broward-county",
+                        "city": "fort-lauderdale",
                         "status": lifecycle,
                         "starts_at": starts_at.isoformat(),
                         "category": "government",
@@ -280,6 +297,9 @@ def meeting_payload() -> dict[str, Any]:
                     "watch_url": None,
                     "ical_url": None,
                     "source": "City published 2026 DRC schedule",
+                    "market": "broward",
+                    "county": "broward-county",
+                    "city": "fort-lauderdale",
                     "status": "in session window" if starts_at <= now_et else "scheduled",
                     "starts_at": starts_at.isoformat(),
                     "category": "government",
@@ -310,6 +330,9 @@ def meeting_payload() -> dict[str, Any]:
                     "watch_url": None,
                     "ical_url": None,
                     "source": industry_event["source"],
+                    "market": industry_event["market"],
+                    "county": industry_event["county"],
+                    "city": industry_event["city"],
                     "status": "in session window" if starts_at <= now_et else "scheduled",
                     "starts_at": starts_at.isoformat(),
                     "category": "industry",
@@ -426,12 +449,12 @@ def data_health_payload() -> dict[str, Any]:
         source_rows = [
             {"id": "supabase-sync", "label": "Public mirror", "status": health_status(sync.get("completed_at"), 1.25, 3), "system_time": sync.get("completed_at"), "event_through": None, "cadence": "every 30 minutes", "detail": f"{sync.get('rows_synced', 0)} rows in latest run · {sync.get('errors', 0)} errors" if sync else "No sync run visible"},
             {"id": "permits", "label": "Permit applications", "status": health_status(latest_seen.get("last_seen_at"), 30, 54), "system_time": latest_seen.get("last_seen_at"), "event_through": latest_application.get("applied_date"), "cadence": "source intake nightly; mirror every 30 minutes", "detail": "Analysis uses applied_date; last_seen_at is freshness metadata"},
-            {"id": "aggregate-cache", "label": "Aggregate dashboard", "status": health_status(cache_row.get("updated_at"), 26, 54), "system_time": cache_row.get("updated_at"), "event_through": stats.get("permits_fresh"), "cadence": "refresh after successful aggregate build", "detail": "Counts remain visibly stamped when this cache is delayed"},
+            {"id": "aggregate-snapshot", "label": "Aggregate dashboard", "status": health_status(cache_row.get("updated_at"), 26, 54), "system_time": cache_row.get("updated_at"), "event_through": stats.get("permits_fresh"), "cadence": "refresh after successful aggregate build", "detail": "Counts retain their visible update time when this snapshot is delayed"},
             {"id": "broward", "label": "Broward instruments", "status": health_status(stats.get("broward_fresh"), 48, 96), "system_time": cache_row.get("updated_at"), "event_through": stats.get("broward_fresh"), "cadence": "daily at 9:30 AM", "detail": "Deeds, mortgages, liens, NOCs and recorded instruments"},
             {"id": "meetings", "label": "Meeting watch", "status": health_status(meetings.get("updated_at"), .5, 2), "system_time": meetings.get("updated_at"), "event_through": None, "cadence": "Legistar every 15 minutes; DRC and industry editorially checked", "detail": f"{len(meetings.get('meetings', []))} upcoming rooms · every row links to its public source"},
             {"id": "sunbiz", "label": "Sunbiz", "status": "unverified", "system_time": None, "event_through": None, "cadence": "raw ingest nightly at 11:30 PM; exact matching in enrichment", "detail": "Public health timestamp is not yet exposed; fuzzy writes remain off"},
         ]
-        payload = {"generated_at": datetime.now(timezone.utc).isoformat(), "sources": source_rows, "errors": errors, "contract": "Event date drives analysis; pull, sync and cache times only describe freshness."}
+        payload = {"generated_at": datetime.now(timezone.utc).isoformat(), "sources": source_rows, "errors": errors, "contract": "Event date drives analysis; pull, sync and system update times only describe freshness."}
         _health_cache.update({"at": now, "payload": payload})
         return payload
 
@@ -486,13 +509,21 @@ def normalize_taxonomy_values(value: Any, namespace: str) -> list[str]:
 
 
 def normalized_story_taxonomy(item: dict[str, Any]) -> dict[str, list[str]]:
+    market = str(item.get("market") or CMS_MARKET or "broward").strip().lower()
+    county = str(item.get("county") or ("broward-county" if market == "broward" else "")).strip().lower()
+    city = str(item.get("city") or "").strip().lower()
     taxonomy = {
+        "market": normalize_taxonomy_values([market], "market"),
+        "county": normalize_taxonomy_values([county], "county"),
+        "city": normalize_taxonomy_values([city], "city"),
         "topic": normalize_taxonomy_values(item.get("topic_tags") or item.get("tags"), "topic"),
         "geography": normalize_taxonomy_values(item.get("geography_tags") or item.get("places") or item.get("neighborhoods"), "geography"),
         "entity": normalize_taxonomy_values(item.get("entity_tags") or item.get("entities"), "entity"),
         "source": normalize_taxonomy_values(item.get("source_tags"), "source"),
         "audience": normalize_taxonomy_values(item.get("audience_tags"), "audience"),
         "urgency": normalize_taxonomy_values(item.get("urgency_tags") or item.get("urgency"), "urgency"),
+        "neighborhood": normalize_taxonomy_values([item.get("neighborhood")] if item.get("neighborhood") else [], "neighborhood"),
+        "zip": normalize_taxonomy_values([item.get("zip")] if item.get("zip") else [], "zip"),
     }
     if not taxonomy["source"]:
         taxonomy["source"] = ["source:florida-desk"]
@@ -525,6 +556,8 @@ def normalize_wire_story(item: dict[str, Any], endpoint: str) -> dict[str, Any] 
     topic_label = taxonomy["topic"][0].split(":", 1)[1].replace("-", " ").title() if taxonomy["topic"] else "Approved desk brief"
     return {
         "id": str(item.get("id") or item.get("packet_id") or hashlib.sha256((headline + sources[0]).encode()).hexdigest()[:16]),
+        "market": str(item.get("market") or CMS_MARKET or "broward").strip().lower(),
+        "county": str(item.get("county") or "broward-county").strip().lower(),
         "city": city,
         "title": headline,
         "summary": summary,
@@ -559,7 +592,21 @@ def cleared_recon_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         if not isinstance(item.get("lat"), (int, float)) or not isinstance(item.get("lon"), (int, float)):
             continue
-        items.append(item)
+        enriched = dict(item)
+        enriched["market"] = str(item.get("market") or CMS_MARKET or "broward").strip().lower()
+        enriched["county"] = str(item.get("county") or "broward-county").strip().lower()
+        enriched["city"] = str(item.get("city") or CMS_CITY or "fort-lauderdale").strip().lower()
+        if enriched["city"] != CMS_CITY:
+            continue
+        geography = [f"market:{enriched['market']}", f"county:{enriched['county']}", f"city:{enriched['city']}"]
+        if enriched.get("neighborhood"):
+            neighborhood_slug = re.sub(r"[^a-z0-9]+", "-", str(enriched["neighborhood"]).lower()).strip("-")
+            if neighborhood_slug:
+                geography.append(f"neighborhood:{neighborhood_slug}")
+        if enriched.get("zip"):
+            geography.append(f"zip:{enriched['zip']}")
+        enriched["geography_tags"] = list(dict.fromkeys(geography + list(enriched.get("geography_tags") or [])))
+        items.append(enriched)
     return items
 
 
@@ -671,6 +718,8 @@ def init_db() -> None:
             connection.execute("alter table brief_subscribers add column mailchimp_synced_at text")
         if "cities_json" not in columns:
             connection.execute("alter table brief_subscribers add column cities_json text not null default '[\"fort-lauderdale\"]'")
+        if "interests_json" not in columns:
+            connection.execute("alter table brief_subscribers add column interests_json text not null default '[\"development\",\"neighborhoods\",\"meetings\",\"property\",\"liens\",\"storm\"]'")
         connection.execute(
             """
             create table if not exists analytics_events (
@@ -718,7 +767,7 @@ def mailchimp_configured() -> bool:
     return bool(MAILCHIMP_API_KEY and MAILCHIMP_SERVER_PREFIX and MAILCHIMP_AUDIENCE_ID)
 
 
-def mailchimp_upsert(email: str, zip_code: str, cities: list[str]) -> bool:
+def mailchimp_upsert(email: str, zip_code: str, cities: list[str], interests: list[str]) -> bool:
     """Upsert an explicitly consented signup without exposing credentials client-side."""
     if not mailchimp_configured():
         return False
@@ -727,6 +776,8 @@ def mailchimp_upsert(email: str, zip_code: str, cities: list[str]) -> bool:
     merge_fields = {MAILCHIMP_ZIP_MERGE_TAG: zip_code} if MAILCHIMP_ZIP_MERGE_TAG else {}
     if MAILCHIMP_CITIES_MERGE_TAG:
         merge_fields[MAILCHIMP_CITIES_MERGE_TAG] = ", ".join(cities)
+    if MAILCHIMP_INTERESTS_MERGE_TAG:
+        merge_fields[MAILCHIMP_INTERESTS_MERGE_TAG] = ", ".join(interests)
     body = json.dumps(
         {
             "email_address": email,
@@ -899,6 +950,8 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
         zip_code = str(payload.get("zip", "")).strip()
         raw_cities = payload.get("cities")
         cities = list(dict.fromkeys(str(city).strip().lower() for city in raw_cities)) if isinstance(raw_cities, list) else []
+        raw_interests = payload.get("interests")
+        interests = list(dict.fromkeys(str(interest).strip().lower() for interest in raw_interests)) if isinstance(raw_interests, list) else sorted(BRIEF_INTERESTS)
         source = re.sub(r"[^a-zA-Z0-9_-]", "", str(payload.get("source", "website")))[:64] or "website"
         if len(email) > 254 or not EMAIL_RE.match(email):
             self.json_response({"error": "Enter a valid email address."}, HTTPStatus.UNPROCESSABLE_ENTITY)
@@ -909,7 +962,11 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
         if not cities or any(city not in BROWARD_CITIES for city in cities):
             self.json_response({"error": "Choose at least one valid Broward city."}, HTTPStatus.UNPROCESSABLE_ENTITY)
             return
+        if not interests or any(interest not in BRIEF_INTERESTS for interest in interests):
+            self.json_response({"error": "Choose at least one valid intelligence topic."}, HTTPStatus.UNPROCESSABLE_ENTITY)
+            return
         cities_json = json.dumps(cities, separators=(",", ":"))
+        interests_json = json.dumps(interests, separators=(",", ":"))
         now = datetime.now(timezone.utc).isoformat()
         with sqlite3.connect(DB_PATH) as connection:
             existing = connection.execute(
@@ -917,16 +974,16 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
             ).fetchone()
             if existing:
                 connection.execute(
-                    "update brief_subscribers set status = 'active', zip_code = ?, cities_json = ?, source = ?, updated_at = ? where id = ?",
-                    (zip_code, cities_json, source, now, existing[0]),
+                    "update brief_subscribers set status = 'active', zip_code = ?, cities_json = ?, interests_json = ?, source = ?, updated_at = ? where id = ?",
+                    (zip_code, cities_json, interests_json, source, now, existing[0]),
                 )
             else:
                 connection.execute(
-                    "insert into brief_subscribers (email, zip_code, cities_json, source, created_at, updated_at) values (?, ?, ?, ?, ?, ?)",
-                    (email, zip_code, cities_json, source, now, now),
+                    "insert into brief_subscribers (email, zip_code, cities_json, interests_json, source, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)",
+                    (email, zip_code, cities_json, interests_json, source, now, now),
                 )
             connection.commit()
-        mailchimp_synced = mailchimp_upsert(email, zip_code, cities)
+        mailchimp_synced = mailchimp_upsert(email, zip_code, cities, interests)
         sync_status = "synced" if mailchimp_synced else ("pending" if mailchimp_configured() else "local_only")
         with sqlite3.connect(DB_PATH) as connection:
             connection.execute(
@@ -935,7 +992,7 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
             )
             connection.commit()
         self.json_response(
-            {"ok": True, "existing": bool(existing), "mailchimp_synced": mailchimp_synced, "delivery": sync_status, "cities": cities},
+            {"ok": True, "existing": bool(existing), "mailchimp_synced": mailchimp_synced, "delivery": sync_status, "cities": cities, "interests": interests},
             HTTPStatus.OK if existing else HTTPStatus.CREATED,
         )
 

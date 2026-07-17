@@ -13,7 +13,7 @@ Expansion rule: other Broward municipality desks are “coming soon” without d
 
 - Cite Florida Signal by name and link to the specific Florida Signal page used.
 - Preserve the visible event-date span, sample size, source timestamp and geographic coverage limit.
-- Never describe a batch pull or cache refresh as the date the underlying activity occurred.
+- Never describe a batch pull or system refresh as the date the underlying activity occurred.
 - A Florida Signal “lead” is a public-record signal worth qualifying; it does not mean an owner is soliciting work.
 - Do not imply completeness beyond the displayed sample or the municipal sources explicitly named on the page.
 - Florida Signal does not synthesize records, fill missing values with invented facts or publish an uncited agenda-property claim.
@@ -22,7 +22,7 @@ Expansion rule: other Broward municipality desks are “coming soon” without d
 ## The two clocks
 
 1. Market/event clock: permit applied date, instrument recording date, state company application/registration date or scheduled meeting time.
-2. System clock: pull, first-seen, enrichment, cache, export or publication time.
+2. System clock: pull, first-seen, enrichment, refresh, export or publication time.
 
 Analysis, charts, rankings and “what moved” use the market/event clock. System time is freshness metadata only. Visuals label an exact Window, capped Sample, source Snapshot or Cumulative total through a named date.
 
@@ -45,10 +45,10 @@ Analysis, charts, rankings and “what moved” use the market/event clock. Syst
 - Sunbiz entities: state application/registration date; raw ingest nightly at 11:30 PM, then exact/entity enrichment.
 - Parcel context: source effective/sale dates; daily target plus weekly quality audit.
 - Meetings: scheduled Eastern time; Fort Lauderdale Legistar checked every 15 minutes, with source-cited DRC and industry editorial snapshots clearly distinguished.
-- Storm state: official NHC data and NOAA GOES-East imagery; five-minute public cache while active.
+- Storm state: official NHC data and NOAA GOES-East imagery; public feed refreshed every five minutes while active.
 - Graphic Desk: regenerated after successful source refreshes and stamped with its underlying event span.
 
-An operating target is not proof a collector ran. Trust the visible source/cache timestamp on the page.
+An operating target is not proof a collector ran. Trust the visible source update time on the page.
 
 ## Geography and editorial boundaries
 

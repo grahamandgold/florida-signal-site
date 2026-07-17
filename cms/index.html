@@ -288,6 +288,7 @@
     .form-footer p { margin: 0; max-width: 500px; color: var(--ink-soft); font-size: .82rem; }
 
     .queue-tools { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .queue-city-filter { width: auto; min-height: 38px; padding: 7px 34px 7px 10px; border-radius: 7px; background-color: #fff; font-size: .8rem; font-weight: 750; }
     .filter {
       min-height: 38px;
       border: 1px solid var(--line);
@@ -536,6 +537,11 @@
                 </select>
                 <span class="field-help">Required on every brief. Only Fort Lauderdale has a public desk.</span>
               </label>
+              <label>
+                <span class="label">County <span class="required" aria-hidden="true">*</span></span>
+                <input name="county" value="broward-county" required pattern="[a-z0-9][a-z0-9-]{1,79}" autocomplete="off">
+                <span class="field-help">Hidden geography metadata; use the stable county key.</span>
+              </label>
               <label class="span-2">
                 <span class="label">Headline <span class="required" aria-hidden="true">*</span></span>
                 <input name="headline" required maxlength="300" placeholder="A precise, record-led headline">
@@ -709,6 +715,8 @@
             <p id="queue-summary">Open the desk to load the live editorial queue.</p>
           </div>
           <div class="queue-tools" aria-label="Filter story queue">
+            <label class="sr-only" for="queue-city-filter">Filter queue by city</label>
+            <select class="queue-city-filter" id="queue-city-filter"><option value="all">All city desks</option></select>
             <button class="filter" type="button" data-filter="all" aria-pressed="true">All</button>
             <button class="filter" type="button" data-filter="draft" aria-pressed="false">Drafts</button>
             <button class="filter" type="button" data-filter="hold" aria-pressed="false">Hold</button>
@@ -796,7 +804,7 @@
 
       const SESSION_TOKEN_KEY = 'dataWireAdminToken';
       const SESSION_MARKET_KEY = 'dataWireMarket';
-      const state = { stories: [], filter: 'all', connected: false };
+      const state = { stories: [], filter: 'all', cityFilter: 'all', connected: false };
 
       const connectionForm = document.querySelector('#connection-form');
       const storyForm = document.querySelector('#story-form');
@@ -808,6 +816,7 @@
       const statusDot = document.querySelector('#status-dot');
       const deskStatus = document.querySelector('#desk-status');
       const queueSummary = document.querySelector('#queue-summary');
+      const queueCityFilter = document.querySelector('#queue-city-filter');
       const alertBox = document.querySelector('#alert');
 
       function currentMarket() {
@@ -876,6 +885,7 @@
 
       function storyBlocks(story) {
         const blocks = [];
+        if (!String(story.county || '').trim()) blocks.push('County is required');
         if (!String(story.city || '').trim()) blocks.push('City is required');
         if (!String(story.headline || '').trim()) blocks.push('Headline is required');
         if (!String(story.dek || '').trim()) blocks.push('Summary is required');
@@ -925,12 +935,14 @@
       function renderQueue() {
         queue.replaceChildren();
         const visible = state.stories.filter(story => {
+          if (state.cityFilter !== 'all' && story.city !== state.cityFilter) return false;
           if (state.filter === 'all') return true;
           if (state.filter === 'approved') return ['approved', 'published'].includes(story.status);
           return story.status === state.filter;
         });
 
-        queueSummary.textContent = `${state.stories.length} ${state.stories.length === 1 ? 'story' : 'stories'} in ${currentMarket()} · ${visible.length} shown`;
+        const cityScope = state.cityFilter === 'all' ? 'all city desks' : queueCityFilter.options[queueCityFilter.selectedIndex]?.textContent || state.cityFilter;
+        queueSummary.textContent = `${state.stories.length} ${state.stories.length === 1 ? 'story' : 'stories'} in ${currentMarket()} · ${visible.length} shown · ${cityScope}`;
         if (!visible.length) {
           const empty = makeElement('div', 'empty');
           const copy = makeElement('div');
@@ -948,7 +960,7 @@
 
           const top = makeElement('div', 'wire-card__top');
           const titleWrap = makeElement('div');
-          titleWrap.append(makeElement('div', 'eyebrow', [story.city, story.neighborhood].filter(Boolean).join(' · ') || story.market || currentMarket()));
+          titleWrap.append(makeElement('div', 'eyebrow', [story.county, story.city, story.neighborhood].filter(Boolean).join(' · ') || story.market || currentMarket()));
           titleWrap.append(makeElement('h4', '', story.headline || 'Untitled draft'));
           titleWrap.append(makeElement('p', 'wire-card__meta', `Updated ${displayDate(story.updated_at)} · ${story.byline || 'No byline'}`));
           const statusClass = ['approved', 'published'].includes(story.status) ? 'badge badge--approved' : story.status === 'hold' ? 'badge badge--hold' : 'badge';
@@ -1121,6 +1133,11 @@
         renderQueue();
       });
 
+      queueCityFilter.addEventListener('change', () => {
+        state.cityFilter = queueCityFilter.value;
+        renderQueue();
+      });
+
       document.querySelector('#refresh-queue').addEventListener('click', loadQueue);
 
       queue.addEventListener('click', event => {
@@ -1182,6 +1199,9 @@
 
       const savedMarket = sessionStorage.getItem(SESSION_MARKET_KEY);
       const savedToken = sessionStorage.getItem(SESSION_TOKEN_KEY);
+      Array.from(storyForm.elements.city.options).forEach(option => {
+        queueCityFilter.append(new Option(option.textContent.replace(' · live desk', '').replace(' · coming soon', ''), option.value));
+      });
       if (savedMarket) marketInput.value = savedMarket;
       if (savedToken) {
         tokenInput.value = savedToken;

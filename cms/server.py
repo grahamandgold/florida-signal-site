@@ -23,6 +23,7 @@ ADMIN_TOKEN = os.getenv("DATA_WIRE_ADMIN_TOKEN", "").strip()
 MAX_BODY = 1_000_000
 MARKET_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,39}$")
 CITY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,59}$")
+COUNTY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,79}$")
 STATUS_PUBLIC = {"approved", "published"}
 
 
@@ -82,6 +83,30 @@ def city_value(value: Any) -> str:
     return city
 
 
+def county_value(value: Any) -> str:
+    county = str(value or "").strip().lower()
+    if not county or not COUNTY_RE.fullmatch(county):
+        raise ValueError("A valid county key is required")
+    return county
+
+
+def ensure_city_scoped_story_slugs(db: sqlite3.Connection) -> None:
+    """Upgrade the early market-wide slug constraint without losing draft rows."""
+    row = db.execute("select sql from sqlite_master where type='table' and name='stories'").fetchone()
+    table_sql = str(row[0] if row else "")
+    normalized = re.sub(r"\s+", "", table_sql.lower())
+    if "unique(market,slug)" not in normalized:
+        return
+    migration_sql = re.sub(r"create\s+table\s+stories", "create table stories_city_migration", table_sql, count=1, flags=re.IGNORECASE)
+    migration_sql = re.sub(r"unique\s*\(\s*market\s*,\s*slug\s*\)", "unique(market, city, slug)", migration_sql, count=1, flags=re.IGNORECASE)
+    columns = [row[1] for row in db.execute("pragma table_info(stories)")]
+    quoted = ",".join('"' + column.replace('"', '""') + '"' for column in columns)
+    db.execute(migration_sql)
+    db.execute(f"insert into stories_city_migration ({quoted}) select {quoted} from stories")
+    db.execute("drop table stories")
+    db.execute("alter table stories_city_migration rename to stories")
+
+
 def init_db() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as db:
@@ -90,6 +115,7 @@ def init_db() -> None:
             create table if not exists stories (
               id text primary key,
               market text not null,
+              county text not null,
               city text not null,
               slug text not null,
               headline text not null,
@@ -127,12 +153,14 @@ def init_db() -> None:
               approved_at text,
               created_at text not null,
               updated_at text not null,
-              unique(market, slug)
+              unique(market, city, slug)
             );
             create index if not exists stories_market_status on stories(market, status, approved_at);
             create table if not exists agenda_recon (
               id text primary key,
               market text not null,
+              county text not null,
+              city text not null,
               meeting_title text not null,
               meeting_date text not null,
               item_number text not null,
@@ -169,7 +197,17 @@ def init_db() -> None:
         story_columns = {row[1] for row in db.execute("pragma table_info(stories)")}
         if "city" not in story_columns:
             db.execute("alter table stories add column city text not null default 'fort-lauderdale'")
+        if "county" not in story_columns:
+            db.execute("alter table stories add column county text not null default 'broward-county'")
+        ensure_city_scoped_story_slugs(db)
+        db.execute("create index if not exists stories_market_status on stories(market, status, approved_at)")
         db.execute("create index if not exists stories_market_city_status on stories(market, city, status, approved_at)")
+        agenda_columns = {row[1] for row in db.execute("pragma table_info(agenda_recon)")}
+        if "city" not in agenda_columns:
+            db.execute("alter table agenda_recon add column city text not null default 'fort-lauderdale'")
+        if "county" not in agenda_columns:
+            db.execute("alter table agenda_recon add column county text not null default 'broward-county'")
+        db.execute("create index if not exists agenda_market_city_status on agenda_recon(market, city, editor_status, meeting_date)")
         db.commit()
 
 
@@ -190,7 +228,12 @@ def story_json(row: sqlite3.Row | dict[str, Any], *, public: bool = False) -> di
     item["review_status"] = item["status"]
     item["wire_approved_at"] = item.get("approved_at")
     item["source_links"] = [item["source_url"]] if item.get("source_url") else []
-    item["tags"] = item["topic_tags"]
+    item["tags"] = list(dict.fromkeys(
+        [f"market:{item.get('market')}", f"county:{item.get('county')}", f"city:{item.get('city')}"]
+        + ([f"neighborhood:{slugify(str(item.get('neighborhood')))}"] if item.get("neighborhood") else [])
+        + ([f"zip:{item.get('zip')}"] if item.get("zip") else [])
+        + item["topic_tags"] + item["geography_tags"] + item["entity_tags"] + item["audience_tags"] + item["urgency_tags"]
+    ))
     if public:
         for key in ("editor_note", "unresolved_issues"):
             item.pop(key, None)
@@ -199,6 +242,10 @@ def story_json(row: sqlite3.Row | dict[str, Any], *, public: bool = False) -> di
 
 def story_blocks(item: dict[str, Any]) -> list[str]:
     blocks: list[str] = []
+    try:
+        county_value(item.get("county"))
+    except ValueError:
+        blocks.append("A county is required")
     try:
         city_value(item.get("city"))
     except ValueError:
@@ -237,6 +284,14 @@ def story_blocks(item: dict[str, Any]) -> list[str]:
 
 def agenda_blocks(item: dict[str, Any]) -> list[str]:
     blocks: list[str] = []
+    try:
+        county_value(item.get("county"))
+    except ValueError:
+        blocks.append("A county is required")
+    try:
+        city_value(item.get("city"))
+    except ValueError:
+        blocks.append("A city is required")
     for key, label in (("meeting_title", "Meeting title"), ("meeting_date", "Meeting date"), ("item_number", "Item number"), ("property_address", "Property address"), ("proposed_action", "Proposed action")):
         if not str(item.get(key) or "").strip():
             blocks.append(f"{label} is required")
@@ -320,11 +375,12 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if route == "/api/agenda-recon":
             market = self.query_market()
+            city = self.query_city()
             with sqlite3.connect(DB_PATH) as db:
                 db.row_factory = sqlite3.Row
-                rows = db.execute("select * from agenda_recon where market=? and editor_status='cleared' order by meeting_date, item_number", (market,)).fetchall()
+                rows = db.execute("select * from agenda_recon where market=? and city=? and editor_status='cleared' order by meeting_date, item_number", (market, city)).fetchall()
             items = [dict(row) for row in rows if not agenda_blocks(dict(row))]
-            self.reply({"market": market, "items": items, "generated_at": now_iso(), "gate": "editor-cleared cited properties only"})
+            self.reply({"market": market, "city": city, "items": items, "generated_at": now_iso(), "gate": "editor-cleared cited properties only"})
             return
         if route == "/api/admin/stories":
             if not self.require_admin():
@@ -349,6 +405,7 @@ class Handler(SimpleHTTPRequestHandler):
         if route == "/api/admin/stories":
             try:
                 market = market_value(payload.get("market"))
+                county = county_value(payload.get("county"))
                 city = city_value(payload.get("city"))
             except ValueError as error:
                 self.reply({"error": str(error)}, HTTPStatus.UNPROCESSABLE_ENTITY)
@@ -362,15 +419,24 @@ class Handler(SimpleHTTPRequestHandler):
             source_url = str(payload.get("source_url") or "").strip()
             source_hash = hashlib.sha256(source_url.encode()).hexdigest() if source_url else None
             created = now_iso()
+            geography_tags = list_value(payload.get("geography_tags"))
+            geography_tags.extend([f"county:{county}", f"city:{city}"])
+            neighborhood = str(payload.get("neighborhood") or "").strip()[:160] or None
+            zip_code = str(payload.get("zip") or "").strip()[:10] or None
+            if neighborhood:
+                geography_tags.append(f"neighborhood:{slugify(neighborhood)}")
+            if zip_code:
+                geography_tags.append(f"zip:{zip_code}")
+            geography_tags = list(dict.fromkeys(geography_tags))[:30]
             values = {
-                "id": story_id, "market": market, "city": city, "slug": slug, "headline": headline,
+                "id": story_id, "market": market, "county": county, "city": city, "slug": slug, "headline": headline,
                 "dek": str(payload.get("dek") or payload.get("summary") or "").strip()[:1000],
                 "body": str(payload.get("body") or "").strip()[:100000], "byline": str(payload.get("byline") or "Florida Signal Desk").strip()[:120],
                 "event_date": str(payload.get("event_date") or "").strip()[:40] or None, "source_url": source_url,
                 "source_title": str(payload.get("source_title") or "").strip()[:500], "source_published_at": str(payload.get("source_published_at") or "").strip()[:40] or None,
-                "source_hash": source_hash, "topic_tags": json.dumps(list_value(payload.get("topic_tags"))), "geography_tags": json.dumps(list_value(payload.get("geography_tags"))),
+                "source_hash": source_hash, "topic_tags": json.dumps(list_value(payload.get("topic_tags"))), "geography_tags": json.dumps(geography_tags),
                 "entity_tags": json.dumps(list_value(payload.get("entity_tags"))), "audience_tags": json.dumps(list_value(payload.get("audience_tags"))), "urgency_tags": json.dumps(list_value(payload.get("urgency_tags"))),
-                "neighborhood": str(payload.get("neighborhood") or "").strip()[:160] or None, "zip": str(payload.get("zip") or "").strip()[:10] or None,
+                "neighborhood": neighborhood, "zip": zip_code,
                 "lat": payload.get("lat") if isinstance(payload.get("lat"), (int, float)) else None, "lon": payload.get("lon") if isinstance(payload.get("lon"), (int, float)) else None,
                 "hero_image": str(payload.get("hero_image") or "").strip()[:1000] if public_url(payload.get("hero_image")) else None,
                 "verification_status": str(payload.get("verification_status") or "needs_verification"),
@@ -394,7 +460,7 @@ class Handler(SimpleHTTPRequestHandler):
             except sqlite3.IntegrityError:
                 self.reply({"error": "That market already has a story with this slug"}, HTTPStatus.CONFLICT)
                 return
-            self.reply({"ok": True, "id": story_id, "status": "draft", "blocks": story_blocks({**values, "topic_tags": list_value(payload.get("topic_tags")), "geography_tags": list_value(payload.get("geography_tags"))})}, HTTPStatus.CREATED)
+            self.reply({"ok": True, "id": story_id, "status": "draft", "blocks": story_blocks({**values, "topic_tags": list_value(payload.get("topic_tags")), "geography_tags": geography_tags})}, HTTPStatus.CREATED)
             return
         story_action = re.fullmatch(r"/api/admin/stories/([a-zA-Z0-9_-]+)/(?P<action>approve|hold)", route)
         if story_action:
@@ -428,14 +494,16 @@ class Handler(SimpleHTTPRequestHandler):
         if route == "/api/admin/agenda-recon":
             try:
                 market = market_value(payload.get("market"))
+                county = county_value(payload.get("county"))
+                city = city_value(payload.get("city"))
             except ValueError as error:
                 self.reply({"error": str(error)}, HTTPStatus.UNPROCESSABLE_ENTITY)
                 return
             identity = ":".join(str(payload.get(key) or "") for key in ("meeting_date", "item_number", "property_address"))
-            item_id = str(payload.get("id") or hashlib.sha256(f"{market}:{identity}".encode()).hexdigest()[:16])
+            item_id = str(payload.get("id") or hashlib.sha256(f"{market}:{city}:{identity}".encode()).hexdigest()[:16])
             created = now_iso()
             fields = {
-                "id": item_id, "market": market, "meeting_title": str(payload.get("meeting_title") or "").strip(), "meeting_date": str(payload.get("meeting_date") or "").strip(),
+                "id": item_id, "market": market, "county": county, "city": city, "meeting_title": str(payload.get("meeting_title") or "").strip(), "meeting_date": str(payload.get("meeting_date") or "").strip(),
                 "item_number": str(payload.get("item_number") or "").strip(), "property_address": str(payload.get("property_address") or "").strip(), "folio": str(payload.get("folio") or "").strip() or None,
                 "applicant": str(payload.get("applicant") or "").strip() or None, "proposed_action": str(payload.get("proposed_action") or "").strip(), "source_url": str(payload.get("source_url") or "").strip(),
                 "source_page": payload.get("source_page") if isinstance(payload.get("source_page"), int) else None, "source_hash": hashlib.sha256(str(payload.get("source_url") or "").encode()).hexdigest() if payload.get("source_url") else None,
