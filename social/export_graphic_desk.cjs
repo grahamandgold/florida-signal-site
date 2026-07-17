@@ -9,7 +9,7 @@ const { chromium } = require("playwright");
 
 const root = path.resolve(__dirname, "..");
 const outputDir = path.join(root, "social", "graphic-desk");
-const shareDir = path.join(root, "share");
+const shareDir = path.join(root, "fort-lauderdale", "share");
 const baseUrl = (process.argv[2] || "http://127.0.0.1:4173").replace(/\/$/, "");
 const publicUrl = (process.env.FLORIDA_SIGNAL_PUBLIC_URL || "https://thefloridasignal.com").replace(/\/$/, "");
 const cards = [
@@ -35,7 +35,7 @@ function escapeHtml(value) {
 
 function shareDocument(slug, title) {
   const imageUrl = publicUrl + "/social/graphic-desk/" + slug + ".png";
-  const destination = "../graphics.html?graphic=" + slug + "#" + slug;
+  const destination = "/fort-lauderdale/graphics/?graphic=" + slug + "#" + slug;
   const description = "Source-labeled Florida development intelligence from Florida Signal.";
   return `<!doctype html>
 <html lang="en"><head>
@@ -49,9 +49,9 @@ function shareDocument(slug, title) {
 <meta property="og:image" content="${imageUrl}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="620">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Florida Signal · ${escapeHtml(title)}"><meta name="twitter:image" content="${imageUrl}">
 <meta http-equiv="refresh" content="0;url=${destination}">
-<link rel="canonical" href="${publicUrl}/graphics.html?graphic=${slug}#${slug}">
-<link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png"><link rel="apple-touch-icon" sizes="180x180" href="../assets/apple-touch-icon.png">
-</head><body><p><a href="${destination}">Open the cited Florida Signal graphic →</a></p></body></html>\n`;
+<link rel="canonical" href="${publicUrl}/fort-lauderdale/graphics/?graphic=${slug}#${slug}">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png"><link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+</head><body data-city="fort-lauderdale"><p><a href="${destination}">Open the cited Florida Signal graphic →</a></p></body></html>\n`;
 }
 
 (async function exportGraphicDesk() {
@@ -60,7 +60,7 @@ function shareDocument(slug, title) {
   const browser = await chromium.launch();
   for (const [slug, title] of exportCards) {
     const page = await browser.newPage({ viewport: { width: 1200, height: 820 }, deviceScaleFactor: 1 });
-    await page.goto(baseUrl + "/graphics.html?embed=" + slug, { waitUntil: "networkidle", timeout: 60000 });
+    await page.goto(baseUrl + "/fort-lauderdale/graphics/?embed=" + slug, { waitUntil: "networkidle", timeout: 60000 });
     await page.waitForTimeout(2200);
     const card = page.locator("#" + slug);
     await card.waitFor({ state: "visible", timeout: 30000 });

@@ -519,6 +519,23 @@
           <fieldset class="form-section">
             <legend>01 · Story</legend>
             <div class="grid">
+              <label>
+                <span class="label">City <span class="required" aria-hidden="true">*</span></span>
+                <select name="city" required>
+                  <option value="fort-lauderdale" selected>Fort Lauderdale · live desk</option>
+                  <option value="coconut-creek">Coconut Creek · coming soon</option><option value="cooper-city">Cooper City · coming soon</option><option value="coral-springs">Coral Springs · coming soon</option>
+                  <option value="dania-beach">Dania Beach · coming soon</option><option value="davie">Davie · coming soon</option><option value="deerfield-beach">Deerfield Beach · coming soon</option>
+                  <option value="hallandale-beach">Hallandale Beach · coming soon</option><option value="hillsboro-beach">Hillsboro Beach · coming soon</option><option value="hollywood">Hollywood · coming soon</option>
+                  <option value="lauderdale-by-the-sea">Lauderdale-by-the-Sea · coming soon</option><option value="lauderdale-lakes">Lauderdale Lakes · coming soon</option><option value="lauderhill">Lauderhill · coming soon</option>
+                  <option value="lazy-lake">Lazy Lake · coming soon</option><option value="lighthouse-point">Lighthouse Point · coming soon</option><option value="margate">Margate · coming soon</option>
+                  <option value="miramar">Miramar · coming soon</option><option value="north-lauderdale">North Lauderdale · coming soon</option><option value="oakland-park">Oakland Park · coming soon</option>
+                  <option value="parkland">Parkland · coming soon</option><option value="pembroke-park">Pembroke Park · coming soon</option><option value="pembroke-pines">Pembroke Pines · coming soon</option>
+                  <option value="plantation">Plantation · coming soon</option><option value="pompano-beach">Pompano Beach · coming soon</option><option value="sea-ranch-lakes">Sea Ranch Lakes · coming soon</option>
+                  <option value="southwest-ranches">Southwest Ranches · coming soon</option><option value="sunrise">Sunrise · coming soon</option><option value="tamarac">Tamarac · coming soon</option>
+                  <option value="west-park">West Park · coming soon</option><option value="weston">Weston · coming soon</option><option value="wilton-manors">Wilton Manors · coming soon</option>
+                </select>
+                <span class="field-help">Required on every brief. Only Fort Lauderdale has a public desk.</span>
+              </label>
               <label class="span-2">
                 <span class="label">Headline <span class="required" aria-hidden="true">*</span></span>
                 <input name="headline" required maxlength="300" placeholder="A precise, record-led headline">
@@ -859,6 +876,7 @@
 
       function storyBlocks(story) {
         const blocks = [];
+        if (!String(story.city || '').trim()) blocks.push('City is required');
         if (!String(story.headline || '').trim()) blocks.push('Headline is required');
         if (!String(story.dek || '').trim()) blocks.push('Summary is required');
         if (!String(story.body || '').trim()) blocks.push('Story body is required');
@@ -930,7 +948,7 @@
 
           const top = makeElement('div', 'wire-card__top');
           const titleWrap = makeElement('div');
-          titleWrap.append(makeElement('div', 'eyebrow', story.neighborhood || story.market || currentMarket()));
+          titleWrap.append(makeElement('div', 'eyebrow', [story.city, story.neighborhood].filter(Boolean).join(' · ') || story.market || currentMarket()));
           titleWrap.append(makeElement('h4', '', story.headline || 'Untitled draft'));
           titleWrap.append(makeElement('p', 'wire-card__meta', `Updated ${displayDate(story.updated_at)} · ${story.byline || 'No byline'}`));
           const statusClass = ['approved', 'published'].includes(story.status) ? 'badge badge--approved' : story.status === 'hold' ? 'badge badge--hold' : 'badge';

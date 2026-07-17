@@ -5,9 +5,9 @@ The Data Wire is the source-gated editorial CMS that powers Florida Signal and i
 It is a focused, clean-room port of the useful Michigan Intel Desk patterns:
 
 - private draft queues never appear on a public endpoint;
-- every object carries a `market` key;
+- every story/brief carries both a `market` key and a required `city` key;
 - source, claims, taxonomy and human-editor checks must all pass;
-- the public site reads only `/api/wire/packets?market=broward` and `/api/agenda-recon?market=broward`;
+- the public site reads only `/api/wire/packets?market=broward&city=fort-lauderdale` and `/api/agenda-recon?market=broward`;
 - Agenda Recon properties require a cited official source, coordinates and explicit clearance;
 - newsletter/social candidates are downstream views of an approved packet, never separate unsourced copy.
 
@@ -25,6 +25,7 @@ Then run the public site with:
 ```bash
 export FLORIDA_SIGNAL_CMS_URL='http://127.0.0.1:8788'
 export FLORIDA_SIGNAL_CMS_MARKET='broward'
+export FLORIDA_SIGNAL_CMS_CITY='fort-lauderdale'
 python3 server.py --port 4173
 ```
 
@@ -43,7 +44,7 @@ If the token is rejected, stop the CMS process, export a new long private token,
 ## Public endpoints
 
 - `GET /api/health`
-- `GET /api/wire/packets?market=broward`
+- `GET /api/wire/packets?market=broward&city=fort-lauderdale`
 - `GET /api/agenda-recon?market=broward`
 
 ## Private endpoints
@@ -59,7 +60,7 @@ Send `Authorization: Bearer $DATA_WIRE_ADMIN_TOKEN`.
 
 ## Approval contract
 
-A story cannot publish until it is a complete **VERIFIED Story Packet**: headline, dek, body, event date, dated current trigger, defensible project identity, public source URL/title, at least one source-bound claim slot, topic and geography tags, `claims_status: passed`, `validator_status: passed`, `tags_status: passed`, and a named human editor. Needs-verification packets remain private. The CMS computes a source hash and records approval history.
+A brief cannot publish until it is a complete **VERIFIED Story Packet**: required city, headline, dek, body, event date, dated current trigger, defensible project identity, public source URL/title, at least one source-bound claim slot, topic and geography tags, `claims_status: passed`, `validator_status: passed`, `tags_status: passed`, and a named human editor. Needs-verification packets remain private. The CMS computes a source hash and records approval history.
 
 An agenda-property item cannot publish until it has an official packet URL, meeting title/date, item number, property address, coordinates, proposed action, source page and a named human editor.
 

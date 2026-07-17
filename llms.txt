@@ -1,11 +1,13 @@
 # Florida Signal
 
-> Florida Signal is a development-intelligence publication for Fort Lauderdale and Broward County, Florida. It is published by Graham & Gold LLC and turns sourced public records, official calendars, mapped geography and official storm data into field-ready intelligence.
+> Florida Signal is Broward-wide development intelligence launching city by city. Fort Lauderdale is the first live city desk. It is published by Graham & Gold LLC and turns sourced public records, official calendars, mapped geography and official storm data into field-ready intelligence.
 
-Canonical site: https://thefloridasignal.com/
+Canonical live city desk: https://thefloridasignal.com/fort-lauderdale/
 Publisher: Graham & Gold LLC
 Editorial contact: desk@thefloridasignal.com
-Primary geography: Fort Lauderdale and Broward County, Florida
+Live city: Fort Lauderdale
+Brand scope: Broward County, launching city by city
+Expansion rule: other Broward municipality desks are “coming soon” without dates or coverage promises
 
 ## Use and citation
 
@@ -26,15 +28,15 @@ Analysis, charts, rankings and “what moved” use the market/event clock. Syst
 
 ## Canonical sections
 
-- Home and current signals: https://thefloridasignal.com/
-- Approved, source-linked stories: https://thefloridasignal.com/stories.html
-- Neighborhood, ZIP, district and field map: https://thefloridasignal.com/neighborhoods.html
-- Broward recorded instruments: https://thefloridasignal.com/broward.html
-- Graphic Desk: https://thefloridasignal.com/graphics.html
-- Public meetings and Agenda Recon: https://thefloridasignal.com/meetings.html
-- Storm Window: https://thefloridasignal.com/storm.html
-- Sources, methodology and update cadence: https://thefloridasignal.com/method.html
-- Brand and sharing kit: https://thefloridasignal.com/brand-kit.html
+- Home and current signals: https://thefloridasignal.com/fort-lauderdale/
+- Approved, source-linked briefs: https://thefloridasignal.com/fort-lauderdale/briefs/
+- Neighborhood, ZIP, district and field map: https://thefloridasignal.com/fort-lauderdale/neighborhoods/
+- Broward recorded instruments: https://thefloridasignal.com/fort-lauderdale/broward-record/
+- Graphic Desk: https://thefloridasignal.com/fort-lauderdale/graphics/
+- Public meetings and Agenda Recon: https://thefloridasignal.com/fort-lauderdale/meetings/
+- Storm Window: https://thefloridasignal.com/fort-lauderdale/storm/
+- Sources, methodology and update cadence: https://thefloridasignal.com/fort-lauderdale/method/
+- Brand and sharing kit: https://thefloridasignal.com/fort-lauderdale/brand/
 
 ## Source and update model
 

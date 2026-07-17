@@ -22,6 +22,7 @@ DB_PATH = Path(os.getenv("DATA_WIRE_DB_PATH", str(ROOT / "data" / "data_wire.sql
 ADMIN_TOKEN = os.getenv("DATA_WIRE_ADMIN_TOKEN", "").strip()
 MAX_BODY = 1_000_000
 MARKET_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,39}$")
+CITY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,59}$")
 STATUS_PUBLIC = {"approved", "published"}
 
 
@@ -74,6 +75,13 @@ def market_value(value: Any) -> str:
     return market
 
 
+def city_value(value: Any) -> str:
+    city = str(value or "").strip().lower()
+    if not city or not CITY_RE.fullmatch(city):
+        raise ValueError("A valid city key is required")
+    return city
+
+
 def init_db() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as db:
@@ -82,6 +90,7 @@ def init_db() -> None:
             create table if not exists stories (
               id text primary key,
               market text not null,
+              city text not null,
               slug text not null,
               headline text not null,
               dek text not null default '',
@@ -157,6 +166,11 @@ def init_db() -> None:
             );
             """
         )
+        story_columns = {row[1] for row in db.execute("pragma table_info(stories)")}
+        if "city" not in story_columns:
+            db.execute("alter table stories add column city text not null default 'fort-lauderdale'")
+        db.execute("create index if not exists stories_market_city_status on stories(market, city, status, approved_at)")
+        db.commit()
 
 
 def row_dict(cursor: sqlite3.Cursor, row: tuple[Any, ...]) -> dict[str, Any]:
@@ -185,6 +199,10 @@ def story_json(row: sqlite3.Row | dict[str, Any], *, public: bool = False) -> di
 
 def story_blocks(item: dict[str, Any]) -> list[str]:
     blocks: list[str] = []
+    try:
+        city_value(item.get("city"))
+    except ValueError:
+        blocks.append("A city is required")
     required = (("headline", "Headline"), ("dek", "Summary"), ("body", "Story body"), ("event_date", "Event date"), ("source_title", "Source title"))
     for key, label in required:
         if not str(item.get(key) or "").strip():
@@ -256,6 +274,9 @@ class Handler(SimpleHTTPRequestHandler):
     def query_market(self) -> str:
         return market_value(parse_qs(urlparse(self.path).query).get("market", ["broward"])[0])
 
+    def query_city(self) -> str:
+        return city_value(parse_qs(urlparse(self.path).query).get("city", ["fort-lauderdale"])[0])
+
     def authorized(self) -> bool:
         return bool(ADMIN_TOKEN) and self.headers.get("Authorization", "") == f"Bearer {ADMIN_TOKEN}"
 
@@ -290,11 +311,12 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if route == "/api/wire/packets":
             market = self.query_market()
+            city = self.query_city()
             with sqlite3.connect(DB_PATH) as db:
                 db.row_factory = sqlite3.Row
-                rows = db.execute("select * from stories where market=? and status in ('approved','published') order by approved_at desc", (market,)).fetchall()
+                rows = db.execute("select * from stories where market=? and city=? and status in ('approved','published') order by approved_at desc", (market, city)).fetchall()
             packets = [story_json(row, public=True) for row in rows if not story_blocks(story_json(row))]
-            self.reply({"market": market, "packets": packets, "generated_at": now_iso(), "gate": "approved source-linked packets only"})
+            self.reply({"market": market, "city": city, "packets": packets, "generated_at": now_iso(), "gate": "approved source-linked packets only"})
             return
         if route == "/api/agenda-recon":
             market = self.query_market()
@@ -327,6 +349,7 @@ class Handler(SimpleHTTPRequestHandler):
         if route == "/api/admin/stories":
             try:
                 market = market_value(payload.get("market"))
+                city = city_value(payload.get("city"))
             except ValueError as error:
                 self.reply({"error": str(error)}, HTTPStatus.UNPROCESSABLE_ENTITY)
                 return
@@ -334,13 +357,13 @@ class Handler(SimpleHTTPRequestHandler):
             if not headline:
                 self.reply({"error": "Headline is required"}, HTTPStatus.UNPROCESSABLE_ENTITY)
                 return
-            story_id = str(payload.get("id") or hashlib.sha256(f"{market}:{headline}:{now_iso()}".encode()).hexdigest()[:16])
+            story_id = str(payload.get("id") or hashlib.sha256(f"{market}:{city}:{headline}:{now_iso()}".encode()).hexdigest()[:16])
             slug = slugify(str(payload.get("slug") or headline))
             source_url = str(payload.get("source_url") or "").strip()
             source_hash = hashlib.sha256(source_url.encode()).hexdigest() if source_url else None
             created = now_iso()
             values = {
-                "id": story_id, "market": market, "slug": slug, "headline": headline,
+                "id": story_id, "market": market, "city": city, "slug": slug, "headline": headline,
                 "dek": str(payload.get("dek") or payload.get("summary") or "").strip()[:1000],
                 "body": str(payload.get("body") or "").strip()[:100000], "byline": str(payload.get("byline") or "Florida Signal Desk").strip()[:120],
                 "event_date": str(payload.get("event_date") or "").strip()[:40] or None, "source_url": source_url,

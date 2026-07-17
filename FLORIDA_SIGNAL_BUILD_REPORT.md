@@ -19,7 +19,7 @@ Delivered:
 - a meetings desk with government and industry sources, agenda links, video actions and source-gated Agenda Recon;
 - a three-phase Storm Window and a publisher-controlled red Storm Watch mode with storm icon, official track/outlook, satellite, coordinates and a red information ticker;
 - ten visually distinct Graphic Desk diagrams with embedded Florida Signal branding, explicit data spans, share pages, embeds and 1200-pixel social exports;
-- a stories home and **The Data Wire**, a private source-gated CMS derived from the useful Michigan desk patterns without altering the Michigan repositories;
+- a city-scoped briefs home and **The Data Wire**, a private source-gated CMS derived from the useful Michigan desk patterns without altering the Michigan repositories;
 - a restrained site/CMS taxonomy that tags stories, neighborhoods, entities, sources, audiences and urgency without a wall of AI-looking pills;
 - a ten-second, dismissible daily-brief signup for email plus watched ZIP;
 - site-wide sponsor inventory that is visibly subordinate to the record and cannot influence rankings or editorial conclusions;
@@ -121,7 +121,7 @@ Editorial rules:
 
 ## The Data Wire CMS
 
-The private CMS is in `cms/` and currently runs locally at `http://127.0.0.1:8788/`. The public Florida site asks only for `market=broward`; the same internal data model can support additional market sites later without advertising those markets on Florida Signal.
+The private CMS is in `cms/` and currently runs locally at `http://127.0.0.1:8788/`. The public Fort Lauderdale desk asks for `market=broward&city=fort-lauderdale`; the same required-city model supports future city desks without making them public prematurely.
 
 ### Unlock it locally
 
@@ -142,13 +142,21 @@ python3 server.py --port 4173
 
 Public routes:
 
-- `/api/wire/packets?market=broward` — approved source-linked Story Packets only;
+- `/api/wire/packets?market=broward&city=fort-lauderdale` — approved, city-scoped, source-linked Story Packets only;
 - `/api/agenda-recon?market=broward` — cited, geocoded, human-cleared agenda properties only; and
 - `/api/health` — desk availability, never draft content.
 
 The CMS starts empty. A story is blocked until it is `verified` and includes a dated current trigger, defensible project identity, public source, source-bound claim slots, passed claim/tag/validator checks and a named human editor. Needs-verification packets never publish automatically. Every approval/hold action is recorded.
 
-The public site has a real `stories.html` home. It shows an honest empty state until approved Broward packets exist, then renders story cards and details with source, byline, date and taxonomy.
+The public site has a real `/fort-lauderdale/briefs/` home. It shows an honest empty state until approved Fort Lauderdale packets exist, then renders brief cards and details with required city, source, byline, date and taxonomy.
+
+## Multi-city URL and content contract
+
+- Every public content page is under `/fort-lauderdale/`; `/` and the former city-less page URLs are redirects only.
+- Fort Lauderdale is the one live city desk. All other Broward municipality links resolve through one shared `coming soon` template with no launch date or coverage promise.
+- Every Data Wire story/brief requires a `city` value. The public Fort Lauderdale adapter requests and accepts only `city=fort-lauderdale` packets.
+- Every email signup requires one or more Broward city interests; Fort Lauderdale is preselected. Interests are stored as `cities_json` and may optionally sync to a configured Mailchimp text merge field.
+- Machine discovery, the manifest, share exporter, sitemap, canonical metadata and internal navigation use the city-scoped URL pattern.
 
 ## Storm operations
 
@@ -204,15 +212,16 @@ All shareable cards include a date/span and Florida Signal signature. The Graphi
 
 | Path | Responsibility |
 |---|---|
-| `index.html` | Homepage, signup, mobile live rail, public-record flipper, signals, Spyglass and storm/sponsor surfaces |
-| `neighborhoods.html` | Search, Lead Desk, Mobile Field Test, live map and geography layers |
-| `stories.html` | Public approved-story home and story detail |
-| `graphics.html` | Ten shareable/embeddable data diagrams |
-| `meetings.html` | Government/industry watch and Agenda Recon |
-| `broward.html` | Broward instruments, parcels and entity context |
-| `storm.html` | Official storm state, before/during/after windows and Irma archive |
-| `method.html` | Public methodology, sources, clocks and sponsor firewall |
-| `brand-kit.html` | Brand rules, previews and asset downloads |
+| `fort-lauderdale/index.html` | Live city homepage, signup, mobile rail, public-record flipper, signals, Spyglass and storm/sponsor surfaces |
+| `fort-lauderdale/neighborhoods/` | Search, Lead Desk, Mobile Field Test, live map and geography layers |
+| `fort-lauderdale/briefs/` | Public approved-brief home and brief detail |
+| `fort-lauderdale/graphics/` | Ten shareable/embeddable data diagrams |
+| `fort-lauderdale/meetings/` | Government/industry watch and Agenda Recon |
+| `fort-lauderdale/broward-record/` | Broward instruments, parcels and entity context |
+| `fort-lauderdale/storm/` | Official storm state, before/during/after windows and Irma archive |
+| `fort-lauderdale/method/` | Public methodology, sources, clocks and sponsor firewall |
+| `fort-lauderdale/brand/` | Brand rules, previews and asset downloads |
+| `_templates/city-coming-soon.html` | Single reusable non-live Broward city template |
 | `app.js` | Queries, rendering, maps, search, shares, stories, health, analytics and storm mode |
 | `server.py` | Public APIs, source health, meetings/storm proxy, CMS adapter, signup and local analytics |
 | `cms/` | Private Data Wire UI/API, Story Packet gate and agenda clearance |
@@ -246,7 +255,7 @@ All shareable cards include a date/span and Florida Signal signature. The Graphi
 9. Automate social publishing only after account authorization; templates and URLs are ready, posting remains editorial.
 10. Configure the production domain, HTTPS, secrets, RLS audit, monitoring, backups, collector alerts and incident ownership.
 
-## Primary source doors
+## Primary source directory
 
 - [Fort Lauderdale Legistar calendar](https://fortlauderdale.legistar.com/Calendar.aspx)
 - [Fort Lauderdale Development Review Committee](https://www.fortlauderdale.gov/Government/Departments/Development-Services/Urban-Design-and-Planning/Development-Applications-Boards-and-Committees/Development-Review-Committee)

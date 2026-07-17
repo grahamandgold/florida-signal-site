@@ -57,15 +57,39 @@ _cms_cache: dict[str, Any] = {"at": 0.0, "payload": None}
 CMS_BASE_URL = os.getenv("FLORIDA_SIGNAL_CMS_URL", "").strip().rstrip("/")
 CMS_TOKEN = os.getenv("FLORIDA_SIGNAL_CMS_TOKEN", "").strip()
 CMS_MARKET = re.sub(r"[^a-z0-9-]", "", os.getenv("FLORIDA_SIGNAL_CMS_MARKET", "broward").strip().lower()) or "broward"
+CMS_CITY = re.sub(r"[^a-z0-9-]", "", os.getenv("FLORIDA_SIGNAL_CMS_CITY", "fort-lauderdale").strip().lower()) or "fort-lauderdale"
 STORM_MODE_OVERRIDE = os.getenv("FLORIDA_SIGNAL_STORM_MODE", "").strip().lower()
 MAILCHIMP_API_KEY = os.getenv("MAILCHIMP_API_KEY", "").strip()
 MAILCHIMP_SERVER_PREFIX = os.getenv("MAILCHIMP_SERVER_PREFIX", "us2").strip()
 MAILCHIMP_AUDIENCE_ID = os.getenv("MAILCHIMP_AUDIENCE_ID", "123540d751").strip()
 MAILCHIMP_ZIP_MERGE_TAG = os.getenv("MAILCHIMP_ZIP_MERGE_TAG", "WATCHZIP").strip()
+MAILCHIMP_CITIES_MERGE_TAG = os.getenv("MAILCHIMP_CITIES_MERGE_TAG", "").strip()
 SUPABASE_URL = (os.getenv("FLORIDA_SIGNAL_SUPABASE_URL", "").strip() or "https://jrjewmzkyluxdywyusrw.supabase.co").rstrip("/")
 SUPABASE_PUBLISHABLE_KEY = os.getenv("FLORIDA_SIGNAL_SUPABASE_PUBLISHABLE_KEY", "").strip() or "sb_publishable_dEyBjKE_vcTj3YYx4p6XvA_xnkVW3Wb"
 _health_lock = threading.Lock()
 _health_cache: dict[str, Any] = {"at": 0.0, "payload": None}
+
+ACTIVE_CITY = "fort-lauderdale"
+BROWARD_CITIES = {
+    "coconut-creek", "cooper-city", "coral-springs", "dania-beach", "davie", "deerfield-beach",
+    "fort-lauderdale", "hallandale-beach", "hillsboro-beach", "hollywood", "lauderdale-by-the-sea",
+    "lauderdale-lakes", "lauderhill", "lazy-lake", "lighthouse-point", "margate", "miramar",
+    "north-lauderdale", "oakland-park", "parkland", "pembroke-park", "pembroke-pines", "plantation",
+    "pompano-beach", "sea-ranch-lakes", "southwest-ranches", "sunrise", "tamarac", "west-park", "weston",
+    "wilton-manors",
+}
+LEGACY_PUBLIC_ROUTES = {
+    "/": "/fort-lauderdale/",
+    "/index.html": "/fort-lauderdale/",
+    "/stories.html": "/fort-lauderdale/briefs/",
+    "/neighborhoods.html": "/fort-lauderdale/neighborhoods/",
+    "/broward.html": "/fort-lauderdale/broward-record/",
+    "/graphics.html": "/fort-lauderdale/graphics/",
+    "/storm.html": "/fort-lauderdale/storm/",
+    "/meetings.html": "/fort-lauderdale/meetings/",
+    "/method.html": "/fort-lauderdale/method/",
+    "/brand-kit.html": "/fort-lauderdale/brand/",
+}
 
 
 class LegistarCalendarParser(HTMLParser):
@@ -420,7 +444,7 @@ def cms_request(path: str) -> dict[str, Any]:
     if CMS_TOKEN:
         headers["Authorization"] = f"Bearer {CMS_TOKEN}"
     separator = "&" if "?" in path else "?"
-    request = urllib.request.Request(f"{CMS_BASE_URL}{path}{separator}market={quote(CMS_MARKET)}", headers=headers)
+    request = urllib.request.Request(f"{CMS_BASE_URL}{path}{separator}market={quote(CMS_MARKET)}&city={quote(CMS_CITY)}", headers=headers)
     with urllib.request.urlopen(request, timeout=10) as response:
         raw = response.read(2_000_000)
     payload = json.loads(raw.decode("utf-8"))
@@ -480,6 +504,9 @@ def normalized_story_taxonomy(item: dict[str, Any]) -> dict[str, list[str]]:
 def normalize_wire_story(item: dict[str, Any], endpoint: str) -> dict[str, Any] | None:
     if item.get("internal_preview") is True or item.get("excluded") is True:
         return None
+    city = str(item.get("city") or "").strip().lower()
+    if city != CMS_CITY:
+        return None
     review_status = str(item.get("review_status") or item.get("status") or "").lower()
     approved_at = item.get("wire_approved_at") or item.get("approved_at") or item.get("published_at")
     endpoint_path = endpoint.split("?", 1)[0]
@@ -498,6 +525,7 @@ def normalize_wire_story(item: dict[str, Any], endpoint: str) -> dict[str, Any] 
     topic_label = taxonomy["topic"][0].split(":", 1)[1].replace("-", " ").title() if taxonomy["topic"] else "Approved desk brief"
     return {
         "id": str(item.get("id") or item.get("packet_id") or hashlib.sha256((headline + sources[0]).encode()).hexdigest()[:16]),
+        "city": city,
         "title": headline,
         "summary": summary,
         "published_at": approved_at or item.get("generated_at") or item.get("updated_at"),
@@ -545,6 +573,7 @@ def cms_payload() -> dict[str, Any]:
             "agenda_recon_items": [],
             "source_endpoint": None,
             "market": CMS_MARKET,
+            "city": CMS_CITY,
             "gate": "approved-only; internal desk queues are never queried",
         }
     now = time.time()
@@ -580,6 +609,7 @@ def cms_payload() -> dict[str, Any]:
             "agenda_recon_items": recon_items,
             "source_endpoint": endpoint_used,
             "market": CMS_MARKET,
+            "city": CMS_CITY,
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "gate": "WirePacket approved-only, then tracker-eligible fallback; never /api/stories",
             "error": None if endpoint_used else error_message or "No supported public endpoint",
@@ -639,6 +669,8 @@ def init_db() -> None:
             connection.execute("alter table brief_subscribers add column mailchimp_status text not null default 'pending'")
         if "mailchimp_synced_at" not in columns:
             connection.execute("alter table brief_subscribers add column mailchimp_synced_at text")
+        if "cities_json" not in columns:
+            connection.execute("alter table brief_subscribers add column cities_json text not null default '[\"fort-lauderdale\"]'")
         connection.execute(
             """
             create table if not exists analytics_events (
@@ -686,13 +718,15 @@ def mailchimp_configured() -> bool:
     return bool(MAILCHIMP_API_KEY and MAILCHIMP_SERVER_PREFIX and MAILCHIMP_AUDIENCE_ID)
 
 
-def mailchimp_upsert(email: str, zip_code: str) -> bool:
+def mailchimp_upsert(email: str, zip_code: str, cities: list[str]) -> bool:
     """Upsert an explicitly consented signup without exposing credentials client-side."""
     if not mailchimp_configured():
         return False
     member_hash = hashlib.md5(email.encode("utf-8")).hexdigest()  # Mailchimp's documented member key.
     url = f"https://{MAILCHIMP_SERVER_PREFIX}.api.mailchimp.com/3.0/lists/{MAILCHIMP_AUDIENCE_ID}/members/{member_hash}"
     merge_fields = {MAILCHIMP_ZIP_MERGE_TAG: zip_code} if MAILCHIMP_ZIP_MERGE_TAG else {}
+    if MAILCHIMP_CITIES_MERGE_TAG:
+        merge_fields[MAILCHIMP_CITIES_MERGE_TAG] = ", ".join(cities)
     body = json.dumps(
         {
             "email_address": email,
@@ -741,7 +775,8 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:  # noqa: N802
-        route = self.path.split("?", 1)[0]
+        parsed = urlparse(self.path)
+        route = parsed.path
         if route == "/api/health":
             self.json_response(
                 {
@@ -788,6 +823,20 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
             return
         if route == "/api/cms":
             self.json_response(cms_payload())
+            return
+        if route in LEGACY_PUBLIC_ROUTES:
+            destination = LEGACY_PUBLIC_ROUTES[route]
+            if parsed.query:
+                destination += "?" + parsed.query
+            self.send_response(HTTPStatus.MOVED_PERMANENTLY)
+            self.send_header("Location", destination)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        first_segment = route.split("/")[1] if route.startswith("/") and len(route.split("/")) > 1 else ""
+        if first_segment in BROWARD_CITIES and first_segment != ACTIVE_CITY:
+            self.path = "/_templates/city-coming-soon.html"
+            super().do_GET()
             return
         super().do_GET()
 
@@ -848,6 +897,8 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
             return
         email = str(payload.get("email", "")).strip().lower()
         zip_code = str(payload.get("zip", "")).strip()
+        raw_cities = payload.get("cities")
+        cities = list(dict.fromkeys(str(city).strip().lower() for city in raw_cities)) if isinstance(raw_cities, list) else []
         source = re.sub(r"[^a-zA-Z0-9_-]", "", str(payload.get("source", "website")))[:64] or "website"
         if len(email) > 254 or not EMAIL_RE.match(email):
             self.json_response({"error": "Enter a valid email address."}, HTTPStatus.UNPROCESSABLE_ENTITY)
@@ -855,6 +906,10 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
         if not ZIP_RE.match(zip_code):
             self.json_response({"error": "Enter a valid ZIP code."}, HTTPStatus.UNPROCESSABLE_ENTITY)
             return
+        if not cities or any(city not in BROWARD_CITIES for city in cities):
+            self.json_response({"error": "Choose at least one valid Broward city."}, HTTPStatus.UNPROCESSABLE_ENTITY)
+            return
+        cities_json = json.dumps(cities, separators=(",", ":"))
         now = datetime.now(timezone.utc).isoformat()
         with sqlite3.connect(DB_PATH) as connection:
             existing = connection.execute(
@@ -862,16 +917,16 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
             ).fetchone()
             if existing:
                 connection.execute(
-                    "update brief_subscribers set status = 'active', zip_code = ?, source = ?, updated_at = ? where id = ?",
-                    (zip_code, source, now, existing[0]),
+                    "update brief_subscribers set status = 'active', zip_code = ?, cities_json = ?, source = ?, updated_at = ? where id = ?",
+                    (zip_code, cities_json, source, now, existing[0]),
                 )
             else:
                 connection.execute(
-                    "insert into brief_subscribers (email, zip_code, source, created_at, updated_at) values (?, ?, ?, ?, ?)",
-                    (email, zip_code, source, now, now),
+                    "insert into brief_subscribers (email, zip_code, cities_json, source, created_at, updated_at) values (?, ?, ?, ?, ?, ?)",
+                    (email, zip_code, cities_json, source, now, now),
                 )
             connection.commit()
-        mailchimp_synced = mailchimp_upsert(email, zip_code)
+        mailchimp_synced = mailchimp_upsert(email, zip_code, cities)
         sync_status = "synced" if mailchimp_synced else ("pending" if mailchimp_configured() else "local_only")
         with sqlite3.connect(DB_PATH) as connection:
             connection.execute(
@@ -880,7 +935,7 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
             )
             connection.commit()
         self.json_response(
-            {"ok": True, "existing": bool(existing), "mailchimp_synced": mailchimp_synced, "delivery": sync_status},
+            {"ok": True, "existing": bool(existing), "mailchimp_synced": mailchimp_synced, "delivery": sync_status, "cities": cities},
             HTTPStatus.OK if existing else HTTPStatus.CREATED,
         )
 

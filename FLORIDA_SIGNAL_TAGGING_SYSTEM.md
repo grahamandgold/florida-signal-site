@@ -34,10 +34,11 @@ The map shape is the official neighborhood polygon and its dots are actual mappe
 
 ## CMS story contract
 
-A CMS story should provide the six editorial dimensions explicitly:
+A CMS brief must provide a city plus the editorial dimensions explicitly. `city` is a required routing and publication field, not an inferred geography tag:
 
 ```json
 {
+  "city": "fort-lauderdale",
   "headline": "Source-grounded headline",
   "summary": "What changed and why it matters",
   "topic_tags": ["development", "corridor-transit"],
@@ -52,7 +53,7 @@ A CMS story should provide the six editorial dimensions explicitly:
 }
 ```
 
-The public adapter normalizes the fields into prefixed tags and returns both a flat `tags` array and grouped `taxonomy` object. Missing topic tags do not block an otherwise approved/source-backed story, but the editor should add them before newsletter or social distribution. Source links and approval remain mandatory.
+The public adapter normalizes the fields into prefixed tags and returns both a flat `tags` array and grouped `taxonomy` object. City, source links, topic/geography tags and approval gates remain mandatory. The Fort Lauderdale public adapter rejects a packet assigned to any other city.
 
 ## Display rule
 

@@ -1,9 +1,9 @@
 {
   "name": "Florida Signal — Development Intelligence",
   "short_name": "Florida Signal",
-  "description": "Fort Lauderdale and Broward development intelligence from public records, official calendars and mapped neighborhood data.",
-  "start_url": "/",
-  "scope": "/",
+  "description": "Broward-wide development intelligence launching city by city, with Fort Lauderdale first.",
+  "start_url": "/fort-lauderdale/",
+  "scope": "/fort-lauderdale/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#071b32",

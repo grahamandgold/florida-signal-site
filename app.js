@@ -13,6 +13,31 @@
     house: { url: "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Legislative/MapServer/2/query", where: "STATE='12'", fields: "NAME,BASENAME,SLDL", color: "#009f91", label: "FL House" },
     corridor: { url: "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer/4/query", where: "STATE='12' AND NAME IN ('Hollywood city','Pompano Beach city','Oakland Park city','Wilton Manors city','Plantation city','Cooper City city','Southwest Ranches town')", fields: "NAME,BASENAME,PLACE,STATE", color: "#a81920", label: "Broward corridor" }
   };
+  const ACTIVE_CITY = "fort-lauderdale";
+  const CITY_ROOT = "/fort-lauderdale";
+  const PUBLIC_ROUTES = {
+    home: CITY_ROOT + "/",
+    briefs: CITY_ROOT + "/briefs/",
+    neighborhoods: CITY_ROOT + "/neighborhoods/",
+    broward: CITY_ROOT + "/broward-record/",
+    graphics: CITY_ROOT + "/graphics/",
+    storm: CITY_ROOT + "/storm/",
+    meetings: CITY_ROOT + "/meetings/",
+    method: CITY_ROOT + "/method/",
+    brand: CITY_ROOT + "/brand/"
+  };
+  const BROWARD_CITIES = [
+    ["coconut-creek", "Coconut Creek"], ["cooper-city", "Cooper City"], ["coral-springs", "Coral Springs"],
+    ["dania-beach", "Dania Beach"], ["davie", "Davie"], ["deerfield-beach", "Deerfield Beach"],
+    ["fort-lauderdale", "Fort Lauderdale"], ["hallandale-beach", "Hallandale Beach"], ["hillsboro-beach", "Hillsboro Beach"],
+    ["hollywood", "Hollywood"], ["lauderdale-by-the-sea", "Lauderdale-by-the-Sea"], ["lauderdale-lakes", "Lauderdale Lakes"],
+    ["lauderhill", "Lauderhill"], ["lazy-lake", "Lazy Lake"], ["lighthouse-point", "Lighthouse Point"],
+    ["margate", "Margate"], ["miramar", "Miramar"], ["north-lauderdale", "North Lauderdale"],
+    ["oakland-park", "Oakland Park"], ["parkland", "Parkland"], ["pembroke-park", "Pembroke Park"],
+    ["pembroke-pines", "Pembroke Pines"], ["plantation", "Plantation"], ["pompano-beach", "Pompano Beach"],
+    ["sea-ranch-lakes", "Sea Ranch Lakes"], ["southwest-ranches", "Southwest Ranches"], ["sunrise", "Sunrise"],
+    ["tamarac", "Tamarac"], ["west-park", "West Park"], ["weston", "Weston"], ["wilton-manors", "Wilton Manors"]
+  ];
   const recordSelect = "permit_number,address,permit_type,permit_category,description,valuation_usd_clean,applied_date,issued_date,last_seen_at,lat,lon,region,contractor_name,applicant_name,owner_name,status,work_type,is_commercial";
   const numberFormat = new Intl.NumberFormat("en-US");
   const compactFormat = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
@@ -65,7 +90,7 @@
   function isAssociationRecord(record) {
     return /(homeowners association|homeowner association|condominium association|property owners association|\bhoa\b|\bcondo ass|\bassn\b)/i.test([record.owner_name, record.applicant_name, record.description].join(" "));
   }
-  function recordUrl(record) { return "neighborhoods.html?permit=" + encodeURIComponent(record.permit_number || ""); }
+  function recordUrl(record) { return PUBLIC_ROUTES.neighborhoods + "?permit=" + encodeURIComponent(record.permit_number || ""); }
 
   function recordPlace(record) {
     const matched = findNeighborhoodForRecord(record);
@@ -261,7 +286,7 @@
   }
 
   function publicStoryUrl(story) {
-    return "stories.html?story=" + encodeURIComponent(story.id || story.slug || "");
+    return PUBLIC_ROUTES.briefs + "?story=" + encodeURIComponent(story.id || story.slug || "");
   }
 
   function renderStoriesPage(loadError) {
@@ -272,15 +297,15 @@
     const stories = state.cms && Array.isArray(state.cms.stories) ? state.cms.stories : [];
     if (loadError) {
       if (status) status.textContent = "The approved public wire is temporarily unavailable. No cached draft is being substituted.";
-      grid.innerHTML = '<div class="stories-empty"><p class="eyebrow">Source gate closed</p><h2>No story is being inferred.</h2><p>The permit, meeting and map surfaces remain available while the editorial wire reconnects.</p><a class="button" href="neighborhoods.html">Open live field map →</a></div>';
+      grid.innerHTML = '<div class="stories-empty"><p class="eyebrow">Source gate closed</p><h2>No brief is being inferred.</h2><p>The permit, meeting and map surfaces remain available while the editorial wire reconnects.</p><a class="button" href="' + PUBLIC_ROUTES.neighborhoods + '">Open live field map →</a></div>';
       return;
     }
     if (!state.cms.configured) {
-      if (status) status.textContent = "The public Stories home is ready; The Data Wire connection has not been configured on this server.";
-      grid.innerHTML = '<div class="stories-empty"><p class="eyebrow">Desk ready · no synthetic seed</p><h2>The first story will arrive through the source gate.</h2><p>This page starts honestly empty. Drafts, agent notes and uncited summaries remain private until a human editor approves a source-linked WirePacket.</p><a class="button" href="method.html">Read the publishing standard →</a></div>';
+      if (status) status.textContent = "The Fort Lauderdale Briefs desk is ready; The Data Wire connection has not been configured on this server.";
+      grid.innerHTML = '<div class="stories-empty"><p class="eyebrow">Desk ready · no synthetic seed</p><h2>The first brief will arrive through the source gate.</h2><p>This page starts honestly empty. Drafts, agent notes and uncited summaries remain private until a human editor approves a source-linked WirePacket.</p><a class="button" href="' + PUBLIC_ROUTES.method + '">Read the publishing standard →</a></div>';
       return;
     }
-    if (status) status.textContent = stories.length ? formatNumber(stories.length) + " approved stor" + (stories.length === 1 ? "y" : "ies") + " on the public wire · market: Broward" : "The Data Wire is connected. No story has passed every publishing gate yet.";
+    if (status) status.textContent = stories.length ? formatNumber(stories.length) + " approved brief" + (stories.length === 1 ? "" : "s") + " on the public wire · city: Fort Lauderdale" : "The Data Wire is connected. No Fort Lauderdale brief has passed every publishing gate yet.";
     const selectedId = new URLSearchParams(window.location.search).get("story");
     const selected = selectedId ? stories.find(function (story) { return String(story.id) === selectedId || String(story.slug) === selectedId; }) : null;
     if (selected) {
@@ -288,7 +313,7 @@
       const body = String(selected.body || selected.summary || "").split(/\n\s*\n/).filter(Boolean).map(function (paragraph) { return "<p>" + escapeHtml(paragraph) + "</p>"; }).join("");
       const sourceLinks = Array.isArray(selected.source_links) && selected.source_links.length ? selected.source_links : [selected.source_url];
       reader.hidden = false;
-      reader.innerHTML = '<a class="story-reader__back" href="stories.html">← All approved stories</a>' +
+      reader.innerHTML = '<a class="story-reader__back" href="' + PUBLIC_ROUTES.briefs + '">← All approved briefs</a>' +
         (selected.hero_image ? '<figure><img src="' + escapeHtml(selected.hero_image) + '" alt=""><figcaption>Florida Signal story image · source and licensing retained by the desk</figcaption></figure>' : '') +
         '<header>' + taxonomyLine(tags, "Filed under") + '<p class="story-reader__date">Event date ' + escapeHtml(formatDate(selected.event_date || selected.published_at, { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + ' · approved ' + escapeHtml(formatDate(selected.published_at, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })) + ' ET</p><h1>' + escapeHtml(selected.title) + '</h1><p class="story-reader__dek">' + escapeHtml(selected.summary || "") + '</p><span>By ' + escapeHtml(selected.byline || "Florida Signal Desk") + '</span></header><div class="story-reader__body">' + body + '</div><footer><strong>Sources</strong>' + sourceLinks.filter(Boolean).map(function (url, index) { return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noreferrer">Open cited source ' + (index + 1) + ' ↗</a>'; }).join("") + '<small>Florida Signal separates event dates from pull, enrichment and publication times.</small></footer>';
       grid.hidden = true;
@@ -298,13 +323,13 @@
     reader.hidden = true;
     grid.hidden = false;
     if (!stories.length) {
-      grid.innerHTML = '<div class="stories-empty"><p class="eyebrow">Watching, not filling space</p><h2>No story has cleared the wire yet.</h2><p>The desk is connected. The site will publish the first article only after its source, claims, tags and human review pass.</p><a class="button" href="index.html#signals">See live public-record signals →</a></div>';
+      grid.innerHTML = '<div class="stories-empty"><p class="eyebrow">Watching, not filling space</p><h2>No brief has cleared the wire yet.</h2><p>The desk is connected. The site will publish the first article only after its source, claims, tags and human review pass.</p><a class="button" href="' + PUBLIC_ROUTES.home + '#signals">See live public-record signals →</a></div>';
       return;
     }
     grid.innerHTML = stories.map(function (story, index) {
       const tags = Array.isArray(story.tags) ? story.tags : [];
       return '<article class="story-card ' + (index === 0 ? "story-card--lead" : "") + '">' +
-        (story.hero_image ? '<a class="story-card__image" href="' + publicStoryUrl(story) + '"><img src="' + escapeHtml(story.hero_image) + '" alt=""></a>' : '<a class="story-card__mark" href="' + publicStoryUrl(story) + '" aria-label="Open ' + escapeHtml(story.title) + '"><img src="assets/mark-full-color.png" alt=""></a>') +
+        (story.hero_image ? '<a class="story-card__image" href="' + publicStoryUrl(story) + '"><img src="' + escapeHtml(story.hero_image) + '" alt=""></a>' : '<a class="story-card__mark" href="' + publicStoryUrl(story) + '" aria-label="Open ' + escapeHtml(story.title) + '"><img src="/assets/mark-full-color.png" alt=""></a>') +
         '<div>' + taxonomyLine(tags, "Filed under") + '<p class="story-card__date">' + escapeHtml(formatDate(story.event_date || story.published_at, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '</p><h2><a href="' + publicStoryUrl(story) + '">' + escapeHtml(story.title) + '</a></h2><p>' + escapeHtml(story.summary || "Approved Florida Desk report") + '</p><footer><span>' + escapeHtml(story.byline || "Florida Signal Desk") + '</span><a href="' + publicStoryUrl(story) + '">Read + sources →</a></footer></div></article>';
     }).join("");
   }
@@ -658,7 +683,7 @@
       if (/(downtown|flagler village|progresso|poinsettia)/i.test(item.name)) tags.push("topic:corridor-transit");
       const template = tags.includes("topic:association-condo") ? "association" : tags.includes("topic:waterfront") ? "waterfront" : tags.includes("topic:storm-readiness") && storm >= 3 ? "storm" : tags.includes("topic:corridor-transit") ? "corridor" : tags.includes("urgency:high-value") ? "high-value" : "development";
       tags.push("template:" + template);
-      return '<a class="neighborhood-profile neighborhood-profile--' + (index % 3) + ' neighborhood-profile--' + template + '" data-signal-tags="' + taxonomyAttribute(tags) + '" href="neighborhoods.html?area=' + encodeURIComponent(item.name) + '">' + fieldMap(item, index) + '<div class="neighborhood-profile__content">' +
+      return '<a class="neighborhood-profile neighborhood-profile--' + (index % 3) + ' neighborhood-profile--' + template + '" data-signal-tags="' + taxonomyAttribute(tags) + '" href="' + PUBLIC_ROUTES.neighborhoods + '?area=' + encodeURIComponent(item.name) + '">' + fieldMap(item, index) + '<div class="neighborhood-profile__content">' +
         '<div><span class="neighborhood-profile__rank">0' + (index + 1) + ' · ' + escapeHtml(dateSpan) + '</span><h3>' + escapeHtml(item.name) + '</h3>' + taxonomyLine(tags, "Lens") + '</div>' +
         '<dl><div><dt>Mapped filings</dt><dd>' + formatNumber(item.count) + '</dd></div><div><dt>Declared value</dt><dd>' + (declared > 0 ? escapeHtml(moneyFormat.format(declared)) : 'Not listed') + '</dd></div><div><dt>Storm-relevant</dt><dd>' + formatNumber(storm) + '</dd></div><div><dt>Operators</dt><dd>' + formatNumber(operators) + '</dd></div></dl>' +
         '<span class="neighborhood-profile__link"><i aria-hidden="true"></i> Open field brief →</span></div></a>';
@@ -670,7 +695,7 @@
     signalControl.onAdd = function () {
       const badge = L.DomUtil.create("div", "map-signal-control");
       badge.setAttribute("aria-label", "Florida Signal Development Intelligence");
-      badge.innerHTML = '<img src="assets/mark-square.png" alt=""><span><b>Florida Signal</b><small>Development intelligence</small></span>';
+      badge.innerHTML = '<img src="/assets/mark-square.png" alt=""><span><b>Florida Signal</b><small>Development intelligence</small></span>';
       L.DomEvent.disableClickPropagation(badge);
       return badge;
     };
@@ -939,7 +964,7 @@
     if (launcher) launcher.addEventListener("submit", function (event) {
       event.preventDefault();
       const input = el('input[name="q"]', launcher);
-      window.location.href = "neighborhoods.html?q=" + encodeURIComponent(input ? input.value.trim() : "");
+      window.location.href = PUBLIC_ROUTES.neighborhoods + "?q=" + encodeURIComponent(input ? input.value.trim() : "");
     });
     const form = el("#record-search");
     if (!form) return;
@@ -1107,7 +1132,7 @@
       }
       if (status) status.textContent = items.length ? formatNumber(items.length) + " source-cleared agenda propert" + (items.length === 1 ? "y" : "ies") : "No future property item has cleared the source gate yet";
       results.innerHTML = items.length ? items.map(function (item) {
-        return '<article class="recon-result"><p>' + escapeHtml(item.meeting_date) + ' · item ' + escapeHtml(item.item_number) + '</p><h3>' + escapeHtml(item.property_address) + '</h3><span>' + escapeHtml(item.proposed_action || item.meeting_title) + '</span><div><a href="' + escapeHtml(item.source_url) + '" target="_blank" rel="noreferrer">Open cited packet ↗</a><a href="neighborhoods.html?q=' + encodeURIComponent(item.property_address) + '">Open field map →</a></div></article>';
+        return '<article class="recon-result"><p>' + escapeHtml(item.meeting_date) + ' · item ' + escapeHtml(item.item_number) + '</p><h3>' + escapeHtml(item.property_address) + '</h3><span>' + escapeHtml(item.proposed_action || item.meeting_title) + '</span><div><a href="' + escapeHtml(item.source_url) + '" target="_blank" rel="noreferrer">Open cited packet ↗</a><a href="' + PUBLIC_ROUTES.neighborhoods + '?q=' + encodeURIComponent(item.property_address) + '">Open field map →</a></div></article>';
       }).join("") : '<p class="meeting-empty"><strong>Watching, not guessing.</strong> No upcoming official packet currently contains a property item that has completed extraction, coordinate resolution and editorial clearance.</p>';
     } catch (error) {
       results.innerHTML = '<p class="meeting-empty">Agenda sweep is temporarily unavailable. No cached or inferred property pins are being substituted.</p>';
@@ -1233,7 +1258,7 @@
     }
 
     function network(items) {
-      return '<div class="graphic-network"><div class="graphic-network__core"><img src="assets/mark-square.png" alt=""><span>ENTITY<br>LENS</span></div>' + items.map(function (item, index) {
+      return '<div class="graphic-network"><div class="graphic-network__core"><img src="/assets/mark-square.png" alt=""><span>ENTITY<br>LENS</span></div>' + items.map(function (item, index) {
         return '<div class="graphic-network__node graphic-network__node--' + (index + 1) + '"><strong>' + escapeHtml(item.value) + '</strong><span>' + escapeHtml(item.label) + '</span></div>';
       }).join("") + '</div>';
     }
@@ -1246,7 +1271,7 @@
 
     function card(slug, kicker, title, dek, body, options) {
       const settings = options || {};
-      const pageUrl = window.location.origin + window.location.pathname.replace(/[^/]*$/, "") + "share/" + encodeURIComponent(slug) + ".html";
+      const pageUrl = window.location.origin + CITY_ROOT + "/share/" + encodeURIComponent(slug) + ".html";
       const embedUrl = window.location.origin + window.location.pathname + "?embed=" + encodeURIComponent(slug);
       const embedCode = '<iframe src="' + embedUrl + '" width="100%" height="620" loading="lazy" title="Florida Signal — ' + title.replace(/<[^>]+>/g, "") + '"></iframe>';
       const shareTitle = "Florida Signal · " + title.replace(/<[^>]+>/g, "");
@@ -1255,7 +1280,7 @@
         '<div class="graphic-card__top"><p>' + escapeHtml(kicker) + '</p><span>' + escapeHtml(settings.status || "REAL RECORD") + '</span></div>' +
         '<h2>' + title + '</h2><p class="graphic-card__dek">' + dek + '</p><div class="graphic-card__body">' + body + '</div>' +
         '<p class="graphic-card__clock">' + escapeHtml(settings.clock || "Public event date · source cache shown") + '</p><a class="graphic-card__sponsor" href="mailto:desk@thefloridasignal.com?subject=' + encodeURIComponent("Sponsor Florida Signal graphic: " + slug) + '"><span>Present this intelligence</span><strong>Your logo here ↗</strong></a>' +
-        '<div class="graphic-card__brand"><span><img src="assets/' + (settings.tone === "navy" ? "mark-white.png" : "mark-full-color.png") + '" alt=""><b>Florida Signal</b><small>Development intelligence</small></span><time>' + escapeHtml(settings.stamp || applicationWindowStamp) + '</time><div>' +
+        '<div class="graphic-card__brand"><span><img src="/assets/' + (settings.tone === "navy" ? "mark-white.png" : "mark-full-color.png") + '" alt=""><b>Florida Signal</b><small>Development intelligence</small></span><time>' + escapeHtml(settings.stamp || applicationWindowStamp) + '</time><div>' +
         '<a href="https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareTitle) + '&url=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on X">X</a>' +
         '<a href="https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on LinkedIn">in</a>' +
         '<a href="https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on Facebook">f</a>' +
@@ -1469,7 +1494,7 @@
         return haystack.includes(normalized);
       }).slice(0, 8);
       if (!matches.length) {
-        status.innerHTML = 'No point in the current mapped sample matches “' + escapeHtml(query) + '.” <a href="neighborhoods.html?q=' + encodeURIComponent(query) + '">Open the full record search →</a>';
+        status.innerHTML = 'No point in the current mapped sample matches “' + escapeHtml(query) + '.” <a href="' + PUBLIC_ROUTES.neighborhoods + '?q=' + encodeURIComponent(query) + '">Open the full record search →</a>';
         results.innerHTML = "";
         return;
       }
@@ -1507,8 +1532,32 @@
     });
   }
 
+  function addCityInterests(form, formIndex) {
+    if (el(".city-interests", form)) return;
+    const fieldset = document.createElement("fieldset");
+    fieldset.className = "city-interests";
+    fieldset.innerHTML = '<legend>Cities you care about</legend><details><summary><span>Cities you watch</span><strong>Fort Lauderdale</strong></summary><div class="city-interests__grid">' +
+      BROWARD_CITIES.map(function (city, cityIndex) {
+        const id = "city-interest-" + formIndex + "-" + cityIndex;
+        return '<label for="' + id + '"><input id="' + id + '" name="cities" type="checkbox" value="' + escapeHtml(city[0]) + '"' + (city[0] === ACTIVE_CITY ? ' checked' : '') + '><span>' + escapeHtml(city[1]) + '</span></label>';
+      }).join("") + '</div><p>Fort Lauderdale is live. Other selections tell the Broward Audience what you care about; they do not promise coverage.</p></details>';
+    const message = el("[data-signup-message]", form);
+    form.insertBefore(fieldset, message || null);
+    const summary = el("summary strong", fieldset);
+    function updateSummary() {
+      const selected = els('input[name="cities"]:checked', fieldset).map(function (input) {
+        const city = BROWARD_CITIES.find(function (entry) { return entry[0] === input.value; });
+        return city ? city[1] : input.value;
+      });
+      summary.textContent = selected.length === 1 ? selected[0] : selected.length + " cities selected";
+    }
+    fieldset.addEventListener("change", updateSummary);
+    updateSummary();
+  }
+
   function initSignupForms() {
-    els("[data-signup-form]").forEach(function (form) {
+    els("[data-signup-form]").forEach(function (form, formIndex) {
+      addCityInterests(form, formIndex);
       form.addEventListener("submit", async function (event) {
         event.preventDefault();
         trackEvent("newsletter_submit", { placement: form.getAttribute("data-signup-source") || (form.classList.contains("signup--hero") ? "homepage-hero" : "homepage-brief") });
@@ -1516,13 +1565,21 @@
         const zip = el('input[name="zip"]', form);
         const message = el("[data-signup-message]", form);
         if (!input || !zip || !message) return;
+        const cities = els('input[name="cities"]:checked', form).map(function (checkbox) { return checkbox.value; });
+        if (!cities.length) {
+          message.classList.add("is-error");
+          message.textContent = "Choose at least one Broward city.";
+          const selector = el(".city-interests details", form);
+          if (selector) selector.open = true;
+          return;
+        }
         message.classList.remove("is-error");
         message.textContent = "Saving your place…";
         try {
           const response = await fetch("/api/subscribe", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: input.value, zip: zip.value, source: form.getAttribute("data-signup-source") || (form.classList.contains("signup--hero") ? "homepage-hero" : "homepage-brief") })
+            body: JSON.stringify({ email: input.value, zip: zip.value, cities: cities, source: form.getAttribute("data-signup-source") || (form.classList.contains("signup--hero") ? "homepage-hero" : "homepage-brief") })
           });
           const data = await response.json();
           if (!response.ok) throw new Error(data.error || "Could not save subscription");
@@ -1531,6 +1588,9 @@
           try { window.localStorage.setItem("florida-signal-brief-subscribed", String(Date.now())); } catch (storageError) { /* Storage is optional. */ }
           input.value = "";
           zip.value = "";
+          els('input[name="cities"]', form).forEach(function (checkbox) { checkbox.checked = checkbox.value === ACTIVE_CITY; });
+          const citySummary = el(".city-interests summary strong", form);
+          if (citySummary) citySummary.textContent = "Fort Lauderdale";
           const prompt = form.closest(".brief-prompt");
           if (prompt) window.setTimeout(function () { const close = el("[data-brief-prompt-close]", prompt); if (close) close.click(); }, 900);
         } catch (error) {
@@ -1556,7 +1616,7 @@
     const prompt = document.createElement("div");
     prompt.className = "brief-prompt";
     prompt.hidden = true;
-    prompt.innerHTML = '<div class="brief-prompt__backdrop" data-brief-prompt-close></div><section class="brief-prompt__dialog" role="dialog" aria-modal="true" aria-labelledby="brief-prompt-title" aria-describedby="brief-prompt-dek"><button class="brief-prompt__close" type="button" data-brief-prompt-close aria-label="Close Daily Intel Brief signup">×</button><div class="brief-prompt__mark" aria-hidden="true"><img src="assets/mark-full-color.png" alt=""></div><p class="eyebrow"><span class="pulse" aria-hidden="true"></span>Tomorrow starts tonight</p><h2 id="brief-prompt-title">Get the 6:15 Daily Intel Brief.</h2><p id="brief-prompt-dek">One sharp Broward email: consequential filings, neighborhood movement, meetings, storm readiness and the records behind every claim.</p><form class="signup signup--prompt" data-signup-form data-signup-source="ten-second-prompt"><label class="sr-only" for="prompt-email">Email address</label><input id="prompt-email" name="email" type="email" autocomplete="email" placeholder="Your email address" required><label class="sr-only" for="prompt-zip">ZIP you watch</label><input id="prompt-zip" name="zip" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{5}(-[0-9]{4})?" placeholder="ZIP you watch" required><button type="submit">Send me the brief →</button><p class="signup__message" data-signup-message aria-live="polite"></p></form><p class="brief-prompt__fine">Free · Broward Audience · unsubscribe anytime · powered by Graham &amp; Gold LLC</p></section>';
+    prompt.innerHTML = '<div class="brief-prompt__backdrop" data-brief-prompt-close></div><section class="brief-prompt__dialog" role="dialog" aria-modal="true" aria-labelledby="brief-prompt-title" aria-describedby="brief-prompt-dek"><button class="brief-prompt__close" type="button" data-brief-prompt-close aria-label="Close Daily Intel Brief signup">×</button><div class="brief-prompt__mark" aria-hidden="true"><img src="/assets/mark-full-color.png" alt=""></div><p class="eyebrow"><span class="pulse" aria-hidden="true"></span>Tomorrow starts tonight</p><h2 id="brief-prompt-title">Get the 6:15 Daily Intel Brief.</h2><p id="brief-prompt-dek">One sharp Broward email: consequential filings, neighborhood movement, meetings, storm readiness and the records behind every claim.</p><form class="signup signup--prompt" data-signup-form data-signup-source="ten-second-prompt"><label class="sr-only" for="prompt-email">Email address</label><input id="prompt-email" name="email" type="email" autocomplete="email" placeholder="Your email address" required><label class="sr-only" for="prompt-zip">ZIP you watch</label><input id="prompt-zip" name="zip" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{5}(-[0-9]{4})?" placeholder="ZIP you watch" required><button type="submit">Send me the brief →</button><p class="signup__message" data-signup-message aria-live="polite"></p></form><p class="brief-prompt__fine">Free · Broward Audience · unsubscribe anytime · powered by Graham &amp; Gold LLC</p></section>';
     document.body.appendChild(prompt);
     const closeButtons = els("[data-brief-prompt-close]", prompt);
     let previousFocus = null;
@@ -1686,32 +1746,61 @@
     window.floridaSignalTrack = trackEvent;
   }
 
+  function currentCitySlug() {
+    const explicit = document.body.getAttribute("data-city");
+    if (explicit) return explicit;
+    const first = window.location.pathname.split("/").filter(Boolean)[0];
+    return BROWARD_CITIES.some(function (city) { return city[0] === first; }) ? first : ACTIVE_CITY;
+  }
+
+  function initCitySwitcher() {
+    const header = el(".site-header__inner");
+    if (!header || el(".city-switcher", header)) return;
+    const current = currentCitySlug();
+    const currentLabel = (BROWARD_CITIES.find(function (city) { return city[0] === current; }) || [ACTIVE_CITY, "Fort Lauderdale"])[1];
+    const switcher = document.createElement("details");
+    switcher.className = "city-switcher";
+    switcher.innerHTML = '<summary aria-label="Choose a Broward city desk"><span>City desk</span><strong>' + escapeHtml(currentLabel) + '</strong><i aria-hidden="true"></i></summary>' +
+      '<div class="city-switcher__panel"><div class="city-switcher__head"><span>Broward city desks</span><small>Launching city by city</small></div><div class="city-switcher__list">' +
+      BROWARD_CITIES.map(function (city) {
+        const live = city[0] === ACTIVE_CITY;
+        const isCurrent = city[0] === current;
+        return '<a href="/' + escapeHtml(city[0]) + '/"' + (isCurrent ? ' aria-current="page"' : '') + '><span>' + escapeHtml(city[1]) + '</span><small class="' + (live ? 'is-live' : '') + '">' + (live ? 'Live' : 'Coming soon') + '</small></a>';
+      }).join("") + '</div><p>No dates. No coverage promises. A desk goes live only when its source chain is ready.</p></div>';
+    const menu = el(".menu-button", header);
+    header.insertBefore(switcher, menu || header.children[1] || null);
+    document.addEventListener("click", function (event) {
+      if (switcher.open && !switcher.contains(event.target)) switcher.open = false;
+    });
+    document.addEventListener("keydown", function (event) { if (event.key === "Escape" && switcher.open) { switcher.open = false; el("summary", switcher).focus(); } });
+  }
+
   function initNavigation() {
     const button = el(".menu-button");
     if (!button) return;
     const navigation = el(".site-nav");
-    if (navigation && !el('a[href="stories.html"]', navigation)) {
+    if (navigation && !el('a[href="' + PUBLIC_ROUTES.briefs + '"]', navigation)) {
       const storiesLink = document.createElement("a");
-      storiesLink.href = "stories.html";
-      storiesLink.textContent = "Stories";
+      storiesLink.href = PUBLIC_ROUTES.briefs;
+      storiesLink.textContent = "Briefs";
       if (document.body.getAttribute("data-page") === "stories") storiesLink.setAttribute("aria-current", "page");
-      const neighborhoodsLink = el('a[href="neighborhoods.html"]', navigation);
+      const neighborhoodsLink = el('a[href="' + PUBLIC_ROUTES.neighborhoods + '"]', navigation);
       navigation.insertBefore(storiesLink, neighborhoodsLink || navigation.firstChild);
     }
-    if (navigation && !el('a[href="graphics.html"]', navigation)) {
+    if (navigation && !el('a[href="' + PUBLIC_ROUTES.graphics + '"]', navigation)) {
       const graphicsLink = document.createElement("a");
-      graphicsLink.href = "graphics.html";
+      graphicsLink.href = PUBLIC_ROUTES.graphics;
       graphicsLink.textContent = "Graphic desk";
       if (document.body.getAttribute("data-page") === "graphics") graphicsLink.setAttribute("aria-current", "page");
-      const stormLink = el('a[href="storm.html"]', navigation);
+      const stormLink = el('a[href="' + PUBLIC_ROUTES.storm + '"]', navigation);
       navigation.insertBefore(graphicsLink, stormLink || null);
     }
-    if (navigation && !el('a[href="meetings.html"]', navigation)) {
+    if (navigation && !el('a[href="' + PUBLIC_ROUTES.meetings + '"]', navigation)) {
       const meetingsLink = document.createElement("a");
-      meetingsLink.href = "meetings.html";
+      meetingsLink.href = PUBLIC_ROUTES.meetings;
       meetingsLink.textContent = "Meetings";
       if (document.body.getAttribute("data-page") === "meetings") meetingsLink.setAttribute("aria-current", "page");
-      const methodLink = el('a[href="method.html"]', navigation);
+      const methodLink = el('a[href="' + PUBLIC_ROUTES.method + '"]', navigation);
       navigation.insertBefore(meetingsLink, methodLink || null);
     }
     button.addEventListener("click", function () {
@@ -1778,7 +1867,7 @@
     root.innerHTML = '<div class="shell storm-operations__head"><p><span aria-hidden="true">🌀</span><strong>Florida Signal Storm Watch</strong></p><p>' + escapeHtml(update) + '</p></div><div class="shell storm-operations__grid">' +
       '<a class="storm-operations__visual" href="' + escapeHtml(trackPage) + '" target="_blank" rel="noopener"><img src="' + escapeHtml(trackImage || "https://www.nhc.noaa.gov/xgtwo/two_atl_7d0.png") + '" alt="' + escapeHtml(storm ? "Official National Hurricane Center forecast cone for " + storm.name : "Official National Hurricane Center seven-day Atlantic outlook") + '"><span>Official NHC ' + (storm ? "forecast track" : "Atlantic outlook") + ' ↗</span></a>' +
       '<a class="storm-operations__visual" href="https://www.star.nesdis.noaa.gov/goes/sector.php?sat=G19&amp;sector=se" target="_blank" rel="noopener"><img src="https://cdn.star.nesdis.noaa.gov/GOES19/ABI/SECTOR/se/GEOCOLOR/600x600.jpg" alt="Current NOAA GOES-East GeoColor satellite view of the Southeast United States"><span>NOAA GOES-East Southeast satellite ↗</span></a>' +
-      '<div class="storm-operations__readout"><p>Official center fix</p><h2>' + escapeHtml(title) + '</h2><strong>' + escapeHtml(coordinates) + '</strong><span>' + escapeHtml(movement) + '</span><div><a href="' + escapeHtml(advisory) + '" target="_blank" rel="noopener">Public advisory ↗</a><a href="storm.html">Open Storm Window →</a></div><small>Florida Signal adds local readiness records. It does not replace NHC, NWS or emergency management.</small></div></div>';
+      '<div class="storm-operations__readout"><p>Official center fix</p><h2>' + escapeHtml(title) + '</h2><strong>' + escapeHtml(coordinates) + '</strong><span>' + escapeHtml(movement) + '</span><div><a href="' + escapeHtml(advisory) + '" target="_blank" rel="noopener">Public advisory ↗</a><a href="' + PUBLIC_ROUTES.storm + '">Open Storm Window →</a></div><small>Florida Signal adds local readiness records. It does not replace NHC, NWS or emergency management.</small></div></div>';
     startStormTicker(storm);
   }
 
@@ -1826,7 +1915,7 @@
       let mode = null;
       try {
         let response = await fetch("/api/site-mode", { cache: "no-store" });
-        if (!response.ok) response = await fetch("data/site_mode.json", { cache: "no-store" });
+        if (!response.ok) response = await fetch("/data/site_mode.json", { cache: "no-store" });
         if (response.ok) mode = await response.json();
       } catch (error) { mode = null; }
       state.siteMode = mode || { storm_watch: "off" };
@@ -1854,6 +1943,7 @@
     initStormMode();
     initDataHealth();
     initMethodologyToggle();
+    initCitySwitcher();
     initNavigation();
     initBriefPrompt();
     initSignupForms();
