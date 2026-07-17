@@ -21,7 +21,8 @@
   const CURRENT_MONTH_START = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-01";
   const applicationWindowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13);
   const APPLICATION_WINDOW_START = applicationWindowDate.getFullYear() + "-" + String(applicationWindowDate.getMonth() + 1).padStart(2, "0") + "-" + String(applicationWindowDate.getDate()).padStart(2, "0");
-  const state = { dashboard: null, records: [], featured: [], applicationDates: [], cms: { configured: false, connected: false, stories: [] }, storms: [], meetings: [], neighborhoods: null, zipBoundaries: null, map: null, markerLayer: null, polygonLayer: null, searchMarker: null, searchResults: [], leadResults: [], spotlightMaps: {}, overlayLayers: {}, overlayVisibility: { points: true, neighborhoods: true }, lens: "all", leadLens: "new" };
+  const state = { dashboard: null, records: [], featured: [], applicationDates: [], cms: { configured: false, connected: false, stories: [] }, storms: [], stormPayload: null, siteMode: { storm_watch: "off" }, meetings: [], neighborhoods: null, zipBoundaries: null, map: null, markerLayer: null, polygonLayer: null, searchMarker: null, searchResults: [], leadResults: [], spotlightMaps: {}, overlayLayers: {}, overlayVisibility: { points: true, neighborhoods: true }, lens: "all", leadLens: "new" };
+  let stormTickerTimer = null;
 
   function el(selector, root) { return (root || document).querySelector(selector); }
   function els(selector, root) { return Array.from((root || document).querySelectorAll(selector)); }
@@ -213,10 +214,19 @@
     setStat("effective-owner", formatNumber(stats.eff_owner));
     setStat("effective-value", formatNumber(stats.eff_value));
 
-    const timestamp = [state.dashboard && state.dashboard.updated_at, state.records[0] && state.records[0].last_seen_at].filter(Boolean).sort(function (a, b) { return new Date(b) - new Date(a); })[0];
-    els("[data-updated]").forEach(function (node) { node.textContent = timestamp ? "Data cache updated " + formatDate(timestamp, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "Live source connected"; });
+    const permitTimestamp = state.records.map(function (record) { return record.last_seen_at; }).filter(Boolean).sort(function (a, b) { return new Date(b) - new Date(a); })[0];
+    const applicationThrough = state.records.map(function (record) { return record.applied_date; }).filter(Boolean).sort().slice(-1)[0];
+    const dashboardTimestamp = state.dashboard && state.dashboard.updated_at;
+    const permitClock = permitTimestamp ? "Permit mirror synced " + formatDate(permitTimestamp, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "Permit mirror unavailable";
+    const applicationClock = applicationThrough ? "applications through " + formatDate(applicationThrough, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "application date pending";
+    const dashboardClock = dashboardTimestamp ? "aggregate snapshot refreshed " + formatDate(dashboardTimestamp, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "aggregate snapshot unavailable";
+    const pageName = document.body.getAttribute("data-page") || "home";
+    let freshness = permitClock + " · " + applicationClock;
+    if (pageName === "broward") freshness = "Broward instruments through " + (stats.broward_fresh ? formatDate(stats.broward_fresh, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "date pending") + " · " + dashboardClock;
+    else if (pageName === "graphics" || pageName === "method") freshness = permitClock + " · " + dashboardClock + " · cards name their event clocks";
+    els("[data-updated]").forEach(function (node) { node.textContent = freshness; });
     const barTime = el("#live-bar-time");
-    if (barTime) barTime.textContent = timestamp ? "Updated " + formatDate(timestamp, { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "Live";
+    if (barTime) barTime.textContent = permitTimestamp ? "Permits synced " + formatDate(permitTimestamp, { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "Source clock unavailable";
 
     if (state.records.length && (el("#signal-list") || el("#lead-list") || el("#graphic-desk"))) await Promise.allSettled([loadNeighborhoods()]);
     if (el("#graphic-desk")) await Promise.allSettled([loadZipBoundaries()]);
@@ -243,9 +253,60 @@
         else status.textContent = "CMS configured but no approved public endpoint answered; internal queues remain hidden.";
       }
       renderSignals();
+      renderStoriesPage();
     } catch (error) {
       if (status) status.textContent = "Approved-content adapter unavailable; permit records remain the public fallback.";
+      renderStoriesPage(error);
     }
+  }
+
+  function publicStoryUrl(story) {
+    return "stories.html?story=" + encodeURIComponent(story.id || story.slug || "");
+  }
+
+  function renderStoriesPage(loadError) {
+    const grid = el("#stories-grid");
+    const reader = el("#story-reader");
+    const status = el("#stories-status");
+    if (!grid || !reader) return;
+    const stories = state.cms && Array.isArray(state.cms.stories) ? state.cms.stories : [];
+    if (loadError) {
+      if (status) status.textContent = "The approved public wire is temporarily unavailable. No cached draft is being substituted.";
+      grid.innerHTML = '<div class="stories-empty"><p class="eyebrow">Source gate closed</p><h2>No story is being inferred.</h2><p>The permit, meeting and map surfaces remain available while the editorial wire reconnects.</p><a class="button" href="neighborhoods.html">Open live field map →</a></div>';
+      return;
+    }
+    if (!state.cms.configured) {
+      if (status) status.textContent = "The public Stories home is ready; The Data Wire connection has not been configured on this server.";
+      grid.innerHTML = '<div class="stories-empty"><p class="eyebrow">Desk ready · no synthetic seed</p><h2>The first story will arrive through the source gate.</h2><p>This page starts honestly empty. Drafts, agent notes and uncited summaries remain private until a human editor approves a source-linked WirePacket.</p><a class="button" href="method.html">Read the publishing standard →</a></div>';
+      return;
+    }
+    if (status) status.textContent = stories.length ? formatNumber(stories.length) + " approved stor" + (stories.length === 1 ? "y" : "ies") + " on the public wire · market: Broward" : "The Data Wire is connected. No story has passed every publishing gate yet.";
+    const selectedId = new URLSearchParams(window.location.search).get("story");
+    const selected = selectedId ? stories.find(function (story) { return String(story.id) === selectedId || String(story.slug) === selectedId; }) : null;
+    if (selected) {
+      const tags = Array.isArray(selected.tags) ? selected.tags : [];
+      const body = String(selected.body || selected.summary || "").split(/\n\s*\n/).filter(Boolean).map(function (paragraph) { return "<p>" + escapeHtml(paragraph) + "</p>"; }).join("");
+      const sourceLinks = Array.isArray(selected.source_links) && selected.source_links.length ? selected.source_links : [selected.source_url];
+      reader.hidden = false;
+      reader.innerHTML = '<a class="story-reader__back" href="stories.html">← All approved stories</a>' +
+        (selected.hero_image ? '<figure><img src="' + escapeHtml(selected.hero_image) + '" alt=""><figcaption>Florida Signal story image · source and licensing retained by the desk</figcaption></figure>' : '') +
+        '<header>' + taxonomyLine(tags, "Filed under") + '<p class="story-reader__date">Event date ' + escapeHtml(formatDate(selected.event_date || selected.published_at, { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + ' · approved ' + escapeHtml(formatDate(selected.published_at, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })) + ' ET</p><h1>' + escapeHtml(selected.title) + '</h1><p class="story-reader__dek">' + escapeHtml(selected.summary || "") + '</p><span>By ' + escapeHtml(selected.byline || "Florida Signal Desk") + '</span></header><div class="story-reader__body">' + body + '</div><footer><strong>Sources</strong>' + sourceLinks.filter(Boolean).map(function (url, index) { return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noreferrer">Open cited source ' + (index + 1) + ' ↗</a>'; }).join("") + '<small>Florida Signal separates event dates from pull, enrichment and publication times.</small></footer>';
+      grid.hidden = true;
+      document.title = selected.title + " — Florida Signal";
+      return;
+    }
+    reader.hidden = true;
+    grid.hidden = false;
+    if (!stories.length) {
+      grid.innerHTML = '<div class="stories-empty"><p class="eyebrow">Watching, not filling space</p><h2>No story has cleared the wire yet.</h2><p>The desk is connected. The site will publish the first article only after its source, claims, tags and human review pass.</p><a class="button" href="index.html#signals">See live public-record signals →</a></div>';
+      return;
+    }
+    grid.innerHTML = stories.map(function (story, index) {
+      const tags = Array.isArray(story.tags) ? story.tags : [];
+      return '<article class="story-card ' + (index === 0 ? "story-card--lead" : "") + '">' +
+        (story.hero_image ? '<a class="story-card__image" href="' + publicStoryUrl(story) + '"><img src="' + escapeHtml(story.hero_image) + '" alt=""></a>' : '<a class="story-card__mark" href="' + publicStoryUrl(story) + '" aria-label="Open ' + escapeHtml(story.title) + '"><img src="assets/mark-full-color.png" alt=""></a>') +
+        '<div>' + taxonomyLine(tags, "Filed under") + '<p class="story-card__date">' + escapeHtml(formatDate(story.event_date || story.published_at, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '</p><h2><a href="' + publicStoryUrl(story) + '">' + escapeHtml(story.title) + '</a></h2><p>' + escapeHtml(story.summary || "Approved Florida Desk report") + '</p><footer><span>' + escapeHtml(story.byline || "Florida Signal Desk") + '</span><a href="' + publicStoryUrl(story) + '">Read + sources →</a></footer></div></article>';
+    }).join("");
   }
 
   function renderSignals() {
@@ -256,12 +317,13 @@
     const liveHeadline = cmsStories[0] ? cmsStories[0].title : (state.records[0] ? recordHeadline(state.records[0]) : "The public feed is connecting…");
     if (ticker) ticker.textContent = liveHeadline;
     if (mobileTicker) mobileTicker.textContent = liveHeadline;
+    if (document.body.classList.contains("storm-mode")) startStormTicker(state.storms[0] || null);
     if (!list) return;
     if (cmsStories.length) {
       list.innerHTML = cmsStories.map(function (story) {
         const summary = story.summary || story.source || "Approved public desk item";
         const storyTags = Array.isArray(story.tags) ? story.tags : ["topic:" + tagSlug(story.category || "desk-brief"), "source:florida-desk"];
-        return '<a class="signal-row signal-row--cms" data-signal-tags="' + taxonomyAttribute(storyTags) + '" href="' + escapeHtml(story.source_url) + '" target="_blank" rel="noreferrer">' +
+        return '<a class="signal-row signal-row--cms" data-signal-tags="' + taxonomyAttribute(storyTags) + '" href="' + publicStoryUrl(story) + '">' +
           '<div class="signal-row__date">' + escapeHtml(formatDate(story.published_at, { month: "short", day: "numeric", timeZone: "America/New_York" })) + '</div>' +
           '<div>' + taxonomyLine(storyTags) + '<h3>' + escapeHtml(story.title) + '</h3><p class="signal-row__meta">' + escapeHtml(summary) + '</p></div>' +
           '<div class="signal-row__value"><strong>Approved</strong><span>' + escapeHtml(story.category || "desk brief") + '</span></div>' +
@@ -894,7 +956,7 @@
   async function loadStorms() {
     const status = el("#storm-status");
     const updated = el("#storm-updated");
-    if (!status && !updated && !el("#graphic-desk")) return;
+    if (!status && !updated && !el("#graphic-desk") && !el("#storm-operations")) return;
     try {
       let response = await fetch("/api/storms", { cache: "no-store" });
       if (!response.ok) response = await fetch("https://www.nhc.noaa.gov/CurrentStorms.json", { cache: "no-store" });
@@ -902,17 +964,20 @@
       const data = await response.json();
       const storms = (data.activeStorms || []).filter(function (storm) { return String(storm.id || "").toLowerCase().startsWith("al"); });
       state.storms = storms;
+      state.stormPayload = data;
       if (status) status.textContent = storms.length ? storms.map(function (storm) { return storm.name + " · " + storm.classification + " " + storm.intensity + " kt"; }).join(" · ") : "No named Atlantic storms active";
       const responseState = el("#storm-response-state");
       if (responseState) responseState.textContent = storms.length ? formatNumber(storms.length) + " Atlantic system" + (storms.length === 1 ? "" : "s") : "Standby";
-      const newest = (data.activeStorms || [])[0];
+      const newest = storms[0];
       if (updated) updated.textContent = newest && newest.lastUpdate ? "NHC " + formatDate(newest.lastUpdate, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "NHC live";
+      renderStormOperations(data);
       renderGraphicDesk();
     } catch (error) {
       if (status) status.textContent = "Open the official NHC outlook";
       const responseState = el("#storm-response-state");
       if (responseState) responseState.textContent = "Source check needed";
       if (updated) updated.textContent = "Source link active";
+      renderStormOperations(null);
       renderGraphicDesk();
     }
   }
@@ -1119,7 +1184,6 @@
     const highValueTop = highValue.slice().sort(function (a, b) { return Number(b.valuation_usd_clean || 0) - Number(a.valuation_usd_clean || 0); })[0];
     const stormRecords = state.records.filter(isStormRecord);
     const nextMeeting = state.meetings[0];
-    const permitsFresh = [stats.permits_fresh, state.records[0] && state.records[0].last_seen_at].filter(Boolean).sort(function (a, b) { return new Date(b) - new Date(a); })[0];
     const applicationThrough = state.applicationDates.concat(state.records.map(function (record) { return record.applied_date; })).filter(Boolean).sort().slice(-1)[0];
     const stampDate = function (value) { return value ? formatDate(value, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "source date pending"; };
     const spanDate = function (start, end) { return start && end ? stampDate(start) + "–" + stampDate(end) : "span pending"; };
@@ -1190,7 +1254,7 @@
       return '<article class="graphic-card ' + (settings.tone === "navy" ? "graphic-card--navy " : "") + (settings.wide ? "graphic-card--wide" : "") + '" data-signal-tags="' + taxonomyAttribute(tags) + '" id="' + slug + '">' +
         '<div class="graphic-card__top"><p>' + escapeHtml(kicker) + '</p><span>' + escapeHtml(settings.status || "REAL RECORD") + '</span></div>' +
         '<h2>' + title + '</h2><p class="graphic-card__dek">' + dek + '</p><div class="graphic-card__body">' + body + '</div>' +
-        '<p class="graphic-card__clock">' + escapeHtml(settings.clock || "Public event date · source cache shown") + '</p>' +
+        '<p class="graphic-card__clock">' + escapeHtml(settings.clock || "Public event date · source cache shown") + '</p><a class="graphic-card__sponsor" href="mailto:desk@thefloridasignal.com?subject=' + encodeURIComponent("Sponsor Florida Signal graphic: " + slug) + '"><span>Present this intelligence</span><strong>Your logo here ↗</strong></a>' +
         '<div class="graphic-card__brand"><span><img src="assets/' + (settings.tone === "navy" ? "mark-white.png" : "mark-full-color.png") + '" alt=""><b>Florida Signal</b><small>Development intelligence</small></span><time>' + escapeHtml(settings.stamp || applicationWindowStamp) + '</time><div>' +
         '<a href="https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareTitle) + '&url=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on X">X</a>' +
         '<a href="https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on LinkedIn">in</a>' +
@@ -1214,7 +1278,7 @@
       { value: formatNumber(stats.owner_chg), label: "Owner changes" },
       { value: formatNumber(stats.eff_owner), label: "Owners resolved" },
       { value: formatNumber(stats.eff_value), label: "Values joined" },
-      { value: formatNumber(stats.signals_n), label: "Signals" }
+      { value: formatNumber(stats.p_parcel), label: "Parcel links" }
     ]);
     const stormRadar = '<div class="graphic-radar"><div class="graphic-radar__sweep"></div><div class="graphic-radar__core"><strong>' + formatNumber(stormRecords.length) + '</strong><span>local hardening<br>records</span></div>' + (state.storms.length ? state.storms.slice(0, 3).map(function (storm, index) { return '<i class="graphic-radar__blip graphic-radar__blip--' + (index + 1) + '" title="' + escapeHtml(storm.name) + '"></i>'; }).join("") : '<b class="graphic-radar__standby">NHC STANDBY</b>') + '</div>';
     const cards = [
@@ -1261,7 +1325,7 @@
         }
       });
     });
-    if (permitsFresh) els("[data-updated]").forEach(function (node) { node.textContent = "Permit source seen " + formatDate(permitsFresh, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET · activity uses application dates"; });
+    /* Page-level freshness is rendered in loadPublicRecord; each Graphic Desk card carries its own source clock. */
   }
 
   function initDataFlipper() {
@@ -1447,6 +1511,7 @@
     els("[data-signup-form]").forEach(function (form) {
       form.addEventListener("submit", async function (event) {
         event.preventDefault();
+        trackEvent("newsletter_submit", { placement: form.getAttribute("data-signup-source") || (form.classList.contains("signup--hero") ? "homepage-hero" : "homepage-brief") });
         const input = el('input[name="email"]', form);
         const zip = el('input[name="zip"]', form);
         const message = el("[data-signup-message]", form);
@@ -1457,13 +1522,17 @@
           const response = await fetch("/api/subscribe", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: input.value, zip: zip.value, source: form.classList.contains("signup--hero") ? "homepage-hero" : "homepage-brief" })
+            body: JSON.stringify({ email: input.value, zip: zip.value, source: form.getAttribute("data-signup-source") || (form.classList.contains("signup--hero") ? "homepage-hero" : "homepage-brief") })
           });
           const data = await response.json();
           if (!response.ok) throw new Error(data.error || "Could not save subscription");
           message.textContent = data.existing ? "You’re already on the list." : "You’re in. Watch for the 6:15 Brief.";
+          trackEvent("newsletter_conversion", { placement: form.getAttribute("data-signup-source") || "website", status: data.existing ? "existing" : "created" });
+          try { window.localStorage.setItem("florida-signal-brief-subscribed", String(Date.now())); } catch (storageError) { /* Storage is optional. */ }
           input.value = "";
           zip.value = "";
+          const prompt = form.closest(".brief-prompt");
+          if (prompt) window.setTimeout(function () { const close = el("[data-brief-prompt-close]", prompt); if (close) close.click(); }, 900);
         } catch (error) {
           message.classList.add("is-error");
           message.textContent = "Signup is not connected on this host yet. Email desk@thefloridasignal.com.";
@@ -1472,10 +1541,163 @@
     });
   }
 
+  function initBriefPrompt() {
+    const forcePreview = new URLSearchParams(window.location.search).get("brief-preview") === "1";
+    let subscribed = false;
+    let recentlyDismissed = false;
+    let shownThisSession = false;
+    try {
+      subscribed = Boolean(window.localStorage.getItem("florida-signal-brief-subscribed"));
+      const dismissedAt = Number(window.localStorage.getItem("florida-signal-brief-dismissed") || 0);
+      recentlyDismissed = dismissedAt > Date.now() - 7 * 24 * 60 * 60 * 1000;
+      shownThisSession = window.sessionStorage.getItem("florida-signal-brief-prompt-shown") === "yes";
+    } catch (error) { /* Storage is optional. */ }
+    if (!forcePreview && (subscribed || recentlyDismissed || shownThisSession)) return;
+    const prompt = document.createElement("div");
+    prompt.className = "brief-prompt";
+    prompt.hidden = true;
+    prompt.innerHTML = '<div class="brief-prompt__backdrop" data-brief-prompt-close></div><section class="brief-prompt__dialog" role="dialog" aria-modal="true" aria-labelledby="brief-prompt-title" aria-describedby="brief-prompt-dek"><button class="brief-prompt__close" type="button" data-brief-prompt-close aria-label="Close Daily Intel Brief signup">×</button><div class="brief-prompt__mark" aria-hidden="true"><img src="assets/mark-full-color.png" alt=""></div><p class="eyebrow"><span class="pulse" aria-hidden="true"></span>Tomorrow starts tonight</p><h2 id="brief-prompt-title">Get the 6:15 Daily Intel Brief.</h2><p id="brief-prompt-dek">One sharp Broward email: consequential filings, neighborhood movement, meetings, storm readiness and the records behind every claim.</p><form class="signup signup--prompt" data-signup-form data-signup-source="ten-second-prompt"><label class="sr-only" for="prompt-email">Email address</label><input id="prompt-email" name="email" type="email" autocomplete="email" placeholder="Your email address" required><label class="sr-only" for="prompt-zip">ZIP you watch</label><input id="prompt-zip" name="zip" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{5}(-[0-9]{4})?" placeholder="ZIP you watch" required><button type="submit">Send me the brief →</button><p class="signup__message" data-signup-message aria-live="polite"></p></form><p class="brief-prompt__fine">Free · Broward Audience · unsubscribe anytime · powered by Graham &amp; Gold LLC</p></section>';
+    document.body.appendChild(prompt);
+    const closeButtons = els("[data-brief-prompt-close]", prompt);
+    let previousFocus = null;
+    function closePrompt(recordDismissal) {
+      prompt.classList.remove("is-open");
+      document.body.classList.remove("brief-prompt-open");
+      if (recordDismissal) {
+        try { window.localStorage.setItem("florida-signal-brief-dismissed", String(Date.now())); } catch (error) { /* Storage is optional. */ }
+      }
+      window.setTimeout(function () { prompt.hidden = true; if (previousFocus && previousFocus.focus) previousFocus.focus(); }, 220);
+    }
+    closeButtons.forEach(function (button) { button.addEventListener("click", function () { closePrompt(true); }); });
+    prompt.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") { event.preventDefault(); closePrompt(true); return; }
+      if (event.key !== "Tab") return;
+      const focusable = els('button, input, a[href]', prompt).filter(function (node) { return !node.hidden && node.getAttribute("disabled") === null; });
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    });
+    const promptDelay = forcePreview ? 300 : 10000;
+    window.setTimeout(function () {
+      if (document.hidden || prompt.classList.contains("is-open")) return;
+      previousFocus = document.activeElement;
+      prompt.hidden = false;
+      document.body.classList.add("brief-prompt-open");
+      window.requestAnimationFrame(function () { prompt.classList.add("is-open"); const close = el(".brief-prompt__close", prompt); if (close) close.focus(); });
+      trackEvent("brief_prompt_view", { placement: "ten-second-prompt" });
+      try { window.sessionStorage.setItem("florida-signal-brief-prompt-shown", "yes"); } catch (error) { /* Storage is optional. */ }
+    }, promptDelay);
+  }
+
+  function initSponsorInventory() {
+    const footer = el(".site-footer");
+    if (!footer || el(".site-sponsor-rail")) return;
+    const pageName = titleCase(document.body.getAttribute("data-page") || "Florida Signal");
+    const rail = document.createElement("aside");
+    rail.className = "site-sponsor-rail";
+    rail.setAttribute("aria-label", "Florida Signal sponsorship availability");
+    rail.innerHTML = '<div class="shell"><span>Available inventory · ' + escapeHtml(pageName) + '</span><strong>Own this intelligence surface</strong><a href="mailto:desk@thefloridasignal.com?subject=' + encodeURIComponent("Florida Signal " + pageName + " sponsorship") + '">Your logo here · sponsorship desk ↗</a></div>';
+    footer.parentNode.insertBefore(rail, footer);
+  }
+
+  async function initDataHealth() {
+    const page = document.body.getAttribute("data-page") || "home";
+    if (!["home", "neighborhoods", "broward", "graphics", "storm", "method"].includes(page) || el("#source-health")) return;
+    const details = document.createElement("details");
+    details.className = "source-health";
+    details.id = "source-health";
+    if (page === "method") details.open = true;
+    details.innerHTML = '<summary><span><i aria-hidden="true"></i>Source clocks</span><strong>Checking each feed…</strong><small>Event dates ≠ pull times</small></summary><div class="shell source-health__grid"><p>Reading separate source, sync and event clocks…</p></div>';
+    const operations = el("#storm-operations");
+    const header = el(".site-header");
+    if (operations) operations.insertAdjacentElement("afterend", details);
+    else if (header) header.insertAdjacentElement("afterend", details);
+    details.addEventListener("toggle", function () { if (details.open) trackEvent("source_health_open", { placement: page }); });
+    try {
+      const response = await fetch("/api/data-health", { cache: "no-store", headers: { Accept: "application/json" } });
+      if (!response.ok) throw new Error("Data health unavailable");
+      const payload = await response.json();
+      const sources = Array.isArray(payload.sources) ? payload.sources : [];
+      const counts = sources.reduce(function (result, source) { result[source.status] = (result[source.status] || 0) + 1; return result; }, {});
+      const summary = el("summary strong", details);
+      if (summary) summary.textContent = [counts.current ? counts.current + " current" : "", counts.delayed ? counts.delayed + " delayed" : "", counts.stale ? counts.stale + " stale" : "", counts.unverified ? counts.unverified + " unverified" : ""].filter(Boolean).join(" · ") || "Source clocks unavailable";
+      const grid = el(".source-health__grid", details);
+      grid.innerHTML = sources.map(function (source) {
+        const eventClock = source.event_through ? "Event through " + formatDate(source.event_through, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "Event date varies by item";
+        const systemClock = source.system_time ? "System " + formatDate(source.system_time, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "System timestamp not exposed";
+        return '<article><div><span class="source-health__status source-health__status--' + escapeHtml(source.status) + '">' + escapeHtml(source.status) + '</span><strong>' + escapeHtml(source.label) + '</strong></div><p>' + escapeHtml(eventClock) + '</p><p>' + escapeHtml(systemClock) + '</p><small>' + escapeHtml(source.cadence || "") + ' · ' + escapeHtml(source.detail || "") + '</small></article>';
+      }).join("") || '<p>Source health is unavailable. The site will not substitute an inferred green status.</p>';
+    } catch (error) {
+      const summary = el("summary strong", details);
+      if (summary) summary.textContent = "Health manifest unavailable";
+      const grid = el(".source-health__grid", details);
+      grid.innerHTML = '<p>Separate source clocks could not be loaded. No green status is being inferred.</p>';
+    }
+  }
+
+  function analyticsSessionId() {
+    try {
+      let sessionId = window.sessionStorage.getItem("florida-signal-analytics-session");
+      if (!sessionId) {
+        sessionId = window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : "fs-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        window.sessionStorage.setItem("florida-signal-analytics-session", sessionId);
+      }
+      return sessionId;
+    } catch (error) { return ""; }
+  }
+
+  function trackEvent(name, properties) {
+    const payload = JSON.stringify({
+      event: name,
+      page: window.location.pathname,
+      session_id: analyticsSessionId(),
+      properties: Object.assign({ device: window.matchMedia("(max-width: 620px)").matches ? "mobile" : "desktop" }, properties || {})
+    });
+    if (window.dataLayer && Array.isArray(window.dataLayer)) window.dataLayer.push(Object.assign({ event: name }, properties || {}));
+    try {
+      if (navigator.sendBeacon) {
+        const accepted = navigator.sendBeacon("/api/events", new Blob([payload], { type: "application/json" }));
+        if (accepted) return;
+      }
+      fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: payload, keepalive: true }).catch(function () { /* Static hosts may not expose first-party analytics. */ });
+    } catch (error) { /* Analytics must never block the product. */ }
+  }
+
+  function initAnalytics() {
+    trackEvent("page_view", { page_name: document.body.getAttribute("data-page") || "unknown" });
+    document.addEventListener("click", function (event) {
+      const target = event.target && event.target.closest ? event.target.closest("a,button") : null;
+      if (!target) return;
+      if (target.matches(".sponsor-slot,.site-sponsor-rail a,.graphic-card__sponsor")) trackEvent("sponsor_interest", { placement: target.closest(".graphic-card") ? "graphic-card" : target.closest(".site-sponsor-rail") ? "site-rail" : "module" });
+      else if (target.matches("[data-share-record]")) trackEvent("record_share", { share_type: "native" });
+      else if (target.matches("[data-copy-record]")) trackEvent("record_share", { share_type: "copy-link" });
+      else if (target.matches("[data-share-card]")) trackEvent("graphic_share", { share_type: "native" });
+      else if (target.matches("[data-copy-embed]")) trackEvent("graphic_embed", { action: "copy" });
+      else if (target.matches("[data-mobile-field-toggle]")) trackEvent("mobile_field_open", { mode: "panel" });
+      else if (target.matches("[data-mobile-field-locate]")) trackEvent("mobile_field_scan", { mode: "browser-location" });
+      else if (target.matches(".lead-card__map-cta,.spyglass__open")) trackEvent("map_open", { placement: target.matches(".spyglass__open") ? "spotlight" : "lead-card" });
+    });
+    document.addEventListener("submit", function (event) {
+      if (event.target && event.target.matches && event.target.matches("[data-mobile-field-search]")) trackEvent("mobile_field_scan", { mode: "typed-place" });
+      if (event.target && event.target.matches && event.target.matches("#record-search")) trackEvent("record_search", { mode: "typed-query" });
+    });
+    window.floridaSignalTrack = trackEvent;
+  }
+
   function initNavigation() {
     const button = el(".menu-button");
     if (!button) return;
     const navigation = el(".site-nav");
+    if (navigation && !el('a[href="stories.html"]', navigation)) {
+      const storiesLink = document.createElement("a");
+      storiesLink.href = "stories.html";
+      storiesLink.textContent = "Stories";
+      if (document.body.getAttribute("data-page") === "stories") storiesLink.setAttribute("aria-current", "page");
+      const neighborhoodsLink = el('a[href="neighborhoods.html"]', navigation);
+      navigation.insertBefore(storiesLink, neighborhoodsLink || navigation.firstChild);
+    }
     if (navigation && !el('a[href="graphics.html"]', navigation)) {
       const graphicsLink = document.createElement("a");
       graphicsLink.href = "graphics.html";
@@ -1496,33 +1718,122 @@
       const open = !document.body.classList.contains("nav-open");
       document.body.classList.toggle("nav-open", open);
       button.setAttribute("aria-expanded", String(open));
+      const label = el(".sr-only", button);
+      if (label) label.textContent = open ? "Close navigation" : "Open navigation";
     });
-    els(".site-nav a").forEach(function (link) { link.addEventListener("click", function () { document.body.classList.remove("nav-open"); button.setAttribute("aria-expanded", "false"); }); });
+    els(".site-nav a").forEach(function (link) { link.addEventListener("click", function () { document.body.classList.remove("nav-open"); button.setAttribute("aria-expanded", "false"); const label = el(".sr-only", button); if (label) label.textContent = "Open navigation"; }); });
+    document.addEventListener("keydown", function (event) {
+      if (event.key !== "Escape" || !document.body.classList.contains("nav-open")) return;
+      document.body.classList.remove("nav-open");
+      button.setAttribute("aria-expanded", "false");
+      const label = el(".sr-only", button);
+      if (label) label.textContent = "Open navigation";
+      button.focus();
+    });
+  }
+
+  function stormTrackImage(storm) {
+    const id = String((storm || {}).id || "").toUpperCase();
+    if (!/^[A-Z]{2}\d{6}$/.test(id)) return "";
+    return "https://www.nhc.noaa.gov/storm_graphics/" + id.slice(0, 4) + "/refresh/" + id + "_5day_cone+png/";
+  }
+
+  function startStormTicker(storm) {
+    if (stormTickerTimer) window.clearInterval(stormTickerTimer);
+    const story = el("#live-bar-story");
+    const time = el("#live-bar-time");
+    if (!story || !time || !document.body.classList.contains("storm-mode")) return;
+    const items = storm ? [
+      storm.name + " · " + storm.classification + " · " + storm.intensity + " KT",
+      "CENTER " + storm.latitude + " · " + storm.longitude,
+      "MOVEMENT " + storm.movementDir + "° AT " + storm.movementSpeed + " KT",
+      "PRESSURE " + storm.pressure + " MB",
+      "OFFICIAL NHC UPDATE " + formatDate(storm.lastUpdate, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET"
+    ] : [
+      "ATLANTIC BASIN MONITORED BY THE NATIONAL HURRICANE CENTER",
+      "NO NAMED ATLANTIC SYSTEM ACTIVE",
+      "GOES-EAST SOUTHEAST SATELLITE · OFFICIAL NOAA SOURCE"
+    ];
+    let index = 0;
+    function flip() { story.textContent = items[index % items.length]; time.textContent = "EDITOR-CONTROLLED STORM WATCH"; index += 1; }
+    flip();
+    stormTickerTimer = window.setInterval(flip, 4200);
+  }
+
+  function renderStormOperations(payload) {
+    const root = el("#storm-operations");
+    if (!root) return;
+    const active = document.body.classList.contains("storm-mode");
+    root.hidden = !active;
+    if (!active) return;
+    const storms = ((payload || state.stormPayload || {}).activeStorms || []).filter(function (storm) { return String(storm.id || "").toLowerCase().startsWith("al"); });
+    const storm = storms[0] || null;
+    const trackImage = stormTrackImage(storm);
+    const trackPage = storm && storm.forecastGraphics && storm.forecastGraphics.url ? storm.forecastGraphics.url : "https://www.nhc.noaa.gov/";
+    const advisory = storm && storm.publicAdvisory && storm.publicAdvisory.url ? storm.publicAdvisory.url : "https://www.nhc.noaa.gov/";
+    const title = storm ? storm.name + " · " + storm.classification + " · " + storm.intensity + " kt" : "Atlantic basin · official-source standby";
+    const coordinates = storm ? storm.latitude + " · " + storm.longitude : "No named Atlantic center fix";
+    const movement = storm ? "Moving " + storm.movementDir + "° at " + storm.movementSpeed + " kt · " + storm.pressure + " mb" : "Publisher Storm Watch is active; NHC has no named Atlantic system in its current feed.";
+    const update = storm && storm.lastUpdate ? "NHC updated " + formatDate(storm.lastUpdate, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "Official sources remain the authority";
+    root.innerHTML = '<div class="shell storm-operations__head"><p><span aria-hidden="true">🌀</span><strong>Florida Signal Storm Watch</strong></p><p>' + escapeHtml(update) + '</p></div><div class="shell storm-operations__grid">' +
+      '<a class="storm-operations__visual" href="' + escapeHtml(trackPage) + '" target="_blank" rel="noopener"><img src="' + escapeHtml(trackImage || "https://www.nhc.noaa.gov/xgtwo/two_atl_7d0.png") + '" alt="' + escapeHtml(storm ? "Official National Hurricane Center forecast cone for " + storm.name : "Official National Hurricane Center seven-day Atlantic outlook") + '"><span>Official NHC ' + (storm ? "forecast track" : "Atlantic outlook") + ' ↗</span></a>' +
+      '<a class="storm-operations__visual" href="https://www.star.nesdis.noaa.gov/goes/sector.php?sat=G19&amp;sector=se" target="_blank" rel="noopener"><img src="https://cdn.star.nesdis.noaa.gov/GOES19/ABI/SECTOR/se/GEOCOLOR/600x600.jpg" alt="Current NOAA GOES-East GeoColor satellite view of the Southeast United States"><span>NOAA GOES-East Southeast satellite ↗</span></a>' +
+      '<div class="storm-operations__readout"><p>Official center fix</p><h2>' + escapeHtml(title) + '</h2><strong>' + escapeHtml(coordinates) + '</strong><span>' + escapeHtml(movement) + '</span><div><a href="' + escapeHtml(advisory) + '" target="_blank" rel="noopener">Public advisory ↗</a><a href="storm.html">Open Storm Window →</a></div><small>Florida Signal adds local readiness records. It does not replace NHC, NWS or emergency management.</small></div></div>';
+    startStormTicker(storm);
+  }
+
+  function applyStormMode(active, mode) {
+    const status = el("#storm-mode-status");
+    const liveLabel = el(".live-bar__inner p:first-child strong");
+    document.body.classList.toggle("storm-mode", active);
+    if (liveLabel) {
+      if (!liveLabel.dataset.defaultLabel) liveLabel.dataset.defaultLabel = liveLabel.textContent;
+      liveLabel.textContent = active ? "Storm Watch active" : liveLabel.dataset.defaultLabel;
+    }
+    if (status) {
+      status.classList.toggle("is-active", active);
+      status.setAttribute("aria-label", "Publisher-controlled Florida Signal Storm Watch is " + (active ? "active" : "on standby"));
+      status.innerHTML = '<span class="storm-mode-toggle__icon" aria-hidden="true">🌀</span><span>Storm watch ' + (active ? "active" : "standby") + '</span>';
+      status.title = "Publisher-controlled site state" + (mode && mode.updated_at ? " · updated " + mode.updated_at : "");
+    }
+    const themeColor = el('meta[name="theme-color"]');
+    if (themeColor) themeColor.setAttribute("content", active ? "#8f1118" : "#ffffff");
+    if (active && document.body.dataset.stormAnalyticsSent !== "yes") {
+      document.body.dataset.stormAnalyticsSent = "yes";
+      trackEvent("storm_watch_view", { mode: "publisher-controlled" });
+    }
+    renderStormOperations(state.stormPayload);
   }
 
   function initStormMode() {
     const bar = el(".live-bar__inner");
     if (!bar) return;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "storm-mode-toggle";
-    button.title = "Changes the Florida Signal display lens; this is not an official weather watch";
-    bar.appendChild(button);
-    let active = false;
-    try { active = window.localStorage.getItem("florida-signal-storm-mode") === "on"; } catch (error) { active = false; }
-    function apply(next) {
-      active = next;
-      document.body.classList.toggle("storm-mode", active);
-      button.classList.toggle("is-active", active);
-      button.setAttribute("aria-pressed", String(active));
-      button.setAttribute("aria-label", (active ? "Turn off" : "Turn on") + " Florida Signal Storm Watch display mode");
-      button.innerHTML = '<span class="storm-mode-toggle__icon" aria-hidden="true">🌀</span><span>Storm watch ' + (active ? "on" : "off") + '</span>';
-      const themeColor = el('meta[name="theme-color"]');
-      if (themeColor) themeColor.setAttribute("content", active ? "#a81920" : "#ffffff");
-      try { window.localStorage.setItem("florida-signal-storm-mode", active ? "on" : "off"); } catch (error) { /* Storage is optional. */ }
-    }
-    button.addEventListener("click", function () { apply(!active); });
-    apply(active);
+    const status = document.createElement("span");
+    status.className = "storm-mode-toggle";
+    status.id = "storm-mode-status";
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    bar.appendChild(status);
+    const operations = document.createElement("section");
+    operations.className = "storm-operations";
+    operations.id = "storm-operations";
+    operations.hidden = true;
+    operations.setAttribute("aria-label", "Florida Signal Storm Watch official track, satellite and center coordinates");
+    const header = el(".site-header");
+    if (header) header.insertAdjacentElement("afterend", operations);
+    applyStormMode(false, state.siteMode);
+    (async function () {
+      let mode = null;
+      try {
+        let response = await fetch("/api/site-mode", { cache: "no-store" });
+        if (!response.ok) response = await fetch("data/site_mode.json", { cache: "no-store" });
+        if (response.ok) mode = await response.json();
+      } catch (error) { mode = null; }
+      state.siteMode = mode || { storm_watch: "off" };
+      const preview = new URLSearchParams(window.location.search).get("storm-preview");
+      const active = preview === "on" ? true : preview === "off" ? false : String(state.siteMode.storm_watch || "off").toLowerCase() === "on";
+      applyStormMode(active, state.siteMode);
+    })();
   }
 
   function initMethodologyToggle() {
@@ -1539,10 +1850,14 @@
 
   function init() {
     els("[data-year]").forEach(function (node) { node.textContent = String(new Date().getFullYear()); });
+    initAnalytics();
     initStormMode();
+    initDataHealth();
     initMethodologyToggle();
     initNavigation();
+    initBriefPrompt();
     initSignupForms();
+    initSponsorInventory();
     initDataFlipper();
     initMobileLiveRail();
     initMobileFieldTest();

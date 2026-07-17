@@ -1,238 +1,252 @@
-# Florida Signal build + operating handoff
+# Florida Signal build and operating handoff
 
-Updated July 17, 2026. This is the source-of-truth handoff for the Florida Signal build in this folder. It distinguishes what is genuinely connected now, what reads on demand, what must be refreshed by an upstream job, and what is connection-ready but not yet running.
+Updated July 17, 2026. This report is the launch-oriented source of truth for the build in this folder. It separates verified event data from system freshness, and finished interfaces from production infrastructure that still needs to be deployed.
 
-## Outcome
+## Product outcome
 
-Florida Signal is now a bright, branded development-intelligence product for Broward’s local field operators and its out-of-state “frequent fliers”: developers, brokers, real estate agents, contractors, owners and anyone who needs the scoop before walking the block or booking the flight.
+Florida Signal is now a bright, branded development-intelligence product for Broward field operators and frequent fliers: developers, brokers, real estate agents, contractors and owners who want block-level context before walking the site or booking the flight.
 
-The default background should remain white. It makes the emblem, photography, teal, yellow, orange and live-data graphics feel sharper and more trustworthy. Pale blue and mint work best as data-zone changes; navy is most effective as an intentional intelligence/storm surface. A full light-blue page would flatten the hierarchy.
+White should remain the default background. It gives the navy typography, Florida emblem, photography, teal, yellow and orange the cleanest hierarchy. Pale blue and mint work as data-zone changes; navy is reserved for high-energy intelligence surfaces; red is reserved for publisher-activated Storm Watch.
 
-Delivered in this build:
+Delivered:
 
-- a swipeable, auto-advancing mobile Live Now desk showing the newest cited filing, permit universe, Broward record and next watched room before the static hero copy;
-- a **Mobile Field Test** that accepts browser location or a typed address, neighborhood, ZIP or permit, plots the current mapped sample, and ranks the nearest visible filings without storing the visitor’s coordinates;
-- six-face homepage data flipper, including Diagram of the Day and watched public meetings;
-- ten distinct live Graphic Desk cards with branded center emblems, exact spans, social images, share pages and embed mode;
-- official neighborhood, ZIP, heat, U.S. House, Florida Senate, Florida House and Broward-corridor map layers;
-- a controlled site/CMS taxonomy with tag-driven neighborhood templates and clean editorial tag lines;
-- the sponsorable **Signal Spyglass** system: connected mini-map Spotlights for What Moved, Storm Readiness and Rooms Watched;
-- search and Lead Desk cards with neighborhood signatures, exact-map actions, Street View, satellite, text and native share;
-- public + industry meeting watch and a source-gated Agenda Recon map;
-- three-phase storm intelligence and a persistent red Storm Watch display mode with hurricane icon;
-- historical Hurricane Irma archive treatment, never presented as current conditions;
-- editorial-only Brightline corridor feature with date and licensing treatment;
-- approved-only Florida Desk CMS adapter modeled on the Michigan Intel Desk separation of collection, review and publication;
-- consented email + watched-ZIP capture and a server-side Mailchimp adapter for the existing **Broward Audience**; and
-- dim sponsor inventory that cannot affect records, leads, rankings or editorial conclusions.
+- an enlarged, legible desktop and mobile identity system with the Florida emblem used as a watermark, map signature and graphic center;
+- a dynamic mobile Live Now rail ahead of the static hero, followed by a Mobile Field Test for browser location or typed address/neighborhood/ZIP/permit lookup;
+- a six-face public-record flipper that absorbs the old four-stat block and includes Diagram of the Day and watched meetings;
+- neighborhood, ZIP, heat, congressional, state legislative and corridor layers using one naming convention;
+- interactive permit/lead cards with exact-map action, Street View, satellite, text, native share and copied branded links;
+- the Signal Spyglass mini-map/Spotlight system for filings, readiness and watched rooms;
+- a meetings desk with government and industry sources, agenda links, video actions and source-gated Agenda Recon;
+- a three-phase Storm Window and a publisher-controlled red Storm Watch mode with storm icon, official track/outlook, satellite, coordinates and a red information ticker;
+- ten visually distinct Graphic Desk diagrams with embedded Florida Signal branding, explicit data spans, share pages, embeds and 1200-pixel social exports;
+- a stories home and **The Data Wire**, a private source-gated CMS derived from the useful Michigan desk patterns without altering the Michigan repositories;
+- a restrained site/CMS taxonomy that tags stories, neighborhoods, entities, sources, audiences and urgency without a wall of AI-looking pills;
+- a ten-second, dismissible daily-brief signup for email plus watched ZIP;
+- site-wide sponsor inventory that is visibly subordinate to the record and cannot influence rankings or editorial conclusions;
+- local privacy-minimized analytics events, search/AI discovery files, schema metadata, favicons, accessibility improvements, brand kit, four social masters and a Mailchimp-safe newsletter template; and
+- all eight supplied Adobe Stock photos labeled, optimized, documented and placed according to their licenses.
 
-## How the system is meant to run
+## Architecture
 
 ```mermaid
 flowchart LR
-  A["Accela · Broward Clerk/BCPA · Sunbiz"] -->|"morning + afternoon collectors"| B["Supabase public mirror · RLS"]
-  B -->|"query when page opens"| C["Signals · search · leads · charts"]
-  B --> D["Neighborhood + ZIP + district map"]
+  A["Official sources"] --> B["Scheduled collectors"]
+  B --> C["Private source database"]
+  C --> D["Supabase public mirror"]
+  C --> E["Per-source health manifest"]
+  D --> F["Search · maps · cards · diagrams"]
+  E --> F
 
-  E["Legistar · DRC · associations"] -->|"15-minute cache / source scan"| F["Meetings + Agenda Recon"]
-  G["NOAA / NHC"] -->|"5-minute cache"| H["Storm Window + red Storm Watch"]
-
-  I["Duplicated Florida Desk CMS"] -->|"approved WirePackets only"| J["Public stories + cleared agenda properties"]
-  J --> C
+  C --> G["The Data Wire drafts"]
+  G --> H["Story Packet validator"]
+  H --> I["Named human approval"]
+  I --> J["Public stories · cleared agenda pins"]
   J --> F
 
-  C --> K["Graphic Desk exporter"]
-  K --> L["10 stamped social cards + embeds"]
-  C --> M["Editor-selected 6:15 Brief"]
-  N["Email + ZIP consent"] --> O["Private local queue"]
-  O -->|"server-side API key"| P["Mailchimp · Broward Audience"]
-  M --> P
+  F --> K["Graphic exports · share pages"]
+  J --> L["Editor-selected Daily Intel Brief"]
+  M["Email + watched ZIP consent"] --> N["Private signup queue"]
+  N --> O["Mailchimp Broward Audience"]
 ```
 
-## What updates live, twice daily, and editorially
+AI may extract, compare, summarize and nominate. It cannot approve or publish. A public story or agenda pin requires cited source material and a named human decision.
 
-| Surface/data | Reader refresh behavior | Required upstream cadence | Date used for analysis | Current state |
+## What is live, scheduled or editorial
+
+The current production cadence was verified from the existing Florida pipeline documentation and timer configuration. A target cadence is not proof that a job ran; the public health strip must always show the latest observed event and system clocks.
+
+| Source or surface | Current reader behavior | Actual upstream cadence | Analysis date | State on July 17 |
 |---|---|---|---|---|
-| Fort Lauderdale permits | Supabase query on page open/search | **Morning + afternoon** Accela delta | `applied_date`; issued date only when explicitly labeled | Live browser read |
-| 14-day filing pulse | Paginated live query; fixed calendar window retains zero days | Same **1–2× daily** Accela delta | `applied_date` only | Live browser read |
-| Mapped permit sample | Newest geocoded records returned and resolved into official boundaries | Same **1–2× daily** permit + geocode refresh | Actual `applied_date` span in returned sample | Live browser read, capped sample |
-| Mobile Field Test | On-demand browser-only location or typed-place scan of the current mapped sample | Same **1–2× daily** permit + geocode refresh | Each filing’s `applied_date`; distance is calculated at scan time | Live; location is not stored; coverage is the displayed sample, not every permit |
-| Broward deeds, mortgages, liens, NOCs | Reads the newest successful enriched cache | **Morning + afternoon** Clerk pull/enrichment | `recording_date_iso` | Connected cache; timestamp visible |
-| Sunbiz entities | Reads the newest successful entity cache | **Morning + afternoon**, or after new filings arrive | State application/registration date | Connected cache; timestamp visible |
-| Parcel/owner context | Reads existing BCPA/parcel cache | **Daily** delta; weekly quality audit | Property source effective/sale dates | Connected where resolved |
-| Meetings/hearings | Same-origin feed, 15-minute cache | Calendar scan at least **morning + afternoon**; faster when agendas post | Scheduled Eastern start | Connected source reader |
-| Agenda PDFs/property recon | Only source-cited, geocoded, editor-cleared rows publish | On agenda publication; check several times on meeting days | Meeting date + cited packet page | Gate installed; collector/agent not running |
-| Atlantic storm state | Same-origin NHC JSON, 5-minute cache; official outlook image stays live | Continuous during hurricane season | NHC publication/update time | Connected official source |
-| Storm-relevant local filings | Same current mapped permit sample | Same **1–2× daily** permit delta | Permit `applied_date` | Live browser read |
-| Graphic Desk cards | Re-render from the live site | **After each successful source refresh**, minimum daily | The event span printed on each card | Exporter installed; 10 cards generated |
-| Email + ZIP signup | Immediate private write | Immediate Mailchimp upsert when key is present; retry pending rows | Consent timestamp | Local capture live; Mailchimp key not set |
-| Daily Intel Brief | Human-curated from sourced candidates | Editor review before 6:15 a.m. | Each underlying record’s event date | Editorial workflow; send automation not running |
+| Fort Lauderdale permit mirror | Browser queries public Supabase on page open/search | Supabase mirror every 30 minutes | `applied_date` | Current; applications through Jul 16 |
+| New permit intake | Feeds the mirror after collection | Daily at 10:00 PM | `applied_date` | Active upstream |
+| Accela detail lane | Enriches record detail | Every 30 minutes | Source event dates | Active upstream |
+| Permit/entity enrichment | Resolves operators and joins | Every 2 hours | Underlying event date | Active upstream |
+| 14-day application pulse | Paginated public query with zero days retained | Follows permit intake/mirror | `applied_date` only | Current record rows |
+| Map and Mobile Field Test | Searches the current capped, geocoded sample | Follows permit/geocode refresh | Each permit's `applied_date` | Connected; sample limits disclosed |
+| Aggregate dashboard | Reads `dashboard_cache` | Refresh after a successful aggregate build | Underlying event span | Stale; cache still Jul 11 |
+| Broward deeds, mortgages, liens and NOCs | Reads latest enriched cache | Daily at 9:30 AM | `recording_date_iso` | Stale public snapshot; through Jul 7 |
+| Sunbiz raw ingest | Used in exact/entity enrichment | Nightly at 11:30 PM | State application/registration date | Pipeline documented; public health timestamp not exposed, so the site says unverified |
+| Parcel/owner context | Reads existing parcel joins | Existing pipeline/cache | Property effective/sale date | Connected where resolved |
+| Fort Lauderdale Legistar | Same-origin request with cache | Every 15 minutes | Scheduled Eastern start | Current runtime check |
+| DRC and industry rooms | Source-linked editorial listings | Recheck when source publishes/changes | Scheduled Eastern start | Source-cited snapshot, not a live crawler |
+| Agenda PDF/property recon | Draft extraction only; only cited, geocoded and human-cleared rows publish | On agenda publication; increase on meeting days | Meeting date plus cited packet page | CMS gate complete; collector agents not scheduled |
+| NHC storm state | Same-origin official-source request | Five-minute cache | NHC publication/update time | Connected |
+| Storm Watch mode | Audience sees publisher state | Manual editorial control | Mode publication time | Complete; off by default |
+| Graphic Desk | Renders from current site values | Re-export after successful source refresh | Printed event span | Exporter installed; ten images generated |
+| Signup | Immediate private local write | Immediate Mailchimp upsert when key exists | Consent time | Local capture works; Mailchimp key absent |
+| Daily Intel Brief | Human-curated downstream view | Daily editor review before send | Each record's event date | Template ready; send automation not running |
+| Analytics | Same-origin event endpoint | Immediate | Event occurrence time | Local SQLite only; production store not deployed |
 
-An operating target is not evidence that a collector ran. The site must keep showing the newest source/cache timestamp. If a collector misses a run, the honest behavior is an older timestamp or an unavailable state—not invented freshness.
+The public `/api/data-health` endpoint reports each source independently as `current`, `delayed`, `stale`, `unverified` or `unavailable`. It never applies one global “updated” time to unrelated datasets.
 
-## Methodology and date-span contract
+## Date and methodology contract
 
-Florida Signal keeps two clocks separate:
+Florida Signal maintains two clocks:
 
-1. **Market/event clock** — when a permit was applied for, an instrument was recorded, a company registration occurred, or a meeting begins.
-2. **System clock** — when the platform pulled, first saw, enriched, cached or published the item.
+1. **Event clock** — application, registration, recording, sale or meeting date.
+2. **System clock** — pull, first-seen, sync, enrichment, cache or publication time.
 
-Charts, rankings, neighborhood comparisons and “what moved” use the market/event clock. A batch arriving today does not make its contents today’s activity. Pull and enrichment times are freshness metadata only.
+Charts, rankings, neighborhood comparisons and “what moved” use the event clock. A batch pulled today does not turn older records into today’s activity. System times are freshness metadata only.
 
-Every visual uses one of four explicit labels:
+Every visual uses an explicit date treatment:
 
 | Label | Meaning |
 |---|---|
-| **Window** | First and last event date included. |
-| **Sample** | Returned record cap plus the actual event-date span inside it. |
-| **Snapshot** | Last successful pull or enrichment time for a cached source. |
-| **Cumulative** | Total through a named date, not a single-day total. |
+| **Window** | First and last event date included |
+| **Sample** | Returned cap and actual event-date span inside it |
+| **Snapshot** | Last successful source pull/enrichment time |
+| **Cumulative** | Total through a named date, not a single-day count |
 
-The live cards currently demonstrate the standard directly: the application pulse is a fixed 14-calendar-day series (including zero days); Place Lens identifies the newest 700 mapped applications and their exact applied-date span; the high-value queue discloses its 40-record cap and actual span; Broward and cache-backed graphics say “snapshot” or “through” rather than implying all records happened today.
+Geography rules:
 
-### Geography standard
+- No defensible coordinates means no point on a map.
+- Neighborhood names come from official City polygons and use the same naming convention across cards, popups, stories, graphics and CMS records.
+- ZIP and legislative layers use official geography.
+- Counts describe the displayed sample unless explicitly labeled cumulative.
+- Corridor names are context, not proof of a complete municipal permit universe.
+- Tax liens do not receive a hyperlocal label until instrument-to-folio/address resolution is defensible.
+- Meeting-room points are room addresses, not development sites. Agenda properties become separate pins only after official packet citation and human clearance.
+- Mobile “nearby” distance is calculated in the browser against the current visible geocoded sample; coordinates are not stored by analytics.
 
-- A point needs defensible coordinates; otherwise it does not appear on the map.
-- Neighborhood names come from official City polygons and follow one visual naming convention across cards, popups, search and social views.
-- ZIP areas and legislative districts use official Census geography.
-- Counts describe the displayed sample, never total historical market share.
-- The corridor layer is context. Hollywood, Pompano Beach, Oakland Park, Wilton Manors, Plantation, Cooper City and Southwest Ranches need their own municipal collectors before Florida Signal calls their activity live.
-- Tax liens do not receive a neighborhood label until instrument-to-folio/address resolution is defensible.
-- Signal Spyglass mini maps reuse the same coordinates, permit IDs, taxonomy and dates as the canonical field map. Meeting-room points are explicitly room addresses—not project sites—and source-cleared agenda properties remain on the Agenda Recon map.
-- Mobile Field Test “nearby” results are straight-line distances from the browser location to geocoded records in the current capped sample. A typed neighborhood/address/ZIP scan matches the canonical record, geography and taxonomy fields; it is not a claim of complete municipal coverage.
-
-### Editorial standard
+Editorial rules:
 
 - No source, no claim.
-- A raw record may appear as a sourced record; narrative interpretation requires human review.
-- “Lead” means a public-record signal worth qualifying, not a claim that an owner is soliciting work.
-- Industry association events are visibly distinct from government hearings.
-- Agenda Recon needs an official packet, cited item/page, property identifier, coordinates and `editor_status: "cleared"`.
-- Storm Watch is a display/operations lens, not an official warning service.
-- Hurricane Irma photography is explicitly historical and cannot be used to imply current conditions.
-- The Brightline image is Editorial Use Only and cannot be used as sponsor creative, advertising or an endorsement.
-- Sponsors cannot influence records, rankings, lead qualification, story selection, findings or corrections.
+- A raw record may appear as a sourced filing. Interpretation requires human review.
+- “Lead” means a public-record signal worth qualifying; it never means an owner is soliciting work.
+- Industry events are distinct from government hearings.
+- Storm Watch is an intelligence display, not an official warning service.
+- Hurricane Irma photography is historical and labeled as such.
+- The Brightline image is Editorial Use Only and cannot be sponsor creative or imply endorsement.
+- Sponsors cannot influence records, scores, maps, story selection, findings or corrections.
 
-## CMS and agenda recon contract
+## The Data Wire CMS
 
-The site is ready to point at a **duplicated Florida Desk service**; it never alters the Michigan original. Configure `FLORIDA_SIGNAL_CMS_URL` and, if needed, `FLORIDA_SIGNAL_CMS_TOKEN`.
+The private CMS is in `cms/` and currently runs locally at `http://127.0.0.1:8788/`. The public Florida site asks only for `market=broward`; the same internal data model can support additional market sites later without advertising those markets on Florida Signal.
 
-The public adapter tries these endpoints in order:
+### Unlock it locally
 
-1. `/api/wire/packets` — only approved, published or cleared packets with a public source link;
-2. `/api/tracker-feed.json` — only tracker-eligible sourced output as a compatibility fallback;
-3. `/api/agenda-recon` — only `editor_status: "cleared"` properties with public source URL and coordinates.
-
-It deliberately never queries an internal `/api/stories` or draft queue. Collection, analysis, review, approval and publication stay separate.
-
-Every approved story can carry topic, geography, entity, source, audience and urgency tags. The adapter returns them as both a flat prefixed `tags` array and grouped `taxonomy` object. The complete naming convention and CMS JSON example live in `FLORIDA_SIGNAL_TAGGING_SYSTEM.md`. The browser keeps all tags in `data-signal-tags`, but shows only a restrained editorial “Filed under” line—no pill-box tag cloud.
-
-Recommended Agenda Recon object:
-
-```json
-{
-  "meeting_title": "Development Review Committee",
-  "meeting_date": "2026-07-28",
-  "item_number": "official item number",
-  "property_address": "officially extracted address",
-  "folio": "officially extracted folio if present",
-  "applicant": "officially extracted party",
-  "proposed_action": "plain-language action grounded in the packet",
-  "source_url": "https://official-agenda-packet.pdf",
-  "source_page": 42,
-  "lat": 26.0,
-  "lon": -80.0,
-  "source_hash": "packet hash",
-  "confidence": 0.98,
-  "editor_status": "cleared"
-}
+```bash
+export DATA_WIRE_ADMIN_TOKEN='replace-with-a-long-private-token'
+python3 cms/server.py --port 8788
 ```
 
-## Mailchimp state
+Open `http://127.0.0.1:8788/`, keep market `broward`, paste the exact token into **Private desk token**, then choose **Open desk**. The browser keeps the token in `sessionStorage` for that tab only. It must never appear in public JavaScript or committed files.
 
-- Existing real audience renamed to **Broward Audience**.
-- Audience ID: `123540d751`.
-- Server prefix: `us2`.
-- Watched-ZIP merge field: `WATCHZIP` (“ZIP You Watch”).
-- Existing subscribers were not edited and no campaign was sent.
-- `server.py` performs a server-side member upsert only after a valid consented email + ZIP submission.
-- The API key is intentionally absent. Creating a persistent account credential requires an explicit confirmation at the moment of creation. Until it is added as `MAILCHIMP_API_KEY`, signups remain safely stored in the private local queue with a pending sync state.
+Run the public adapter separately:
 
-## Branded graphics, sharing and photography
+```bash
+export FLORIDA_SIGNAL_CMS_URL='http://127.0.0.1:8788'
+export FLORIDA_SIGNAL_CMS_MARKET='broward'
+python3 server.py --port 4173
+```
 
-`social/export_graphic_desk.cjs` opens each live Graphic Desk card and exports a 1200-pixel social image. It also writes ten share landing pages with Open Graph and X/Twitter metadata. Set `FLORIDA_SIGNAL_PUBLIC_URL` when the production hostname differs from `https://thefloridasignal.com`.
+Public routes:
 
-The current ten cards are:
+- `/api/wire/packets?market=broward` — approved source-linked Story Packets only;
+- `/api/agenda-recon?market=broward` — cited, geocoded, human-cleared agenda properties only; and
+- `/api/health` — desk availability, never draft content.
 
-1. Permit Application Pulse
-2. Place Lens: Neighborhood + ZIP
-3. Trades Pulse
-4. High-Value Filing Queue
-5. Property Value Universe
-6. Operator Board
-7. Broward Records Desk
-8. Company Lens
-9. Storm Window
-10. Meetings Watch
+The CMS starts empty. A story is blocked until it is `verified` and includes a dated current trigger, defensible project identity, public source, source-bound claim slots, passed claim/tag/validator checks and a named human editor. Needs-verification packets never publish automatically. Every approval/hold action is recorded.
 
-Legacy static generators and old embed files were moved into `_source_copies/` and are not part of the publish set; this prevents stale sample numbers from being mistaken for live output.
+The public site has a real `stories.html` home. It shows an honest empty state until approved Broward packets exist, then renders story cards and details with source, byline, date and taxonomy.
 
-Licensed photo provenance, captions, alt text, visible placement and restrictions are documented in `assets/photos/README.md`. All eight Adobe Stock files supplied on the Desktop are accounted for, web-optimized and used visibly: six in the homepage field-photo strip, the Hurricane Irma archive image in Storm Window and the Editorial Use Only Brightline station image in the neighborhood corridor feature.
+## Storm operations
 
-## Visual QA completed
+Storm Watch is publisher-controlled. The audience sees the state but cannot toggle it. Set `FLORIDA_SIGNAL_STORM_MODE=on` or update `data/site_mode.json` during an editorial escalation. In storm mode:
 
-The final design pass checked all seven public pages at 390-pixel mobile and 1600-pixel desktop widths: Home, Neighborhoods, Broward Record, Graphic Desk, Storm Window, Meetings and Method. The audit found no broken images, page-level horizontal overflow or type below 7 pixels after the fixes. It also verified the enlarged header lockup, fully uncovered hero photo, mobile Live Now desk, icon-led single-row record/share toolbars, non-overlapping Graphic Desk brand/date/actions, and separated Agenda Recon watermark/status. All ten social PNGs were regenerated from the corrected cards.
+- the top status/ticker turns red and rotates official information;
+- the storm/hurricane icon remains visible;
+- NHC track/outlook and NOAA satellite surfaces move to the top;
+- coordinates, movement, wind and pressure appear when the official feed supplies them; and
+- red accents propagate through priority cards, map controls, buttons and alerts.
+
+Official sources remain the National Hurricane Center and NOAA/NESDIS. Never turn Florida Signal wording into an evacuation or life-safety instruction.
+
+## Signup, Mailchimp, sponsorship and analytics
+
+The signup asks for email, watched ZIP and consent; it can appear after ten seconds, appears at most once per session and can be dismissed for seven days. `?brief-preview=1` is a QA-only preview trigger.
+
+Mailchimp configuration:
+
+- audience: **Broward Audience**;
+- audience ID: `123540d751`;
+- server prefix: `us2`;
+- watched-ZIP merge field: `WATCHZIP`; and
+- API key: intentionally absent.
+
+No existing subscriber was edited and no campaign was sent. Until `MAILCHIMP_API_KEY` is configured server-side, new consented rows remain in the private local queue. The responsive HTML template is `brand/newsletter/florida-signal-daily-intel-brief.html` and preserves Mailchimp merge tags.
+
+Sponsor inventory appears on the public-record flipper, Graphic Desk, Signal Spyglass Spotlights, meeting watch, storm surfaces and supporting rails. “Your logo here” is intentionally dim. Sponsor treatment cannot resemble an official record or overwrite record context.
+
+Analytics records privacy-minimized events such as page views, signup completion, sponsor interest, share/embed actions, field-map use, record search, storm state and source-health opens. The endpoint whitelists event properties and drops email, ZIP, exact location and query text. Production still needs a persistent analytics store and retention policy.
+
+## Brand, social and search discovery
+
+- `brand-kit.html` is the visual brand kit.
+- `BRAND_KIT.md` defines logo clearance, palette, typography, voice, channel use and export checks.
+- `brand/templates/` contains portable, editable LinkedIn/Facebook, Instagram square, Instagram story and X SVG masters with embedded lockups.
+- `brand/newsletter/` contains the responsive Mailchimp template.
+- `graphics.html`, `social/graphic-desk/` and `share/` contain ten diagram families, exported social images and canonical share pages.
+- `robots.txt`, `sitemap.xml`, `llms.txt`, `data/site-catalog.json`, canonical metadata and JSON-LD make public content legible to search engines and AI discovery systems.
+
+All shareable cards include a date/span and Florida Signal signature. The Graphic Desk deliberately mixes bars, ranked fields, timelines, maps, matrices, constellation views and record stacks instead of repeating donut charts.
+
+## Verification completed
+
+- Browser-checked Home, Stories, Neighborhoods, Broward Record, Graphic Desk, Storm Window, Meetings, Method, Brand Kit and the newsletter preview at 390×844 and 1440×1000: 20/20 routes had a title, English document language, one primary heading, no local broken image and no page-level horizontal overflow.
+- Visually checked the normal desktop/mobile home, publisher Storm Watch desktop/mobile, the ten-second signup dialog, the CMS empty queue, the public stories empty state, Graphic Desk, Brand Kit and newsletter branding.
+- Increased meeting metadata and action type from the smallest 6–9px labels to readable 10–12px text and added larger interactive targets.
+- Parsed all 21 HTML documents, verified every local `href`/`src`, validated JSON, XML and SVG, compiled both Python services, checked JavaScript syntax and regenerated all ten Graphic Desk PNG/share pairs.
+- Tested CMS authorization and publication in an isolated database: an incomplete packet returned 422 with gate blockers; a complete verified packet remained private until named-human approval, then appeared on the public wire. The temporary database was removed.
+- Tested analytics property filtering: a QA event stored the allowed `mode` only and discarded email, ZIP, search query and latitude. The QA row was removed.
 
 ## Code map
 
-| File/path | Responsibility |
+| Path | Responsibility |
 |---|---|
-| `index.html` | Homepage, brief capture, six-face flipper, signals, diagrams, maps, storm/sponsor surfaces |
-| `neighborhoods.html` | Search, Lead Desk, hyperlocal map, ZIP/district/corridor layers, Brightline editorial feature |
-| `graphics.html` | Ten live shareable/embeddable intelligence graphics |
-| `meetings.html` | Government + industry watch, source actions and Agenda Recon |
-| `broward.html` | Broward recorded-instrument and ownership/company context |
-| `storm.html` | NHC state, before/during/after data windows and Hurricane Irma archive |
-| `method.html` | Public cadence, span definitions, sources and editorial/sponsor firewall |
-| `app.js` | Supabase queries, date pagination, rendering, sharing, maps/layers, search, leads, CMS display and storm mode |
-| `server.py` | Same-origin feeds, approved CMS adapter, agenda gate, local subscriber DB and Mailchimp upsert |
-| `data/agenda_recon.json` | Agent/editor handoff; public route filters it again |
-| `social/export_graphic_desk.cjs` | Deterministic live-card exporter |
-| `social/graphic-desk/` | Ten generated social PNGs |
-| `share/` | Ten canonical Open Graph share pages |
-| `assets/photos/README.md` | Licensed-photo provenance and usage rules |
-| `FLORIDA_SIGNAL_TAGGING_SYSTEM.md` | Controlled taxonomy, neighborhood template rules and CMS story contract |
-
-Key browser functions: `loadPublicRecord`, `fetchApplicationDates`, `renderInfographics`, `runRecordSearch`, `renderLeadDesk`, `loadMeetings`, `loadAgendaRecon`, `loadCmsContent`, `toggleMapOverlay` and `initStormMode`.
-
-Key server functions: `meeting_payload`, `nhc_payload`, `cms_payload`, `agenda_recon_payload`, `mailchimp_upsert` and the `/api/subscribe` handler.
+| `index.html` | Homepage, signup, mobile live rail, public-record flipper, signals, Spyglass and storm/sponsor surfaces |
+| `neighborhoods.html` | Search, Lead Desk, Mobile Field Test, live map and geography layers |
+| `stories.html` | Public approved-story home and story detail |
+| `graphics.html` | Ten shareable/embeddable data diagrams |
+| `meetings.html` | Government/industry watch and Agenda Recon |
+| `broward.html` | Broward instruments, parcels and entity context |
+| `storm.html` | Official storm state, before/during/after windows and Irma archive |
+| `method.html` | Public methodology, sources, clocks and sponsor firewall |
+| `brand-kit.html` | Brand rules, previews and asset downloads |
+| `app.js` | Queries, rendering, maps, search, shares, stories, health, analytics and storm mode |
+| `server.py` | Public APIs, source health, meetings/storm proxy, CMS adapter, signup and local analytics |
+| `cms/` | Private Data Wire UI/API, Story Packet gate and agenda clearance |
+| `social/export_graphic_desk.cjs` | Deterministic 1200-pixel social exporter |
+| `FLORIDA_SIGNAL_TAGGING_SYSTEM.md` | Controlled taxonomy and CMS naming contract |
+| `assets/photos/README.md` | Licensed-photo provenance and restrictions |
 
 ## Production runbook
 
-1. **Previous evening:** collect Accela, Broward Clerk/BCPA and Sunbiz; preserve source timestamps and failures.
-2. **Before 5:30 a.m.:** collect the morning delta, resolve addresses/entities/parcels, geocode, and nominate deterministic signals.
-3. **Before 6:00 a.m.:** scan newly posted agendas and let the editor review sourced Brief candidates.
-4. **After successful data completion:** export the Graphic Desk so social cards carry the new dates and numbers.
-5. **6:15 a.m.:** send the editor-approved Mailchimp Brief, optionally segmented by watched ZIP.
-6. **Midday/afternoon:** run the second permit/record/company delta and regenerate affected site/social surfaces.
-7. **Meetings:** scan at least morning and afternoon; increase frequency on meeting days and expected agenda-publication windows.
-8. **Storm season:** leave NHC status automatic; an editor controls escalated Storm Watch wording and operations beyond the official-source display.
-9. **Weekly:** audit boundaries, unresolved addresses, corrections, duplicate entities, failed joins and source schema changes.
+1. Monitor the 10:00 PM permit intake, 30-minute mirror/detail lanes and two-hour enrichment heartbeats.
+2. Monitor the 9:30 AM Broward job and 11:30 PM Sunbiz ingest; do not hide missed runs with a fresh page-render time.
+3. Refresh the aggregate cache only after a successful build, then verify its event span.
+4. Scan Legistar continuously; recheck DRC/industry sources when their published listings change.
+5. Download/hash new agenda packets into private drafts; validate identity, citations and coordinates; require named-human clearance.
+6. Review Story Packets in The Data Wire. Approve only verified items; hold anything unresolved.
+7. After successful source changes, regenerate affected Graphic Desk assets and share pages.
+8. Build the Daily Intel Brief from approved packets and sourced records; send only after editor review.
+9. During a storm, activate publisher Storm Watch and compare the display against current NHC/NOAA products.
+10. Weekly, audit failed joins, duplicate entities, unresolved addresses, boundary versions, source schema changes and corrections.
 
-## Remaining production work — do not present as finished
+## Remaining production work — do not call this finished
 
-1. **Connect Mailchimp:** create a scoped API key after explicit confirmation and set `MAILCHIMP_API_KEY`; then replay locally pending consented signups.
-2. **Deploy the duplicated Florida Desk CMS:** copy the Michigan service, change Florida sources/vocabulary/branding, and set the CMS URL/token. The approved-only web adapter is complete.
-3. **Run agenda agents:** schedule official packet discovery, download, hashing, extraction, address/folio resolution and editorial-review queues. The public gate and map are complete.
-4. **Launch upstream 1–2× daily collectors:** this site reads the existing Supabase data but does not itself schedule Accela, Broward or Sunbiz collection.
-5. **Resolve tax-liens geographically:** build a defensible instrument → party/address → parcel/folio pipeline before neighborhood heat maps.
-6. **Add municipal connectors:** Hollywood, Pompano Beach, Oakland Park, Wilton Manors, Plantation, Cooper City and Southwest Ranches currently have geography/context, not full live permit universes.
-7. **Build the HOA/condo layer:** current search can surface association language already present in records; a complete association roster, board calendar and property-resolution layer does not yet exist.
-8. **Automate social publication:** images and share URLs are ready; posting to LinkedIn/Facebook/X remains editorial/manual until account authorization exists.
-9. **Finish sponsorship operations:** visual inventory exists; sponsor intake, asset approval, billing and rotation scheduling do not.
-10. **Production infrastructure:** choose the public host, configure HTTPS/domain, private persistent database/backups, secrets, RLS audit, monitoring and collector alerts.
+1. Deploy the public Python endpoints or equivalent serverless functions; static GitHub Pages alone cannot run `/api/*`, signup, analytics or the CMS adapter.
+2. Deploy The Data Wire privately with HTTPS, real user/role authentication, persistent Postgres/Supabase, backups and audit retention. The current shared-token/SQLite setup is a local starter.
+3. Connect and schedule the agenda download/hash/extract/recheck workers; keep all output in draft until human clearance.
+4. Refresh the stale aggregate and Broward caches, and expose a reliable Sunbiz health timestamp.
+5. Configure a scoped Mailchimp API key, replay pending consented signups and add retry/alerting. Do not send a campaign automatically.
+6. Move analytics from local SQLite to a persistent privacy-reviewed store and define retention.
+7. Add complete municipal permit connectors before calling surrounding cities live; geography/context alone is not source coverage.
+8. Build defensible tax-lien and HOA/condo resolution layers before publishing hyperlocal claims.
+9. Automate social publishing only after account authorization; templates and URLs are ready, posting remains editorial.
+10. Configure the production domain, HTTPS, secrets, RLS audit, monitoring, backups, collector alerts and incident ownership.
 
-## Source doors
+## Primary source doors
 
 - [Fort Lauderdale Legistar calendar](https://fortlauderdale.legistar.com/Calendar.aspx)
 - [Fort Lauderdale Development Review Committee](https://www.fortlauderdale.gov/Government/Departments/Development-Services/Urban-Design-and-Planning/Development-Applications-Boards-and-Committees/Development-Review-Committee)
@@ -240,4 +254,7 @@ Key server functions: `meeting_payload`, `nhc_payload`, `cms_payload`, `agenda_r
 - [RWorld official calendar](https://calendar.rworld.com/)
 - [Construction Association of South Florida events](https://www.casf.org/events/)
 - [National Hurricane Center](https://www.nhc.noaa.gov/)
+- [NOAA GOES imagery](https://www.star.nesdis.noaa.gov/goes/sector.php?sat=G19&sector=se)
 - [U.S. Census TIGERweb](https://tigerweb.geo.census.gov/tigerwebmain/TIGERweb_apps.html)
+
+Powered by Graham & Gold LLC.

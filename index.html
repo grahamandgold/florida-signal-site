@@ -4,21 +4,90 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff">
+  <meta name="color-scheme" content="light">
   <meta name="description" content="Florida Signal turns Fort Lauderdale and Broward public records into useful development intelligence, block by block.">
+  <meta name="author" content="Graham &amp; Gold LLC">
+  <meta name="publisher" content="Graham &amp; Gold LLC">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <link rel="canonical" href="https://thefloridasignal.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Florida Signal">
+  <meta property="og:title" content="Florida Signal — Development intelligence before the headline">
+  <meta property="og:description" content="Fort Lauderdale and Broward development intelligence from public records, official calendars and mapped neighborhood data.">
+  <meta property="og:url" content="https://thefloridasignal.com/">
+  <meta property="og:image" content="https://thefloridasignal.com/social/graphic-desk/place-lens.png">
+  <meta property="og:image:alt" content="Florida Signal neighborhood and ZIP development intelligence">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Florida Signal — Development intelligence before the headline">
+  <meta name="twitter:description" content="What is changing in Fort Lauderdale and Broward, block by block.">
+  <meta name="twitter:image" content="https://thefloridasignal.com/social/graphic-desk/place-lens.png">
   <title>Florida Signal — Development intelligence before the headline</title>
-  <link rel="icon" href="assets/mark-square.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
+  <link rel="alternate" type="text/plain" href="llms.txt" title="Florida Signal AI context">
+  <link rel="alternate" type="application/json" href="data/site-catalog.json" title="Florida Signal machine-readable site catalog">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://thefloridasignal.com/#publisher",
+        "name": "Florida Signal",
+        "legalName": "Graham & Gold LLC",
+        "url": "https://thefloridasignal.com/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://thefloridasignal.com/assets/mark-square.png",
+          "width": 1024,
+          "height": 1024
+        },
+        "description": "Fort Lauderdale and Broward development intelligence from sourced public records, official calendars and mapped neighborhood data.",
+        "areaServed": ["Fort Lauderdale", "Broward County", "Florida"]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://thefloridasignal.com/#website",
+        "url": "https://thefloridasignal.com/",
+        "name": "Florida Signal",
+        "description": "Development intelligence before the headline.",
+        "publisher": {"@id": "https://thefloridasignal.com/#publisher"},
+        "inLanguage": "en-US",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": {
+            "@type": "EntryPoint",
+            "urlTemplate": "https://thefloridasignal.com/neighborhoods.html?q={search_term_string}"
+          },
+          "query-input": "required name=search_term_string"
+        }
+      },
+      {
+        "@type": "WebPage",
+        "@id": "https://thefloridasignal.com/#home",
+        "url": "https://thefloridasignal.com/",
+        "name": "Florida Signal — Development intelligence before the headline",
+        "isPartOf": {"@id": "https://thefloridasignal.com/#website"},
+        "about": ["Real estate development", "Public records", "Fort Lauderdale neighborhoods", "Broward County"],
+        "dateModified": "2026-07-17",
+        "inLanguage": "en-US"
+      }
+    ]
+  }
+  </script>
 </head>
 <body data-page="home">
   <a class="skip-link" href="#main">Skip to content</a>
 
   <div class="live-bar" aria-label="Live data status">
     <div class="shell live-bar__inner">
-      <p><span class="pulse" aria-hidden="true"></span><strong>Florida feed is live</strong></p>
+      <p><span class="pulse" aria-hidden="true"></span><strong>Latest verified feeds</strong></p>
       <p class="live-bar__story" id="live-bar-story">Reading the newest Fort Lauderdale records…</p>
       <p class="live-bar__time" id="live-bar-time">Connecting</p>
     </div>
@@ -51,7 +120,7 @@
     <div class="mobile-live-rail__viewport" data-mobile-live-rail tabindex="0" aria-label="Swipe through current Florida Signal data">
       <div class="mobile-live-rail__track">
         <a class="mobile-live-card mobile-live-card--signal" href="#signals" data-mobile-live-card>
-          <span>Newest consequential filing</span>
+          <span>Newest high-value application</span>
           <strong id="mobile-live-story" aria-live="polite">Reading the newest application…</strong>
           <small>Application clock · open the cited record <b>→</b></small>
         </a>
@@ -90,7 +159,7 @@
         <button type="submit">Scan →</button>
       </form>
       <p class="mobile-field-test__status" data-mobile-field-status aria-live="polite">Tap your location or enter a field point to scan the current mapped permit sample.</p>
-      <div class="mobile-field-test__map" id="mobile-field-map" role="application" aria-label="Map of your field point and nearby public permit records"></div>
+      <div class="mobile-field-test__map" id="mobile-field-map" role="region" aria-label="Map of your field point and nearby public permit records"></div>
       <div class="mobile-field-test__results" data-mobile-field-results></div>
     </div>
   </section>
@@ -127,7 +196,7 @@
           <div class="hero__live-card data-flipper" id="live-data" aria-label="Live data highlights">
             <div class="data-flipper__emblem" aria-hidden="true"><img src="assets/mark-square.png" alt="" width="192" height="192"><i></i></div>
             <div class="data-flipper__head">
-              <p class="data-label"><span class="pulse pulse--dark" aria-hidden="true"></span>Live public record</p>
+              <p class="data-label"><span class="pulse pulse--dark" aria-hidden="true"></span>Current public record</p>
               <div class="data-flipper__controls">
                 <button type="button" data-flip-prev aria-label="Previous data point">←</button>
                 <span data-flip-index>1 / 6</span>
@@ -194,10 +263,10 @@
             <p class="eyebrow">On the record now</p>
             <h2>What moved.</h2>
           </div>
-          <p>Not press releases. Not rumors. The newest consequential filings in the live permit feed.</p>
+          <p>Not press releases. Not rumors. The newest high-value applications in the current permit query.</p>
         </div>
         <div class="spyglass" data-spotlight="signals" data-signal-tags="format:spotlight topic:development source:city-permit audience:field-desk">
-          <div class="spyglass__map" id="signal-spotlight-map" role="application" aria-label="Signal Spyglass map of the newest consequential filings"></div>
+          <div class="spyglass__map" id="signal-spotlight-map" role="region" aria-label="Signal Spyglass map of the newest high-value applications"></div>
           <div class="spyglass__desk"><p class="eyebrow"><span class="pulse" aria-hidden="true"></span>Signal Spyglass · What Moved Spotlight</p><h3 id="signal-spotlight-title">Plotting the newest filings…</h3><p id="signal-spotlight-meta">Every pin uses the same permit ID, neighborhood resolver and application date as the full live map.</p><a class="spyglass__open" id="signal-spotlight-link" href="neighborhoods.html#full-map">Open this filing on the full map →</a><a class="sponsor-slot sponsor-slot--spyglass" href="mailto:desk@thefloridasignal.com?subject=Sponsor%20the%20What%20Moved%20Spyglass"><span>What Moved Spotlight partner</span><strong>Your logo here</strong></a></div>
         </div>
         <div class="signal-list" id="signal-list" aria-live="polite">
@@ -293,7 +362,7 @@
             </div>
             <a href="neighborhoods.html">Open full map ↗</a>
           </div>
-          <div id="home-map" class="map" role="application" aria-label="Interactive map of recent Fort Lauderdale permit filings"></div>
+          <div id="home-map" class="map" role="region" aria-label="Interactive map of recent Fort Lauderdale permit filings"></div>
           <p class="map-credit">Neighborhood polygons: City of Fort Lauderdale GIS · Records: Florida Signal / Supabase</p>
         </div>
         <aside class="neighborhood-rank" aria-label="Active neighborhoods">

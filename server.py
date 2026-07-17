@@ -25,7 +25,7 @@ from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse
 from zoneinfo import ZoneInfo
 
 
@@ -33,11 +33,13 @@ ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
 DB_PATH = DATA_DIR / "florida_signal_cms.sqlite"
 AGENDA_RECON_PATH = DATA_DIR / "agenda_recon.json"
+SITE_MODE_PATH = DATA_DIR / "site_mode.json"
 NHC_URL = "https://www.nhc.noaa.gov/CurrentStorms.json"
 LEGISTAR_CALENDAR_URL = "https://fortlauderdale.legistar.com/Calendar.aspx"
 FLTV_URL = "https://www.fortlauderdale.gov/government/departments-i-z/strategic-communications/fltv"
 DRC_AGENDA_URL = "https://www.fortlauderdale.gov/Government/Departments/City-Clerks-Office/Advisory-Boards-Committees-and-Authorities-Agendas-and-Minutes/Development-Review-Committee"
 DRC_DETAILS_URL = "https://www.fortlauderdale.gov/Government/Departments/Development-Services/Urban-Design-and-Planning/Development-Applications-Boards-and-Committees/Development-Review-Committee"
+EDITORIAL_MEETING_CHECKED_AT = "2026-07-17T02:15:00-04:00"
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 ZIP_RE = re.compile(r"^\d{5}(?:-\d{4})?$")
 MAX_BODY = 4096
@@ -54,10 +56,16 @@ _cms_cache: dict[str, Any] = {"at": 0.0, "payload": None}
 
 CMS_BASE_URL = os.getenv("FLORIDA_SIGNAL_CMS_URL", "").strip().rstrip("/")
 CMS_TOKEN = os.getenv("FLORIDA_SIGNAL_CMS_TOKEN", "").strip()
+CMS_MARKET = re.sub(r"[^a-z0-9-]", "", os.getenv("FLORIDA_SIGNAL_CMS_MARKET", "broward").strip().lower()) or "broward"
+STORM_MODE_OVERRIDE = os.getenv("FLORIDA_SIGNAL_STORM_MODE", "").strip().lower()
 MAILCHIMP_API_KEY = os.getenv("MAILCHIMP_API_KEY", "").strip()
 MAILCHIMP_SERVER_PREFIX = os.getenv("MAILCHIMP_SERVER_PREFIX", "us2").strip()
 MAILCHIMP_AUDIENCE_ID = os.getenv("MAILCHIMP_AUDIENCE_ID", "123540d751").strip()
 MAILCHIMP_ZIP_MERGE_TAG = os.getenv("MAILCHIMP_ZIP_MERGE_TAG", "WATCHZIP").strip()
+SUPABASE_URL = (os.getenv("FLORIDA_SIGNAL_SUPABASE_URL", "").strip() or "https://jrjewmzkyluxdywyusrw.supabase.co").rstrip("/")
+SUPABASE_PUBLISHABLE_KEY = os.getenv("FLORIDA_SIGNAL_SUPABASE_PUBLISHABLE_KEY", "").strip() or "sb_publishable_dEyBjKE_vcTj3YYx4p6XvA_xnkVW3Wb"
+_health_lock = threading.Lock()
+_health_cache: dict[str, Any] = {"at": 0.0, "payload": None}
 
 
 class LegistarCalendarParser(HTMLParser):
@@ -255,6 +263,8 @@ def meeting_payload() -> dict[str, Any]:
                     "lat": 26.1322010,
                     "lon": -80.1670950,
                     "coordinate_source": "OpenStreetMap address match · 700 NW 19 Ave",
+                    "verified_at": EDITORIAL_MEETING_CHECKED_AT,
+                    "refresh_mode": "source-cited editorial schedule",
                 }
             )
 
@@ -280,6 +290,8 @@ def meeting_payload() -> dict[str, Any]:
                     "starts_at": starts_at.isoformat(),
                     "category": "industry",
                     "link_label": "Event details",
+                    "verified_at": EDITORIAL_MEETING_CHECKED_AT,
+                    "refresh_mode": "source-cited editorial listing",
                     **({"lat": industry_event["lat"], "lon": industry_event["lon"], "coordinate_source": industry_event["coordinate_source"]} if "lat" in industry_event else {}),
                 }
             )
@@ -298,7 +310,8 @@ def meeting_payload() -> dict[str, Any]:
                 [meeting["title"], meeting["date"], meeting.get("time", ""), meeting.get("agenda_url", ""), meeting["source"]]
             )
             meeting["source_hash"] = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:16]
-            meeting["verified_at"] = verified_at
+            meeting.setdefault("verified_at", verified_at)
+            meeting.setdefault("refresh_mode", "15-minute official-calendar check")
         payload = {
             "meetings": meetings[:20],
             "calendar_url": LEGISTAR_CALENDAR_URL,
@@ -317,6 +330,88 @@ def is_public_http_url(value: Any) -> bool:
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
 
+def supabase_public_rows(path: str) -> list[dict[str, Any]]:
+    request = urllib.request.Request(
+        f"{SUPABASE_URL}/rest/v1/{path}",
+        headers={"Accept": "application/json", "apikey": SUPABASE_PUBLISHABLE_KEY, "User-Agent": "FloridaSignalDataHealth/1.0"},
+    )
+    with urllib.request.urlopen(request, timeout=10) as response:
+        payload = json.loads(response.read(2_000_000).decode("utf-8"))
+    if not isinstance(payload, list):
+        raise ValueError("Supabase health response must be a list")
+    return [row for row in payload if isinstance(row, dict)]
+
+
+def parse_source_time(value: Any) -> datetime | None:
+    if not value:
+        return None
+    text = str(value).strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        try:
+            parsed = datetime.strptime(text[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def health_status(value: Any, current_hours: float, delayed_hours: float) -> str:
+    parsed = parse_source_time(value)
+    if not parsed:
+        return "unavailable"
+    age = max(0.0, (datetime.now(timezone.utc) - parsed).total_seconds() / 3600)
+    if age <= current_hours:
+        return "current"
+    if age <= delayed_hours:
+        return "delayed"
+    return "stale"
+
+
+def data_health_payload() -> dict[str, Any]:
+    now = time.time()
+    with _health_lock:
+        if _health_cache["payload"] is not None and now - float(_health_cache["at"]) < 60:
+            return _health_cache["payload"]
+        errors: list[str] = []
+        sync: dict[str, Any] = {}
+        latest_application: dict[str, Any] = {}
+        latest_seen: dict[str, Any] = {}
+        cache_row: dict[str, Any] = {}
+        try:
+            rows = supabase_public_rows("_meta_sync_runs?select=id,completed_at,rows_synced,tables_touched,errors&order=completed_at.desc&limit=1")
+            sync = rows[0] if rows else {}
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
+            errors.append("sync:" + type(error).__name__)
+        try:
+            rows = supabase_public_rows("permits?select=applied_date,last_seen_at&applied_date=not.is.null&order=applied_date.desc.nullslast&limit=1")
+            latest_application = rows[0] if rows else {}
+            rows = supabase_public_rows("permits?select=applied_date,last_seen_at&last_seen_at=not.is.null&order=last_seen_at.desc.nullslast&limit=1")
+            latest_seen = rows[0] if rows else {}
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
+            errors.append("permits:" + type(error).__name__)
+        try:
+            rows = supabase_public_rows("dashboard_cache?select=payload,updated_at&id=eq.1&limit=1")
+            cache_row = rows[0] if rows else {}
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
+            errors.append("dashboard:" + type(error).__name__)
+        stats = cache_row.get("payload", {}).get("stats", {}) if isinstance(cache_row.get("payload"), dict) else {}
+        meetings = meeting_payload()
+        source_rows = [
+            {"id": "supabase-sync", "label": "Public mirror", "status": health_status(sync.get("completed_at"), 1.25, 3), "system_time": sync.get("completed_at"), "event_through": None, "cadence": "every 30 minutes", "detail": f"{sync.get('rows_synced', 0)} rows in latest run · {sync.get('errors', 0)} errors" if sync else "No sync run visible"},
+            {"id": "permits", "label": "Permit applications", "status": health_status(latest_seen.get("last_seen_at"), 30, 54), "system_time": latest_seen.get("last_seen_at"), "event_through": latest_application.get("applied_date"), "cadence": "source intake nightly; mirror every 30 minutes", "detail": "Analysis uses applied_date; last_seen_at is freshness metadata"},
+            {"id": "aggregate-cache", "label": "Aggregate dashboard", "status": health_status(cache_row.get("updated_at"), 26, 54), "system_time": cache_row.get("updated_at"), "event_through": stats.get("permits_fresh"), "cadence": "refresh after successful aggregate build", "detail": "Counts remain visibly stamped when this cache is delayed"},
+            {"id": "broward", "label": "Broward instruments", "status": health_status(stats.get("broward_fresh"), 48, 96), "system_time": cache_row.get("updated_at"), "event_through": stats.get("broward_fresh"), "cadence": "daily at 9:30 AM", "detail": "Deeds, mortgages, liens, NOCs and recorded instruments"},
+            {"id": "meetings", "label": "Meeting watch", "status": health_status(meetings.get("updated_at"), .5, 2), "system_time": meetings.get("updated_at"), "event_through": None, "cadence": "Legistar every 15 minutes; DRC and industry editorially checked", "detail": f"{len(meetings.get('meetings', []))} upcoming rooms · every row links to its public source"},
+            {"id": "sunbiz", "label": "Sunbiz", "status": "unverified", "system_time": None, "event_through": None, "cadence": "raw ingest nightly at 11:30 PM; exact matching in enrichment", "detail": "Public health timestamp is not yet exposed; fuzzy writes remain off"},
+        ]
+        payload = {"generated_at": datetime.now(timezone.utc).isoformat(), "sources": source_rows, "errors": errors, "contract": "Event date drives analysis; pull, sync and cache times only describe freshness."}
+        _health_cache.update({"at": now, "payload": payload})
+        return payload
+
+
 def cms_request(path: str) -> dict[str, Any]:
     headers = {
         "Accept": "application/json",
@@ -324,7 +419,8 @@ def cms_request(path: str) -> dict[str, Any]:
     }
     if CMS_TOKEN:
         headers["Authorization"] = f"Bearer {CMS_TOKEN}"
-    request = urllib.request.Request(f"{CMS_BASE_URL}{path}", headers=headers)
+    separator = "&" if "?" in path else "?"
+    request = urllib.request.Request(f"{CMS_BASE_URL}{path}{separator}market={quote(CMS_MARKET)}", headers=headers)
     with urllib.request.urlopen(request, timeout=10) as response:
         raw = response.read(2_000_000)
     payload = json.loads(raw.decode("utf-8"))
@@ -386,9 +482,10 @@ def normalize_wire_story(item: dict[str, Any], endpoint: str) -> dict[str, Any] 
         return None
     review_status = str(item.get("review_status") or item.get("status") or "").lower()
     approved_at = item.get("wire_approved_at") or item.get("approved_at") or item.get("published_at")
-    if endpoint == "/api/wire/packets" and not approved_at and review_status not in {"approved", "published", "cleared"}:
+    endpoint_path = endpoint.split("?", 1)[0]
+    if endpoint_path == "/api/wire/packets" and not approved_at and review_status not in {"approved", "published", "cleared"}:
         return None
-    if endpoint == "/api/tracker-feed.json" and item.get("tracker_eligible") is False:
+    if endpoint_path == "/api/tracker-feed.json" and item.get("tracker_eligible") is False:
         return None
     headline = str(item.get("headline") or item.get("title") or "").strip()
     summary = str(item.get("summary") or item.get("why_it_matters") or item.get("dek") or "").strip()
@@ -415,6 +512,12 @@ def normalize_wire_story(item: dict[str, Any], endpoint: str) -> dict[str, Any] 
         "neighborhood": item.get("neighborhood"),
         "zip": item.get("zip"),
         "review_status": "approved",
+        "slug": str(item.get("slug") or ""),
+        "body": str(item.get("body") or item.get("story_body") or "")[:100000],
+        "byline": str(item.get("byline") or "Florida Signal Desk")[:120],
+        "event_date": item.get("event_date"),
+        "updated_at": item.get("updated_at") or approved_at,
+        "hero_image": item.get("hero_image") if is_public_http_url(item.get("hero_image")) else None,
     }
 
 
@@ -441,6 +544,7 @@ def cms_payload() -> dict[str, Any]:
             "stories": [],
             "agenda_recon_items": [],
             "source_endpoint": None,
+            "market": CMS_MARKET,
             "gate": "approved-only; internal desk queues are never queried",
         }
     now = time.time()
@@ -475,6 +579,7 @@ def cms_payload() -> dict[str, Any]:
             "stories": stories[:12],
             "agenda_recon_items": recon_items,
             "source_endpoint": endpoint_used,
+            "market": CMS_MARKET,
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "gate": "WirePacket approved-only, then tracker-eligible fallback; never /api/stories",
             "error": None if endpoint_used else error_message or "No supported public endpoint",
@@ -534,6 +639,19 @@ def init_db() -> None:
             connection.execute("alter table brief_subscribers add column mailchimp_status text not null default 'pending'")
         if "mailchimp_synced_at" not in columns:
             connection.execute("alter table brief_subscribers add column mailchimp_synced_at text")
+        connection.execute(
+            """
+            create table if not exists analytics_events (
+              id integer primary key autoincrement,
+              event_name text not null,
+              page_path text not null,
+              session_id text,
+              properties_json text not null default '{}',
+              created_at text not null
+            )
+            """
+        )
+        connection.execute("create index if not exists analytics_events_name_at on analytics_events (event_name, created_at)")
         connection.commit()
 
 
@@ -635,11 +753,32 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
                 }
             )
             return
+        if route == "/api/data-health":
+            try:
+                self.json_response(data_health_payload())
+            except Exception as error:  # Health reporting must fail closed, never invent green.
+                self.json_response({"error": "Data health unavailable", "detail": type(error).__name__, "sources": []}, HTTPStatus.BAD_GATEWAY)
+            return
         if route == "/api/storms":
             try:
                 self.json_response(nhc_payload())
             except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
                 self.json_response({"error": "NHC feed unavailable", "detail": str(error)}, HTTPStatus.BAD_GATEWAY)
+            return
+        if route == "/api/site-mode":
+            payload: dict[str, Any] = {"storm_watch": "off", "headline": "Florida Signal Storm Watch", "editor_note": "", "updated_at": None}
+            try:
+                loaded = json.loads(SITE_MODE_PATH.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    payload.update(loaded)
+            except (OSError, json.JSONDecodeError):
+                pass
+            if STORM_MODE_OVERRIDE in {"on", "off"}:
+                payload["storm_watch"] = STORM_MODE_OVERRIDE
+                payload["control_source"] = "environment"
+            else:
+                payload["control_source"] = "site-mode"
+            self.json_response(payload)
             return
         if route == "/api/meetings":
             self.json_response(meeting_payload())
@@ -654,6 +793,41 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         route = self.path.split("?", 1)[0]
+        if route == "/api/events":
+            try:
+                content_length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                content_length = 0
+            if content_length <= 0 or content_length > 4096:
+                self.json_response({"error": "Invalid event body"}, HTTPStatus.BAD_REQUEST)
+                return
+            try:
+                payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                self.json_response({"error": "Invalid JSON"}, HTTPStatus.BAD_REQUEST)
+                return
+            event_name = str(payload.get("event", "")).strip().lower()
+            page_path = str(payload.get("page", "/")).strip()[:300]
+            session_id = re.sub(r"[^a-zA-Z0-9_-]", "", str(payload.get("session_id", "")))[:80]
+            if not re.fullmatch(r"[a-z0-9_]{2,64}", event_name) or not page_path.startswith("/"):
+                self.json_response({"error": "Invalid event"}, HTTPStatus.UNPROCESSABLE_ENTITY)
+                return
+            allowed_keys = {"action", "placement", "record_type", "source", "mode", "device", "section", "result_count", "share_type", "page_name", "status"}
+            incoming = payload.get("properties") if isinstance(payload.get("properties"), dict) else {}
+            properties: dict[str, Any] = {}
+            for key, value in incoming.items():
+                if key not in allowed_keys or not isinstance(value, (str, int, float, bool)):
+                    continue
+                properties[key] = value[:120] if isinstance(value, str) else value
+            created_at = datetime.now(timezone.utc).isoformat()
+            with sqlite3.connect(DB_PATH) as connection:
+                connection.execute(
+                    "insert into analytics_events (event_name, page_path, session_id, properties_json, created_at) values (?, ?, ?, ?, ?)",
+                    (event_name, page_path, session_id or None, json.dumps(properties, separators=(",", ":")), created_at),
+                )
+                connection.commit()
+            self.json_response({"ok": True}, HTTPStatus.CREATED)
+            return
         if route != "/api/subscribe":
             self.json_response({"error": "Not found"}, HTTPStatus.NOT_FOUND)
             return

@@ -24,6 +24,8 @@ const cards = [
   ["storm-window", "Florida Signal storm window"],
   ["meetings-watch", "Public + industry meeting watch"]
 ];
+const requestedSlugs = new Set(String(process.env.FLORIDA_SIGNAL_EXPORT_SLUGS || "").split(",").map((value) => value.trim()).filter(Boolean));
+const exportCards = requestedSlugs.size ? cards.filter(([slug]) => requestedSlugs.has(slug)) : cards;
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, function (character) {
@@ -40,6 +42,7 @@ function shareDocument(slug, title) {
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Florida Signal · ${escapeHtml(title)}</title>
 <meta name="description" content="${escapeHtml(description)}">
+<meta name="author" content="Graham &amp; Gold LLC"><meta name="publisher" content="Graham &amp; Gold LLC"><meta name="robots" content="index,follow,max-image-preview:large">
 <meta property="og:type" content="article"><meta property="og:site_name" content="Florida Signal">
 <meta property="og:title" content="Florida Signal · ${escapeHtml(title)}">
 <meta property="og:description" content="${escapeHtml(description)}">
@@ -47,6 +50,7 @@ function shareDocument(slug, title) {
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Florida Signal · ${escapeHtml(title)}"><meta name="twitter:image" content="${imageUrl}">
 <meta http-equiv="refresh" content="0;url=${destination}">
 <link rel="canonical" href="${publicUrl}/graphics.html?graphic=${slug}#${slug}">
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png"><link rel="apple-touch-icon" sizes="180x180" href="../assets/apple-touch-icon.png">
 </head><body><p><a href="${destination}">Open the cited Florida Signal graphic →</a></p></body></html>\n`;
 }
 
@@ -54,7 +58,7 @@ function shareDocument(slug, title) {
   fs.mkdirSync(outputDir, { recursive: true });
   fs.mkdirSync(shareDir, { recursive: true });
   const browser = await chromium.launch();
-  for (const [slug, title] of cards) {
+  for (const [slug, title] of exportCards) {
     const page = await browser.newPage({ viewport: { width: 1200, height: 820 }, deviceScaleFactor: 1 });
     await page.goto(baseUrl + "/graphics.html?embed=" + slug, { waitUntil: "networkidle", timeout: 60000 });
     await page.waitForTimeout(2200);
