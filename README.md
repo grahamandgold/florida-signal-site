@@ -1,5 +1,10 @@
 # Florida Signal
 
+**New here, human or agent? Read [`FLORIDA_SIGNAL_VERIFIED_CHECKPOINT_2026-07-19.md`](FLORIDA_SIGNAL_VERIFIED_CHECKPOINT_2026-07-19.md) first.**
+It is the verified front door: authorities, current branch and PR, what is deployed, what is
+database-applied, what is scheduled, what is local-only, and what needs Andy's approval.
+**The scorer and collectors are not in this repository** — they live in `grahamandgold/florida-signal`.
+
 Florida Signal is Broward-wide, source-first development intelligence launching city by city. Fort Lauderdale is the first live desk. Every public content URL is scoped under `/fort-lauderdale/`; other Broward municipality paths use one shared “coming soon” template without dates or coverage promises.
 
 ## Run locally

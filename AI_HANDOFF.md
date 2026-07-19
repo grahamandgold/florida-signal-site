@@ -2,6 +2,17 @@
 
 Last verified: July 19, 2026 (Claudette session — see `CLAUDETTE_HANDOFF_2026-07-19.md` for the full launch-day changelog)
 
+> ## ⇢ START HERE FIRST: `FLORIDA_SIGNAL_VERIFIED_CHECKPOINT_2026-07-19.md`
+> Every claim in that document was verified directly against GitHub, Supabase, the DigitalOcean
+> runtime, this Mac and Google Drive. It tells you which authority owns what, the current branch
+> and PR, what is deployed, what is database-applied, what is scheduled, what is local-only, and
+> what requires Andy's approval. **Read it before acting on anything below.**
+>
+> Two facts it exists to prevent you getting wrong:
+> 1. The scorer and collectors are **not in this repository** — they are in `grahamandgold/florida-signal`.
+> 2. Andy's Mac runs **one** loaded agent (Acclaim). The 19 other plists on disk do **not** run.
+>    Check with `launchctl list`, never `ls`.
+
 ## Product contract
 
 Florida Signal is Broward-wide, source-first development intelligence launching city by city. Fort Lauderdale is the first live desk. The product turns public records into useful, place-specific signals without overstating coverage, inventing interpretation or hiding the source window.

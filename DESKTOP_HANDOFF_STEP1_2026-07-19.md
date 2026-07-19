@@ -1,3 +1,9 @@
+> **SUPERSEDED — PRESERVED FOR HISTORY.** Superseded 2026-07-19 by
+> `FLORIDA_SIGNAL_VERIFIED_CHECKPOINT_2026-07-19.md`. Reason: parcel counts and map
+> status changed materially after this was written (parcel import completed at
+> 532,470; deed layer connected). This document was **historically correct at the
+> time** and is kept as evidence of the state on the morning of 2026-07-19.
+
 # FLORIDA SIGNAL — STEP 1 HANDOFF (visual inspection + status)
 **Sun July 19, 2026 · Claude/Cowork session · local branch `claudette/launch-day` → draft PR #1 (`codex/florida-signal-rebuild`)**
 *No production changes. Nothing merged or deployed. Local CSS edits below are NOT pushed — Andy pushes.*

@@ -9,3 +9,6 @@ cms/data/*.sqlite-*
 tmp/
 .env
 shots/
+
+# Generated visual-QA capture sets (large PNG contact sheets). Kept locally, not in git.
+audit/visual/
