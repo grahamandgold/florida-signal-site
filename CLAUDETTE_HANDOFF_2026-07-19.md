@@ -105,3 +105,65 @@ Event dates over pull dates · state windows and caps · no source, no claim · 
 **Automation inventory delta:** Acclaim preliminary → native Mac LaunchAgent 12:00 + 19:00 (primary) + Claude task (active fallback); reconciliation → Supabase pg_cron 10:00 UTC; nightly health task now covers SFTP catch-up + Acclaim + social export.
 
 **Status labels:** Acclaim: CURRENT DIGITALOCEAN EGRESS BLOCKED — runs on residential Mac (working). Social export: CURRENTLY MAC-LOCAL — server-side rendering migration not yet designed.
+
+---
+## Addendum — Acclaim completeness + authority checkpoint (2026-07-19 late)
+
+### OPERATIONAL STATUS: **OPERATIONAL — COMPLETE DAILY COVERAGE** (proven on one heavy day; remaining backlog dates recollecting)
+
+**Root cause of the "3-page halt" (resolved):** it was never a pagination bug. The Telerik grid's
+default page size is **5 rows**; the harvester's 60-page safety cap therefore yielded exactly
+60 × 5 = **300 rows** on every heavy date. The grid offers page sizes 25/50/100/150/200/250/**500**.
+The harvester now sets **500** after each search, so a ~2,900-record day is **6 pages**.
+
+**Pagination hardening (ops/mac/acclaim_harvest.applescript):** reads the displayed total and
+computes expected pages; re-queries DOM after every AJAX refresh; advances via the **pager-scoped**
+`.t-pager .t-arrow-next` (the date-picker has an identical arrow — previously ambiguous); waits for
+the first row's instrument number to actually change (true AJAX completion, not a fixed sleep);
+detects repeated pages and exits nonzero; honours a configurable cap but returns
+`INCOMPLETE|pages|total|reason` when the cap is hit. Returns `OK|pages|total`, `EMPTY|0|0`, or
+`INCOMPLETE|...`. `acclaim_pull.sh` marks a date **done only when** status=OK **and** rows ≥ displayed
+total (or a verified EMPTY), otherwise records `incomplete`, sets a nonzero exit, and stops so the
+next run resumes that date.
+
+**Heavy-day proof — 2026-07-13:** Acclaim displayed **2,909 records / 6 pages**; processed **6/6
+pages**; extracted **2,909 rows**; **2,909 unique instruments**; 0 duplicates; 0 malformed;
+0 missing-field rows; first instrument `120977412`, last `120980320`; inserted **2,609 new**
+(300 already present from the earlier partial run, correctly deduped); **rerun inserted 0**.
+No result cap or partitioning required — full retrieval is possible via page size 500.
+
+**Idempotency bug found and fixed during proof:** the existing-key pre-filter hit PostgREST's
+1,000-row response cap, so a rerun attempted duplicate inserts (HTTP 409). `acclaim_upsert.py` now
+pages the lookup with `Range` headers. Post-fix rerun: "all 2909 harvested rows already present".
+
+**Phase 3 correction:** 2026-07-14/15/16/17 (300 rows each under the old cap) were reset to
+`incomplete` in state and are being fully recollected oldest-first by the LaunchAgent; 07-11/07-12/
+07-18 are verified 0-record weekend dates. Partially harvested dates are **not** marked complete.
+
+### DECISION LOG
+Temporarily approve `com.floridasignal.acclaim` as a sixth Florida Mac agent solely for twice-daily
+preliminary Acclaim collection until a dedicated residential runner is deployed and verified.
+(The five previously approved Florida Mac agents remain enabled and untouched.)
+
+### MASTER TO-DO
+Move the Acclaim LaunchAgent to a dedicated residential runner after three complete scheduled runs
+and verified reconciliation.
+
+### RISK REGISTER
+The preliminary same-day pipeline remains dependent on the Mac, logged-in user session, Chrome,
+Apple Events permissions, and complete Telerik pagination.
+
+### Mac agent inventory (6)
+1–5. Previously approved Florida Mac agents (Claude scheduled tasks) — unchanged, still enabled.
+6. **`com.floridasignal.acclaim`** — LaunchAgent, `~/Library/LaunchAgents/`, twice daily 12:00 + 19:00,
+   ExecStart `ops/mac/acclaim_pull.sh`, logs `~/Library/Logs/florida-acclaim.log`, state
+   `~/Library/Application Support/FloridaSignal/acclaim_state.json`.
+   Rollback: `launchctl bootout gui/$(id -u)/com.floridasignal.acclaim` + re-enable Claude task
+   `broward-sameday-recordings` (kept ENABLED as fallback until three complete scheduled runs).
+
+### Supabase source-of-truth
+Live reconciliation objects are now tracked at `supabase/migrations/` (001 table+policy+indexes,
+002 reconciliation columns+function+pg_cron, README inventory). Verified live-vs-GitHub: columns,
+indexes, single SELECT policy, 0 triggers, cron `0 10 * * *` active invoking only
+`reconcile_clerk_preliminary()`; tracked SQL contains **no** writes to authoritative
+`broward_clerk_records_*` tables and **no** secrets. Rollback SQL documented, not executed.

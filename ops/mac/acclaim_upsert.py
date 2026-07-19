@@ -41,13 +41,22 @@ def sb_headers():
 # Pre-filter existing (record_date, instrument_number) so re-runs never duplicate and never
 # depend on a conflict target. The partial unique index still guards against races.
 existing = set()
+PAGE = 1000  # PostgREST caps rows per response; page through with Range headers.
 for rd in sorted({r["record_date"] for r in rows}):
-    url = (SB + "/rest/v1/broward_clerk_preliminary?select=instrument_number"
-           "&record_date=eq." + rd + "&limit=100000")
-    req = urllib.request.Request(url, headers=sb_headers())
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        for e in json.loads(resp.read()):
+    offset = 0
+    while True:
+        url = (SB + "/rest/v1/broward_clerk_preliminary?select=instrument_number"
+               "&record_date=eq." + rd + "&order=instrument_number")
+        req = urllib.request.Request(url, headers=sb_headers())
+        req.add_header("Range-Unit", "items")
+        req.add_header("Range", "%d-%d" % (offset, offset + PAGE - 1))
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            batch = json.loads(resp.read())
+        for e in batch:
             existing.add((rd, str(e["instrument_number"])))
+        if len(batch) < PAGE:
+            break
+        offset += PAGE
 
 fresh = [r for r in rows if (r["record_date"], r["instrument_number"]) not in existing]
 if not fresh:

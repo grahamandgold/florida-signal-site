@@ -8,6 +8,7 @@ import json, os, sys, datetime
 statef, iso, status, pages, found, inserted, verified_max = (
     sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]),
     int(sys.argv[5]), int(sys.argv[6]), sys.argv[7])
+total_shown = int(sys.argv[8]) if len(sys.argv) > 8 else 0
 
 st = {"dates": {}}
 if os.path.exists(statef):
@@ -19,7 +20,7 @@ st.setdefault("dates", {})
 
 now = datetime.datetime.now(datetime.timezone.utc).isoformat()
 st["dates"][iso] = {
-    "status": status, "pages": pages, "found": found,
+    "status": status, "pages": pages, "found": found, "total_shown": total_shown,
     "inserted": inserted, "skipped": max(0, found - inserted), "at": now,
 }
 st["last_run_at"] = now

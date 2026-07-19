@@ -10,7 +10,7 @@ LOG="/Users/gillfillan/Library/Logs/florida-acclaim.log"
 STATEDIR="/Users/gillfillan/Library/Application Support/FloridaSignal"
 STATE="$STATEDIR/acclaim_state.json"
 mkdir -p "$STATEDIR"
-MAXPAGES="${ACCLAIM_MAX_PAGES:-60}"
+MAXPAGES="${ACCLAIM_MAX_PAGES:-40}"   # 40 pages x 500 rows = 20,000 rows/day capacity
 MAXDATES="${ACCLAIM_MAX_DATES:-8}"
 
 # Secrets: set -a exports sourced KEY=value pairs to child processes (osascript/python).
@@ -69,11 +69,11 @@ while IFS= read -r LINE; do
   OUT="/tmp/fs_acclaim_${ISO}.ndjson"; : > "$OUT"
   log "harvest $ISO ($TD)"
   RES=$(/usr/bin/osascript "$DIR/acclaim_harvest.applescript" "$TD" "$OUT" "$MAXPAGES" 2>>"$LOG")
-  if [ "$RES" != "OK" ] && [ "$RES" != "EMPTY" ]; then
-    log "HARVEST FAILED $ISO: $RES"; FAIL=1
-    /usr/bin/python3 "$DIR/acclaim_state.py" "$STATE" "$ISO" incomplete 0 0 0 "$VERIFIED_MAX" 2>>"$LOG"
-    break   # resume from this date next run
-  fi
+  STATUS="${RES%%|*}"
+  PAGES_DONE=$(echo "$RES" | cut -d'|' -f2); PAGES_DONE="${PAGES_DONE:-0}"
+  TOTAL_SHOWN=$(echo "$RES" | cut -d'|' -f3); TOTAL_SHOWN="${TOTAL_SHOWN:-0}"
+  REASON=$(echo "$RES" | cut -d'|' -f4)
+  log "harvest result $ISO: status=$STATUS pages=$PAGES_DONE total=$TOTAL_SHOWN ${REASON:+reason=$REASON}"
   FOUND=$(wc -l < "$OUT" | tr -d ' ')
   INS=0; SKIP=0
   if [ "$FOUND" -gt 0 ]; then
@@ -82,11 +82,22 @@ while IFS= read -r LINE; do
     INS=$(echo "$UPOUT" | grep -oE 'inserted [0-9]+' | grep -oE '[0-9]+' | head -1); INS="${INS:-0}"
     SKIP=$(echo "$UPOUT" | grep -oE 'already present\)?' >/dev/null && echo "$UPOUT" | grep -oE '[0-9]+ already present' | grep -oE '[0-9]+' | head -1 || echo 0); SKIP="${SKIP:-0}"
   fi
-  PAGES=$(( (FOUND + 99) / 100 ))
-  /usr/bin/python3 "$DIR/acclaim_state.py" "$STATE" "$ISO" done "$PAGES" "$FOUND" "$INS" "$VERIFIED_MAX" 2>>"$LOG"
-  log "date done $ISO: found=$FOUND inserted=$INS pages~$PAGES"
-  LAST="$ISO"
+  # A date is COMPLETE only when every page was processed and the row count matches the
+  # total Acclaim displayed (allowing rows the grid shows without an instrument number).
+  DSTATUS=incomplete
+  if [ "$STATUS" = "EMPTY" ]; then
+    DSTATUS=done
+  elif [ "$STATUS" = "OK" ] && [ "$FOUND" -ge "$TOTAL_SHOWN" ]; then
+    DSTATUS=done
+  else
+    FAIL=1
+    log "DATE INCOMPLETE $ISO: status=$STATUS found=$FOUND of $TOTAL_SHOWN ${REASON:+($REASON)}"
+  fi
+  /usr/bin/python3 "$DIR/acclaim_state.py" "$STATE" "$ISO" "$DSTATUS" "$PAGES_DONE" "$FOUND" "$INS" "$VERIFIED_MAX" "$TOTAL_SHOWN" 2>>"$LOG"
+  log "date $DSTATUS $ISO: found=$FOUND/$TOTAL_SHOWN inserted=$INS pages=$PAGES_DONE"
+  [ "$DSTATUS" = "done" ] && LAST="$ISO"
   rm -f "$OUT" "$OUT.page"
+  if [ "$DSTATUS" != "done" ]; then break; fi   # stop; resume this date next run
 done <<< "$TARGETS"
 
 log "=== acclaim pull end (fail=$FAIL first=$FIRST last=$LAST) ==="
