@@ -341,3 +341,52 @@ Readout distinguishes **in this view / loaded / match current filters / eligible
 - Complete meeting-document ingestion after existing logic and municipality coverage are inventoried.
 - Implement controlled source-health, reconciliation, Signal-refresh and publication-freshness loops.
 - Finish CMS review UI actions (approve/hold/reject currently service-role).
+
+---
+## Addendum — Parcel authority import + Clerk linkage by document type (2026-07-19, late)
+
+### DECISION LOG
+Broward parcel/folio identifiers are canonical **12-character ALPHANUMERIC** strings (e.g. `484306BH0010`).
+Letters and leading zeros are significant. **Digits-only normalization is prohibited** — it strips letters
+and collapses distinct parcels (measured: 1,295 collision groups spanning 5,056 folios).
+The prior **1,096 / 7.9%** linkage figure is **SUPERSEDED — PRESERVED FOR HISTORY**: it contained false
+collisions. The corrected pre-import baseline was **737 exact matches (~5.0%)**.
+
+### Import state (verified)
+Official source count **554,358**. Loaded **404,082 parcels (72.9%)** into `broward_parcel_geography`.
+Zero null coordinates. Zero duplicate source OBJECTIDs (rows = distinct OBJECTIDs at every check).
+Import runs recorded in `broward_parcel_import_runs`; **1 run status=COMPLETE** (tail range only —
+NOT whole-county coverage). Remaining offsets still need sweeping before a whole-county COMPLETE
+can be claimed. **No recurring parcel schedule was created.**
+
+### Clerk linkage by document type — STRUCTURAL LIMIT FOUND
+| Doc type | Instruments | With valid folio | Mappable | Unique parcels |
+|---|---:|---:|---:|---:|
+| **D — deeds** | 15,487 | 15,137 | **7,903** | 7,592 |
+| EAS — easements | 502 | 471 | 386 | 379 |
+| TSD | 1,897 | 51 | 23 | 11 |
+| NOT | 2,225 | 27 | 17 | 16 |
+| **M — mortgages** | 10,357 | **0** | **0** | 0 |
+| **LIE — liens** | 7,388 | **0** | **0** | 0 |
+| **LP — lis pendens** | 1,281 | **0** | **0** | 0 |
+| **FJ — final judgments** | 14,669 | **0** | **0** | 0 |
+| AFF / CP / CPX / DC / CMV / FJX | 17,995 | 0 | 0 | 0 |
+
+**Root cause:** the Clerk's `lgl-ver` (legal) file carries `parcel_id` almost exclusively for
+**deed-type** instruments. Mortgages, liens, lis pendens and judgments have **no legal/parcel rows at
+all** in the source. This is a **source-structure limitation, not a normalization or parcel-coverage
+problem** — no amount of parcel geography fixes it.
+
+### RISK REGISTER (verified)
+- Digits-only folio normalization collapsed distinct alphanumeric parcels and produced false matches.
+  **Persisted impact: NONE** — the rule existed only in read-only audit SQL (verified: 0 Clerk rows in
+  `map_signal_candidates`, 0 reconciled preliminary rows, 0 conflict rows). No production correction needed.
+- Mortgage/lien/lis-pendens mapping cannot be achieved through the Clerk legal file; it requires a
+  separate verified relationship (e.g. instrument→instrument links in `broward_clerk_records_link`,
+  or BCPA per-folio lookup). Unverified as of this checkpoint.
+
+### MASTER TO-DO
+- Finish sweeping remaining parcel offsets until whole-county page coverage is provably COMPLETE.
+- Investigate `broward_clerk_records_link` as a verified path from mortgages/liens/LP to a deed's parcel.
+- Audit Michigan and Florida parcel/folio normalization paths separately — identifier rules do not transfer.
+- Stratified 50-record quality verification before any Clerk record becomes map-eligible.
