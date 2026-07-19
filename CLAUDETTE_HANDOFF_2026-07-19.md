@@ -69,3 +69,20 @@ Both edge functions use a private `?key=` (custom auth, verify_jwt off). All new
 
 ## The rules that still govern everything
 Event dates over pull dates · state windows and caps · no source, no claim · preliminary ≠ verified (Acclaim rows carry `source='acclaimweb-public-search'` until the matching SFTP business date lands) · human editor gates all public briefs (Data Wire) · droplet is production, enrich additively, never delete.
+
+---
+## Addendum — Clerk catch-up migration closure (2026-07-19 ~13:15 EDT)
+
+**DECISION LOG:** The verified Broward Clerk catch-up now runs on DigitalOcean through a GitHub-tracked systemd timer and dedicated Python virtual environment. The previous Claude-scheduled catch-up is disabled and retained only for rollback.
+
+**Facts:** units + script installed on florida-signal-runtime, byte-identical to repo @ `dcbf6b4` (sha256 5c5f1b14… / e082d00a… / 447350bd…). Venv `/srv/grahamandgold/florida-signal/.venv-clerk-catchup` (Python 3.12.3, paramiko==5.0.0 pinned in ops/droplet/requirements-clerk-catchup.txt; no /home/andy/.local dependence). Unit hardened: User/Group=andy, WorkingDirectory, EnvironmentFile, NoNewPrivileges, PrivateTmp, ProtectSystem=full, ProtectHome=true, UMask=0027, TimeoutStartSec=900, Restart=no; timer Persistent=true + RandomizedDelaySec=120; next fire Mon 2026-07-20 ~14:11 EDT. Manual venv run: Result=success/exit 0, "Nothing to ingest; verified table matches server" (DB max business_date 2026-07-10 = server release; doc count 149,999 unchanged — no deletes/overwrites). Failure fixture (no env): systemd recorded exit-code/status=1. Journal contains zero secret strings. Install history disclosure: units first installed + manually run 12:59–13:00 EDT by operator via Codex (between shadow runs 4 and 5), one unit revision (User=andy) after first-start failure; hardened install from GitHub at ~13:12 EDT with operator authorization.
+
+**SHADOW-GATE DISCLOSURE (for run-5 report):** An unrelated Clerk catch-up unit was installed and manually executed on the host between shadow runs 4 and 5. It uses disjoint schedules (14:10 vs 05:45), no shared locks (scorer: /tmp/florida-signals-shadow.lock), disjoint code paths and data outputs (scorer: SQLite/CSV, no EnvironmentFile). The change is disclosed; scorer evidence must NOT be described as occurring on an unchanged host.
+
+**MASTER TO-DO:** Verify the next scheduled weekday Clerk catch-up (Mon 2026-07-20 ~14:11 EDT) and confirm the nightly health check reports its row-level result. Later: evaluate dedicated least-privilege service account; decide venv ownership pattern for other droplet jobs.
+
+**RISK REGISTER:** (1) Service runs as the general `andy` production operator account (passwordless sudo on host); dedicated least-privilege account remains a future hardening item after full path/permission mapping. (2) RESOLVED: user-site paramiko dependence removed via pinned venv.
+
+**Automation inventory changes:** Clerk SFTP catch-up → droplet systemd (production path); Claude task `broward-clerk-catchup-sync` DISABLED (emergency rollback only); nightly `regenerate-social-graphics` task now doubles as the Clerk health audit (alerts on timer inactive, failure, 3-day silence, or freshness lag).
+
+**Status labels:** Acclaim: CURRENT DIGITALOCEAN EGRESS BLOCKED — alternative execution architecture unresolved. Social export: CURRENTLY MAC-LOCAL — server-side rendering migration not yet designed.
