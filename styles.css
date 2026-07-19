@@ -21,7 +21,7 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; overflow-x: clip; }
 body {
   margin: 0;
   overflow-x: clip;
@@ -802,12 +802,6 @@ body.brief-prompt-open { overflow: hidden; }
 .map-toolbar p.data-label { margin: 0; color: var(--ink); }
 .map-toolbar a { color: var(--teal-dark); font-size: 12px; font-weight: 700; text-decoration: none; }
 .map { height: 585px; background: #e8f0ec; }
-.map-signal-control { position: absolute; z-index: 640; top: 15px; left: 50%; display: flex; align-items: center; gap: 11px; margin: 0 !important; padding: 7px 16px 7px 7px; border: 1px solid rgba(7,27,50,.16); border-radius: 999px; background: rgba(255,255,255,.95); color: var(--ink); box-shadow: 0 12px 34px rgba(7,27,50,.2); backdrop-filter: blur(12px); text-decoration: none; transform: translateX(-50%); }
-.map-signal-control__mark { width: 42px; height: 42px; display: grid !important; place-items: center; overflow: hidden; border: 1px solid rgba(23,103,255,.25); border-radius: 50%; background: radial-gradient(circle at 32% 24%, #fff 0 18%, #e6f8f5 52%, #d3edf2 100%); box-shadow: inset 0 0 14px rgba(255,255,255,.9), 0 7px 18px rgba(7,27,50,.13); }
-.map-signal-control img { width: 31px; height: 34px; position: static !important; object-fit: contain; filter: drop-shadow(0 5px 7px rgba(7,27,50,.23)); }
-.map-signal-control > span:last-child { display: grid; gap: 2px; padding-right: 2px; }
-.map-signal-control b { font-size: 10px; letter-spacing: .13em; line-height: 1; text-transform: uppercase; }
-.map-signal-control small { color: var(--teal-dark); font-size: 7px; font-weight: 800; letter-spacing: .11em; line-height: 1; text-transform: uppercase; }
 .map-credit { margin: 0; padding: 9px 16px; color: #7f9198; font-size: 9px; border-top: 1px solid var(--line); }
 .neighborhood-rank { padding: 32px 27px; border-left: 1px solid var(--line); }
 .neighborhood-rank h3 { margin: 0 0 22px; font-family: var(--serif); font-size: 30px; font-weight: 500; line-height: 1.05; }
@@ -1817,7 +1811,6 @@ body[data-page="storm"] .page-hero__dek { max-width: 620px; font-size: 16px; lin
 }
 
 @media (max-width: 620px) {
-  .map-signal-control { top: 9px; }
   .surface-publish--map,
   .surface-publish--overlay,
   .map-publish-tools--map { top: 50%; right: 8px; left: auto; width: 39px; transform: translateY(-50%); }
@@ -2541,7 +2534,6 @@ a.brand { width: auto; max-width: none; }
 
 
 /* Map key + refreshed map brand */
-.map-signal-control__mark img { width: 30px; height: auto; }
 .map-key { position: absolute; z-index: 640; left: 12px; bottom: 12px; display: flex; flex-direction: column; gap: 4px; padding: 10px 13px; border: 1px solid rgba(7,27,50,.16); background: rgba(255,255,255,.95); backdrop-filter: blur(10px); box-shadow: 0 12px 30px rgba(7,27,50,.18); font-size: 10px; color: var(--ink-2); }
 .map-key b { font-family: "Montserrat", var(--sans); font-size: 8.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--ink); }
 .map-key span { display: flex; align-items: center; gap: 7px; }
@@ -2653,26 +2645,8 @@ a.brand { width: auto; max-width: none; }
   .map-publish-tools .publish-social, .publish-social { width: 34px; min-width: 34px !important; height: 34px; min-height: 34px !important; }
 }
 
-/* ===== Map brand: the crown jewel — centered, larger, mirrors the page lockup ===== */
-.map-signal-control { position: absolute; z-index: 650; top: 18px; left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 14px; margin: 0 !important; padding: 12px 26px 12px 16px;
-  border: 1px solid rgba(8,42,84,.14); border-radius: 0; background: rgba(255,255,255,.97);
-  box-shadow: 0 18px 44px rgba(8,42,84,.20); backdrop-filter: blur(14px); text-decoration: none; }
-.map-signal-control:hover { border-color: var(--blue-bright); }
-.map-signal-control__mark img { width: 46px; height: auto; display: block; }
-.map-signal-control__words { display: flex; flex-direction: column; border-left: 2px solid #c9d6ea; padding-left: 14px; }
-.map-signal-control__words b { font-family: "Montserrat", var(--sans); font-size: 19px; font-weight: 800;
-  letter-spacing: .06em; line-height: 1; color: var(--ink); text-transform: uppercase; white-space: nowrap; }
-.map-signal-control__words b i { font-style: normal; color: var(--blue-bright); }
-.map-signal-control__words small { margin-top: 5px; font-family: "Montserrat", var(--sans); font-size: 8.5px;
-  font-weight: 600; letter-spacing: .3em; line-height: 1; color: #48628c; text-transform: uppercase; white-space: nowrap; }
 
 @media (max-width: 620px) {
-  .map-signal-control { top: 12px; gap: 10px; padding: 9px 16px 9px 11px; }
-  .map-signal-control__mark img { width: 34px; }
-  .map-signal-control__words { padding-left: 10px; }
-  .map-signal-control__words b { font-size: 14px; }
-  .map-signal-control__words small { font-size: 7px; letter-spacing: .2em; }
 }
 
 /* Map share rail: keep it horizontal and inside the map (was stacking 274px tall and clipping
@@ -2721,48 +2695,35 @@ a.brand { width: auto; max-width: none; }
 }
 
 /* ===== Lockup parity: tagline justifies to the exact width of the wordmark, header AND map ===== */
-.brand__words, .map-signal-control__words { display: inline-block; width: max-content; }
-.brand__name, .map-signal-control__words b { display: block; white-space: nowrap; }
-.brand__tag, .map-signal-control__words small {
+.brand__words{ display: inline-block; width: max-content; }
+.brand__name { display: block; white-space: nowrap; }
+.brand__tag {
   display: block; width: 100%;
   text-align: justify; text-align-last: justify; -moz-text-align-last: justify;
   letter-spacing: .04em; white-space: normal;
 }
 .brand__tag::before, .brand__tag::after { content: none; }   /* rules were breaking the justify */
 /* Map emblem larger so the mark holds its own against the wordmark */
-.map-signal-control__mark img { width: 58px; }
-@media (max-width: 620px) { .map-signal-control__mark img { width: 42px; } }
 
 /* Tagline: even letter tracking that spans the full wordmark width (justify was gapping the two
    words to the edges). Tracking measured against the rendered wordmark: header 197.1/24 chars,
    map 187.3/24 chars. Trailing space compensated so the optical block stays centred. */
-.brand__tag, .map-signal-control__words small {
+.brand__tag {
   text-align: center; text-align-last: center; -moz-text-align-last: center;
   white-space: nowrap; box-sizing: border-box;
 }
 .brand__tag { letter-spacing: 3.6px; text-indent: 3.6px; }        /* fills 197px wordmark */
-.map-signal-control__words small { letter-spacing: 3.05px; text-indent: 3.05px; } /* fills 187px */
 @media (max-width: 620px) {
   .brand__tag { letter-spacing: 2.6px; text-indent: 2.6px; }
-  .map-signal-control__words small { letter-spacing: 2.2px; text-indent: 2.2px; }
 }
 
 /* Lockup: JS measures and sets exact tracking; CSS only guarantees fit + a larger wordmark. */
-.brand__tag, .map-signal-control__words small { letter-spacing: normal; text-indent: 0; overflow: visible; }
 .brand__name { font-size: 22px; }
 .brand__words { max-width: none; }
 .site-header__inner .brand { flex: 0 0 auto; }
 @media (max-width: 620px) { .brand__name { font-size: 17px; } }
 
 /* Map lockup: bare emblem — no circle, ring, gradient plate or shadow (matches the site header). */
-.map-signal-control__mark {
-  width: auto !important; height: auto !important;
-  display: block !important; place-items: initial !important;
-  overflow: visible !important; border: 0 !important; border-radius: 0 !important;
-  background: none !important; box-shadow: none !important;
-}
-.map-signal-control__mark img { width: 58px; height: auto; display: block; }
-@media (max-width: 620px) { .map-signal-control__mark img { width: 42px; } }
 .signal-readout { margin: 0; font-size: 12px; color: var(--ink-2); line-height: 1.5; }
 .signal-readout strong { font-family: "Montserrat", var(--sans); font-size: 15px; color: var(--ink); }
 .signal-readout b { color: var(--blue-bright); }
@@ -2792,20 +2753,27 @@ a.brand { width: auto; max-width: none; }
 @media (max-width: 620px) {
   .signal-popup .leaflet-popup-content { max-height: 52vh; }
   /* On a phone the badge and the card cannot share the top of the map. */
-  .map-signal-control { top: 8px; padding: 5px 12px 5px 5px; }
-  .map-signal-control__mark { width: 34px; height: 34px; }
-  .map-signal-control img { width: 25px; height: 27px; }
 }
 
 
-/* ===== Map brand = the site wordmark (2026-07-19) =====
-   The map used to carry an emblem plus hand-set type, which drifted from the site lockup.
-   It now renders the same asset as the header and footer, so every surface matches. */
-.map-signal-control { padding: 9px 20px; gap: 0; border-radius: 4px; }
+/* ===== MAP BRAND — single source of truth (2026-07-19) =====
+   Every map on the site renders the SAME lockup file as the header and footer.
+   This is the ONLY place .map-signal-control is styled. Earlier there were five scattered
+   rules plus ~29 declarations for a `__mark` / `__words` structure that no longer exists in
+   the DOM; twice today a stale one outranked the live rule and broke the badge. Do not add a
+   competing rule elsewhere — edit this block.
+   Applies to: home-map, signal-spotlight-map, mobile-field-map, full-map, data-room-map,
+   meeting-spotlight-map, agenda-recon-map, storm-spotlight-map. */
+.map-signal-control {
+  position: absolute; z-index: 650; top: 18px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; margin: 0 !important; padding: 9px 20px; gap: 0;
+  border: 1px solid rgba(8,42,84,.14); border-radius: 4px; background: rgba(255,255,255,.97);
+  box-shadow: 0 18px 44px rgba(8,42,84,.20); backdrop-filter: blur(14px); text-decoration: none;
+}
+.map-signal-control:hover { border-color: var(--blue-bright); }
 .map-signal-control img.map-signal-control__lockup { width: clamp(176px, 23vw, 262px); height: auto; aspect-ratio: 1800 / 248; display: block; position: static !important; object-fit: contain; filter: none; }
-.map-signal-control__mark { display: none !important; }
 @media (max-width: 620px) {
-  .map-signal-control { padding: 7px 14px; }
+  .map-signal-control { top: 10px; padding: 7px 14px; }
   .map-signal-control img.map-signal-control__lockup { width: 148px; }
 }
 
