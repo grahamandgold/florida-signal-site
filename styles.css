@@ -2533,3 +2533,29 @@ a.brand { width: auto; max-width: none; }
   .surface-publish--compact a, .surface-publish--compact button { font-size: 9.5px !important; }
   .storm-map-key span, .popup-record-clock { font-size: 10px !important; }
 }
+
+/* ===== Final public-site IA (2026-07-19): nav More menu + credibility elements ===== */
+.nav-more { position: relative; }
+.nav-more > summary { list-style: none; cursor: pointer; font-family: "Montserrat", var(--sans); font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-2); }
+.nav-more > summary::-webkit-details-marker { display: none; }
+.nav-more > summary::after { content: " ▾"; font-size: 9px; }
+.nav-more__panel { position: absolute; right: 0; top: calc(100% + 12px); z-index: 60; min-width: 220px; display: flex; flex-direction: column; background: #fff; border: 1px solid var(--line); box-shadow: 0 18px 44px rgba(8,42,84,.14); }
+.nav-more__panel a { padding: 13px 16px; border-bottom: 1px solid var(--line); }
+.nav-more__panel a:last-child { border-bottom: 0; }
+.nav-more__panel a::after { display: none; }
+.hero__credibility { margin: 14px 0 0; max-width: 520px; padding-left: 12px; border-left: 3px solid var(--teal); color: var(--muted); font-size: 12.5px; }
+.credibility__points { margin: 26px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.credibility__points li { background: #fff; padding: 18px 20px; font-size: 13px; color: var(--ink-2); }
+.credibility__points strong { display: block; margin-bottom: 3px; color: var(--ink); font-family: "Montserrat", var(--sans); font-size: 14px; }
+@media (max-width: 900px) { .credibility__points { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media (max-width: 620px) {
+  .credibility__points { grid-template-columns: 1fr; }
+  .nav-more { width: 100%; }
+  .nav-more > summary { display: none; }
+  .nav-more__panel { position: static; min-width: 0; border: 0; box-shadow: none; background: transparent; }
+  .nav-more__panel a { width: 100%; padding: 18px 0; border-bottom: 1px solid var(--line); font-family: var(--serif); font-size: 31px; font-weight: 500; }
+}
+.site-header__inner { flex-wrap: nowrap; }
+.site-nav { flex-wrap: nowrap; white-space: nowrap; }
+.site-nav .nav-live-map { background: var(--ink); color: #fff; padding: 9px 14px; }
+.site-nav .nav-live-map::after { display: none; }

@@ -19,6 +19,7 @@
   const FIELD_BRIEF_STORAGE_KEY = "florida-signal-field-brief-v1";
   const PUBLIC_ROUTES = {
     home: CITY_ROOT + "/",
+    signals: CITY_ROOT + "/signals/",
     briefs: CITY_ROOT + "/briefs/",
     neighborhoods: CITY_ROOT + "/neighborhoods/",
     broward: CITY_ROOT + "/broward-record/",
@@ -441,7 +442,8 @@
       if (cmsNote) cmsNote.textContent = "Florida Desk · approved-only public feed · sources open with each item";
       return;
     }
-    const candidates = state.featured.length ? state.featured.slice(0, 4) : state.records.slice(0, 4);
+    const signalCap = (document.body.getAttribute("data-page") === "signals") ? 40 : 4;
+    const candidates = state.featured.length ? state.featured.slice(0, signalCap) : state.records.slice(0, signalCap);
     if (!candidates.length) {
       list.innerHTML = '<div class="loading-row">The public feed is temporarily unavailable. No substitute data is being shown.</div>';
       return;
@@ -2196,16 +2198,41 @@
     const navigation = el(".site-nav");
     if (navigation) {
       const page = document.body.getAttribute("data-page");
-      const signalHref = page === "home" ? "#signals" : PUBLIC_ROUTES.home + "#signals";
-      const items = [
-        { href: PUBLIC_ROUTES.neighborhoods + "#full-map", label: "Live map", className: "nav-live-map", current: page === "neighborhoods" },
-        { href: signalHref, label: "Signals", current: page === "home" },
-        { href: PUBLIC_ROUTES.graphics, label: "Data room", current: page === "graphics" },
+      const width = window.innerWidth;
+      let items = [
+        { href: PUBLIC_ROUTES.neighborhoods + "#full-map", label: "Live map", className: "nav-live-map" },
+        { href: PUBLIC_ROUTES.signals, label: "Signals", current: page === "signals" || page === "home" },
+        { href: PUBLIC_ROUTES.neighborhoods, label: "Neighborhoods", current: page === "neighborhoods" },
+        { href: PUBLIC_ROUTES.graphics, label: "Market data", current: page === "graphics" },
+        { href: PUBLIC_ROUTES.broward, label: "Broward record", current: page === "broward" },
         { href: PUBLIC_ROUTES.meetings, label: "Meetings", current: page === "meetings" }
       ];
-      navigation.innerHTML = items.map(function (item) {
+      let moreItems = [
+        { href: PUBLIC_ROUTES.storm, label: "Storm", current: page === "storm" },
+        { href: PUBLIC_ROUTES.method, label: "Method", current: page === "method" },
+        { href: PUBLIC_ROUTES.briefs, label: "Daily Intel Brief", current: page === "briefs" },
+        { href: PUBLIC_ROUTES.brand, label: "Brand + sharing", current: page === "brand-kit" || page === "brand" }
+      ];
+      // Desktop width governance: overflow primaries collapse into More (mobile menu shows everything).
+      if (width > 620) {
+        const demote = function (label) {
+          const index = items.findIndex(function (item) { return item.label === label; });
+          if (index > -1) moreItems.unshift(items.splice(index, 1)[0]);
+        };
+        if (width < 1560) demote("Broward record");
+        if (width < 1340) demote("Market data");
+        if (width < 1120) demote("Neighborhoods");
+      }
+      const link = function (item) {
         return '<a href="' + item.href + '"' + (item.className ? ' class="' + item.className + '"' : '') + (item.current ? ' aria-current="page"' : '') + '>' + item.label + '</a>';
-      }).join("");
+      };
+      navigation.innerHTML = items.map(link).join("") +
+        '<details class="nav-more"><summary aria-label="More sections">More</summary><div class="nav-more__panel">' + moreItems.map(link).join("") + "</div></details>";
+      const moreMenu = el(".nav-more", navigation);
+      if (moreMenu) {
+        if (window.innerWidth <= 620) moreMenu.open = true;
+        document.addEventListener("click", function (event) { if (moreMenu.open && window.innerWidth > 620 && !moreMenu.contains(event.target)) moreMenu.open = false; });
+      }
     }
     button.addEventListener("click", function () {
       const open = !document.body.classList.contains("nav-open");
@@ -2671,6 +2698,7 @@
       els("[data-dod-title]").forEach(function (t) { t.textContent = pick.title; });
       els("[data-dod-img]").forEach(function (i) { i.src = "/social/graphic-desk/" + pick.img + ".png"; i.alt = "Florida Signal diagram of the day: " + pick.title; });
     })();
+    if (window.innerWidth <= 620) els(".nav-more").forEach(function (d) { d.open = true; });
     initMobileLiveRail();
     initHomepagePriority();
     initMobileFieldTest();
