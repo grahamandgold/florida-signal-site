@@ -86,3 +86,22 @@ Event dates over pull dates · state windows and caps · no source, no claim · 
 **Automation inventory changes:** Clerk SFTP catch-up → droplet systemd (production path); Claude task `broward-clerk-catchup-sync` DISABLED (emergency rollback only); nightly `regenerate-social-graphics` task now doubles as the Clerk health audit (alerts on timer inactive, failure, 3-day silence, or freshness lag).
 
 **Status labels:** Acclaim: CURRENT DIGITALOCEAN EGRESS BLOCKED — alternative execution architecture unresolved. Social export: CURRENTLY MAC-LOCAL — server-side rendering migration not yet designed.
+
+---
+## Addendum — Acclaim preliminary pipeline off Claude (2026-07-19 pm)
+
+**DECISION LOG:** The early Clerk pipeline uses twice-daily native Mac Acclaim collection with automatic missed-date backfill and later reconciliation against the authoritative Clerk SFTP feed. (Acclaim is Cloudflare-protected AND the DigitalOcean IP is blocked, so preliminary collection must run on the residential Mac via real Chrome; verified SFTP catch-up remains on the droplet.)
+
+**Built (ops/mac/, GitHub-tracked):** acclaim_harvest.applescript (real-Chrome, Cloudflare-passing), acclaim_upsert.py (idempotent pre-filter insert, service role, preliminary label), acclaim_state.py (per-date state + backlog), acclaim_pull.sh (oldest-first backfill, resume, nonzero on fail, logs to ~/Library/Logs/florida-acclaim.log), com.floridasignal.acclaim.plist (LaunchAgent 12:00 + 19:00). Reconciliation: additive columns on broward_clerk_preliminary (verification_status, preliminary_first_seen_at, verified_business_date, verified_doc_type, reconciled_at, conflict_flag, conflict_note) + public.reconcile_clerk_preliminary() + pg_cron clerk-preliminary-reconcile daily 10:00 UTC.
+
+**Proven 2026-07-19:** real July-13 records harvested through Chrome past Cloudflare; inserted to broward_clerk_preliminary labeled acclaimweb-public-search; re-run inserted 0 (idempotent); reconcile matched 1 → verified (official business date + doc type attached, first_seen + source preserved), flagged 1 date-conflict without merging; verified broward_clerk_records_doc untouched (149,963). LaunchAgent kickstart ran the backfill detached from Claude (weekends 0 records, weekdays backfilling oldest-first with state persisted).
+
+**MASTER TO-DO:** Verify three independent scheduled Acclaim runs and one real preliminary-to-verified reconciliation (fixture proof done; awaiting an organic match when the SFTP feed catches up to a preliminary date).
+
+**RISK REGISTER:** The preliminary Acclaim pipeline remains dependent on a powered-on Mac, logged-in user session, usable Chrome profile, and residential connection until a dedicated residential runner replaces it. (Also: first scheduled launch may prompt once for osascript→Chrome Automation permission.)
+
+**Scheduling transition:** Claude task broward-sameday-recordings kept ENABLED as fallback until THREE independent successful LaunchAgent runs, then disable (not delete), label EMERGENCY ROLLBACK ONLY.
+
+**Automation inventory delta:** Acclaim preliminary → native Mac LaunchAgent 12:00 + 19:00 (primary) + Claude task (active fallback); reconciliation → Supabase pg_cron 10:00 UTC; nightly health task now covers SFTP catch-up + Acclaim + social export.
+
+**Status labels:** Acclaim: CURRENT DIGITALOCEAN EGRESS BLOCKED — runs on residential Mac (working). Social export: CURRENTLY MAC-LOCAL — server-side rendering migration not yet designed.
