@@ -1,0 +1,7 @@
+[Unit]
+Description=Daily Broward Clerk catch-up at 18:10 UTC (2:10pm ET) weekdays
+[Timer]
+OnCalendar=Mon..Fri 18:10:00 UTC
+Persistent=true
+[Install]
+WantedBy=timers.target

@@ -411,7 +411,7 @@
     grid.innerHTML = stories.map(function (story, index) {
       const tags = Array.isArray(story.tags) ? story.tags : [];
       return '<article class="story-card ' + (index === 0 ? "story-card--lead" : "") + '">' +
-        (story.hero_image ? '<a class="story-card__image" href="' + publicStoryUrl(story) + '"><img src="' + escapeHtml(story.hero_image) + '" alt=""></a>' : '<a class="story-card__mark" href="' + publicStoryUrl(story) + '" aria-label="Open ' + escapeHtml(story.title) + '"><img src="/assets/mark-full-color.png" alt=""></a>') +
+        (story.hero_image ? '<a class="story-card__image" href="' + publicStoryUrl(story) + '"><img src="' + escapeHtml(story.hero_image) + '" alt=""></a>' : '<a class="story-card__mark" href="' + publicStoryUrl(story) + '" aria-label="Open ' + escapeHtml(story.title) + '"><img src="/assets/emblem-2026.png" alt=""></a>') +
         '<div>' + taxonomyLine(tags, "Filed under") + '<p class="story-card__date">' + escapeHtml(formatDate(story.event_date || story.published_at, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '</p><h2><a href="' + publicStoryUrl(story) + '">' + escapeHtml(story.title) + '</a></h2><p>' + escapeHtml(story.summary || "Approved Florida Desk report") + '</p><footer><span>' + escapeHtml(story.byline || "Florida Signal Desk") + '</span><a href="' + publicStoryUrl(story) + '">Read + sources →</a><button type="button" data-report-add data-report-id="story:' + escapeHtml(story.slug || story.id || publicStoryUrl(story)) + '" data-report-title="' + escapeHtml(story.title) + '" data-report-meta="Approved Florida Signal brief · ' + escapeHtml(formatDate(story.event_date || story.published_at, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '" data-report-url="' + escapeHtml(publicStoryUrl(story)) + '" data-report-tags="' + taxonomyAttribute(tags) + '">＋ Add to report</button></footer></div></article>';
     }).join("");
   }
@@ -621,7 +621,7 @@
     if (/(demo|demolition)/i.test(text)) return "#ff6d3a";
     if (isStormRecord(record)) return "#1767ff";
     if (Number(record.valuation_usd_clean) >= 500000) return "#071b32";
-    return "#009f91";
+    return "#00b8dc";
   }
 
   function drawMarkers(map, records) {
@@ -830,9 +830,20 @@
     badge.className = "map-signal-control";
     badge.href = PUBLIC_ROUTES.home;
     badge.setAttribute("aria-label", "Florida Signal Development Intelligence home");
-    badge.innerHTML = '<span class="map-signal-control__mark"><img src="/assets/mark-full-color.png" alt=""></span><span><b>Florida Signal</b><small>Live field map</small></span>';
+    badge.innerHTML = '<span class="map-signal-control__mark"><img src="/assets/emblem-2026.png" alt=""></span><span><b>Florida Signal</b><small>Live field map</small></span>';
     L.DomEvent.disableClickPropagation(badge);
     container.appendChild(badge);
+    if (!container.querySelector(".map-key")) {
+      const key = document.createElement("div");
+      key.className = "map-key";
+      key.innerHTML = '<b>Key · permit applications</b>' +
+        '<span><i style="background:#00b8dc"></i>Application</span>' +
+        '<span><i style="background:#071b32"></i>$500K+ declared</span>' +
+        '<span><i style="background:#1767ff"></i>Storm-related</span>' +
+        '<span><i style="background:#ff6d3a"></i>Demolition</span>';
+      L.DomEvent.disableClickPropagation(key);
+      container.appendChild(key);
+    }
   }
 
   function renderSpyglass(name, items, options) {
@@ -1435,7 +1446,7 @@
     }
 
     function network(items) {
-      return '<div class="graphic-network"><div class="graphic-network__core"><img src="/assets/mark-square.png" alt=""><span>ENTITY<br>LENS</span></div>' + items.map(function (item, index) {
+      return '<div class="graphic-network"><div class="graphic-network__core"><img src="/assets/emblem-2026.png" alt=""><span>ENTITY<br>LENS</span></div>' + items.map(function (item, index) {
         return '<div class="graphic-network__node graphic-network__node--' + (index + 1) + '"><strong>' + escapeHtml(item.value) + '</strong><span>' + escapeHtml(item.label) + '</span></div>';
       }).join("") + '</div>';
     }
@@ -1456,10 +1467,10 @@
       const openLink = settings.href ? '<a class="graphic-card__open" href="' + escapeHtml(settings.href) + '">' + escapeHtml(settings.linkLabel || "Open the connected intelligence") + ' →</a>' : '';
       return '<article class="graphic-card ' + (settings.tone === "navy" ? "graphic-card--navy " : "") + (settings.wide ? "graphic-card--wide" : "") + '" data-signal-tags="' + taxonomyAttribute(tags) + '" id="' + slug + '">' +
         '<div class="graphic-card__top"><p>' + escapeHtml(kicker) + '</p><span>' + escapeHtml(settings.status || "REAL RECORD") + '</span></div>' +
-        '<span class="graphic-card__crest" aria-hidden="true"><img src="/assets/mark-full-color.png" alt=""></span>' +
+        '<span class="graphic-card__crest" aria-hidden="true"><img src="/assets/emblem-2026.png" alt=""></span>' +
         '<h2>' + title + '</h2><p class="graphic-card__dek">' + dek + '</p>' + openLink + '<div class="graphic-card__body">' + body + '</div>' +
         '<p class="graphic-card__clock">' + escapeHtml(settings.clock || "Public event date · data update shown") + '</p><a class="graphic-card__sponsor" href="mailto:desk@thefloridasignal.com?subject=' + encodeURIComponent("Sponsor Florida Signal graphic: " + slug) + '"><span>Present this intelligence</span><strong>Your logo here ↗</strong></a>' +
-        '<div class="graphic-card__brand"><span><img src="/assets/' + (settings.tone === "navy" ? "mark-white.png" : "mark-full-color.png") + '" alt=""><b>Florida Signal</b><small>Development intelligence</small></span><time>' + escapeHtml(settings.stamp || applicationWindowStamp) + '</time><div>' +
+        '<div class="graphic-card__brand"><span><img src="/assets/' + (settings.tone === "navy" ? "emblem-2026-white.png" : "emblem-2026.png") + '" alt=""><b>Florida Signal</b><small>Development intelligence</small></span><time>' + escapeHtml(settings.stamp || applicationWindowStamp) + '</time><div>' +
         '<a class="publish-social publish-social--x" data-network="X" href="https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareTitle) + '&url=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on X">X</a>' +
         '<a class="publish-social publish-social--linkedin" data-network="LinkedIn" href="https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on LinkedIn">in</a>' +
         '<a class="publish-social publish-social--facebook" data-network="Facebook" href="https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on Facebook">f</a>' +
@@ -2004,7 +2015,7 @@
     const prompt = document.createElement("div");
     prompt.className = "brief-prompt";
     prompt.hidden = true;
-    prompt.innerHTML = '<div class="brief-prompt__backdrop" data-brief-prompt-close></div><section class="brief-prompt__dialog" role="dialog" aria-modal="true" aria-labelledby="brief-prompt-title" aria-describedby="brief-prompt-dek"><button class="brief-prompt__close" type="button" data-brief-prompt-close aria-label="Close Daily Intel Brief signup">×</button><div class="brief-prompt__mark" aria-hidden="true"><img src="/assets/mark-full-color.png" alt=""></div><p class="eyebrow"><span class="pulse" aria-hidden="true"></span>Tomorrow starts tonight</p><h2 id="brief-prompt-title">Get the 6:15 Daily Intel Brief.</h2><p id="brief-prompt-dek">One sharp Broward email: consequential filings, neighborhood movement, meetings, storm readiness and the records behind every claim.</p><form class="signup signup--prompt" data-signup-form data-signup-source="ten-second-prompt"><label class="sr-only" for="prompt-email">Email address</label><input id="prompt-email" name="email" type="email" autocomplete="email" placeholder="Your email address" required><label class="sr-only" for="prompt-zip">ZIP you watch</label><input id="prompt-zip" name="zip" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{5}(-[0-9]{4})?" placeholder="ZIP you watch" required><button type="submit">Send me the brief →</button><p class="signup__message" data-signup-message aria-live="polite"></p></form><p class="brief-prompt__fine">Free · Broward Audience · unsubscribe anytime · powered by Graham &amp; Gold LLC</p></section>';
+    prompt.innerHTML = '<div class="brief-prompt__backdrop" data-brief-prompt-close></div><section class="brief-prompt__dialog" role="dialog" aria-modal="true" aria-labelledby="brief-prompt-title" aria-describedby="brief-prompt-dek"><button class="brief-prompt__close" type="button" data-brief-prompt-close aria-label="Close Daily Intel Brief signup">×</button><div class="brief-prompt__mark" aria-hidden="true"><img src="/assets/emblem-2026.png" alt=""></div><p class="eyebrow"><span class="pulse" aria-hidden="true"></span>Tomorrow starts tonight</p><h2 id="brief-prompt-title">Get the 6:15 Daily Intel Brief.</h2><p id="brief-prompt-dek">One sharp Broward email: consequential filings, neighborhood movement, meetings, storm readiness and the records behind every claim.</p><form class="signup signup--prompt" data-signup-form data-signup-source="ten-second-prompt"><label class="sr-only" for="prompt-email">Email address</label><input id="prompt-email" name="email" type="email" autocomplete="email" placeholder="Your email address" required><label class="sr-only" for="prompt-zip">ZIP you watch</label><input id="prompt-zip" name="zip" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{5}(-[0-9]{4})?" placeholder="ZIP you watch" required><button type="submit">Send me the brief →</button><p class="signup__message" data-signup-message aria-live="polite"></p></form><p class="brief-prompt__fine">Free · Broward Audience · unsubscribe anytime · powered by Graham &amp; Gold LLC</p></section>';
     document.body.appendChild(prompt);
     const closeButtons = els("[data-brief-prompt-close]", prompt);
     let previousFocus = null;
@@ -2624,7 +2635,7 @@
         const printWindow = window.open("", "_blank");
         if (!printWindow) { status.textContent = "Allow pop-ups to print this report."; return; }
         const rows = items.map(function (item, index) { return '<article><span>' + String(index + 1).padStart(2, "0") + '</span><div><h2>' + escapeHtml(item.title) + '</h2><p>' + escapeHtml(item.meta || "") + '</p><a href="' + escapeHtml(item.url || "") + '">' + escapeHtml(item.url || "") + '</a><small>' + escapeHtml((item.tags || "").replace(/\s+/g, " · ")) + '</small></div></article>'; }).join("");
-        printWindow.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Florida Signal Field Brief</title><style>*{box-sizing:border-box}body{margin:38px;color:#071b32;font:14px Arial,sans-serif}header{position:relative;padding:24px 0;border-top:8px solid #00a596;border-bottom:1px solid #cbd8dc}header:after{content:"";position:absolute;right:10px;top:5px;width:120px;height:140px;background:url("' + window.location.origin + '/assets/mark-full-color.png") center/contain no-repeat;opacity:.1}header img{width:330px}header p{margin:8px 0 0;color:#63788b;text-transform:uppercase;letter-spacing:.12em;font-size:10px}main{margin-top:24px}article{display:grid;grid-template-columns:38px 1fr;gap:12px;padding:16px 0;border-bottom:1px solid #d8e1e4;break-inside:avoid}article>span{color:#009f91;font-weight:700}h2{margin:0 0 5px;font:24px Georgia,serif}p{margin:0 0 7px;color:#52697c}a{color:#007c72;font-size:10px;overflow-wrap:anywhere}small{display:block;margin-top:7px;color:#8797a3;font-size:8px;text-transform:uppercase}footer{margin-top:30px;padding-top:12px;border-top:2px solid #071b32;font-size:9px;color:#63788b}@media print{body{margin:12mm}}</style></head><body><header><img src="' + window.location.origin + '/assets/lockup-horizontal-transparent.png" alt="Florida Signal"><p>Field Brief · ' + escapeHtml(new Date().toLocaleString("en-US", { timeZone: "America/New_York" })) + ' ET · ' + items.length + ' saved item' + (items.length === 1 ? '' : 's') + '</p></header><main>' + rows + '</main><footer>Florida Signal · Development Intelligence · Powered by Graham &amp; Gold LLC · Every item links to its cited public-record surface.</footer></body></html>');
+        printWindow.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Florida Signal Field Brief</title><style>*{box-sizing:border-box}body{margin:38px;color:#071b32;font:14px Arial,sans-serif}header{position:relative;padding:24px 0;border-top:8px solid #00a596;border-bottom:1px solid #cbd8dc}header:after{content:"";position:absolute;right:10px;top:5px;width:120px;height:140px;background:url("' + window.location.origin + '/assets/emblem-2026.png") center/contain no-repeat;opacity:.1}header img{width:330px}header p{margin:8px 0 0;color:#63788b;text-transform:uppercase;letter-spacing:.12em;font-size:10px}main{margin-top:24px}article{display:grid;grid-template-columns:38px 1fr;gap:12px;padding:16px 0;border-bottom:1px solid #d8e1e4;break-inside:avoid}article>span{color:#009f91;font-weight:700}h2{margin:0 0 5px;font:24px Georgia,serif}p{margin:0 0 7px;color:#52697c}a{color:#007c72;font-size:10px;overflow-wrap:anywhere}small{display:block;margin-top:7px;color:#8797a3;font-size:8px;text-transform:uppercase}footer{margin-top:30px;padding-top:12px;border-top:2px solid #071b32;font-size:9px;color:#63788b}@media print{body{margin:12mm}}</style></head><body><header><img src="' + window.location.origin + '/assets/lockup-2026-horizontal.png" alt="Florida Signal"><p>Field Brief · ' + escapeHtml(new Date().toLocaleString("en-US", { timeZone: "America/New_York" })) + ' ET · ' + items.length + ' saved item' + (items.length === 1 ? '' : 's') + '</p></header><main>' + rows + '</main><footer>Florida Signal · Development Intelligence · Powered by Graham &amp; Gold LLC · Every item links to its cited public-record surface.</footer></body></html>');
         printWindow.document.close();
         printWindow.focus();
         window.setTimeout(function () { printWindow.print(); }, 500);
