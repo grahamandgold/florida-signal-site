@@ -167,3 +167,28 @@ Live reconciliation objects are now tracked at `supabase/migrations/` (001 table
 indexes, single SELECT policy, 0 triggers, cron `0 10 * * *` active invoking only
 `reconcile_clerk_preliminary()`; tracked SQL contains **no** writes to authoritative
 `broward_clerk_records_*` tables and **no** secrets. Rollback SQL documented, not executed.
+
+### Phase 3 recollection result (verified 2026-07-19 14:06 EDT)
+Every previously-partial date was fully recollected, each matching Acclaim's displayed total exactly:
+
+| Record date | Rows | Displayed total | Pages | Status |
+|---|---:|---:|---:|---|
+| 2026-07-11 (Sat) | 0 | 0 | 0 | done (verified empty) |
+| 2026-07-12 (Sun) | 0 | 0 | 0 | done (verified empty) |
+| 2026-07-13 | 2,909 | 2,909 | 6/6 | done |
+| 2026-07-14 | 3,007 | 3,007 | 7/7 | done |
+| 2026-07-15 | 2,475 | 2,475 | 5/5 | done |
+| 2026-07-16 | 2,877 | 2,877 | 6/6 | done |
+| 2026-07-17 | 2,501 | 2,501 | 6/6 | done |
+| 2026-07-18 (Sat) | 0 | 0 | 0 | done (verified empty) |
+| 2026-07-19 (Sun, today) | 0 | — | 0 | **incomplete** — `grid_never_loaded`; correctly NOT marked complete |
+
+DB totals: **13,769 preliminary rows** (= 2909+3007+2475+2877+2501, no duplicates), leading date
+**2026-07-17 vs verified 2026-07-10 — a 7-day lead**. Authoritative `broward_clerk_records_doc`
+unchanged at 149,963 throughout.
+
+**One open item (honest):** today's date (Sunday 07-19) returns `grid_never_loaded` rather than a
+verified `EMPTY`, so the runner refuses to mark it complete and exits nonzero — conservative and
+correct per the rules, but it means a genuinely record-less current day stays in the backlog until
+the empty state is confirmable. Empty-state detection for the current/no-result day is the single
+remaining refinement; it does not affect completed-date integrity.
