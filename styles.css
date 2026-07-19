@@ -2781,11 +2781,11 @@ a.brand { width: auto; max-width: none; }
 .leaflet-container:has(.leaflet-popup) .map-key,
 .leaflet-container.has-open-popup .map-signal-control,
 .leaflet-container.has-open-popup .map-key {
-  opacity: .22;
+  opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity .18s ease;
 }
-.map-signal-control, .map-key { transition: opacity .18s ease; }
+.map-signal-control, .map-key { transition: opacity .16s ease, visibility .16s ease; }
 
 /* Give a long Signal card its own scroll instead of letting it run past the map. */
 .signal-popup .leaflet-popup-content { max-height: min(60vh, 420px); overflow-y: auto; overscroll-behavior: contain; }
@@ -2795,4 +2795,47 @@ a.brand { width: auto; max-width: none; }
   .map-signal-control { top: 8px; padding: 5px 12px 5px 5px; }
   .map-signal-control__mark { width: 34px; height: 34px; }
   .map-signal-control img { width: 25px; height: 27px; }
+}
+
+
+/* ===== Map brand = the site wordmark (2026-07-19) =====
+   The map used to carry an emblem plus hand-set type, which drifted from the site lockup.
+   It now renders the same asset as the header and footer, so every surface matches. */
+.map-signal-control { padding: 9px 20px; gap: 0; border-radius: 4px; }
+.map-signal-control img.map-signal-control__lockup { width: clamp(176px, 23vw, 262px); height: auto; aspect-ratio: 1800 / 248; display: block; position: static !important; object-fit: contain; filter: none; }
+.map-signal-control__mark { display: none !important; }
+@media (max-width: 620px) {
+  .map-signal-control { padding: 7px 14px; }
+  .map-signal-control img.map-signal-control__lockup { width: 148px; }
+}
+
+/* ===== Map share rail: glyph buttons were smaller than the lettermarks (2026-07-19) =====
+   X / in / f carried explicit sizing; the share, embed and report glyphs inherited a much
+   smaller body size, so the rail looked unbalanced. Size them together. */
+.map-publish-tools .publish-social,
+.map-publish-tools button,
+.map-publish-tools a:not(.publish-social),
+.map-publish-tools.map-publish-tools--map .publish-social,
+.map-publish-tools.map-publish-tools--map button,
+.leaflet-container > .map-publish-tools--map .publish-social {
+  width: 40px !important; min-width: 40px !important; height: 40px !important; min-height: 40px !important;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 !important; border-radius: 50%;
+  font-size: 17px !important; line-height: 1; font-weight: 700;
+}
+.map-publish-tools .publish-social--facebook { font-size: 19px !important; }
+.map-publish-tools .publish-social--x { font-size: 15px !important; }
+.map-publish-tools .publish-social--linkedin { font-size: 14px !important; }
+.map-publish-tools .surface-report { font-size: 21px !important; }
+.map-publish-tools [data-surface-embed] { font-size: 13px !important; letter-spacing: -.02em; }
+@media (max-width: 620px) {
+  .map-publish-tools .publish-social,
+  .map-publish-tools button,
+  .map-publish-tools a:not(.publish-social),
+  .map-publish-tools.map-publish-tools--map .publish-social,
+  .map-publish-tools.map-publish-tools--map button {
+    width: 37px !important; min-width: 37px !important; height: 37px !important; min-height: 37px !important;
+    font-size: 15px !important;
+  }
+  .map-publish-tools .surface-report { font-size: 19px !important; }
 }

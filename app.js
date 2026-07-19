@@ -857,7 +857,6 @@
   function initLockups() {
     const run = function () {
       fitLockupTagline(".brand__name", ".brand__tag");
-      fitLockupTagline(".map-signal-control__words b", ".map-signal-control__words small");
     };
     run();
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(run).catch(function () {});
@@ -893,8 +892,8 @@
     badge.rel = "noopener";
     badge.title = "Open Florida Signal";
     badge.setAttribute("aria-label", "Florida Signal Development Intelligence — open the live desk");
-    badge.innerHTML = '<span class="map-signal-control__mark"><img src="/assets/emblem-2026.png" alt=""></span>' +
-      '<span class="map-signal-control__words"><b>FLORIDA <i>SIGNAL</i></b><small>Development Intelligence</small></span>';
+    badge.innerHTML = '<img class="map-signal-control__lockup" src="/assets/lockup-2026-horizontal.png" ' +
+      'alt="Florida Signal — Development Intelligence" width="1800" height="248">';
     L.DomEvent.disableClickPropagation(badge);
     container.appendChild(badge);
     if (!container.querySelector(".map-key")) {
@@ -927,7 +926,6 @@
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(map);
     addMapBrand(map);
     adoptMapShareRail(map);
-    window.setTimeout(function () { fitLockupTagline(".map-signal-control__words b", ".map-signal-control__words small"); }, 60);
     addMapReset(map, { center: (typeof settings !== 'undefined' && settings.center) || [26.129, -80.144], zoom: (typeof settings !== 'undefined' && settings.zoom) || 12 });
     const bounds = [];
     const titleNode = el("#" + name + "-spotlight-title");
