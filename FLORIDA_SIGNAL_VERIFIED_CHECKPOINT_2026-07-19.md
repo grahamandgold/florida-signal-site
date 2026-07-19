@@ -8,6 +8,11 @@
 Nothing was merged, deployed, published or scheduled to produce this document. No database
 object, schedule, service or application behaviour was changed. No secrets appear here.
 
+**Drive mirror of `FLORIDA_SIGNAL_VERIFIED_CHECKPOINT_2026-07-19.md` in
+`grahamandgold/florida-signal-site`, branch `claudette/launch-day` (draft PR #1).
+GitHub is code authority; this Drive copy is the documentation authority.
+Canonical Drive location: `Graham & Gold Shared Drive / 00_Company_Admin /`.**
+
 ---
 
 ## 1. AUTHORITIES — who owns what
@@ -429,5 +434,7 @@ beside it pointing to this checkpoint.
   never searched, so "evidence complete" was wrong.
 - `CLAUDETTE_HANDOFF_2026-07-19.md` parcel section — **superseded** by §3 above; the addendum
   in that file already records the completion.
+- `FLORIDA_SIGNAL_AI_HANDOFF_2026-07-16_rev2_EOD.md` (Drive, recovery folder) — **SUPERSEDED —
+  PRESERVED FOR HISTORY.** Left in place; see the companion note beside it.
 
 Nothing has been deleted. All superseded documents remain in place.
