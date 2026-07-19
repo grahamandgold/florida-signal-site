@@ -23,7 +23,7 @@ for p in 8788 4173; do
 done
 sleep 1
 
-DATA_WIRE_ADMIN_TOKEN="$TOKEN" nohup python3 cms/server.py --port 8788 >/tmp/datawire.log 2>&1 &
+DATA_WIRE_ADMIN_TOKEN="$TOKEN" DATA_WIRE_LOCAL_AUTOUNLOCK=1 nohup python3 cms/server.py --port 8788 >/tmp/datawire.log 2>&1 &
 FLORIDA_SIGNAL_CMS_URL='http://127.0.0.1:8788' \
 FLORIDA_SIGNAL_CMS_MARKET='broward' \
 FLORIDA_SIGNAL_CMS_CITY='fort-lauderdale' \

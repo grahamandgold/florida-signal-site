@@ -1,6 +1,6 @@
 # Florida Signal — AI Handoff
 
-Last verified: July 17, 2026
+Last verified: July 19, 2026 (Claudette session — see `CLAUDETTE_HANDOFF_2026-07-19.md` for the full launch-day changelog)
 
 ## Product contract
 
@@ -99,3 +99,13 @@ Before publishing any AI-assisted change:
 
 As of the verification date, the local health endpoint reports that CMS and Mailchimp production integrations are not configured. Some aggregate and Broward clocks are stale and Sunbiz does not expose enough source-health metadata to claim live status. See `LIVE_DATA_OPERATIONS_HANDOFF.md` for the exact snapshot and remediation sequence.
 
+
+
+## 2026-07-19 addendum (Claudette)
+
+- New Supabase sources: `fdep_erp`, `faa_oeaaa` (edge functions + pg_cron daily), `broward_clerk_preliminary` (AcclaimWeb same-day, PRELIMINARY until the verified SFTP business date lands — never present as verified).
+- Internal Data Desk viewer at `cms/data.html`; Data Wire local auto-unlock via `/api/local-session` (loopback + `DATA_WIRE_LOCAL_AUTOUNLOCK=1` only — keep OFF in production).
+- Brand: Atlantic palette + Montserrat/Figtree + `assets/lockup-2026-horizontal.png` / `assets/datawire-lockup.png`. Header lockup is live text; do not reintroduce the old PNG-only header.
+- CTA copy is "Get Daily Intel Brief" site-wide. Diagram of the day rotates daily by date.
+- `dashboard_cache` pg_cron re-armed at 30-minute cadence. Clerk SFTP verified-vs-source parity confirmed 2026-07-19.
+- Full task/automation inventory and open work: `CLAUDETTE_HANDOFF_2026-07-19.md`.

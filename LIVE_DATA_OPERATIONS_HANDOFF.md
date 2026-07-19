@@ -3,7 +3,7 @@
 **Market:** Broward County  
 **Live city:** Fort Lauderdale  
 **Publisher:** Graham & Gold LLC  
-**Last local verification:** July 17, 2026, 5:45 p.m. ET
+**Last local verification:** July 19, 2026 (see `CLAUDETTE_HANDOFF_2026-07-19.md`)
 
 This document is the operational truth for the public site. It separates the date an event happened from the time Florida Signal collected, synchronized, enriched or published it.
 
@@ -165,3 +165,18 @@ Do not silently publish or refresh a number when any of these is true:
 - Deploy the Data Wire behind real user authentication with persistent Postgres/Supabase, backups and retained audit logs.
 - Configure Mailchimp server-side and replay only explicit-consent rows with retry/alerting.
 - Add persistent analytics storage and a retention policy.
+
+
+## 2026-07-19 additions (Claudette)
+
+New feeds and their clocks:
+
+| Feed | Event clock | Cadence | Notes |
+|---|---|---|---|
+| FDEP ERP (`fdep_erp`) | `received_date` | pg_cron daily 09:20 UTC via `fdep-erp-sync` | Broward bbox, layers 0+1; leading indicator ~5–6 weeks. |
+| FAA OE/AAA (`faa_oeaaa`) | `date_entered` | pg_cron daily 09:40 UTC via `faa-oeaaa-sync` | state=FL stored, `in_broward` generated; cranes = `structure_type LIKE 'CRANE%'`. |
+| Preliminary recordings (`broward_clerk_preliminary`) | `record_date` | Claude task weekdays 12:00 + 19:00 ET | From Clerk's public AcclaimWeb search ("Released through" runs ~3 days ahead of SFTP). PRELIMINARY: superseded row-for-row when the verified SFTP business date arrives. Label accordingly anywhere surfaced. |
+
+Automation inventory (full table in `CLAUDETTE_HANDOFF_2026-07-19.md`): dashboard cache rebuild every 30 min (pg_cron), Clerk SFTP catch-up 2:15pm weekdays (Claude), social PNG re-export 9:40pm gated on `/api/data-health` (Claude), shadow scorer 05:45 + morning review 08:20 (droplet + Claude; five-run gate ends 2026-07-20).
+
+Local ops: `ops/launch_local.sh` (or the Florida Signal Desk / The Data Wire apps) starts both servers with desk token, Mailchimp env, and local auto-unlock. Mailchimp is configured as of 2026-07-19 (`mailchimp_configured: true`).

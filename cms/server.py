@@ -361,6 +361,14 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         route = urlparse(self.path).path
+        if route == "/api/local-session":
+            # Convenience for Andy's local desk only: requires explicit env opt-in
+            # and a loopback client. Never enabled in production deployments.
+            if os.getenv("DATA_WIRE_LOCAL_AUTOUNLOCK") == "1" and ADMIN_TOKEN and self.client_address[0] == "127.0.0.1":
+                self.reply({"token": ADMIN_TOKEN, "market": "broward"})
+            else:
+                self.reply({"error": "Not available"}, HTTPStatus.NOT_FOUND)
+            return
         if route == "/api/health":
             self.reply({"ok": True, "service": "the-data-wire", "at": now_iso(), "admin_writes_enabled": bool(ADMIN_TOKEN)})
             return

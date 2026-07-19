@@ -2495,3 +2495,41 @@ a.brand, a.brand:hover, a.brand:focus { text-decoration: none; }
 h1, h2, h3, .hero__live-number, .storm-operations__readout h2, .diagram-watch__title strong, .window-watch__copy strong { letter-spacing: -.028em !important; }
 a.brand { width: auto; max-width: none; }
 .brand__tag { letter-spacing: .27em; }
+
+/* Social publish rail: breathing room, no bleed */
+.surface-publish { gap: 7px; }
+.surface-publish a, .surface-publish button { border-left: 0; }
+.publish-social { width: 30px; min-width: 30px !important; height: 30px; min-height: 30px !important; padding: 0 !important; border-radius: 50%; justify-content: center; }
+.surface-publish--overlay { gap: 8px; padding: 6px 10px; }
+
+
+/* ===== Header polish (2026-07-19 pm): nav matches brand, standout brief CTA, city desk breathing room ===== */
+.site-nav a { font-family: "Montserrat", var(--sans); font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.brief-button { font-family: "Montserrat", var(--sans); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; box-shadow: 0 8px 22px rgba(23,103,255,.35); }
+.city-switcher { margin-left: 16px; }
+.city-switcher > summary { min-height: 52px; padding: 8px 15px; border-color: #c9d6ea; }
+.city-switcher > summary span { font-size: 8px; letter-spacing: .18em; }
+.city-switcher > summary strong { font-size: 12px; }
+
+
+/* Personalize-your-brief: visible feature, readable topic grid */
+.signup-preferences > summary span { color: var(--teal-dark); font-family: "Montserrat", var(--sans); font-weight: 800; letter-spacing: .12em; }
+.brief-interests__grid { gap: 4px 18px; padding: 12px; }
+.brief-interests__grid label { min-height: 32px; display: flex; align-items: center; gap: 8px; font-size: 11px; line-height: 1.3; }
+
+/* ===== Visual QA pass 1 (2026-07-19 pm) ===== */
+/* Record rows: action bar flows below content — can never overlap headlines */
+.signal-row-wrap { position: relative; }
+.signal-row-wrap > .record-share { position: static; width: min(470px, 100%); margin: 12px 0 14px auto; }
+.signal-row h3 { font-size: clamp(21px, 2.1vw, 30px); letter-spacing: -.02em; }
+/* Signup: tidy, compact, readable */
+.signup-preferences > summary { padding: 12px 2px; }
+.brief-interests__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 22px; padding: 12px 14px; }
+.brief-interests__grid label { min-height: 34px; font-size: 11.5px; }
+.city-interests__grid label { font-size: 11px; }
+/* Mobile micro-text floor: diagram + publish labels (QA sweep round 3) */
+@media (max-width: 620px) {
+  .surface-publish a, .surface-publish button, .surface-publish > span,
+  .surface-publish--compact a, .surface-publish--compact button { font-size: 9.5px !important; }
+  .storm-map-key span, .popup-record-clock { font-size: 10px !important; }
+}

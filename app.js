@@ -2653,6 +2653,24 @@
     initSponsorInventory();
     initHeroSequence();
     initDataFlipper();
+    (function applyDiagramOfDay() {
+      var picks = [
+        { slug: "place-lens", title: "Neighborhood + ZIP Place Lens", img: "place-lens" },
+        { slug: "application-pulse", title: "Application Pulse \u00b7 14-day window", img: "application-pulse" },
+        { slug: "trades-pulse", title: "Live Work Mix \u00b7 what\u2019s being built", img: "trades-pulse" },
+        { slug: "value-universe", title: "Value Universe \u00b7 declared dollars", img: "value-universe" },
+        { slug: "operator-board", title: "Operator Board \u00b7 who\u2019s filing", img: "operator-board" },
+        { slug: "records-desk", title: "Records Desk \u00b7 Broward instruments", img: "records-desk" },
+        { slug: "high-value", title: "High-Value Queue \u00b7 $100K+", img: "high-value" }
+      ];
+      var now = new Date();
+      var start = Date.UTC(now.getUTCFullYear(), 0, 0);
+      var day = Math.floor((Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - start) / 86400000);
+      var pick = picks[day % picks.length];
+      els("[data-dod-link]").forEach(function (a) { a.href = "/fort-lauderdale/graphics/#" + pick.slug; });
+      els("[data-dod-title]").forEach(function (t) { t.textContent = pick.title; });
+      els("[data-dod-img]").forEach(function (i) { i.src = "/social/graphic-desk/" + pick.img + ".png"; i.alt = "Florida Signal diagram of the day: " + pick.title; });
+    })();
     initMobileLiveRail();
     initHomepagePriority();
     initMobileFieldTest();

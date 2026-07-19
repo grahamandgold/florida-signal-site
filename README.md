@@ -4,6 +4,16 @@ Florida Signal is Broward-wide, source-first development intelligence launching 
 
 ## Run locally
 
+**One-click (Andy's Mac):** open the **Florida Signal Desk** or **The Data Wire** app (Dock/Desktop), or run:
+
+```bash
+bash ops/launch_local.sh
+```
+
+That starts both servers, loads the private desk token from `~/.florida_signal_datawire_token`, loads Mailchimp credentials from `~/.florida_signal_mailchimp_env`, and enables local desk auto-unlock (`DATA_WIRE_LOCAL_AUTOUNLOCK=1`, loopback-only).
+
+**Manual:**
+
 ```bash
 export DATA_WIRE_ADMIN_TOKEN='replace-with-a-long-private-token'
 python3 cms/server.py --port 8788
