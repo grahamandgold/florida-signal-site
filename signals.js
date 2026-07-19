@@ -26,7 +26,9 @@
     DEMOLITION: "demolition",
     STORM: "storm",
     FAA: "faa",
-    ENVIRONMENTAL: "environmental"
+    ENVIRONMENTAL: "environmental",
+    DEED: "deed",
+    EASEMENT: "easement"
   };
 
   var LAYER_LABEL = {
@@ -35,7 +37,9 @@
     "demolition": "Demolition",
     "storm": "Storm",
     "faa": "FAA / Cranes",
-    "environmental": "Environmental"
+    "environmental": "Environmental",
+    "deed": "Property transfers",
+    "easement": "Easements"
   };
 
   var LAYER_COLOR = {
@@ -44,8 +48,24 @@
     "demolition": "#ff6d3a",
     "storm": "#1767ff",
     "faa": "#7d3cc4",
-    "environmental": "#0f9d76"
+    "environmental": "#0f9d76",
+    "deed": "#b8860b",
+    "easement": "#8a6d1f"
   };
+
+  // Primary map categories, organised around what a user is trying to find rather than which
+  // agency published the record. A family with no connected source is declared "planned" so the
+  // map never presents an empty category as though it were fully covered.
+  var SOURCE_FAMILIES = [
+    { key: "development",     label: "Development",    layers: ["development", "high-value", "demolition", "storm"], status: "live" },
+    { key: "property-money",  label: "Property & Money", layers: ["deed", "easement"], status: "live" },
+    { key: "environment",     label: "Environment",    layers: ["environmental"], status: "live" },
+    { key: "skyline",         label: "Skyline",        layers: ["faa"], status: "live" },
+    { key: "government",      label: "Government",     layers: [], status: "planned",
+      note: "Meeting agendas and municipal actions are not connected yet." },
+    { key: "risk-legal",      label: "Risk & Legal",   layers: [], status: "planned",
+      note: "Mortgages, liens, lis pendens and judgments are not map-eligible: the Clerk's public files carry no parcel identifier for them." }
+  ];
 
   var BROWARD_BOX = { minLat: 25.90, maxLat: 26.45, minLon: -80.60, maxLon: -80.02 };
 
@@ -59,8 +79,14 @@
   }
   function txt(v) { return v == null ? "" : String(v).trim(); }
   function isoDate(v) { var s = txt(v); return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null; }
+  // Compass directions and unit markers stay uppercase — "401 SW 1 Ave", never "401 Sw 1 Ave".
+  var KEEP_UPPER = { N: 1, S: 1, E: 1, W: 1, NE: 1, NW: 1, SE: 1, SW: 1, US: 1, SR: 1, LLC: 1, LP: 1, LLP: 1, INC: 1, PA: 1, NA: 1, II: 1, III: 1, IV: 1 };
   function titleish(s) {
-    return txt(s).toLowerCase().replace(/\s+/g, " ").replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); });
+    return txt(s).toLowerCase().replace(/\s+/g, " ")
+      .replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); })
+      .replace(/\b[A-Za-z]{1,3}\b/g, function (w) {
+        return KEEP_UPPER[w.toUpperCase()] ? w.toUpperCase() : w;
+      });
   }
   function money(n) {
     var v = num(n);
@@ -132,10 +158,12 @@
       // EDITORIAL CONTENT (filled by intelligence pass)
       headline: base.headline || null,
       summary: base.summary || null,
+      what_happened: base.what_happened || null,
       why_it_matters: base.why_it_matters || null,
       what_changed: base.what_changed || null,
       what_to_watch: base.what_to_watch || null,
       caveat: base.caveat || null,
+      what_it_does_not_prove: base.what_it_does_not_prove || null,
       evidence_summary: base.evidence_summary || null,
       source_attribution: base.source_attribution || null,
       // STATE
@@ -330,6 +358,78 @@
     return s;
   }
 
+  // ---------- PROPERTY TRANSFER ADAPTER (deeds + easements) ----------
+  // Input rows come from the read-only view broward_property_transfer_links, which links a Clerk
+  // instrument to an official county parcel by EXACT canonical folio and nothing else.
+  //
+  // Scope is deliberately narrow. Mortgages, liens, lis pendens and judgments are NOT handled here:
+  // the Clerk's public files carry no parcel identifier for those instrument types, and the Clerk's
+  // own instrument-link file does not reach a parcel-bearing instrument for them (audited 2026-07-19).
+  // An instrument-to-instrument link is not evidence of shared property.
+  var TRANSFER_TYPE = {
+    PROPERTY_TRANSFER: "PROPERTY_TRANSFER",
+    OWNERSHIP_CHANGE: "OWNERSHIP_CHANGE",
+    EASEMENT_RECORDED: "EASEMENT_RECORDED"
+  };
+
+  // Deed subtypes that state a conveyance of title on their face. The Clerk's doc file uses the
+  // generic code "D" and does not publish the subtype, so this stays empty in practice and the
+  // adapter falls back to PROPERTY_TRANSFER rather than asserting that ownership changed.
+  var OWNERSHIP_SUBTYPES = { WD: 1, "WD*": 1, SWD: 1, GWD: 1, TRD: 1 };
+
+  function fromPropertyTransfer(r) {
+    var isEasement = txt(r.doc_type_code).toUpperCase() === "EAS" || txt(r.instrument_kind) === "easement";
+    var lat = num(r.latitude), lon = num(r.longitude);
+    var amount = num(r.consideration_amount);
+    var recordDate = isoDate(r.recording_date);
+    var subtype = txt(r.deed_subtype).toUpperCase();
+    var instrument = txt(r.instrument_number);
+    var official = txt(r.record_source) !== "preliminary";
+
+    var signalType = isEasement ? TRANSFER_TYPE.EASEMENT_RECORDED
+      : (OWNERSHIP_SUBTYPES[subtype] ? TRANSFER_TYPE.OWNERSHIP_CHANGE : TRANSFER_TYPE.PROPERTY_TRANSFER);
+
+    var s = makeSignal({
+      signal_id: "transfer:" + instrument + ":" + txt(r.folio_canonical),
+      source_name: official ? "Broward Clerk official records" : "Broward Clerk (preliminary public search)",
+      source_record_id: instrument,
+      source_table: "broward_property_transfer_links",
+      source_record_date: recordDate,
+      signal_type: signalType,
+      signal_subtype: isEasement ? "easement" : "deed",
+      category: isEasement ? "Recorded easement" : "Recorded deed",
+      public_label: LAYER_LABEL[isEasement ? LAYER.EASEMENT : LAYER.DEED],
+      verification_status: official ? STATUS.VERIFIED : STATUS.PRELIMINARY,
+      confidence: lat != null && lon != null ? 0.9 : 0.2,
+      editorial_priority: isEasement ? 40 : (amount != null && amount >= 5000000 ? 90 : (amount != null && amount >= 1000000 ? 70 : 45)),
+      latitude: lat, longitude: lon,
+      address: titleish(r.address) || null,
+      municipality: null,               // the county layer publishes no municipality value; see caveat
+      verified_parcel_id: txt(r.folio_canonical) || null,
+      geographic_precision: lat != null && lon != null ? "parcel" : "none",
+      location_source: "official county parcel centroid, matched by exact canonical folio",
+      owner_or_applicant: titleish(r.parties) || null,
+      valuation_or_amount: amount,
+      layer: isEasement ? LAYER.EASEMENT : LAYER.DEED,
+      source_attribution: "Broward Clerk instrument " + instrument + " · county parcel " + txt(r.folio_canonical)
+    });
+
+    // A record the linkage view could not resolve to exactly one parcel never reaches the map.
+    var state = txt(r.verification_state).toUpperCase();
+    if (state === "CONFLICT") {
+      s.verification_status = STATUS.CONFLICT;
+      s.conflicts = [{ field: "parcel", values: [r.folio_canonical], sources: ["clerk lgl-ver", "county parcel layer"] }];
+      s.exclusion_reasons.push("instrument references more than one parcel; a single point would misstate it");
+    } else if (state === "UNRESOLVED") {
+      s.exclusion_reasons.push("clerk folio is not present in the official county parcel layer");
+    }
+
+    s._meaningful = true;
+    s._is_easement = isEasement;
+    s._raw = r;
+    return s;
+  }
+
   // ---------- PHASE 8: PUBLIC-ELIGIBILITY RULESET ----------
   function applyEligibility(s) {
     var reasons = s.exclusion_reasons;
@@ -395,6 +495,30 @@
       s.what_to_watch = "Watch for a status change and for related local permits at the same site.";
       s.caveat = "This is a state environmental permit record. It does not establish environmental impact, approval, or that work has begun. Source permit type: " + (s._permit_type || "not stated") + ".";
       s.evidence_summary = "FDEP " + s.source_record_id + (dateStr ? " · received " + dateStr : "") + (s._status ? " · " + s._status : "");
+    } else if (s.source_table === "broward_property_transfer_links") {
+      // Wording rule: a recording is a recording. State only what the instrument itself establishes.
+      if (s._is_easement) {
+        s.headline = "Easement recorded affecting " + where;
+        s.what_happened = "An easement was recorded affecting this parcel.";
+        s.why_it_matters = "An easement is a recorded interest in the parcel held by someone other than the owner.";
+        s.what_to_watch = "Watch for permits or utility work on the same parcel.";
+        s.caveat = "This is the fact of a recorded easement. It does not establish what the easement permits, who benefits from it, or how it affects use of the property. Read the recorded instrument for its terms.";
+      } else {
+        s.headline = (amt ? amt + " deed recorded at " : "Deed recorded at ") + where;
+        s.what_happened = amt
+          ? "A deed with a stated amount of " + amt + " was recorded."
+          : "A deed was recorded for this parcel.";
+        s.why_it_matters = "Recorded deeds are the public trail of who is buying property, and where.";
+        s.what_to_watch = "Watch for permit, demolition or FAA activity on the same parcel after a transfer.";
+        s.caveat = "This is a recorded deed on the public record, matched to the county parcel by exact folio. " +
+          "The stated amount is what the instrument declares — it is not an appraisal, not a market value, and not proof the sale was arm's length. " +
+          "A recorded deed does not prove that ownership changed in the way you might assume, that development is planned, or that any construction will occur.";
+      }
+      s.what_it_does_not_prove = s.caveat;
+      s.evidence_summary = "Clerk instrument " + s.source_record_id +
+        (dateStr ? " · recorded " + dateStr : "") +
+        (s.verified_parcel_id ? " · parcel " + s.verified_parcel_id : "") +
+        (amt ? " · stated " + amt : "");
     } else if (String(s.source_table).indexOf("clerk") > -1) {
       s.headline = titleish(s.signal_subtype) + " recorded";
       s.why_it_matters = "Recorded instruments show ownership, financing and construction-notice activity.";
@@ -415,6 +539,7 @@
     else if (kind === "faa") s = fromFaa(record);
     else if (kind === "fdep") s = fromFdep(record);
     else if (kind === "clerk") s = fromClerk(record, opts && opts.resolveLocation);
+    else if (kind === "transfer") s = fromPropertyTransfer(record);
     else return null;
     applyEligibility(s);
     applyIntelligence(s);
@@ -450,6 +575,20 @@
         table: "fdep_erp", latCol: "lat", lonCol: "lon", dateCol: "received_date", kind: "fdep",
         select: "permit_id,objectid,project_name,applicant_company,applicant_name,permit_type,permit_status,agency_action,received_date,street_address,city,lat,lon,documents_url,first_fetched_at,last_fetched_at",
         order: "received_date.desc.nullslast", extra: {}
+      },
+      // Only map_eligible rows are ever requested: the view marks an instrument eligible solely when
+      // its canonical folio resolves to exactly one official county parcel.
+      deeds: {
+        table: "broward_property_transfer_map", latCol: "latitude", lonCol: "longitude",
+        dateCol: "recording_date", amountCol: "consideration_amount", cityCol: "situs_city", kind: "transfer",
+        select: "instrument_number,doc_type_code,instrument_kind,recording_date,consideration_amount,verified_flag,folio_canonical,source_object_id,latitude,longitude,address,situs_city,property_type,matched_parcel_count,verification_state,linkage_method",
+        order: "recording_date.desc.nullslast", extra: { map_eligible: "is.true", doc_type_code: "eq.D" }
+      },
+      easements: {
+        table: "broward_property_transfer_map", latCol: "latitude", lonCol: "longitude",
+        dateCol: "recording_date", amountCol: "consideration_amount", cityCol: "situs_city", kind: "transfer",
+        select: "instrument_number,doc_type_code,instrument_kind,recording_date,consideration_amount,verified_flag,folio_canonical,source_object_id,latitude,longitude,address,situs_city,property_type,matched_parcel_count,verification_state,linkage_method",
+        order: "recording_date.desc.nullslast", extra: { map_eligible: "is.true", doc_type_code: "eq.EAS" }
       }
     };
 
@@ -481,6 +620,10 @@
       if (o.startDate) q.append(src.dateCol, "gte." + o.startDate);
       if (o.endDate) q.append(src.dateCol, "lte." + o.endDate);
       if (o.minValuation && src.kind === "permit") q.append("valuation_usd_clean", "gte." + o.minValuation);
+      if (o.minAmount && src.amountCol) q.append(src.amountCol, "gte." + o.minAmount);
+      if (o.municipality && src.cityCol) q.append(src.cityCol, "eq." + o.municipality);
+      if (o.instrument && src.kind === "transfer") q.append("instrument_number", "eq." + o.instrument);
+      if (o.folio && src.kind === "transfer") q.append("folio_canonical", "eq." + o.folio);
       if (opts && opts.countOnly) { q.set("select", src.latCol); q.set("limit", "1"); }
       else {
         q.set("select", src.select);
@@ -518,10 +661,15 @@
     return {
       PAGE_CAP: PAGE_CAP,
       // Unbounded eligible totals (server-side counts, no rows transferred).
+      SOURCE_KEYS: Object.keys(SOURCES),
       totals: function (o) {
         var opt = o || {};
-        return Promise.all([countFor("permits", opt), countFor("faa", opt), countFor("fdep", opt)])
-          .then(function (c) { return { permits: c[0], faa: c[1], fdep: c[2], all: (c[0] || 0) + (c[1] || 0) + (c[2] || 0) }; });
+        var keys = (o && o.sources && o.sources.length) ? o.sources : Object.keys(SOURCES);
+        return Promise.all(keys.map(function (k) { return countFor(k, opt); })).then(function (c) {
+          var out = { all: 0 };
+          keys.forEach(function (k, i) { out[k] = c[i]; out.all += (c[i] || 0); });
+          return out;
+        });
       },
       // Viewport/filter load. Returns signals + counts + per-source errors; stale calls resolve stale:true.
       load: function (options) {
@@ -529,7 +677,7 @@
         var mySeq = ++seq;
         var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
         var sig = controller ? controller.signal : undefined;
-        var wanted = o.sources && o.sources.length ? o.sources : ["permits", "faa", "fdep"];
+        var wanted = o.sources && o.sources.length ? o.sources : ["permits", "faa", "fdep", "deeds", "easements"];
         var jobs = wanted.map(function (k) { return fetchSource(k, o, sig); });
         var countJobs = wanted.map(function (k) { return countFor(k, o, sig); });
 
@@ -567,7 +715,9 @@
     VERSION: SIGNAL_VERSION,
     STATUS: STATUS, REVIEW: REVIEW, LAYER: LAYER,
     LAYER_LABEL: LAYER_LABEL, LAYER_COLOR: LAYER_COLOR,
+    SOURCE_FAMILIES: SOURCE_FAMILIES, TRANSFER_TYPE: TRANSFER_TYPE,
     fromPermit: fromPermit, fromFaa: fromFaa, fromFdep: fromFdep, fromClerk: fromClerk,
+    fromPropertyTransfer: fromPropertyTransfer,
     applyEligibility: applyEligibility, applyIntelligence: applyIntelligence,
     build: build, createService: createService,
     inBroward: inBroward, money: money, fmtDate: fmtDate

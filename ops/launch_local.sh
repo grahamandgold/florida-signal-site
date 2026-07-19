@@ -15,6 +15,12 @@ TOKEN="$(cat "$TOKEN_FILE")"
 # Mailchimp credentials, if configured via ops/set_mailchimp_key.command
 [ -f "$HOME/.florida_signal_mailchimp_env" ] && source "$HOME/.florida_signal_mailchimp_env"
 
+# Supabase service-role key for the Signal review queue. Read from outside the repo and exported to
+# the CMS process only — it is never sent to the browser; the desk proxies every queue call.
+if [ -f "$HOME/.florida_signal_supabase_env" ]; then
+  set -a; source "$HOME/.florida_signal_supabase_env"; set +a
+fi
+
 cd "$DIR"
 
 # Stop any previous instances (kill whatever holds the ports)

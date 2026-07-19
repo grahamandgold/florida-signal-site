@@ -1040,12 +1040,29 @@
      Adds a curated, clustered, multi-source Signal layer on top of the existing map.
      Preserves all legacy behaviour: the raw permit points layer, storm lens, overlays and heat
      map are untouched. Only eligible Signals render; excluded ones never reach the map. */
-  const signalState = { service: null, all: [], layer: null, counts: {}, totals: null, errors: [], filters: { sources: {}, status: "all", days: 365 }, loaded: false, error: null };
+  const SIGNAL_SOURCE_KEYS = ["permits", "faa", "fdep", "deeds", "easements"];
+  const AMOUNT_SOURCES = { permits: 1, deeds: 1, easements: 1 };
+  const CITY_SOURCES = { deeds: 1, easements: 1 };
+
+  // The county parcel layer publishes an empty MUNICIPALITY column for all 554,358 records; the only
+  // place it names a city is SITUS_CITY, a two-letter county code with no published lookup table.
+  // Codes are therefore shown as the county writes them. No label is guessed.
+  const SITUS_CITY_NOTE = "County situs code (Broward publishes no municipality name on this layer)";
+
+  const signalState = {
+    service: null, all: [], layer: null, counts: {}, totals: null, errors: [],
+    filters: { sources: {}, status: "all", days: 365, minAmount: 0, municipality: "" },
+    search: { query: "", results: [], searching: false, ran: false },
+    loaded: false, error: null
+  };
 
   function signalSourceKey(signal) {
     if (signal.source_table === "permits") return "permits";
     if (signal.source_table === "faa_oeaaa") return "faa";
     if (signal.source_table === "fdep_erp") return "fdep";
+    if (signal.source_table === "broward_property_transfer_links") {
+      return signal.layer === "easement" ? "easements" : "deeds";
+    }
     return "other";
   }
 
@@ -1058,6 +1075,14 @@
       if (f.status === "verified" && s.verification_status !== "VERIFIED") return false;
       if (f.status === "preliminary" && s.verification_status !== "PRELIMINARY") return false;
       if (s.source_record_date && s.source_record_date < cutoff) return false;
+      // The amount threshold applies ONLY to sources that publish an amount (permits, deeds).
+      // FAA and FDEP records state no amount, so a threshold must not silently erase them.
+      if (f.minAmount > 0 && AMOUNT_SOURCES[signalSourceKey(s)] &&
+          (s.valuation_or_amount == null || s.valuation_or_amount < f.minAmount)) return false;
+      // Municipality is only knowable for deeds and easements (via the county situs code), so the
+      // filter is scoped to those sources rather than silently hiding sources it cannot judge.
+      if (f.municipality && CITY_SOURCES[signalSourceKey(s)] &&
+          String((s._raw && s._raw.situs_city) || "") !== f.municipality) return false;
       return true;
     });
   }
@@ -1069,9 +1094,14 @@
       : '<span class="signal-badge signal-badge--preliminary">Preliminary · not yet reconciled</span>';
     const rows = [];
     if (s.address || s.municipality) rows.push(["Location", [s.address, s.municipality].filter(Boolean).join(" · ")]);
+    if (s.verified_parcel_id) rows.push(["County parcel (folio)", s.verified_parcel_id]);
+    if (s._raw && s._raw.linkage_method) rows.push(["How it was located", "Exact county folio match"]);
     if (s.source_record_date) rows.push(["Source record date", V.fmtDate(s.source_record_date)]);
     if (s.first_detected_at) rows.push(["First detected", V.fmtDate(s.first_detected_at)]);
-    if (s.valuation_or_amount) rows.push(["Declared value", V.money(s.valuation_or_amount)]);
+    if (s.valuation_or_amount) {
+      rows.push([s.source_table === "broward_property_transfer_links" ? "Stated amount on the deed" : "Declared value",
+                 V.money(s.valuation_or_amount)]);
+    }
     if (s.project_scale) rows.push(["Scale", s.project_scale]);
     if (s.owner_or_applicant) rows.push(["Owner / applicant", s.owner_or_applicant]);
     if (s.contractor_or_sponsor) rows.push(["Contractor / sponsor", s.contractor_or_sponsor]);
@@ -1092,6 +1122,23 @@
       '</div></div>';
   }
 
+  // A Signal card must never open underneath the brand badge or the key. autoPanPadding reserves
+  // room for both, so Leaflet pans the map instead of dropping the card behind an overlay.
+  var SIGNAL_POPUP_OPTIONS = {
+    maxWidth: 340, className: "signal-popup", autoPan: true,
+    autoPanPaddingTopLeft: L.point(24, 104),     // brand badge sits at the top centre
+    autoPanPaddingBottomRight: L.point(24, 120)  // key sits bottom-left, credit strip below
+  };
+
+  // Belt and braces alongside the CSS :has() rule — older engines still dim the overlays.
+  function bindPopupOverlayGuard(map) {
+    if (!map || map._fsPopupGuard) return;
+    map._fsPopupGuard = true;
+    var container = map.getContainer();
+    map.on("popupopen", function () { container.classList.add("has-open-popup"); });
+    map.on("popupclose", function () { container.classList.remove("has-open-popup"); });
+  }
+
   function drawSignalLayer() {
     if (!state.map || !window.FloridaSignalV1) return;
     const V = window.FloridaSignalV1;
@@ -1109,7 +1156,7 @@
         fillOpacity: .92
       });
       marker.signalId = s.signal_id;              // deterministic marker identity
-      marker.bindPopup(signalCardHtml(s), { maxWidth: 340, className: "signal-popup" });
+      marker.bindPopup(signalCardHtml(s), SIGNAL_POPUP_OPTIONS);
       layer.addLayer(marker);
     });
     signalState.layer = layer;
@@ -1127,16 +1174,59 @@
     const V = window.FloridaSignalV1;
     const counts = {};
     signalState.all.forEach(function (s) { if (s.public_eligibility) { const k = signalSourceKey(s); counts[k] = (counts[k] || 0) + 1; } });
-    const sources = [["permits", "Development · permits"], ["faa", "FAA / cranes"], ["fdep", "Environmental · FDEP"]];
+    // Sources are grouped by what the reader is looking for, not by which agency published them.
+    const SOURCE_IN_FAMILY = {
+      "development": [["permits", "Permits, demolition & storm work"]],
+      "property-money": [["deeds", "Property transfers (deeds)"], ["easements", "Easements"]],
+      "environment": [["fdep", "FDEP environmental permits"]],
+      "skyline": [["faa", "FAA cases & cranes"]]
+    };
+    const f = signalState.filters;
+    const cities = uniqueTags(signalState.all.map(function (s) { return s._raw && s._raw.situs_city; })).sort();
+
+    const families = V.SOURCE_FAMILIES.map(function (fam) {
+      if (fam.status !== "live") {
+        return '<div class="signal-family signal-family--planned">' +
+          '<p class="signal-family__label">' + escapeHtml(fam.label) + ' <span class="signal-family__tag">Not connected yet</span></p>' +
+          '<p class="signal-family__note">' + escapeHtml(fam.note || "") + '</p></div>';
+      }
+      const rows = (SOURCE_IN_FAMILY[fam.key] || []).map(function (pair) {
+        const on = f.sources[pair[0]] !== false;
+        return '<label class="signal-toggle"><input type="checkbox" data-signal-source="' + pair[0] + '"' + (on ? " checked" : "") + '>' +
+          '<span>' + escapeHtml(pair[1]) + ' (' + formatNumber(counts[pair[0]] || 0) + ')</span></label>';
+      }).join("");
+      return '<div class="signal-family"><p class="signal-family__label">' + escapeHtml(fam.label) + '</p>' + rows + '</div>';
+    }).join("");
+
     host.innerHTML =
       '<div class="signal-controls__row"><p class="signal-readout" id="signal-count-readout">Loading…</p></div>' +
-      '<div class="signal-controls__row signal-controls__sources">' + sources.map(function (pair) {
-        return '<label class="signal-toggle"><input type="checkbox" data-signal-source="' + pair[0] + '" checked><span>' + escapeHtml(pair[1]) + ' (' + (counts[pair[0]] || 0) + ')</span></label>';
-      }).join("") + '</div>' +
+      '<form class="signal-search" data-signal-search>' +
+        '<label class="signal-field signal-field--grow"><span>Search</span>' +
+          '<input type="search" data-signal-query placeholder="Address, folio, instrument, permit, owner" value="' + escapeHtml(signalState.search.query) + '"></label>' +
+        '<button type="submit">Search</button>' +
+      '</form>' +
+      '<div class="signal-results" id="signal-search-results" hidden></div>' +
+      '<div class="signal-controls__row signal-controls__sources">' + families + '</div>' +
       '<div class="signal-controls__row">' +
-        '<label class="signal-field"><span>Verification</span><select data-signal-status><option value="all">All</option><option value="verified">Verified only</option><option value="preliminary">Preliminary only</option></select></label>' +
-        '<label class="signal-field"><span>Window</span><select data-signal-days><option value="30">30 days</option><option value="60">60 days</option><option value="120">120 days</option><option value="365" selected>1 year</option></select></label>' +
+        '<label class="signal-field"><span>Verification</span><select data-signal-status>' +
+          '<option value="all"' + (f.status === "all" ? " selected" : "") + '>All</option>' +
+          '<option value="verified"' + (f.status === "verified" ? " selected" : "") + '>Verified only</option>' +
+          '<option value="preliminary"' + (f.status === "preliminary" ? " selected" : "") + '>Preliminary only</option></select></label>' +
+        '<label class="signal-field"><span>Window</span><select data-signal-days>' +
+          [30, 60, 120, 365].map(function (d) {
+            return '<option value="' + d + '"' + (f.days === d ? " selected" : "") + '>' + (d === 365 ? "1 year" : d + " days") + '</option>';
+          }).join("") + '</select></label>' +
+        '<label class="signal-field"><span>Stated amount</span><select data-signal-amount>' +
+          [[0, "Any"], [250000, "$250K+"], [1000000, "$1M+"], [5000000, "$5M+"], [25000000, "$25M+"]].map(function (p) {
+            return '<option value="' + p[0] + '"' + (f.minAmount === p[0] ? " selected" : "") + '>' + p[1] + '</option>';
+          }).join("") + '</select></label>' +
+        (cities.length ? '<label class="signal-field"><span>Municipality</span><select data-signal-city title="' + escapeHtml(SITUS_CITY_NOTE) + '">' +
+          '<option value="">All</option>' + cities.map(function (c) {
+            return '<option value="' + escapeHtml(c) + '"' + (f.municipality === c ? " selected" : "") + '>' + escapeHtml(c) + '</option>';
+          }).join("") + '</select></label>' : '') +
       '</div>' +
+      (f.minAmount > 0 ? '<p class="signal-note">Amount filter applies to permits and deeds only. FAA and FDEP records state no amount and are unaffected.</p>' : '') +
+      (cities.length ? '<p class="signal-note">' + escapeHtml(SITUS_CITY_NOTE) + '. It filters deeds and easements only.</p>' : '') +
       '<ul class="signal-legend">' + Object.keys(V.LAYER_LABEL).map(function (k) {
         return '<li><i style="background:' + V.LAYER_COLOR[k] + '"></i>' + escapeHtml(V.LAYER_LABEL[k]) + '</li>';
       }).join("") + '</ul>' +
@@ -1147,9 +1237,104 @@
       box.addEventListener("change", function () { signalState.filters.sources[box.dataset.signalSource] = box.checked; loadSignalsForView(); });
     });
     const statusSel = el("[data-signal-status]", host);
-    if (statusSel) statusSel.addEventListener("change", function () { signalState.filters.status = statusSel.value; drawSignalLayer(); renderSignalCounts(); });
+    if (statusSel) statusSel.addEventListener("change", function () { signalState.filters.status = statusSel.value; drawSignalLayer(); });
     const daysSel = el("[data-signal-days]", host);
     if (daysSel) daysSel.addEventListener("change", function () { signalState.filters.days = Number(daysSel.value); loadSignalsForView(); });
+    const amtSel = el("[data-signal-amount]", host);
+    if (amtSel) amtSel.addEventListener("change", function () { signalState.filters.minAmount = Number(amtSel.value); loadSignalsForView(); });
+    const citySel = el("[data-signal-city]", host);
+    if (citySel) citySel.addEventListener("change", function () { signalState.filters.municipality = citySel.value; drawSignalLayer(); });
+    const form = el("[data-signal-search]", host);
+    if (form) form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      const input = el("[data-signal-query]", host);
+      runSignalSearch(input ? input.value : "");
+    });
+    if (signalState.search.ran) renderSearchResults();
+  }
+
+  // ---------- SEARCH ----------
+  // Exact identifiers (folio, Clerk instrument, permit number) are looked up on the server so a
+  // record can be found outside the current viewport. Free text matches the loaded set. A search
+  // that finds nothing says so, and names what was searched — it never fails silently.
+  function classifySearchQuery(raw) {
+    const q = String(raw || "").trim();
+    if (!q) return { kind: "empty", q: q };
+    const compact = q.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+    if (compact.length === 12) return { kind: "folio", q: compact };
+    if (/^\d{9}$/.test(compact)) return { kind: "instrument", q: compact };
+    return { kind: "text", q: q };
+  }
+
+  async function runSignalSearch(raw) {
+    const parsed = classifySearchQuery(raw);
+    signalState.search.query = String(raw || "");
+    signalState.search.ran = true;
+    if (parsed.kind === "empty") {
+      signalState.search.results = [];
+      renderSearchResults();
+      return;
+    }
+    signalState.search.searching = true;
+    renderSearchResults();
+
+    let results = [];
+    try {
+      if (parsed.kind === "folio" || parsed.kind === "instrument") {
+        const opts = { limit: 50, offset: 0, sources: ["deeds", "easements"] };
+        if (parsed.kind === "folio") opts.folio = parsed.q; else opts.instrument = parsed.q;
+        const res = await signalState.service.load(opts);
+        results = res.signals || [];
+      }
+      if (!results.length) {
+        const needle = parsed.q.toLowerCase();
+        results = signalState.all.filter(function (s) {
+          if (!s.public_eligibility) return false;
+          return [s.address, s.owner_or_applicant, s.contractor_or_sponsor, s.project_name,
+                  s.source_record_id, s.verified_parcel_id, s.municipality, s.neighborhood]
+            .some(function (v) { return v && String(v).toLowerCase().indexOf(needle) > -1; });
+        }).slice(0, 50);
+      }
+    } catch (error) {
+      signalState.search.error = String(error && error.message || error);
+    }
+    signalState.search.results = results;
+    signalState.search.searching = false;
+    renderSearchResults();
+  }
+
+  function renderSearchResults() {
+    const host = el("#signal-search-results");
+    if (!host) return;
+    const V = window.FloridaSignalV1;
+    const st = signalState.search;
+    if (!st.ran) { host.hidden = true; return; }
+    host.hidden = false;
+    if (st.searching) { host.innerHTML = '<p class="signal-loading">Searching…</p>'; return; }
+    if (!st.results.length) {
+      host.innerHTML = '<p class="signal-empty">No match for “' + escapeHtml(st.query) + '”. ' +
+        'Searched: address, folio, Clerk instrument, permit number, owner and party names across permits, deeds, easements, FDEP and FAA. ' +
+        'Mortgages, liens, lis pendens and judgments are not searchable on the map — the Clerk’s public files carry no parcel for them.</p>';
+      return;
+    }
+    host.innerHTML = '<p class="signal-results__head">' + formatNumber(st.results.length) + ' match' + (st.results.length === 1 ? "" : "es") + '</p>' +
+      st.results.slice(0, 25).map(function (s, i) {
+        const badge = s.verification_status === "VERIFIED" ? "Verified" : (s.verification_status === "PRELIMINARY" ? "Preliminary" : s.verification_status);
+        return '<button type="button" class="signal-result" data-search-index="' + i + '">' +
+          '<span class="signal-result__layer" style="color:' + escapeHtml(V.LAYER_COLOR[s.layer] || "#1767ff") + '">' + escapeHtml(V.LAYER_LABEL[s.layer] || "") + '</span>' +
+          '<span class="signal-result__title">' + escapeHtml(s.headline || s.signal_id) + '</span>' +
+          '<span class="signal-result__meta">' + escapeHtml(s.source_name) + ' · ' + escapeHtml(badge) +
+          (s.source_record_date ? ' · ' + escapeHtml(V.fmtDate(s.source_record_date)) : '') + '</span></button>';
+      }).join("");
+    els("[data-search-index]", host).forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const s = signalState.search.results[Number(btn.dataset.searchIndex)];
+        if (!s || s.latitude == null || s.longitude == null || !state.map) return;
+        state.map.setView([s.latitude, s.longitude], Math.max(state.map.getZoom(), 17));
+        L.popup(SIGNAL_POPUP_OPTIONS)
+          .setLatLng([s.latitude, s.longitude]).setContent(signalCardHtml(s)).openOn(state.map);
+      });
+    });
   }
 
   function signalBoundsFromMap() {
@@ -1166,7 +1351,9 @@
     return {
       bounds: useBounds === false ? null : signalBoundsFromMap(),
       startDate: startDate,
-      sources: sources.length ? sources : ["permits", "faa", "fdep"],
+      sources: sources.length ? sources : SIGNAL_SOURCE_KEYS.slice(),
+      minAmount: f.minAmount || 0,
+      municipality: f.municipality || "",
       limit: 600, offset: 0
     };
   }
@@ -1175,17 +1362,34 @@
     var host = el("#signal-count-readout");
     if (!host) return;
     var c = signalState.counts || {};
-    var loaded = signalState.all.filter(function (s) { return s.public_eligibility; }).length;
+    var f = signalState.filters;
+    // Report only on sources the reader currently has switched on. Counts left over from a previous
+    // load must never be added in — a stale number is worse than no number.
+    var active = SIGNAL_SOURCE_KEYS.filter(function (k) { return f.sources[k] !== false; });
+    var loaded = signalState.all.filter(function (s) {
+      return s.public_eligibility && active.indexOf(signalSourceKey(s)) > -1;
+    }).length;
     var visible = visibleSignals().length;
-    var filteredTotal = ["permits", "faa", "fdep"].reduce(function (sum, k) {
+    var filteredTotal = active.reduce(function (sum, k) {
       var v = c[k] && c[k].filteredTotal; return v == null ? sum : sum + v;
     }, 0);
-    var anyUnknown = ["permits", "faa", "fdep"].some(function (k) { return c[k] && c[k].filteredTotal == null; });
+    var anyUnknown = active.some(function (k) { return !c[k] || c[k].filteredTotal == null; });
     var eligTotal = signalState.totals && signalState.totals.all;
+    // A source that returned a full page has more records behind it. Say so plainly rather than
+    // presenting a capped page as if it were the complete set for this view.
+    var capped = active.filter(function (k) { return c[k] && c[k].hasMore; });
     host.innerHTML =
-      '<strong>' + formatNumber(visible) + '</strong> Signals in this view · ' +
-      formatNumber(loaded) + ' loaded' +
-      (filteredTotal && !anyUnknown ? ' · <b>' + formatNumber(filteredTotal) + '</b> match current filters' : '') +
+      '<strong>' + formatNumber(visible) + '</strong> Signals shown · ' +
+      formatNumber(loaded) + ' loaded in this view' +
+      (capped.length
+        ? '<small class="signal-readout__cap">More records exist here than one view can load (' +
+          escapeHtml(capped.join(", ")) + ' reached the per-request cap of ' +
+          formatNumber(signalState.service ? signalState.service.PAGE_CAP : 600) +
+          '). Zoom in or narrow the window for complete coverage of an area.</small>'
+        : '') +
+      (filteredTotal && !anyUnknown
+        ? '<small>≈' + formatNumber(filteredTotal) + ' match these filters countywide (planner estimate)</small>'
+        : '') +
       (eligTotal ? '<small>' + formatNumber(eligTotal) + ' eligible Signals across Broward (all dates)</small>' : '');
   }
 
@@ -1198,7 +1402,7 @@
       var result = await signalState.service.load(signalQueryOptions((opts && opts.all) ? false : true));
       if (result.stale) return;                       // a newer request won
       signalState.all = result.signals;
-      signalState.counts = result.counts;
+      signalState.counts = result.counts;      // replaced wholesale; no key survives a source change
       signalState.errors = result.errors || [];
       renderSignalControls();
       drawSignalLayer();
@@ -1222,6 +1426,7 @@
     signalState.service = window.FloridaSignalV1.createService({ supabaseUrl: SUPABASE_URL, key: SUPABASE_KEY });
     // Unbounded eligible totals first (server-side counts only — no rows transferred).
     signalState.service.totals({}).then(function (t) { signalState.totals = t; renderSignalCounts(); }).catch(function () {});
+    bindPopupOverlayGuard(state.map);
     await loadSignalsForView();
     state.map.on("moveend zoomend", scheduleSignalReload);
   }

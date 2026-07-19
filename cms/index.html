@@ -74,6 +74,33 @@
       border-bottom: 1px solid var(--line);
       backdrop-filter: blur(14px);
     }
+
+    /* ===== Shared desk navigation (ADR-001) — identical in index/data/review ===== */
+    .stage-nav { background: var(--ink); }
+    .stage-nav__inner {
+      max-width: 1600px; margin: 0 auto; display: grid;
+      grid-template-columns: repeat(3, 1fr);
+    }
+    .stage-nav__stage {
+      display: block; padding: 13px clamp(14px, 2.4vw, 28px);
+      border-right: 1px solid rgba(255,255,255,.14);
+      color: rgba(255,255,255,.66); text-decoration: none;
+    }
+    .stage-nav__stage:last-child { border-right: 0; }
+    .stage-nav__stage b {
+      display: block; font-family: var(--serif); font-size: 12px; font-weight: 700;
+      letter-spacing: .04em; color: rgba(255,255,255,.9);
+    }
+    .stage-nav__stage small { display: block; margin-top: 2px; font-size: 10.5px; line-height: 1.4; }
+    .stage-nav__stage:hover { background: rgba(255,255,255,.07); color: #fff; }
+    .stage-nav__stage:hover b { color: #fff; }
+    .stage-nav__stage[aria-current="page"] { background: var(--teal); color: rgba(255,255,255,.86); }
+    .stage-nav__stage[aria-current="page"] b { color: #fff; }
+    @media (max-width: 720px) {
+      .stage-nav__inner { grid-template-columns: 1fr; }
+      .stage-nav__stage { border-right: 0; border-bottom: 1px solid rgba(255,255,255,.14); padding: 11px 14px; }
+      .stage-nav__stage small { display: inline; margin-left: 6px; }
+    }
     .masthead__inner {
       max-width: 1600px;
       margin: 0 auto;
@@ -499,9 +526,22 @@
         <span class="status-dot" id="status-dot" data-state="locked" aria-hidden="true"></span>
         <span id="desk-status">Desk locked · enter the local admin token</span>
       </div>
-      <div class="privacy-note">Token stays in this tab · drafts never enter the public wire · <a href="/data.html"><strong>Data Desk →</strong></a></div>
+      <div class="privacy-note">Token stays in this tab · drafts never enter the public wire</div>
     </div>
   </div>
+
+  <!-- Shared desk navigation. See cms/ADR-001-data-wire-information-architecture.md.
+       Keep this block identical in index.html, data.html and review.html. -->
+  <nav class="stage-nav" aria-label="Data Wire stages">
+    <div class="stage-nav__inner">
+      <a class="stage-nav__stage" href="/data.html">
+        <b>1 · Data Desk</b><small>Look. Every source, raw and read-only.</small></a>
+      <a class="stage-nav__stage" href="/review.html">
+        <b>2 · Signal Review</b><small>Decide. Approve, hold or reject candidates.</small></a>
+      <a class="stage-nav__stage" href="/index.html" aria-current="page">
+        <b>3 · Editorial Desk</b><small>Write. Source-gated packets, cleared by a human.</small></a>
+    </div>
+  </nav>
 
   <main id="workspace">
     <section class="intro" aria-labelledby="page-title">

@@ -21,6 +21,43 @@ ROOT = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("DATA_WIRE_DB_PATH", str(ROOT / "data" / "data_wire.sqlite")))
 ADMIN_TOKEN = os.getenv("DATA_WIRE_ADMIN_TOKEN", "").strip()
 MAX_BODY = 1_000_000
+
+# Signal review queue lives in Supabase, not the local SQLite store. The service-role key is read
+# from the environment only (Andy keeps it in ~/.florida_signal_supabase_env) and is NEVER sent to
+# the browser: every queue read and write is proxied through this loopback server.
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://jrjewmzkyluxdywyusrw.supabase.co").rstrip("/")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+REVIEW_STATUSES = {"NEW", "REVIEWING", "HOLD", "APPROVED", "REJECTED", "NEEDS_MORE_REPORTING"}
+REVIEW_DESTINATIONS = {
+    "live_signals_map", "signals_page", "daily_intel_brief", "neighborhood_page", "broward_record",
+}
+
+
+def supabase_request(path: str, method: str = "GET", body: Any = None, prefer: str = "") -> tuple[int, Any]:
+    """Call PostgREST with the service-role key. Returns (status, parsed-or-text)."""
+    import urllib.error
+    import urllib.request
+
+    if not SUPABASE_SERVICE_KEY:
+        return 503, {"error": "SUPABASE_SERVICE_ROLE_KEY is not set in this shell; queue is read-only"}
+    request = urllib.request.Request(
+        f"{SUPABASE_URL}/rest/v1/{path}",
+        method=method,
+        data=json.dumps(body).encode() if body is not None else None,
+    )
+    request.add_header("apikey", SUPABASE_SERVICE_KEY)
+    request.add_header("Authorization", f"Bearer {SUPABASE_SERVICE_KEY}")
+    request.add_header("Content-Type", "application/json")
+    if prefer:
+        request.add_header("Prefer", prefer)
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            raw = response.read().decode()
+            return response.status, (json.loads(raw) if raw.strip() else None)
+    except urllib.error.HTTPError as error:
+        return error.code, {"error": error.read().decode()[:400]}
+    except OSError as error:
+        return 502, {"error": str(error)[:200]}
 MARKET_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,39}$")
 CITY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,59}$")
 COUNTY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,79}$")
@@ -399,6 +436,23 @@ class Handler(SimpleHTTPRequestHandler):
                 rows = db.execute("select * from stories where market=? order by updated_at desc", (market,)).fetchall()
             self.reply({"market": market, "stories": [story_json(row) for row in rows]})
             return
+        if route == "/api/admin/review-queue":
+            if not self.require_admin():
+                return
+            params = parse_qs(urlparse(self.path).query)
+            status = (params.get("status", [""])[0] or "").upper()
+            query = ("signal_review_queue?select=*"
+                     "&order=amount.desc.nullslast,source_record_date.desc&limit=200")
+            if status in REVIEW_STATUSES:
+                query += f"&review_status=eq.{status}"
+            code, data = supabase_request(query)
+            if code >= 400:
+                self.reply(data if isinstance(data, dict) else {"error": "queue unavailable"},
+                           HTTPStatus.BAD_GATEWAY)
+                return
+            self.reply({"items": data or [], "generated_at": now_iso(),
+                        "gate": "editorial queue — approval records a decision and publishes nothing"})
+            return
         if route == "/":
             self.path = "/index.html"
         super().do_GET()
@@ -409,6 +463,45 @@ class Handler(SimpleHTTPRequestHandler):
         route = urlparse(self.path).path
         payload = self.read_json()
         if payload is None:
+            return
+        review_action = re.fullmatch(r"/api/admin/review-queue/(?P<qid>\d{1,12})", route)
+        if review_action:
+            patch: dict[str, Any] = {}
+            status = str(payload.get("review_status", "")).upper().strip()
+            if status:
+                if status not in REVIEW_STATUSES:
+                    self.reply({"error": f"Unknown review status: {status}"}, HTTPStatus.BAD_REQUEST)
+                    return
+                patch["review_status"] = status
+                # A decision is stamped; it is not a publish action.
+                if status in {"APPROVED", "REJECTED", "HOLD", "NEEDS_MORE_REPORTING"}:
+                    patch["decided_at"] = now_iso()
+                    patch["decided_by"] = str(payload.get("decided_by", "editor"))[:120]
+            if "destinations" in payload:
+                chosen = [str(d) for d in list_value(payload.get("destinations"))]
+                unknown = sorted(set(chosen) - REVIEW_DESTINATIONS)
+                if unknown:
+                    self.reply({"error": f"Unknown destination(s): {', '.join(unknown)}"},
+                               HTTPStatus.BAD_REQUEST)
+                    return
+                patch["destinations"] = chosen
+            for field, limit in (("editor_headline", 300), ("editor_summary", 2000),
+                                 ("editor_notes", 4000), ("assigned_reviewer", 120)):
+                if field in payload:
+                    patch[field] = str(payload.get(field) or "")[:limit] or None
+            if not patch:
+                self.reply({"error": "Nothing to update"}, HTTPStatus.BAD_REQUEST)
+                return
+            code, data = supabase_request(
+                f"signal_review_queue?queue_id=eq.{review_action.group('qid')}",
+                method="PATCH", body=patch, prefer="return=representation")
+            if code >= 400:
+                self.reply(data if isinstance(data, dict) else {"error": "update failed"},
+                           HTTPStatus.BAD_GATEWAY)
+                return
+            item = (data or [None])[0]
+            self.reply({"ok": True, "item": item,
+                        "note": "Editorial decision recorded. Nothing has been published."})
             return
         if route == "/api/admin/stories":
             try:

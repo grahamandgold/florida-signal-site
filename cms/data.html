@@ -33,6 +33,34 @@
       --sans: "Figtree", "DM Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     }
+
+    /* ===== Shared desk navigation (ADR-001) — identical in index/data/review ===== */
+    .stage-nav { background: var(--ink); }
+    .stage-nav__inner {
+      max-width: 1600px; margin: 0 auto; display: grid;
+      grid-template-columns: repeat(3, 1fr);
+    }
+    .stage-nav__stage {
+      display: block; padding: 13px clamp(14px, 2.4vw, 28px);
+      border-right: 1px solid rgba(255,255,255,.14);
+      color: rgba(255,255,255,.66); text-decoration: none;
+    }
+    .stage-nav__stage:last-child { border-right: 0; }
+    .stage-nav__stage b {
+      display: block; font-family: var(--serif); font-size: 12px; font-weight: 700;
+      letter-spacing: .04em; color: rgba(255,255,255,.9);
+    }
+    .stage-nav__stage small { display: block; margin-top: 2px; font-size: 10.5px; line-height: 1.4; }
+    .stage-nav__stage:hover { background: rgba(255,255,255,.07); color: #fff; }
+    .stage-nav__stage:hover b { color: #fff; }
+    .stage-nav__stage[aria-current="page"] { background: var(--teal); color: rgba(255,255,255,.86); }
+    .stage-nav__stage[aria-current="page"] b { color: #fff; }
+    @media (max-width: 720px) {
+      .stage-nav__inner { grid-template-columns: 1fr; }
+      .stage-nav__stage { border-right: 0; border-bottom: 1px solid rgba(255,255,255,.14); padding: 11px 14px; }
+      .stage-nav__stage small { display: inline; margin-left: 6px; }
+    }
+
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body {
@@ -199,12 +227,24 @@
           <p class="brand__sub">Read-only intelligence viewer · Broward store</p>
         </div>
       </div>
-      <nav class="desk-nav" aria-label="Desk navigation">
-        <a class="button button--ghost" href="/">Editorial Desk</a>
+      <nav class="masthead-links" aria-label="External links">
         <a class="button button--teal" href="http://127.0.0.1:4173/fort-lauderdale/" target="_blank" rel="noopener">Public site ↗</a>
       </nav>
     </div>
   </header>
+
+  <!-- Shared desk navigation. See cms/ADR-001-data-wire-information-architecture.md.
+       Keep this block identical in index.html, data.html and review.html. -->
+  <nav class="stage-nav" aria-label="Data Wire stages">
+    <div class="stage-nav__inner">
+      <a class="stage-nav__stage" href="/data.html" aria-current="page">
+        <b>1 · Data Desk</b><small>Look. Every source, raw and read-only.</small></a>
+      <a class="stage-nav__stage" href="/review.html">
+        <b>2 · Signal Review</b><small>Decide. Approve, hold or reject candidates.</small></a>
+      <a class="stage-nav__stage" href="/index.html">
+        <b>3 · Editorial Desk</b><small>Write. Source-gated packets, cleared by a human.</small></a>
+    </div>
+  </nav>
 
   <main>
     <section class="intro">
@@ -510,6 +550,25 @@
         search: t => `(permit_number.ilike.*${t}*,task_name.ilike.*${t}*)`,
         drawer: "permitByField"
       },
+      broward_property_transfer_map: {
+        label: "Property transfers — deeds & easements mapped to parcels",
+        select: "recording_date,instrument_kind,doc_type_code,instrument_number,consideration_amount,folio_canonical,folio_raw,address,situs_city,property_type,source_object_id,latitude,longitude,matched_parcel_count,linkage_method,verification_state,exclusion_reason,map_eligible,legal_description,verified_flag",
+        order: "recording_date.desc.nullslast",
+        cols: [
+          ["recording_date", "Recorded", dateish],
+          ["instrument_kind", "Kind"],
+          ["instrument_number", "Instrument #", v => `<span class="pill">${esc(v)}</span>`],
+          ["consideration_amount", "Stated amount", money, "num"],
+          ["folio_canonical", "Folio"],
+          ["address", "Situs address"],
+          ["situs_city", "City code"],
+          ["verification_state", "Verification"],
+          ["map_eligible", "Map eligible?"],
+          ["exclusion_reason", "Why excluded"]
+        ],
+        search: t => `(instrument_number.ilike.*${t}*,folio_canonical.ilike.*${t}*,address.ilike.*${t}*,legal_description.ilike.*${t}*)`,
+        drawer: "generic"
+      },
       owner_resolution: {
         label: "Owner resolution",
         select: "permit_number,resolved_owner_name,resolved_owner_source,confidence,requires_human_verification,folio,resolved_at",
@@ -532,7 +591,10 @@
       { label: "High value $100K+", table: "permits", extra: { valuation_usd_clean: "gte.100000" } },
       { label: "Latest recordings", table: "broward_clerk_records_doc", extra: {} },
       { label: "Deeds", table: "broward_clerk_records_doc", extra: { doc_type_code: "eq.D" } },
-      { label: "Mortgages", table: "broward_clerk_records_doc", extra: { doc_type_code: "eq.M" } },
+      { label: "Deeds · mapped to parcels", table: "broward_property_transfer_map", extra: { doc_type_code: "eq.D", map_eligible: "is.true" } },
+      { label: "Deeds · NOT mappable", table: "broward_property_transfer_map", extra: { doc_type_code: "eq.D", map_eligible: "is.false" } },
+      { label: "Easements · mapped", table: "broward_property_transfer_map", extra: { doc_type_code: "eq.EAS", map_eligible: "is.true" } },
+      { label: "Mortgages (no parcel — not mappable)", table: "broward_clerk_records_doc", extra: { doc_type_code: "eq.M" } },
       { label: "NOCs", table: "broward_clerk_records_doc", extra: { doc_type_code: "eq.NOC" } },
       { label: "Liens", table: "broward_clerk_records_doc", extra: { doc_type_code: "eq.LIE" } },
       { label: "Judgments", table: "broward_clerk_records_doc", extra: { doc_type_code: "eq.FJ" } },

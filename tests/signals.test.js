@@ -86,6 +86,63 @@ const clerkResolved = V.build(clerkPrelim, "clerk", { resolveLocation: () => ({ 
 ok("resolver enables location + parcel", clerkResolved.latitude === 26.12 && clerkResolved.verified_parcel_id === "504210010010");
 ok("resolved clerk still PRELIMINARY badge", clerkResolved.verification_status === "PRELIMINARY");
 
+section("PROPERTY TRANSFER ADAPTER (deeds + easements)");
+const deedRow = { instrument_number: "120843560", doc_type_code: "D", instrument_kind: "deed", recording_date: "2026-05-01", consideration_amount: 180000000, folio_canonical: "504210460010", source_object_id: 257808, latitude: 26.11788, longitude: -80.14489, address: "401 SW 1 AVE", situs_city: "FL", property_type: "10", matched_parcel_count: 1, verification_state: "VERIFIED", linkage_method: "DIRECT_EXACT_FOLIO", parties: "ACME HOLDINGS LLC (G) · RIVERSIDE PARTNERS LP (E)" };
+const deedNoAmount = Object.assign({}, deedRow, { instrument_number: "120900000", consideration_amount: null });
+const easementRow = { instrument_number: "120912345", doc_type_code: "EAS", instrument_kind: "easement", recording_date: "2026-06-18", consideration_amount: 10, folio_canonical: "494110AJ0050", source_object_id: 800548, latitude: 26.20045, longitude: -80.23706, address: "2309 SW 81 TER # 5", situs_city: "NL", property_type: "04", matched_parcel_count: 1, verification_state: "VERIFIED", linkage_method: "DIRECT_EXACT_FOLIO" };
+const deedConflict = Object.assign({}, deedRow, { instrument_number: "120800001", matched_parcel_count: 3, verification_state: "CONFLICT" });
+const deedUnresolved = Object.assign({}, deedRow, { instrument_number: "120800002", source_object_id: null, latitude: null, longitude: null, verification_state: "UNRESOLVED" });
+
+const deed = V.build(deedRow, "transfer");
+ok("deed → deed layer", deed.layer === V.LAYER.DEED, deed.layer);
+ok("deed is public-eligible", deed.public_eligibility === true, JSON.stringify(deed.exclusion_reasons));
+ok("signal_type is PROPERTY_TRANSFER when subtype unknown", deed.signal_type === V.TRANSFER_TYPE.PROPERTY_TRANSFER, deed.signal_type);
+ok("does NOT claim ownership changed", deed.signal_type !== V.TRANSFER_TYPE.OWNERSHIP_CHANGE);
+ok("carries the exact parcel", deed.verified_parcel_id === "504210460010");
+ok("parcel-precision location", deed.geographic_precision === "parcel" && /exact canonical folio/.test(deed.location_source));
+ok("uses recording date, not pull date", deed.source_record_date === "2026-05-01", deed.source_record_date);
+ok("stated amount surfaced in what_happened", /stated amount of \$180 million/.test(deed.what_happened), deed.what_happened);
+ok("no-amount deed still states the recording", /A deed was recorded for this parcel\./.test(V.build(deedNoAmount, "transfer").what_happened));
+ok("caveat denies market value", /not an appraisal, not a market value/.test(deed.caveat));
+ok("caveat denies arm's length", /arm's length/.test(deed.caveat));
+ok("caveat denies development/construction", /development is planned, or that any construction will occur/.test(deed.caveat));
+ok("headline never claims construction", !/construction|development will|breaks ground/i.test(deed.headline), deed.headline);
+ok("what_it_does_not_prove is populated", !!deed.what_it_does_not_prove);
+ok("evidence names instrument and parcel", /Clerk instrument 120843560/.test(deed.evidence_summary) && /parcel 504210460010/.test(deed.evidence_summary), deed.evidence_summary);
+ok("deterministic id includes folio", deed.signal_id === "transfer:120843560:504210460010", deed.signal_id);
+ok("high-value deed gets top priority", deed.editorial_priority === 90, String(deed.editorial_priority));
+ok("parties carried", /Acme Holdings/i.test(deed.owner_or_applicant || ""), deed.owner_or_applicant);
+ok("municipality left null (county publishes none)", deed.municipality === null);
+
+const eas = V.build(easementRow, "transfer");
+ok("easement → easement layer", eas.layer === V.LAYER.EASEMENT, eas.layer);
+ok("easement signal type", eas.signal_type === V.TRANSFER_TYPE.EASEMENT_RECORDED, eas.signal_type);
+ok("easement wording is bounded", /An easement was recorded affecting this parcel\./.test(eas.what_happened), eas.what_happened);
+ok("easement does not infer impact", /does not establish what the easement permits/.test(eas.caveat));
+ok("easement eligible", eas.public_eligibility === true, JSON.stringify(eas.exclusion_reasons));
+
+const dc = V.build(deedConflict, "transfer");
+ok("multi-parcel deed is CONFLICT", dc.verification_status === V.STATUS.CONFLICT, dc.verification_status);
+ok("multi-parcel deed NOT map-eligible", dc.public_eligibility === false);
+ok("multi-parcel reason recorded", dc.exclusion_reasons.some(r => /more than one parcel/i.test(r)), JSON.stringify(dc.exclusion_reasons));
+
+const du = V.build(deedUnresolved, "transfer");
+ok("unmatched folio NOT map-eligible", du.public_eligibility === false);
+ok("unmatched reason recorded", du.exclusion_reasons.some(r => /not present in the official county parcel layer/i.test(r)), JSON.stringify(du.exclusion_reasons));
+ok("unmatched deed manufactures no coordinates", du.latitude === null && du.longitude === null);
+
+section("UNSUPPORTED CLERK CATEGORIES STAY OFF THE MAP");
+["M", "LIE", "LP", "FJ"].forEach(function (code) {
+  const s = V.build({ instrument_number: "9990" + code, doc_type: code, record_date: "2026-07-01", source: "acclaimweb-public-search" }, "clerk");
+  ok(code + " is not map-eligible", s.public_eligibility === false, JSON.stringify(s.exclusion_reasons));
+  ok(code + " has no manufactured coordinates", s.latitude === null && s.longitude === null);
+});
+const riskFamily = V.SOURCE_FAMILIES.filter(f => f.key === "risk-legal")[0];
+ok("Risk & Legal family is declared planned, not live", riskFamily && riskFamily.status === "planned", JSON.stringify(riskFamily));
+ok("Risk & Legal explains why it is empty", /no parcel identifier/i.test(riskFamily.note || ""), riskFamily && riskFamily.note);
+ok("Property & Money family carries only deeds + easements",
+   JSON.stringify(V.SOURCE_FAMILIES.filter(f => f.key === "property-money")[0].layers) === '["deed","easement"]');
+
 section("CONFLICT HANDLING");
 const conflicted = V.applyEligibility(V.applyIntelligence(V.fromPermit(Object.assign({}, permitHighValue))));
 conflicted.conflicts = [{ field: "valuation_or_amount", values: [1111117, 250000], sources: ["permits", "accela_details"] }];
@@ -108,8 +165,12 @@ ok("no signal carries a published flag", [hv, crane, fdep].every(s => !("publish
 ok("versioned model", hv.signal_version === "SignalV1" && V.VERSION === "SignalV1");
 
 section("LAYERS / LEGEND");
-ok("6 product layers defined", Object.keys(V.LAYER_LABEL).length === 6, JSON.stringify(Object.keys(V.LAYER_LABEL)));
+ok("8 product layers defined", Object.keys(V.LAYER_LABEL).length === 8, JSON.stringify(Object.keys(V.LAYER_LABEL)));
 ok("every layer has a colour", Object.keys(V.LAYER_LABEL).every(k => !!V.LAYER_COLOR[k]));
+ok("every live family maps to defined layers",
+   V.SOURCE_FAMILIES.filter(f => f.status === "live").every(f => f.layers.length > 0 && f.layers.every(l => !!V.LAYER_LABEL[l])));
+ok("every planned family is empty and explained",
+   V.SOURCE_FAMILIES.filter(f => f.status === "planned").every(f => f.layers.length === 0 && !!f.note));
 
 console.log("\n================ RESULT ================");
 console.log("  passed: " + pass + "   failed: " + fail);

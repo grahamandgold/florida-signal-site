@@ -802,7 +802,7 @@ body.brief-prompt-open { overflow: hidden; }
 .map-toolbar p.data-label { margin: 0; color: var(--ink); }
 .map-toolbar a { color: var(--teal-dark); font-size: 12px; font-weight: 700; text-decoration: none; }
 .map { height: 585px; background: #e8f0ec; }
-.map-signal-control { position: absolute; z-index: 650; top: 15px; left: 50%; display: flex; align-items: center; gap: 11px; margin: 0 !important; padding: 7px 16px 7px 7px; border: 1px solid rgba(7,27,50,.16); border-radius: 999px; background: rgba(255,255,255,.95); color: var(--ink); box-shadow: 0 12px 34px rgba(7,27,50,.2); backdrop-filter: blur(12px); text-decoration: none; transform: translateX(-50%); }
+.map-signal-control { position: absolute; z-index: 640; top: 15px; left: 50%; display: flex; align-items: center; gap: 11px; margin: 0 !important; padding: 7px 16px 7px 7px; border: 1px solid rgba(7,27,50,.16); border-radius: 999px; background: rgba(255,255,255,.95); color: var(--ink); box-shadow: 0 12px 34px rgba(7,27,50,.2); backdrop-filter: blur(12px); text-decoration: none; transform: translateX(-50%); }
 .map-signal-control__mark { width: 42px; height: 42px; display: grid !important; place-items: center; overflow: hidden; border: 1px solid rgba(23,103,255,.25); border-radius: 50%; background: radial-gradient(circle at 32% 24%, #fff 0 18%, #e6f8f5 52%, #d3edf2 100%); box-shadow: inset 0 0 14px rgba(255,255,255,.9), 0 7px 18px rgba(7,27,50,.13); }
 .map-signal-control img { width: 31px; height: 34px; position: static !important; object-fit: contain; filter: drop-shadow(0 5px 7px rgba(7,27,50,.23)); }
 .map-signal-control > span:last-child { display: grid; gap: 2px; padding-right: 2px; }
@@ -2542,7 +2542,7 @@ a.brand { width: auto; max-width: none; }
 
 /* Map key + refreshed map brand */
 .map-signal-control__mark img { width: 30px; height: auto; }
-.map-key { position: absolute; z-index: 650; left: 12px; bottom: 12px; display: flex; flex-direction: column; gap: 4px; padding: 10px 13px; border: 1px solid rgba(7,27,50,.16); background: rgba(255,255,255,.95); backdrop-filter: blur(10px); box-shadow: 0 12px 30px rgba(7,27,50,.18); font-size: 10px; color: var(--ink-2); }
+.map-key { position: absolute; z-index: 640; left: 12px; bottom: 12px; display: flex; flex-direction: column; gap: 4px; padding: 10px 13px; border: 1px solid rgba(7,27,50,.16); background: rgba(255,255,255,.95); backdrop-filter: blur(10px); box-shadow: 0 12px 30px rgba(7,27,50,.18); font-size: 10px; color: var(--ink-2); }
 .map-key b { font-family: "Montserrat", var(--sans); font-size: 8.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--ink); }
 .map-key span { display: flex; align-items: center; gap: 7px; }
 .map-key i { width: 11px; height: 11px; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px rgba(7,27,50,.25); }
@@ -2572,6 +2572,33 @@ a.brand { width: auto; max-width: none; }
 .signal-legend i { width: 11px; height: 11px; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px rgba(7,27,50,.25); }
 .signal-loading, .signal-empty, .signal-error { margin: 6px 0 0; font-size: 11.5px; color: var(--muted); }
 .signal-error { color: #a52828; }
+.signal-note { margin: 0 0 10px; font-size: 10.5px; line-height: 1.45; color: var(--muted); }
+
+/* Source families — grouped by what the reader is looking for, not by publishing agency. */
+.signal-controls__sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(196px, 1fr)); gap: 12px 20px; align-items: start; }
+.signal-family { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.signal-family__label { margin: 0 0 4px; font-family: "Montserrat", var(--sans); font-size: 9px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; color: var(--ink); }
+.signal-family--planned { opacity: .78; }
+.signal-family__tag { display: inline-block; margin-left: 6px; padding: 2px 6px; background: var(--paper-2, #f1f3f7); font-size: 8px; font-weight: 700; letter-spacing: .1em; color: var(--muted); }
+.signal-family__note { margin: 0; font-size: 10.5px; line-height: 1.45; color: var(--muted); }
+.signal-family .signal-toggle { min-height: 30px; }
+
+/* Search */
+.signal-search { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin: 0 0 10px; }
+.signal-field--grow { flex: 1 1 220px; min-width: 0; }
+.signal-search input[type="search"] { width: 100%; min-height: 36px; padding: 6px 10px; border: 1px solid var(--line); background: #fff; font-size: 13px; color: var(--ink); -webkit-appearance: none; appearance: none; }
+.signal-search input[type="search"]:focus { outline: 2px solid var(--blue-bright); outline-offset: -2px; }
+.signal-search button { min-height: 36px; padding: 0 16px; border: 1px solid var(--navy, #082a54); background: var(--navy, #082a54); font-family: "Montserrat", var(--sans); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #fff; cursor: pointer; }
+.signal-search button:hover { background: var(--blue-bright); border-color: var(--blue-bright); }
+.signal-results { margin: 0 0 12px; max-height: 264px; overflow-y: auto; border: 1px solid var(--line); }
+.signal-results__head { margin: 0; padding: 7px 10px; border-bottom: 1px solid var(--line); background: var(--paper-2, #f1f3f7); font-size: 9.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.signal-result { display: block; width: 100%; padding: 9px 10px; border: 0; border-bottom: 1px solid var(--line); background: #fff; text-align: left; cursor: pointer; }
+.signal-result:last-child { border-bottom: 0; }
+.signal-result:hover { background: var(--paper-2, #f1f3f7); }
+.signal-result__layer { display: block; font-family: "Montserrat", var(--sans); font-size: 8px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+.signal-result__title { display: block; margin: 2px 0; font-size: 12.5px; line-height: 1.35; color: var(--ink); }
+.signal-result__meta { display: block; font-size: 10px; color: var(--muted); }
+.signal-results .signal-empty { padding: 10px; }
 
 .signal-popup .leaflet-popup-content { margin: 14px 16px; }
 .signal-card__layer { margin: 0 0 4px; font-family: "Montserrat", var(--sans); font-size: 8.5px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
@@ -2596,6 +2623,11 @@ a.brand { width: auto; max-width: none; }
   .signal-controls { padding: 12px; }
   .signal-controls__row { gap: 8px 10px; }
   .signal-field, .signal-field select { width: 100%; }
+  .signal-controls__sources { grid-template-columns: 1fr; gap: 10px; }
+  .signal-search { gap: 6px; }
+  .signal-search button { width: 100%; }
+  .signal-results { max-height: 216px; }
+  .signal-toggle { font-size: 11px; }
   .signal-popup .leaflet-popup-content { margin: 12px 13px; }
   .signal-card__headline { font-size: 14px; }
   .signal-card__facts { grid-template-columns: 1fr; gap: 1px; }
@@ -2735,4 +2767,32 @@ a.brand { width: auto; max-width: none; }
 .signal-readout strong { font-family: "Montserrat", var(--sans); font-size: 15px; color: var(--ink); }
 .signal-readout b { color: var(--blue-bright); }
 .signal-readout small { display: block; margin-top: 2px; font-size: 10px; color: var(--muted); }
+.signal-readout__cap { color: #8a6d1a; }
 .signal-controls[data-loading] { opacity: .72; }
+
+
+/* ===== Map overlays must never cover an open Signal card (2026-07-19) =====
+   The brand badge and key are children of the map container, so without an explicit rule they
+   paint over Leaflet's popup pane. Popups win; overlays dim and drop behind while one is open. */
+.leaflet-popup-pane { z-index: 900; }
+.map:has(.leaflet-popup) .map-signal-control,
+.map:has(.leaflet-popup) .map-key,
+.leaflet-container:has(.leaflet-popup) .map-signal-control,
+.leaflet-container:has(.leaflet-popup) .map-key,
+.leaflet-container.has-open-popup .map-signal-control,
+.leaflet-container.has-open-popup .map-key {
+  opacity: .22;
+  pointer-events: none;
+  transition: opacity .18s ease;
+}
+.map-signal-control, .map-key { transition: opacity .18s ease; }
+
+/* Give a long Signal card its own scroll instead of letting it run past the map. */
+.signal-popup .leaflet-popup-content { max-height: min(60vh, 420px); overflow-y: auto; overscroll-behavior: contain; }
+@media (max-width: 620px) {
+  .signal-popup .leaflet-popup-content { max-height: 52vh; }
+  /* On a phone the badge and the card cannot share the top of the map. */
+  .map-signal-control { top: 8px; padding: 5px 12px 5px 5px; }
+  .map-signal-control__mark { width: 34px; height: 34px; }
+  .map-signal-control img { width: 25px; height: 27px; }
+}

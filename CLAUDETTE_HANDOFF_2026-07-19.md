@@ -441,3 +441,153 @@ verified path.** This is a source-data limitation. Only **deeds (7,903 mappable)
 - For mortgages/liens/LP: the only remaining credible path is **BCPA per-folio lookup or a
   Clerk-provided legal file that includes non-deed instruments** — both require separate approval.
 - Connect **deeds only** to SignalV1/map/CMS once stratified verification passes.
+
+---
+## Addendum — County parcel import COMPLETE + deed/easement property layer connected (2026-07-19, evening)
+
+### WHOLE-COUNTY PARCEL IMPORT — COMPLETE (provable)
+
+Coverage is now proved by a **range ledger** (`broward_parcel_range_ledger`), not by a tail batch.
+The county source is partitioned into **110 disjoint OBJECTID ranges of 20,000** covering
+`[0 … 2,199,999]`, which contains the source's true span (`min OBJECTID 2 … max 2,185,857`).
+Each range carries an expected row count taken from the county's **own `returnCountOnly`**.
+
+| Ledger proof | Value |
+|---|---:|
+| Expected ranges | 110 |
+| Completed ranges | **110** |
+| Failed ranges | **0** |
+| Unfinished ranges | **0** |
+| Gaps or overlaps between ranges | **0** |
+| Source rows expected (sum of per-range county counts) | **554,358** |
+| Source rows received | **554,358** |
+| Source rows accepted | 539,213 |
+| Source rows rejected | 50 |
+| Duplicate folios collapsed (same page) | 15,095 |
+
+`539,213 + 50 + 15,095 = 554,358` — the ledger reconciles exactly, and the sum of the 110
+independent county counts equals the county's own published total of **554,358**.
+
+### FINAL PARCEL INTEGRITY
+
+| Measure | Value |
+|---|---:|
+| Official source count | 554,358 |
+| Final loaded rows | **532,470** |
+| Distinct source OBJECTIDs | 532,470 |
+| Unique canonical folios | 532,470 |
+| Numeric folios | 482,572 |
+| Alphanumeric folios | 49,898 |
+| Duplicate folios in the table | **0** |
+| Duplicate source OBJECTIDs | **0** |
+| Missing coordinates | **0** |
+| Out-of-Broward coordinates | **0** |
+| Address coverage | 524,214 (98.5%) |
+| Municipality coverage | **0 — see below** |
+| Final import status | **COMPLETE** |
+
+**Reconciliation of 554,358 → 532,470 (fully explained, no unexplained loss):**
+554,358 source rows − 50 rejected (county-published centroid outside the Broward bounding box;
+isolated to 3 ranges, 0.009%) = 554,308 valid − 21,838 folio duplicates = **532,470 stored**.
+The table is keyed on canonical folio, so a parcel represented by several polygons (condo and
+common-element geometry) collapses to one centroid. 15,095 of those duplicates were seen inside a
+single page and counted by the ledger; the remaining 6,743 were the same folio appearing in
+different pages or ranges and collapsed on upsert. 15,095 + 6,743 = 21,838.
+
+### VERIFIED FACTS discovered during the import
+- **The county's `MUNICIPALITY` column is empty for all 554,358 records.** Confirmed directly against
+  the source (`where MUNICIPALITY IS NOT NULL` returns count 0). The only city value on the layer is
+  `SITUS_CITY`, a **two-letter county code** (FL, PI, HW, MM, CS, PB, DV, PL, SU, DB, TM, WS…) with no
+  published lookup table. Codes are surfaced exactly as the county writes them; **no label is guessed.**
+- **The layer has no `SITE_ADDRESS` field.** Situs address is stored as components
+  (`SITUS_STREET_NUMBER / _DIRECTION / _NAME / _TYPE / _UNIT_NUMBER`) and is now composed on ingest.
+  The earlier import stored a null address for every row because it used Palm Beach field names.
+- The layer publishes ~230 fields. Requesting `outFields=*` made a single edge invocation parse tens
+  of megabytes and hit `WORKER_RESOURCE_LIMIT`; the import only became reliable once the field list
+  was restricted to the columns actually stored.
+- The layer also publishes, per parcel, the last five sales with a **Clerk Instrument Number (`SALE1_CIN`)**,
+  deed type, sale date and stamp figure. **It cannot be used to cross-check our deeds: BCPA's most
+  recent sale is 2024-09-27 while our Clerk holdings begin 2026-04-23 — the two datasets do not overlap in time.**
+
+### DEED AND EASEMENT LINKAGE (exact canonical folio only)
+
+| | Deeds (`D`) | Easements (`EAS`) |
+|---|---:|---:|
+| Total instruments | 15,487 | 502 |
+| Instruments with a valid 12-char folio | 15,137 | 471 |
+| Distinct folio references | 15,456 | 490 |
+| Exact parcel matches / mappable | **10,337** | **461** |
+| Unique mapped parcels | 9,585 | 436 |
+| Folio present but not in the parcel layer | 4,800 | 10 |
+| No valid folio | 350 | 31 |
+| Match rate | **66.75%** | **91.83%** |
+| Official (verified feed) | all 15,487 | all 502 |
+| Preliminary (Acclaim) | 0 mappable — preliminary records have no legal file, so no folio | — |
+
+Map-eligible after conflict screening: **10,233 deeds** and **452 easements**
+(104 deeds and 9 easements reference more than one parcel and are held back as CONFLICT).
+
+The 4,800 unmatched deed folios use the same folio prefixes as matched ones (47–51), so they are
+Broward folios absent from the current tax-roll snapshot — splits, combines and newly created
+parcels — **not** a normalization defect.
+
+`TSD` (1,897 instruments, 1,506 with a parcel row) is a deed-family code that has **not** been
+classified and is deliberately excluded pending a documented reading of the county's code list.
+
+### STRATIFIED VERIFICATION — 46 samples retained in `broward_linkage_verification_samples`
+
+26 deeds, 10 easements, 10 alphanumeric folios; 12 distinct municipalities; condominium, residential,
+commercial-industrial and high-value strata; all instruments from the official verified feed.
+
+| Result | Count |
+|---|---:|
+| VERIFIED | 38 |
+| CONFLICT (multi-parcel instruments) | 3 |
+| UNRESOLVED (folio absent from the parcel layer) | 5 |
+
+No CONFLICT or UNRESOLVED record is map-eligible — enforced in SQL (`map_eligible`) and again in the
+adapter (`exclusion_reasons`), and asserted by unit tests.
+
+Independent checks performed:
+- The $180,000,000 sample (instrument 120843560, folio 504210460010) was **re-queried against the live
+  county layer**: OBJECTID 257808, situs components, use code and centroid all matched the stored row
+  to five decimal places.
+- 9 of 10 alphanumeric folios resolve to **condominium** parcels (use code 04) carrying a unit number
+  in the situs address; the tenth is a warehouse condo unit. This is what an alphanumeric Broward
+  folio denotes, and it confirms the alphanumeric normalization is behaving correctly.
+
+### DECISION LOG
+- The current Clerk SFTP legal and link files support verified parcel mapping **primarily for
+  deed-type instruments and easements**. Mortgages, liens, lis pendens and judgments are **not
+  map-eligible** without a separate verified property-link source. Accepted as a source limitation;
+  no further effort is being spent forcing them through the existing link table.
+- Coverage of a bulk import is proved by a **range ledger reconciled against the source's own counts**.
+  A COMPLETE sub-run is not evidence of whole-county completion.
+- The linkage view is materialised (`broward_property_transfer_map`) purely for interactive read
+  performance — the un-materialised join exceeded the statement timeout (57014). **No schedule is
+  attached to it**; refresh is manual and explicit.
+- Municipality is presented as the county's raw situs code. Inventing city labels for undocumented
+  two-letter codes would be an assumption, so it is not done.
+
+### RISK REGISTER
+- **An instrument-link relationship does not prove shared property** and must never be used as parcel
+  inheritance without verified evidence.
+- High-concurrency imports saturate the database. The proven configuration is **3 workers × 8 ranges**;
+  larger per-invocation batches hit the edge runtime's resource limit and silently strand ranges in
+  `IN_PROGRESS` (a stale-reclaim step is required after any such failure).
+- `broward_property_transfer_map` is a point-in-time snapshot. It does **not** refresh itself, so newly
+  ingested Clerk records will not appear on the map until someone runs the refresh.
+- The map's per-request cap is 600 records per source. Dense views are therefore incomplete by design;
+  the readout now says so explicitly rather than implying full coverage.
+
+### MASTER TO-DO
+- **Investigate separate official or document-derived linkage paths for mortgages, liens, lis pendens
+  and judgments.** These categories must not be described as supported by the current Clerk SFTP
+  mapping path. Candidate paths (each needs its own approval): BCPA per-folio lookup, or asking the
+  Clerk whether a legal file covering non-deed instruments exists.
+- Obtain an official Broward `SITUS_CITY` two-letter code table so the municipality filter can show
+  city names instead of codes.
+- Classify `TSD` and the remaining deed-family codes against the county's published code list.
+- Decide the refresh cadence for `broward_property_transfer_map` (currently manual by design).
+- Persona coverage gaps: contractor NOC mapping does not exist (NOCs carry no parcel), and Government
+  and Risk & Legal map families remain empty and are labelled as such.
