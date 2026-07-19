@@ -834,6 +834,37 @@
     if (window.L && L.DomEvent) L.DomEvent.disableClickPropagation(rail);
   }
 
+  /* Lockup tracking: measure the wordmark and stretch the tagline's letter-spacing so it spans
+     exactly that width, centred. Runs on load + resize so it stays exact at every breakpoint. */
+  function fitLockupTagline(nameSel, tagSel) {
+    els(nameSel).forEach(function (name, i) {
+      const tag = els(tagSel)[i];
+      if (!tag || !name.offsetParent) return;
+      const text = (tag.textContent || "").trim();
+      if (!text) return;
+      tag.style.letterSpacing = "normal";
+      tag.style.textIndent = "0px";
+      const target = name.getBoundingClientRect().width;
+      const natural = tag.getBoundingClientRect().width;
+      const chars = text.length;
+      if (!target || !natural || chars < 2) return;
+      const ls = Math.max(0, (target - natural) / chars);
+      tag.style.letterSpacing = ls.toFixed(3) + "px";
+      tag.style.textIndent = ls.toFixed(3) + "px";   // offset the trailing space so it stays centred
+    });
+  }
+
+  function initLockups() {
+    const run = function () {
+      fitLockupTagline(".brand__name", ".brand__tag");
+      fitLockupTagline(".map-signal-control__words b", ".map-signal-control__words small");
+    };
+    run();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(run).catch(function () {});
+    let t = 0;
+    window.addEventListener("resize", function () { window.clearTimeout(t); t = window.setTimeout(run, 120); });
+  }
+
   function addMapReset(map, home) {
     const container = map.getContainer();
     if (!container || container.querySelector(".map-reset-control")) return;
@@ -896,6 +927,7 @@
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(map);
     addMapBrand(map);
     adoptMapShareRail(map);
+    window.setTimeout(function () { fitLockupTagline(".map-signal-control__words b", ".map-signal-control__words small"); }, 60);
     addMapReset(map, { center: (typeof settings !== 'undefined' && settings.center) || [26.129, -80.144], zoom: (typeof settings !== 'undefined' && settings.zoom) || 12 });
     const bounds = [];
     const titleNode = el("#" + name + "-spotlight-title");
@@ -2850,6 +2882,7 @@
       els("[data-dod-title]").forEach(function (t) { t.textContent = pick.title; });
       els("[data-dod-img]").forEach(function (i) { i.src = "/social/graphic-desk/" + pick.img + ".png"; i.alt = "Florida Signal diagram of the day: " + pick.title; });
     })();
+    initLockups();
     initMobileLiveRail();
     initHomepagePriority();
     initMobileFieldTest();

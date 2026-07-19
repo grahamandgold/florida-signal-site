@@ -2687,3 +2687,47 @@ a.brand { width: auto; max-width: none; }
   .map-publish-tools.map-publish-tools--map .publish-social { width: 32px !important; min-width: 32px !important; height: 32px !important; min-height: 32px !important; }
   .map-publish-tools.map-publish-tools--map a:not(.publish-social), .map-publish-tools.map-publish-tools--map button:not(.publish-social) { display: none !important; }
 }
+
+/* ===== Lockup parity: tagline justifies to the exact width of the wordmark, header AND map ===== */
+.brand__words, .map-signal-control__words { display: inline-block; width: max-content; }
+.brand__name, .map-signal-control__words b { display: block; white-space: nowrap; }
+.brand__tag, .map-signal-control__words small {
+  display: block; width: 100%;
+  text-align: justify; text-align-last: justify; -moz-text-align-last: justify;
+  letter-spacing: .04em; white-space: normal;
+}
+.brand__tag::before, .brand__tag::after { content: none; }   /* rules were breaking the justify */
+/* Map emblem larger so the mark holds its own against the wordmark */
+.map-signal-control__mark img { width: 58px; }
+@media (max-width: 620px) { .map-signal-control__mark img { width: 42px; } }
+
+/* Tagline: even letter tracking that spans the full wordmark width (justify was gapping the two
+   words to the edges). Tracking measured against the rendered wordmark: header 197.1/24 chars,
+   map 187.3/24 chars. Trailing space compensated so the optical block stays centred. */
+.brand__tag, .map-signal-control__words small {
+  text-align: center; text-align-last: center; -moz-text-align-last: center;
+  white-space: nowrap; box-sizing: border-box;
+}
+.brand__tag { letter-spacing: 3.6px; text-indent: 3.6px; }        /* fills 197px wordmark */
+.map-signal-control__words small { letter-spacing: 3.05px; text-indent: 3.05px; } /* fills 187px */
+@media (max-width: 620px) {
+  .brand__tag { letter-spacing: 2.6px; text-indent: 2.6px; }
+  .map-signal-control__words small { letter-spacing: 2.2px; text-indent: 2.2px; }
+}
+
+/* Lockup: JS measures and sets exact tracking; CSS only guarantees fit + a larger wordmark. */
+.brand__tag, .map-signal-control__words small { letter-spacing: normal; text-indent: 0; overflow: visible; }
+.brand__name { font-size: 22px; }
+.brand__words { max-width: none; }
+.site-header__inner .brand { flex: 0 0 auto; }
+@media (max-width: 620px) { .brand__name { font-size: 17px; } }
+
+/* Map lockup: bare emblem — no circle, ring, gradient plate or shadow (matches the site header). */
+.map-signal-control__mark {
+  width: auto !important; height: auto !important;
+  display: block !important; place-items: initial !important;
+  overflow: visible !important; border: 0 !important; border-radius: 0 !important;
+  background: none !important; box-shadow: none !important;
+}
+.map-signal-control__mark img { width: 58px; height: auto; display: block; }
+@media (max-width: 620px) { .map-signal-control__mark img { width: 42px; } }
