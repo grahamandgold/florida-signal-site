@@ -2547,3 +2547,104 @@ a.brand { width: auto; max-width: none; }
 .map-key span { display: flex; align-items: center; gap: 7px; }
 .map-key i { width: 11px; height: 11px; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px rgba(7,27,50,.25); }
 @media (max-width: 620px) { .map-key { left: 8px; bottom: 8px; padding: 8px 10px; font-size: 9.5px; } }
+
+/* ===== Visual QA final pass (2026-07-19): interior pages storm/method/briefs/broward/brand ===== */
+@media (max-width: 620px) {
+  /* Storm: keep the surface-report action inside the viewport (was overflowing to ~430px) */
+  .storm-window .surface-publish, .storm-map-key + .surface-publish, .surface-publish { max-width: 100%; flex-wrap: wrap; }
+  .surface-report { max-width: 100%; overflow-wrap: anywhere; }
+  /* Micro-label legibility floor, consistent with home/graphics/neighborhoods/meetings */
+  .storm-map-key span, .window-watch__copy em, .window-watch__copy i,
+  .method-note, .method-source, .brand-kit-swatch span, .brand-token,
+  .surface-report, .popup-record-clock { font-size: 10px !important; }
+}
+
+/* ===== Live Signals Map (SignalV1) — controls, legend, Signal Card ===== */
+.signal-controls { margin: 0 0 16px; padding: 14px; border: 1px solid var(--line); background: #fff; }
+.signal-controls__row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-bottom: 10px; }
+.signal-controls__sources { gap: 8px 16px; }
+.signal-toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--ink-2); cursor: pointer; min-height: 32px; }
+.signal-toggle input { width: 15px; height: 15px; accent-color: var(--blue-bright); }
+.signal-field { display: flex; flex-direction: column; gap: 3px; font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.signal-field select { min-height: 34px; padding: 5px 8px; border: 1px solid var(--line); background: #fff; font-size: 12px; color: var(--ink); }
+.signal-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); list-style: none; }
+.signal-legend li { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--ink-2); }
+.signal-legend i { width: 11px; height: 11px; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px rgba(7,27,50,.25); }
+.signal-loading, .signal-empty, .signal-error { margin: 6px 0 0; font-size: 11.5px; color: var(--muted); }
+.signal-error { color: #a52828; }
+
+.signal-popup .leaflet-popup-content { margin: 14px 16px; }
+.signal-card__layer { margin: 0 0 4px; font-family: "Montserrat", var(--sans); font-size: 8.5px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+.signal-card__headline { margin: 0 0 8px; font-family: "Montserrat", var(--sans); font-size: 15px; font-weight: 700; line-height: 1.25; letter-spacing: -.01em; color: var(--ink); }
+.signal-badge { display: inline-block; margin-bottom: 9px; padding: 3px 9px; font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.signal-badge--verified { background: var(--mint); color: #0d47c4; }
+.signal-badge--preliminary { background: #fdf3d7; color: #8a6d1a; }
+.signal-card__why, .signal-card__watch { margin: 0 0 8px; font-size: 12px; line-height: 1.45; color: var(--ink-2); }
+.signal-card__changed { margin: 0 0 8px; font-size: 11.5px; color: var(--ink-2); }
+.signal-card__facts { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0 0 9px; font-size: 11px; }
+.signal-card__facts dt { color: var(--muted); font-weight: 700; }
+.signal-card__facts dd { margin: 0; color: var(--ink); }
+.signal-card__caveat { margin: 0 0 8px; padding: 7px 9px; border-left: 3px solid var(--sun); background: #fffaf0; font-size: 10.5px; line-height: 1.4; color: #6b5518; }
+.signal-card__source { margin: 0 0 9px; font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.signal-card__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.signal-card__actions a, .signal-card__actions button { min-height: 32px; display: inline-flex; align-items: center; padding: 0 11px; border: 1px solid var(--line); background: #fff; font-size: 10.5px; font-weight: 700; color: var(--ink); text-decoration: none; cursor: pointer; }
+.signal-card__actions a:hover, .signal-card__actions button:hover { border-color: var(--blue-bright); color: var(--blue-bright); }
+.marker-cluster-small, .marker-cluster-medium, .marker-cluster-large { background: rgba(23,103,255,.22); }
+.marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div { background: rgba(8,42,84,.92); color: #fff; font-family: "Montserrat", var(--sans); font-weight: 700; }
+
+@media (max-width: 620px) {
+  .signal-controls { padding: 12px; }
+  .signal-controls__row { gap: 8px 10px; }
+  .signal-field, .signal-field select { width: 100%; }
+  .signal-popup .leaflet-popup-content { margin: 12px 13px; }
+  .signal-card__headline { font-size: 14px; }
+  .signal-card__facts { grid-template-columns: 1fr; gap: 1px; }
+  .signal-card__facts dt { margin-top: 5px; }
+}
+
+/* ===== Map reset control (all maps) + social rail sizing ===== */
+.map-reset-control { position: absolute; z-index: 700; left: 12px; top: 92px; min-height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border: 1px solid rgba(7,27,50,.18); background: rgba(255,255,255,.95); color: var(--ink); font: 700 10px/1 "Montserrat", var(--sans); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; box-shadow: 0 10px 26px rgba(7,27,50,.16); backdrop-filter: blur(8px); }
+.map-reset-control:hover { border-color: var(--blue-bright); color: var(--blue-bright); }
+.map-reset-control span { font-size: 13px; }
+
+/* Social/publish rail: bigger touch targets, wraps instead of running off the map */
+.map-publish-tools--map { max-width: min(320px, calc(100% - 28px)); flex-wrap: wrap; gap: 6px; padding: 7px; }
+.map-publish-tools a, .map-publish-tools button { min-height: 38px; font-size: 9px; padding: 0 12px; }
+.map-publish-tools .publish-social { width: 38px; min-width: 38px !important; height: 38px; min-height: 38px !important; padding: 0 !important; font-size: 13px !important; }
+.publish-social { width: 34px; min-width: 34px !important; height: 34px; min-height: 34px !important; font-size: 12px !important; }
+.publish-social--facebook { font-size: 15px !important; }
+.surface-publish { gap: 8px; }
+
+@media (max-width: 620px) {
+  .map-reset-control { left: 8px; top: 84px; min-height: 32px; padding: 0 10px; font-size: 9px; }
+  .map-publish-tools--map { max-width: calc(100% - 20px); right: 10px; top: 10px; }
+  .map-publish-tools .publish-social, .publish-social { width: 34px; min-width: 34px !important; height: 34px; min-height: 34px !important; }
+}
+
+/* ===== Map brand: the crown jewel — centered, larger, mirrors the page lockup ===== */
+.map-signal-control { position: absolute; z-index: 650; top: 18px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 14px; margin: 0 !important; padding: 12px 26px 12px 16px;
+  border: 1px solid rgba(8,42,84,.14); border-radius: 0; background: rgba(255,255,255,.97);
+  box-shadow: 0 18px 44px rgba(8,42,84,.20); backdrop-filter: blur(14px); text-decoration: none; }
+.map-signal-control:hover { border-color: var(--blue-bright); }
+.map-signal-control__mark img { width: 46px; height: auto; display: block; }
+.map-signal-control__words { display: flex; flex-direction: column; border-left: 2px solid #c9d6ea; padding-left: 14px; }
+.map-signal-control__words b { font-family: "Montserrat", var(--sans); font-size: 19px; font-weight: 800;
+  letter-spacing: .06em; line-height: 1; color: var(--ink); text-transform: uppercase; white-space: nowrap; }
+.map-signal-control__words b i { font-style: normal; color: var(--blue-bright); }
+.map-signal-control__words small { margin-top: 5px; font-family: "Montserrat", var(--sans); font-size: 8.5px;
+  font-weight: 600; letter-spacing: .3em; line-height: 1; color: #48628c; text-transform: uppercase; white-space: nowrap; }
+
+@media (max-width: 620px) {
+  .map-signal-control { top: 12px; gap: 10px; padding: 9px 16px 9px 11px; }
+  .map-signal-control__mark img { width: 34px; }
+  .map-signal-control__words { padding-left: 10px; }
+  .map-signal-control__words b { font-size: 14px; }
+  .map-signal-control__words small { font-size: 7px; letter-spacing: .2em; }
+}
+
+/* Map share rail: keep it horizontal and inside the map (was stacking 274px tall and clipping
+   off the top because its positioning context starts above the map element). */
+.map-publish-tools--map { flex-direction: row !important; flex-wrap: wrap; align-items: center;
+  top: auto !important; bottom: 16px; right: 14px; max-width: min(360px, calc(100% - 28px)); }
+@media (max-width: 620px) { .map-publish-tools--map { bottom: 12px; right: 10px; max-width: calc(100% - 20px); } }

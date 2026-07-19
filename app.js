@@ -823,14 +823,36 @@
     }).join("");
   }
 
+  function addMapReset(map, home) {
+    const container = map.getContainer();
+    if (!container || container.querySelector(".map-reset-control")) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "map-reset-control";
+    btn.setAttribute("aria-label", "Reset map to the default view");
+    btn.innerHTML = '<span aria-hidden="true">\u27F2</span><b>Reset view</b>';
+    btn.addEventListener("click", function (event) {
+      event.preventDefault();
+      map.setView(home && home.center ? home.center : [26.129, -80.144], home && home.zoom ? home.zoom : 12);
+      if (map.closePopup) map.closePopup();
+    });
+    L.DomEvent.disableClickPropagation(btn);
+    container.appendChild(btn);
+  }
+
   function addMapBrand(map) {
     const container = map.getContainer();
     if (!container || container.querySelector(".map-signal-control")) return;
     const badge = document.createElement("a");
     badge.className = "map-signal-control";
-    badge.href = PUBLIC_ROUTES.home;
-    badge.setAttribute("aria-label", "Florida Signal Development Intelligence home");
-    badge.innerHTML = '<span class="map-signal-control__mark"><img src="/assets/emblem-2026.png" alt=""></span><span><b>Florida Signal</b><small>Live field map</small></span>';
+    // Absolute + new tab so the brand still returns to Florida Signal when the map is embedded.
+    badge.href = "https://thefloridasignal.com" + PUBLIC_ROUTES.home;
+    badge.target = "_blank";
+    badge.rel = "noopener";
+    badge.title = "Open Florida Signal";
+    badge.setAttribute("aria-label", "Florida Signal Development Intelligence — open the live desk");
+    badge.innerHTML = '<span class="map-signal-control__mark"><img src="/assets/emblem-2026.png" alt=""></span>' +
+      '<span class="map-signal-control__words"><b>FLORIDA <i>SIGNAL</i></b><small>Development Intelligence</small></span>';
     L.DomEvent.disableClickPropagation(badge);
     container.appendChild(badge);
     if (!container.querySelector(".map-key")) {
@@ -862,6 +884,7 @@
     const map = L.map(node, { zoomControl: true, scrollWheelZoom: false, attributionControl: true, preferCanvas: true }).setView(settings.center || [26.129, -80.144], settings.zoom || 12);
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(map);
     addMapBrand(map);
+    addMapReset(map, { center: (typeof settings !== 'undefined' && settings.center) || [26.129, -80.144], zoom: (typeof settings !== 'undefined' && settings.zoom) || 12 });
     const bounds = [];
     const titleNode = el("#" + name + "-spotlight-title");
     const metaNode = el("#" + name + "-spotlight-meta");
@@ -938,6 +961,7 @@
       attribution: '&copy; OpenStreetMap &copy; CARTO'
     }).addTo(map);
     addMapBrand(map);
+    addMapReset(map, { center: (typeof settings !== 'undefined' && settings.center) || [26.129, -80.144], zoom: (typeof settings !== 'undefined' && settings.zoom) || 12 });
     const geojson = await loadNeighborhoods();
     state.polygonLayer = L.geoJSON(geojson, {
       style: { color: "#00796f", weight: 1.1, opacity: .58, fillColor: "#76d4c0", fillOpacity: .055 },
@@ -968,10 +992,142 @@
     return map;
   }
 
+  /* ===== Live Signals Map (SignalV1) =====
+     Adds a curated, clustered, multi-source Signal layer on top of the existing map.
+     Preserves all legacy behaviour: the raw permit points layer, storm lens, overlays and heat
+     map are untouched. Only eligible Signals render; excluded ones never reach the map. */
+  const signalState = { service: null, all: [], layer: null, filters: { sources: {}, status: "all", days: 120 }, loaded: false, error: null };
+
+  function signalSourceKey(signal) {
+    if (signal.source_table === "permits") return "permits";
+    if (signal.source_table === "faa_oeaaa") return "faa";
+    if (signal.source_table === "fdep_erp") return "fdep";
+    return "other";
+  }
+
+  function visibleSignals() {
+    const f = signalState.filters;
+    const cutoff = new Date(Date.now() - f.days * 86400000).toISOString().slice(0, 10);
+    return signalState.all.filter(function (s) {
+      if (!s.public_eligibility) return false;
+      if (f.sources[signalSourceKey(s)] === false) return false;
+      if (f.status === "verified" && s.verification_status !== "VERIFIED") return false;
+      if (f.status === "preliminary" && s.verification_status !== "PRELIMINARY") return false;
+      if (s.source_record_date && s.source_record_date < cutoff) return false;
+      return true;
+    });
+  }
+
+  function signalCardHtml(s) {
+    const V = window.FloridaSignalV1;
+    const badge = s.verification_status === "VERIFIED"
+      ? '<span class="signal-badge signal-badge--verified">Verified record</span>'
+      : '<span class="signal-badge signal-badge--preliminary">Preliminary · not yet reconciled</span>';
+    const rows = [];
+    if (s.address || s.municipality) rows.push(["Location", [s.address, s.municipality].filter(Boolean).join(" · ")]);
+    if (s.source_record_date) rows.push(["Source record date", V.fmtDate(s.source_record_date)]);
+    if (s.first_detected_at) rows.push(["First detected", V.fmtDate(s.first_detected_at)]);
+    if (s.valuation_or_amount) rows.push(["Declared value", V.money(s.valuation_or_amount)]);
+    if (s.project_scale) rows.push(["Scale", s.project_scale]);
+    if (s.owner_or_applicant) rows.push(["Owner / applicant", s.owner_or_applicant]);
+    if (s.contractor_or_sponsor) rows.push(["Contractor / sponsor", s.contractor_or_sponsor]);
+    if (s.related_record_count) rows.push(["Related records", String(s.related_record_count)]);
+    return '<div class="signal-card" data-signal-id="' + escapeHtml(s.signal_id) + '">' +
+      '<p class="signal-card__layer" style="color:' + escapeHtml(V.LAYER_COLOR[s.layer] || "#1767ff") + '">' + escapeHtml(V.LAYER_LABEL[s.layer] || s.public_label) + '</p>' +
+      '<h4 class="signal-card__headline">' + escapeHtml(s.headline || "Signal") + '</h4>' +
+      badge +
+      (s.why_it_matters ? '<p class="signal-card__why"><strong>Why it matters.</strong> ' + escapeHtml(s.why_it_matters) + '</p>' : '') +
+      (s.what_changed ? '<p class="signal-card__changed">' + escapeHtml(s.what_changed) + '</p>' : '') +
+      '<dl class="signal-card__facts">' + rows.map(function (r) { return '<dt>' + escapeHtml(r[0]) + '</dt><dd>' + escapeHtml(r[1]) + '</dd>'; }).join("") + '</dl>' +
+      (s.what_to_watch ? '<p class="signal-card__watch"><strong>What to watch.</strong> ' + escapeHtml(s.what_to_watch) + '</p>' : '') +
+      (s.caveat ? '<p class="signal-card__caveat">' + escapeHtml(s.caveat) + '</p>' : '') +
+      '<p class="signal-card__source">' + escapeHtml(s.source_attribution || s.source_name) + '</p>' +
+      '<div class="signal-card__actions">' +
+        (s.source_record_url ? '<a href="' + escapeHtml(s.source_record_url) + '" target="_blank" rel="noreferrer">Open source ↗</a>' : '') +
+        '<button type="button" data-report-add data-report-id="signal:' + escapeHtml(s.signal_id) + '" data-report-title="' + escapeHtml(s.headline || s.signal_id) + '" data-report-meta="' + escapeHtml((s.source_attribution || "") + (s.source_record_date ? " · " + s.source_record_date : "")) + '" data-report-url="' + escapeHtml(s.source_record_url || window.location.href) + '">＋ Add to report</button>' +
+      '</div></div>';
+  }
+
+  function drawSignalLayer() {
+    if (!state.map || !window.FloridaSignalV1) return;
+    const V = window.FloridaSignalV1;
+    if (signalState.layer) { state.map.removeLayer(signalState.layer); signalState.layer = null; }
+    const items = visibleSignals();
+    const useCluster = typeof L.markerClusterGroup === "function";
+    const layer = useCluster
+      ? L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 46, spiderfyOnMaxZoom: true, showCoverageOnHover: false })
+      : L.layerGroup();
+    items.forEach(function (s) {
+      const marker = L.circleMarker([s.latitude, s.longitude], {
+        radius: s.editorial_priority >= 70 ? 8 : 6,
+        color: "#ffffff", weight: 1.6,
+        fillColor: V.LAYER_COLOR[s.layer] || "#1767ff",
+        fillOpacity: .92
+      });
+      marker.signalId = s.signal_id;              // deterministic marker identity
+      marker.bindPopup(signalCardHtml(s), { maxWidth: 340, className: "signal-popup" });
+      layer.addLayer(marker);
+    });
+    signalState.layer = layer;
+    layer.addTo(state.map);
+    const countEl = el("#signal-layer-count");
+    if (countEl) countEl.textContent = formatNumber(items.length);
+    const emptyEl = el("#signal-empty-state");
+    if (emptyEl) emptyEl.hidden = items.length > 0;
+  }
+
+  function renderSignalControls() {
+    const host = el("[data-signal-controls]");
+    if (!host || !window.FloridaSignalV1) return;
+    const V = window.FloridaSignalV1;
+    const counts = {};
+    signalState.all.forEach(function (s) { if (s.public_eligibility) { const k = signalSourceKey(s); counts[k] = (counts[k] || 0) + 1; } });
+    const sources = [["permits", "Development · permits"], ["faa", "FAA / cranes"], ["fdep", "Environmental · FDEP"]];
+    host.innerHTML =
+      '<div class="signal-controls__row"><p class="eyebrow">Live Signals · <span id="signal-layer-count">0</span> shown</p></div>' +
+      '<div class="signal-controls__row signal-controls__sources">' + sources.map(function (pair) {
+        return '<label class="signal-toggle"><input type="checkbox" data-signal-source="' + pair[0] + '" checked><span>' + escapeHtml(pair[1]) + ' (' + (counts[pair[0]] || 0) + ')</span></label>';
+      }).join("") + '</div>' +
+      '<div class="signal-controls__row">' +
+        '<label class="signal-field"><span>Verification</span><select data-signal-status><option value="all">All</option><option value="verified">Verified only</option><option value="preliminary">Preliminary only</option></select></label>' +
+        '<label class="signal-field"><span>Window</span><select data-signal-days><option value="30">30 days</option><option value="60">60 days</option><option value="120" selected>120 days</option><option value="365">1 year</option></select></label>' +
+      '</div>' +
+      '<ul class="signal-legend">' + Object.keys(V.LAYER_LABEL).map(function (k) {
+        return '<li><i style="background:' + V.LAYER_COLOR[k] + '"></i>' + escapeHtml(V.LAYER_LABEL[k]) + '</li>';
+      }).join("") + '</ul>' +
+      '<p class="signal-empty" id="signal-empty-state" hidden>No Signals match these filters. Widen the window or re-enable a source.</p>' +
+      (signalState.error ? '<p class="signal-error">Some sources are unavailable: ' + escapeHtml(signalState.error) + '</p>' : '');
+
+    els("[data-signal-source]", host).forEach(function (box) {
+      box.addEventListener("change", function () { signalState.filters.sources[box.dataset.signalSource] = box.checked; drawSignalLayer(); });
+    });
+    const statusSel = el("[data-signal-status]", host);
+    if (statusSel) statusSel.addEventListener("change", function () { signalState.filters.status = statusSel.value; drawSignalLayer(); });
+    const daysSel = el("[data-signal-days]", host);
+    if (daysSel) daysSel.addEventListener("change", function () { signalState.filters.days = Number(daysSel.value); drawSignalLayer(); });
+  }
+
+  async function initSignalLayer() {
+    if (!state.map || !window.FloridaSignalV1 || !el("[data-signal-controls]")) return;
+    const host = el("[data-signal-controls]");
+    host.innerHTML = '<p class="signal-loading">Loading Signals…</p>';
+    try {
+      signalState.service = window.FloridaSignalV1.createService({ supabaseUrl: SUPABASE_URL, key: SUPABASE_KEY });
+      const result = await signalState.service.load({ windowDays: 365 });
+      signalState.all = result.signals;
+      signalState.error = result.errors.length ? result.errors.join("; ") : null;
+      signalState.loaded = true;
+      renderSignalControls();
+      drawSignalLayer();
+    } catch (error) {
+      host.innerHTML = '<p class="signal-error">Signals are temporarily unavailable. No substitute data is shown.</p>';
+    }
+  }
+
   async function initMaps() {
     const node = el("#home-map") || el("#full-map") || el("#data-room-map");
     if (!node || !window.L || !state.records.length) return;
-    try { await buildMap(node); }
+    try { await buildMap(node); await initSignalLayer(); }
     catch (error) {
       node.innerHTML = '<div class="loading-row">The official neighborhood layer is temporarily unavailable. No substitute map is being shown.</div>';
     }

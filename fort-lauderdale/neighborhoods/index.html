@@ -10,7 +10,9 @@
   <title>Live Field Map — Florida Signal</title>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png"><link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Figtree:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"><link rel="stylesheet" href="/styles.css">
 </head>
 <body data-page="neighborhoods" data-city="fort-lauderdale">
   <a class="skip-link" href="#main">Skip to content</a>
@@ -28,6 +30,7 @@
       </div>
       <div class="shell full-map-shell">
         <aside class="full-map-sidebar"><p class="eyebrow">Neighborhood index</p><h2>Where is it moving?</h2><p><strong id="map-point-count">—</strong> of the newest mapped records. Pick a neighborhood for a current field brief, or use the storm lens for roofs, seawalls, openings, drainage and generator work.</p>
+          <section class="signal-controls" data-signal-controls aria-label="Live Signals filters"><p class="signal-loading">Loading Signals…</p></section>
           <div class="lens-switch" aria-label="Map lens"><button class="is-active" type="button" data-map-lens="all">All activity</button><button type="button" data-map-lens="storm">Storm-ready</button></div>
           <div class="map-layer-tools">
             <p class="data-label">Field layers · tap to toggle</p>
@@ -80,5 +83,5 @@
     <section class="standards section"><div class="shell standards__grid"><p class="eyebrow">Map standard</p><p>Counts describe the current map sample, not a complete neighborhood ranking. Boundary names and shapes are published by the City of Fort Lauderdale.</p><a class="text-link" href="/fort-lauderdale/method/">Read the method →</a></div></section>
   </main>
   <footer class="site-footer"><div class="shell site-footer__grid"><div><img src="/assets/lockup-2026-horizontal.png" alt="Florida Signal" width="1000" height="248"><p>Development intelligence for Fort Lauderdale and Broward County.</p></div><div><p class="footer-title">Explore</p><a href="/fort-lauderdale/#signals">Signals</a><a href="/fort-lauderdale/broward-record/">Broward record</a><a href="/fort-lauderdale/storm/">Storm window</a></div><div><p class="footer-title">About</p><a href="/fort-lauderdale/method/">Method + sources</a><a href="mailto:desk@thefloridasignal.com">Send a tip</a></div><div class="footer-brief"><p class="footer-title">Tomorrow starts tonight.</p><p>Get Daily Intel Brief.</p><a href="/fort-lauderdale/#brief">Join free →</a></div></div><div class="shell site-footer__bottom"><p>© <span data-year></span> Florida Signal · Powered by Graham &amp; Gold LLC</p><p>Official City boundaries · current public-record mirror</p></div></footer>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script><script src="/app.js" defer></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script><script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script><script src="/signals.js" defer></script><script src="/app.js" defer></script>
 </body></html>

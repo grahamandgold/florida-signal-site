@@ -232,3 +232,74 @@ no incomplete/failed-run artifact existed or was touched.
   `done` (harvest OK/EMPTY **and** rows ≥ displayed total, i.e. verified Supabase insertion).
   Files for an incomplete/failed date are **retained** for retry.
 - **No 7-day raw-file retention system was added.**
+
+---
+## Addendum — Live Signals Map audit (Phase 1) + safety stop (2026-07-19 late)
+
+### DECISION LOG
+The Live Signals Map is the first public integration target and the product spine for Florida Signal.
+It will display curated, explainable Signals rather than raw source-record dumps.
+
+### MASTER TO-DO
+Connect mapped permit, Broward FAA, FDEP and selected geographically verified Clerk signals to the
+website through one versioned Signal contract, then feed editorially meaningful Signals into the
+candidate registry.
+
+### VERIFIED ARCHITECTURE (behavior-checked, not inferred)
+- **Public map:** `buildMap()` in `app.js` binds to `#full-map` (Neighborhoods `/fort-lauderdale/neighborhoods/#full-map`), `#home-map`, `#data-room-map`. Leaflet `L.map`, `preferCanvas:true`.
+- **Marker source = permits ONLY.** `state.records` = **700** newest current-month geocoded permits (`permits` table, `lat/lon not null`, limit 700). FAA/FDEP/Clerk/preliminary appear **nowhere** on the map or in `app.js`.
+- **"Layers" are permit color-codes, not sources:** `markerColor()` → Demolition `#ff6d3a`, Storm `#1767ff`, $500K+ `#071b32`, default `#00b8dc` — all computed from permit text/valuation.
+- **No clustering.** `drawMarkers()` uses a plain `L.layerGroup` of `L.circleMarker`; no `markercluster`. Heat overlay exists (`L.heatLayer`).
+- **Only filter = storm lens** (`activeMapRecords()`). No source / date-range / preliminary-vs-verified / municipality filters.
+- **Signal Card = permit popup** (`mapPopup()`): permit_type, address, declared value, applied_date, permit_number, Street/Satellite/City-source links, Share, Add-to-report.
+- **Row limits:** 700 mapped, 40 high-value, 24 search, 1000×N application-date counts. Publishable Supabase key + RLS.
+
+### SOURCE DATA READINESS (verified counts + coordinates)
+- **FAA `faa_oeaaa`:** 472 Broward, **142 Broward cranes**, all 472 with WGS84 lat/lon inside the Broward box (e.g. crane `26.0161,-80.2139`). ✅ map-ready.
+- **FDEP `fdep_erp`:** **8,309**, all with WGS84 lat/lon inside the Broward box (e.g. `26.0826,-80.1163`). ✅ map-ready.
+- **Preliminary Clerk `broward_clerk_preliminary`:** 13,769 rows — **NO coordinates or folio**; only names/instrument/doc_type/legal text. Cannot be mapped without a folio→parcel-centroid or address geocode join (not present). ⚠️ not directly map-ready.
+- **Permits:** current map source, geocoded. ✅
+
+### SAFETY STOP (Phase 7) — the editorial registries are the frozen scorer's ledger
+`brief_candidate_registry` (0 rows) and `brief_publication_registry` (0 rows) are **not** blank generic
+review queues. Their columns (`story_key, entity_key, module, folio_set, event_fingerprint, figures_hash,
+source_fingerprint, times_seen, drop_reason, run_id` / publication delivery tracking) show they are the
+**shadow scorer's fingerprint-based promotion + dedup + delivery ledger** — part of the weekly signal
+packet pipeline that is **FROZEN under the five-run editorial gate (run 5 completes Mon 2026-07-20)**.
+Writing map-derived signals into these tables would contaminate the scorer's ledger and risk the open
+gate. Per Phase 7 and the scorer-frozen rule, I am stopping to explain before writing to them.
+
+---
+## Addendum — Live Signals Map + editorial queue (2026-07-19 evening)
+
+### DECISION LOG
+The Live Signals Map is the first public product spine for Florida Signal. Existing permit, FAA and
+FDEP records are normalized into a shared Signal model (SignalV1) before display or editorial review.
+Map-derived editorial candidates use a separate review queue (`map_signal_candidates`) and do NOT write
+into the frozen shadow scorer registries. The Data Desk is the inspection surface. The Data Wire CMS is
+the editorial review surface. No Signal publishes automatically.
+
+### MASTER TO-DO
+- Connect geographically verified Clerk events after a reliable parcel/address relationship exists
+  (the deferred `fromClerk` resolver interface is already in place and manufactures no coordinates).
+- Connect approved Signals to the Daily Intel Brief after the review flow is proven.
+- Reconcile `map_signal_candidates` with the broader scorer architecture only after the five-run gate
+  closes and the interface is explicitly reviewed.
+- Build the click-to-approve Signal review UI in the Data Wire CMS (transitions currently service-role).
+
+### RISK REGISTER (verified in this build)
+- Raw source volume can overwhelm the map without bounded loading and clustering — mitigated: per-source
+  caps (permits 700 / FAA 300 / FDEP 400), date-window filter, marker clustering.
+- Poor geographic links can create misleading markers — mitigated: Clerk mapping deferred; a
+  null-coordinate bug (`Number(null)===0` placing records at 0,0) was found by tests and fixed.
+- Preliminary records can be misunderstood if not visibly labelled — mitigated: PRELIMINARY badge on
+  every card; CONFLICT/NEEDS_REVIEW are never public-eligible.
+- Generated wording can overstate filings — mitigated: deterministic evidence + mandatory caveats
+  ("application", "filing", "does not prove work has started", "does NOT mean construction has started").
+
+### What shipped
+`signals.js` (SignalV1 model, permit/FAA/FDEP adapters + deferred Clerk resolver interface, eligibility
+ruleset, deterministic intelligence pass, bounded read-only service); map integration in `app.js`
+(clustered multi-source Signal layer, source/verification/date filters, legend, Signal Cards, Reset-view
+control on every map, enlarged centered brand lockup linking to thefloridasignal.com for embeds);
+`tests/signals.test.js` (45 assertions, all passing); `supabase/migrations/20260719_003_map_signal_candidates.sql`.
