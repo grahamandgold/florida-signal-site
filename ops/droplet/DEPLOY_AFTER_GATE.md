@@ -1,14 +1,25 @@
-# Deploy clerk catch-up to droplet — AFTER shadow gate completes (post 2026-07-20 run-5 review)
+# Clerk catch-up on droplet — OPERATIONS & ROLLBACK (superseded deploy note)
 
-The five-run gate rules forbid installs/daemon-reload on the droplet until run 5 is reviewed.
-After Andy approves the gate report:
+STATUS 2026-07-19: DEPLOYED + HARDENED. Units installed on florida-signal-runtime from GitHub-tracked
+files (this directory). Venv: /srv/grahamandgold/florida-signal/.venv-clerk-catchup (paramiko pinned via
+requirements-clerk-catchup.txt). Runs as andy, weekdays 18:10 UTC (+ ≤120s jitter), Persistent=true.
 
-    scp ops/droplet/clerk_catchup.py florida:/srv/grahamandgold/florida-signal/app/
-    scp ops/droplet/florida-clerk-catchup.{service,timer} florida:/tmp/
-    ssh florida 'sudo mv /tmp/florida-clerk-catchup.* /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now florida-clerk-catchup.timer && systemctl list-timers florida-clerk-catchup*'
+HISTORY: bundle authored + pushed by Claude 2026-07-19 with deploy deferred until after shadow-gate run 5;
+installed early the same day (12:59–13:00 EDT) by the operator via Codex, incl. one unit revision (User=andy)
+after a first-start failure (root could not see user-site paramiko). Hardened + venv'd by Claude same day with
+operator authorization. GATE DISCLOSURE: an unrelated unit was installed and manually executed on the host
+between shadow runs 4 and 5 (disjoint schedules/locks/code/data); scorer evidence must not be described as
+from an unchanged host.
 
-Confirm the droplet secrets env exposes SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (or edit env names in the script).
-First run: `ssh florida 'sudo systemctl start florida-clerk-catchup.service && journalctl -u florida-clerk-catchup -n 20'`
-Then retire the Claude scheduled task `broward-clerk-catchup-sync` (keep as backup for a week if preferred).
-Verified from droplet 2026-07-19: SFTP :22 reachable, Supabase reachable, paramiko present.
-NOTE: AcclaimWeb 403-blocks the droplet IP (datacenter block) — same-day preliminary pulls STAY on the Mac/Claude path by design.
+HEALTH CHECK (integrated into nightly social-graphics report task):
+  ssh florida 'systemctl is-active florida-clerk-catchup.timer; systemctl show florida-clerk-catchup.service -p Result,ExecMainStatus,ExecMainExitTimestamp'
+  journalctl -u florida-clerk-catchup.service --since "-3 days" --no-pager | tail -20
+  Alert if: timer inactive/disabled, Result != success, no success in 3 business days, or DB max(business_date)
+  lags the Clerk server's newest published date by > 2 business days.
+
+ROLLBACK (restores Claude-task path):
+  ssh florida 'sudo systemctl disable --now florida-clerk-catchup.timer'
+  (optional remove: sudo rm /etc/systemd/system/florida-clerk-catchup.{service,timer} && sudo systemctl daemon-reload)
+  Then re-enable Claude scheduled task "broward-clerk-catchup-sync" (Scheduled sidebar → enable; it is DISABLED,
+  labeled EMERGENCY ROLLBACK ONLY — never deleted). Rollback does not touch the authoritative droplet Clerk
+  ingest or any verified data; the catch-up only ever inserts missing business dates idempotently.
