@@ -3,3 +3,9 @@ data/*.sqlite-*
 __pycache__/
 *.pyc
 _source_copies/
+cms/data/*.sqlite
+cms/data/*.sqlite-*
+.DS_Store
+tmp/
+.env
+shots/

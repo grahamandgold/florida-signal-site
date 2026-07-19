@@ -2435,3 +2435,57 @@ body[data-page="meetings"] .meeting-source-note { grid-template-columns: minmax(
   .field-brief-launcher__icon { width: 32px; height: 32px; }
   .field-brief-launcher.has-items { width: auto; grid-template-columns: 30px auto 24px; padding: 7px 9px; }
 }
+
+/* ===== Mobile polish layer (2026-07-19) =====
+   Readability floors + overflow guards at phone widths only. Desktop design unchanged.
+   Root causes fixed: .section-head flex child forcing 412px min-content width (sideways scroll);
+   7-9px micro-labels unreadable on handsets; sub-32px tap targets. */
+@media (max-width: 620px) {
+  main { overflow-x: clip; }
+  .section-head { flex-wrap: wrap; }
+  .section-head > div { min-width: 0; max-width: 100%; }
+  .section-head h2, .section-head p { overflow-wrap: break-word; }
+
+  /* Prose floor: small annotations become readable */
+  main small, main dt, main dd, figcaption,
+  .neighborhood-profile__link, .surface-report, .diagram-watch__insight, .hero__caption { font-size: 11px !important; line-height: 1.45; }
+
+  /* Micro-label floor: uppercase stamps/keys stay compact but legible */
+  .record-action, .publish-social a, .publish-social button,
+  .neighborhood-profile__map-label, .neighborhood-profile__rank,
+  .place-signature, .data-window-stamp, .eyebrow,
+  .live-bar__countdown-mobile, .mobile-live-rail__head p, .mobile-live-rail__foot,
+  .storm-mode-toggle, .spyglass__open, .record-search__quick button, .lead-lenses button { font-size: 10px !important; }
+
+  /* Thumb-sized taps */
+  .record-action, .lead-lenses button, .record-search__quick button, .publish-social a, .publish-social button { min-height: 36px; min-width: 36px; display: inline-flex; align-items: center; justify-content: center; }
+}
+
+/* Mobile polish layer — round 2: ticker cards, share buttons, operator links, map controls */
+@media (max-width: 620px) {
+  .activity-day span, .mobile-live-card span, .mobile-live-card small,
+  .sponsor-slot span, .sponsor-slot strong, .record-flow__item span,
+  .window-watch__copy em, .window-watch__copy i,
+  .surface-publish button, .publish-social, .publish-social *,
+  .operator-list__links a, .text-link { font-size: 10px !important; }
+
+  .operator-list__links a, .text-link, .surface-publish button { min-height: 36px; display: inline-flex; align-items: center; }
+  .leaflet-control-zoom a { width: 34px !important; height: 34px !important; line-height: 34px !important; }
+}
+
+/* ===== Text lockup (2026-07-19): the emblem stays art; the words become live text so
+   FLORIDA SIGNAL and DEVELOPMENT INTELLIGENCE are crisp and legible at every size. ===== */
+.brand { display: flex; align-items: center; }
+.brand__lockup { display: flex; align-items: center; gap: 13px; }
+.brand img.brand__emblem { width: 46px; height: auto; flex: 0 0 auto; }
+.brand__words { display: flex; flex-direction: column; }
+.brand__name { font-family: var(--sans); font-size: 21px; font-weight: 700; letter-spacing: .12em; line-height: 1; color: var(--ink); text-transform: uppercase; white-space: nowrap; }
+.brand__name i { font-style: normal; color: var(--teal); }
+.brand__tag { display: inline-flex; align-items: center; gap: 8px; margin-top: 5px; font-size: 9.5px; font-weight: 700; letter-spacing: .24em; line-height: 1; color: var(--teal-dark); text-transform: uppercase; white-space: nowrap; }
+.brand__tag::before, .brand__tag::after { content: ""; width: 16px; height: 1px; background: var(--teal); }
+@media (max-width: 620px) {
+  .brand img.brand__emblem { width: 38px; }
+  .brand__name { font-size: 16.5px; }
+  .brand__tag { font-size: 9px; letter-spacing: .18em; margin-top: 4px; }
+}
+a.brand, a.brand:hover, a.brand:focus { text-decoration: none; }

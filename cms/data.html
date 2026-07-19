@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="referrer" content="no-referrer">
+  <title>Data Desk — Florida Signal Internal Viewer</title>
+  <meta name="description" content="Private read-only viewer over the Florida Signal intelligence store.">
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #061b33;
+      --ink-soft: #183b58;
+      --teal: #009e92;
+      --teal-dark: #00786f;
+      --teal-pale: #dff5f2;
+      --coral: #ff6b43;
+      --gold: #f4c94e;
+      --paper: #ffffff;
+      --wash: #eff7f8;
+      --line: #cad8dc;
+      --muted: #667d8e;
+      --danger: #a52828;
+      --danger-pale: #fff0ee;
+      --success: #08705f;
+      --shadow: 0 1px 0 rgba(6,27,51,.08), 0 14px 34px rgba(6,27,51,.06);
+      --radius: 0;
+      --serif: Georgia, "Times New Roman", serif;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      background:
+        linear-gradient(90deg, rgba(0,158,146,.07) 1px, transparent 1px) 0 0 / 84px 84px,
+        linear-gradient(rgba(0,158,146,.07) 1px, transparent 1px) 0 0 / 84px 84px,
+        var(--wash);
+      color: var(--ink);
+      font-family: var(--sans);
+      line-height: 1.5;
+    }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    a { color: inherit; }
+    :focus-visible { outline: 3px solid var(--coral); outline-offset: 3px; }
+
+    .masthead {
+      position: sticky; top: 0; z-index: 20;
+      background: rgba(255,255,255,.94);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(14px);
+    }
+    .masthead__inner {
+      max-width: 1600px; margin: 0 auto; min-height: 94px;
+      padding: 14px clamp(16px, 3.3vw, 56px);
+      display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+    }
+    .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+    .brand__mark {
+      width: 44px; height: 56px; flex: 0 0 auto; position: relative;
+      border-radius: 58% 42% 55% 45% / 38% 46% 54% 62%;
+      background: var(--ink);
+      box-shadow: inset -8px -8px 0 var(--teal), inset -13px -13px 0 #49c6dc;
+      transform: skew(-3deg);
+    }
+    .brand__mark::after {
+      content: ""; position: absolute; left: 13px; bottom: 7px; width: 4px; height: 35px;
+      background: white; box-shadow: 9px 7px 0 white; transform: skew(3deg);
+    }
+    .eyebrow { color: var(--teal-dark); font-size: .75rem; font-weight: 800; letter-spacing: .17em; text-transform: uppercase; }
+    .brand h1 { margin: 1px 0 0; font: 600 clamp(1.35rem, 2.2vw, 1.9rem)/1 var(--serif); }
+    .brand h1 span { color: var(--teal-dark); font-style: italic; }
+    .brand__sub { margin: 4px 0 0; color: var(--muted); font-size: .85rem; }
+    .desk-nav { display: flex; gap: 10px; flex-wrap: wrap; }
+    .button {
+      border: 1px solid var(--line); border-radius: 0; background: var(--paper);
+      color: var(--ink); padding: 9px 18px; font-weight: 700; font-size: .88rem;
+      text-decoration: none; display: inline-flex; align-items: center; gap: 7px;
+    }
+    .button--teal { background: var(--teal-dark); border-color: var(--teal-dark); color: white; }
+    .button--ghost:hover, .button:hover { border-color: var(--teal-dark); }
+
+    main { max-width: 1600px; margin: 0 auto; padding: 26px clamp(16px, 3.3vw, 56px) 90px; }
+    .intro { display: flex; justify-content: space-between; align-items: end; gap: 18px; flex-wrap: wrap; margin: 8px 0 22px; }
+    .intro h2 { margin: 6px 0 0; font: 600 clamp(1.6rem, 3vw, 2.4rem)/1.12 var(--serif); }
+    .intro h2 span { color: var(--teal-dark); font-style: italic; }
+    .intro p { max-width: 520px; margin: 0; color: var(--ink-soft); }
+
+    .section-label { margin: 30px 0 12px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .section-label h3 { margin: 0; font: 600 1.25rem/1.2 var(--serif); }
+    .section-label .hint { color: var(--muted); font-size: .85rem; }
+
+    .health-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 14px; }
+    .health-card {
+      background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 14px 16px; border-top: 3px solid var(--ink);
+      display: flex; flex-direction: column; gap: 5px; min-height: 118px;
+    }
+    .health-card .feed { font-weight: 800; font-size: .95rem; }
+    .health-card .rows { color: var(--muted); font-size: .8rem; }
+    .health-card .event { font-family: var(--mono); font-size: .95rem; color: var(--ink-soft); }
+    .badge {
+      align-self: flex-start; border-radius: 0; padding: 3px 11px;
+      font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+    }
+    .badge--current { background: var(--teal-pale); color: var(--teal-dark); }
+    .badge--lagging { background: #fdf3d7; color: #8a6d1a; }
+    .badge--stale { background: var(--danger-pale); color: var(--danger); }
+    .badge--unknown { background: #e9eef2; color: var(--muted); }
+
+    .preset-row { display: flex; gap: 9px; flex-wrap: wrap; }
+    .chip {
+      border: 1px solid var(--line); border-radius: 0; background: var(--paper);
+      padding: 8px 16px; font-weight: 700; font-size: .85rem; color: var(--ink-soft);
+    }
+    .chip:hover { border-color: var(--teal-dark); color: var(--teal-dark); }
+    .chip[data-active="true"] { background: var(--ink); border-color: var(--ink); color: white; }
+
+    .explorer {
+      margin-top: 14px; background: var(--paper); border: 1px solid var(--line);
+      border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
+    }
+    .explorer__controls {
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      padding: 14px 18px; border-bottom: 1px solid var(--line); background: #fbfdfd;
+    }
+    .explorer__controls label { display: flex; flex-direction: column; gap: 3px; font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+    .explorer__controls select, .explorer__controls input {
+      border: 1px solid var(--line); border-radius: 0; padding: 8px 12px; min-width: 170px; background: white;
+    }
+    .explorer__controls input { min-width: min(280px, 60vw); }
+    .count-note { margin-left: auto; color: var(--muted); font-size: .85rem; font-family: var(--mono); }
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { border-collapse: collapse; width: 100%; font-size: .87rem; min-width: 640px; }
+    thead th {
+      text-align: left; position: sticky; top: 0; background: var(--ink); color: white;
+      padding: 9px 12px; font-size: .72rem; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap;
+    }
+    tbody td { padding: 9px 12px; border-bottom: 1px solid #e4ecef; vertical-align: top; }
+    tbody tr { cursor: pointer; }
+    tbody tr:hover { background: var(--teal-pale); }
+    td.num { text-align: right; font-family: var(--mono); white-space: nowrap; }
+    td .pill { border-bottom: 1px solid var(--line); padding: 0 1px; font-family: var(--mono); font-size: .78rem; white-space: nowrap; }
+    .empty-row td { color: var(--muted); text-align: center; padding: 34px 10px; cursor: default; }
+    .pager { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-top: 1px solid var(--line); background: #fbfdfd; }
+    .pager .spacer { flex: 1; }
+    .foot-note { margin-top: 26px; color: var(--muted); font-size: .8rem; max-width: 860px; }
+
+    .drawer-veil { position: fixed; inset: 0; background: rgba(6,27,51,.42); z-index: 40; display: none; }
+    .drawer {
+      position: fixed; top: 0; right: 0; bottom: 0; width: min(660px, 100vw); z-index: 41;
+      background: var(--paper); box-shadow: -18px 0 50px rgba(6,27,51,.25);
+      transform: translateX(102%); transition: transform .22s ease; display: flex; flex-direction: column;
+    }
+    .drawer[data-open="true"] { transform: translateX(0); }
+    .drawer__head { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+    .drawer__head h4 { margin: 0; font: 600 1.15rem/1.2 var(--serif); flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .drawer__body { overflow-y: auto; padding: 16px 20px 40px; }
+    .kv { display: grid; grid-template-columns: minmax(130px, 34%) 1fr; gap: 4px 14px; font-size: .86rem; }
+    .kv dt { color: var(--muted); font-weight: 700; overflow-wrap: anywhere; }
+    .kv dd { margin: 0; font-family: var(--mono); font-size: .82rem; overflow-wrap: anywhere; }
+    .drawer h5 { margin: 22px 0 8px; font: 700 .8rem/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--teal-dark); border-top: 1px solid var(--line); padding-top: 14px; }
+    .drawer h5:first-of-type { border-top: 0; padding-top: 0; }
+    .mini { width: 100%; border-collapse: collapse; font-size: .8rem; }
+    .mini th { text-align: left; color: var(--muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; padding: 4px 8px; }
+    .mini td { padding: 4px 8px; border-top: 1px solid #eaf0f2; font-family: var(--mono); font-size: .78rem; overflow-wrap: anywhere; }
+    .drawer .note { color: var(--muted); font-size: .8rem; }
+    .loading { color: var(--muted); font-style: italic; }
+
+    @media (max-width: 720px) {
+      .masthead__inner { min-height: 0; padding: 12px 16px; }
+      .brand__mark { width: 34px; height: 44px; }
+      .explorer__controls input { min-width: 0; width: 100%; }
+      .explorer__controls label { width: 100%; }
+      .count-note { margin-left: 0; }
+      table { font-size: .8rem; }
+    }
+  </style>
+</head>
+<body>
+  <header class="masthead">
+    <div class="masthead__inner">
+      <div class="brand" aria-label="Florida Signal internal data desk">
+        <span class="brand__mark" aria-hidden="true"></span>
+        <div>
+          <div class="eyebrow">Internal · Graham &amp; Gold LLC</div>
+          <h1>Data <span>Desk</span></h1>
+          <p class="brand__sub">Read-only intelligence viewer · Broward store</p>
+        </div>
+      </div>
+      <nav class="desk-nav" aria-label="Desk navigation">
+        <a class="button button--ghost" href="/">Editorial Desk</a>
+        <a class="button button--teal" href="http://127.0.0.1:4173/fort-lauderdale/" target="_blank" rel="noopener">Public site ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="intro">
+      <div>
+        <div class="eyebrow">Every table · every source · one desk</div>
+        <h2>See the record.<br><span>Then work the signal.</span></h2>
+      </div>
+      <p><strong>Nothing here is public output.</strong> This desk reads the raw store under row-level security. Analysis uses public event dates; fetch stamps are freshness metadata only.</p>
+    </section>
+
+    <div class="section-label"><h3>Feed health</h3><span class="hint">newest public event date per feed · row counts are full-table</span></div>
+    <div class="health-grid" id="health-grid" role="status" aria-live="polite"></div>
+
+    <div class="section-label"><h3>Field views</h3><span class="hint">one tap · preset queries over the store</span></div>
+    <div class="preset-row" id="preset-row"></div>
+
+    <div class="explorer" id="explorer">
+      <div class="explorer__controls">
+        <label>Table
+          <select id="table-select"></select>
+        </label>
+        <label>Search
+          <input id="search-input" type="search" placeholder="address, name, permit #…" autocomplete="off">
+        </label>
+        <button class="button button--ghost" id="refresh-btn" type="button">Refresh</button>
+        <span class="count-note" id="count-note">—</span>
+      </div>
+      <div class="table-wrap">
+        <table id="data-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <button class="button button--ghost" id="prev-btn" type="button">← Prev</button>
+        <button class="button button--ghost" id="next-btn" type="button">Next →</button>
+        <span class="spacer"></span>
+        <span class="count-note" id="page-note"></span>
+      </div>
+    </div>
+
+    <p class="foot-note">Data Desk is an internal viewer over the Florida Signal Supabase store (public-record tables only; subscriber and product tables stay locked). Row clicks open a case drawer that weaves permits, ownership, GIS enrichment, signals and Clerk parties for the selected record. Nothing viewed here publishes anywhere.</p>
+  </main>
+
+  <div class="drawer-veil" id="drawer-veil"></div>
+  <aside class="drawer" id="drawer" aria-label="Record case file">
+    <div class="drawer__head">
+      <h4 id="drawer-title">Record</h4>
+      <button class="button button--ghost" id="drawer-close" type="button">Close</button>
+    </div>
+    <div class="drawer__body" id="drawer-body"></div>
+  </aside>
+
+  <script>
+    "use strict";
+    const SB = "https://jrjewmzkyluxdywyusrw.supabase.co/rest/v1/";
+    const KEY = "sb_publishable_dEyBjKE_vcTj3YYx4p6XvA_xnkVW3Wb"; // publishable key; RLS is the boundary
+    const PAGE = 25;
+
+    function esc(s) { const d = document.createElement("span"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
+    function q(sel) { return document.querySelector(sel); }
+    function money(v) { const n = Number(v); return Number.isFinite(n) && v !== null && v !== "" ? "$" + n.toLocaleString() : ""; }
+    function dateish(v) { return v == null ? "" : String(v).slice(0, 10); }
+    function cleanSearch(v) { return String(v || "").replace(/[,()"'\\]/g, " ").trim(); }
+
+    async function sbFetch(path, params, opts) {
+      const url = new URL(SB + path);
+      Object.entries(params || {}).forEach(([k, v]) => url.searchParams.set(k, v));
+      const r = await fetch(url, Object.assign({ headers: { apikey: KEY, Accept: "application/json" } }, opts || {}));
+      if (!r.ok) throw new Error(path + " HTTP " + r.status);
+      return r;
+    }
+    async function rows(path, params) { return (await sbFetch(path, params)).json(); }
+    async function tableCount(table, params) {
+      const url = new URL(SB + table);
+      Object.entries(params || {}).forEach(([k, v]) => url.searchParams.set(k, v));
+      url.searchParams.set("select", "*");
+      url.searchParams.set("limit", "1");
+      const r = await fetch(url, { method: "HEAD", headers: { apikey: KEY, Prefer: "count=planned" } });
+      const cr = r.headers.get("content-range") || "";
+      const total = cr.split("/")[1];
+      return total && total !== "*" ? Number(total) : null;
+    }
+
+    // ---------- feed health ----------
+    const FEEDS = [
+      { name: "Permit applications", table: "permits", event: "applied_date", currentDays: 3, laggingDays: 7 },
+      { name: "Clerk recordings", table: "broward_clerk_records_doc", event: "recording_date_iso", currentDays: 6, laggingDays: 11 },
+      { name: "FDEP environmental", table: "fdep_erp", event: "received_date", currentDays: 21, laggingDays: 45 },
+      { name: "FAA obstruction cases", table: "faa_oeaaa", event: "date_entered", currentDays: 10, laggingDays: 30 },
+      { name: "Signals v2", table: "signals_v2", event: "detected_at", currentDays: 7, laggingDays: 21 },
+      { name: "GIS parcel enrichment", table: "gis_enrichment", event: "enriched_at", currentDays: 14, laggingDays: 45 },
+      { name: "Sync heartbeat", table: "_meta_sync_runs", event: "completed_at", currentDays: 1, laggingDays: 3 },
+      { name: "Dashboard cache", table: "dashboard_cache", event: "updated_at", currentDays: 1, laggingDays: 3 },
+      { name: "Land sales", table: "land_sales", event: "sale_date", currentDays: 45, laggingDays: 120 }
+    ];
+    async function paintHealth() {
+      const grid = q("#health-grid");
+      grid.innerHTML = FEEDS.map(f => `<div class="health-card" data-feed="${esc(f.table)}"><span class="feed">${esc(f.name)}</span><span class="event loading">loading…</span><span class="rows"></span><span class="badge badge--unknown">checking</span></div>`).join("");
+      FEEDS.forEach(async f => {
+        const card = grid.querySelector(`[data-feed="${f.table}"]`);
+        try {
+          const [newest, total] = await Promise.all([
+            rows(f.table, { select: f.event, order: f.event + ".desc.nullslast", limit: "1" }),
+            tableCount(f.table)
+          ]);
+          const newestVal = newest.length ? newest[0][f.event] : null;
+          const d = newestVal ? dateish(newestVal) : "no rows";
+          card.querySelector(".event").textContent = d;
+          card.querySelector(".event").classList.remove("loading");
+          card.querySelector(".rows").textContent = total != null ? total.toLocaleString() + " rows" : "";
+          const badge = card.querySelector(".badge");
+          if (!newestVal) { badge.textContent = "empty"; badge.className = "badge badge--unknown"; return; }
+          const days = Math.floor((Date.now() - new Date(dateish(newestVal))) / 86400000);
+          if (days <= f.currentDays) { badge.textContent = "current"; badge.className = "badge badge--current"; }
+          else if (days <= f.laggingDays) { badge.textContent = days + "d behind"; badge.className = "badge badge--lagging"; }
+          else { badge.textContent = days + "d stale"; badge.className = "badge badge--stale"; }
+        } catch (e) {
+          card.querySelector(".event").textContent = "unavailable";
+          card.querySelector(".badge").textContent = "error";
+          card.querySelector(".badge").className = "badge badge--stale";
+        }
+      });
+    }
+
+    // ---------- explorer config ----------
+    const TABLES = {
+      permits: {
+        label: "Permits (Accela)",
+        select: "permit_number,applied_date,permit_type,work_type,status,address,valuation_usd_clean,contractor_name,owner_name",
+        order: "applied_date.desc.nullslast",
+        cols: [
+          ["applied_date", "Applied", dateish],
+          ["permit_number", "Permit #", v => `<span class="pill">${esc(v)}</span>`, true],
+          ["permit_type", "Type"],
+          ["status", "Status"],
+          ["address", "Address"],
+          ["valuation_usd_clean", "Valuation", money, "num"],
+          ["contractor_name", "Contractor"],
+          ["owner_name", "Owner"]
+        ],
+        search: t => `(permit_number.ilike.*${t}*,address.ilike.*${t}*,contractor_name.ilike.*${t}*,owner_name.ilike.*${t}*)`,
+        drawer: "permit"
+      },
+      broward_clerk_records_doc: {
+        label: "Clerk recordings",
+        select: "recording_date_iso,doc_type_code,instrument_number,consideration_amount,documentary_tax,number_of_names,number_of_legals,verified_flag,business_date",
+        order: "recording_date_iso.desc.nullslast",
+        cols: [
+          ["recording_date_iso", "Recorded", dateish],
+          ["doc_type_code", "Type", v => `<span class="pill">${esc(v)}</span>`],
+          ["instrument_number", "Instrument #"],
+          ["consideration_amount", "Consideration", money, "num"],
+          ["documentary_tax", "Doc tax", money, "num"],
+          ["number_of_names", "Parties", null, "num"]
+        ],
+        search: t => `(instrument_number.ilike.*${t}*,doc_type_code.ilike.*${t}*)`,
+        drawer: "clerk"
+      },
+      fdep_erp: {
+        label: "FDEP environmental (ERP)",
+        select: "received_date,permitting_program,permit_type,project_name,applicant_company,applicant_name,city,permit_status,documents_url,street_address",
+        order: "received_date.desc.nullslast",
+        cols: [
+          ["received_date", "Received", dateish],
+          ["project_name", "Project"],
+          ["applicant_company", "Applicant co."],
+          ["applicant_name", "Applicant"],
+          ["city", "City"],
+          ["permit_status", "Status", v => `<span class="pill">${esc(v)}</span>`],
+          ["permit_type", "Permit type", v => esc(String(v || "").slice(0, 60))]
+        ],
+        search: t => `(project_name.ilike.*${t}*,applicant_company.ilike.*${t}*,applicant_name.ilike.*${t}*,city.ilike.*${t}*,street_address.ilike.*${t}*)`,
+        drawer: "generic"
+      },
+      faa_oeaaa: {
+        label: "FAA obstruction cases",
+        select: "date_entered,asn,structure_type,structure_description,agl_height,status_code,sponsor,nearest_city,in_broward,lat,lon",
+        order: "date_entered.desc.nullslast",
+        cols: [
+          ["date_entered", "Entered", dateish],
+          ["asn", "ASN", v => `<span class=\"pill\">${esc(v)}</span>`],
+          ["structure_type", "Structure"],
+          ["structure_description", "Description"],
+          ["agl_height", "Height ft", null, "num"],
+          ["status_code", "Status"],
+          ["sponsor", "Sponsor"],
+          ["nearest_city", "Near"],
+          ["in_broward", "Broward?"]
+        ],
+        search: t => `(asn.ilike.*${t}*,sponsor.ilike.*${t}*,structure_type.ilike.*${t}*,nearest_city.ilike.*${t}*)`,
+        drawer: "generic"
+      },
+      signals_v2_context: {
+        label: "Signals v2 (scored)",
+        select: "composite_score,v2_final_score,top_20_rank,permit_number,address,permit_type,valuation,owner_name,detected_at,location_flags,operator_flags,media_flag",
+        order: "composite_score.desc.nullslast",
+        cols: [
+          ["composite_score", "Score", null, "num"],
+          ["top_20_rank", "Top-20", null, "num"],
+          ["permit_number", "Permit #", v => `<span class="pill">${esc(v)}</span>`],
+          ["address", "Address"],
+          ["permit_type", "Type"],
+          ["valuation", "Valuation", money, "num"],
+          ["owner_name", "Owner"],
+          ["detected_at", "Detected", dateish]
+        ],
+        search: t => `(permit_number.ilike.*${t}*,address.ilike.*${t}*,owner_name.ilike.*${t}*)`,
+        drawer: "permitByField"
+      },
+      gis_enrichment: {
+        label: "GIS parcel enrichment",
+        select: "permit_number,folio,gis_owner,gis_property_value,gis_last_sale_date,gis_last_sale_amount,flip_flag,owner_changed_since_permit,enriched_at",
+        order: "enriched_at.desc.nullslast",
+        cols: [
+          ["permit_number", "Permit #", v => `<span class="pill">${esc(v)}</span>`],
+          ["gis_owner", "GIS owner"],
+          ["gis_property_value", "Value", money, "num"],
+          ["gis_last_sale_date", "Last sale", dateish],
+          ["gis_last_sale_amount", "Sale amt", money, "num"],
+          ["flip_flag", "Flip?"],
+          ["owner_changed_since_permit", "Owner Δ"]
+        ],
+        search: t => `(permit_number.ilike.*${t}*,gis_owner.ilike.*${t}*,folio.ilike.*${t}*)`,
+        drawer: "permitByField"
+      },
+      bcpa_property_card: {
+        label: "BCPA property cards",
+        select: "folio,owner_name_1,site_address_1,just_value_num,land_value_num,beds,baths,neighborhood,mailing_is_same_as_situs,homestead_flag",
+        order: "just_value_num.desc.nullslast",
+        cols: [
+          ["folio", "Folio", v => `<span class="pill">${esc(v)}</span>`],
+          ["owner_name_1", "Owner"],
+          ["site_address_1", "Site address"],
+          ["just_value_num", "Just value", money, "num"],
+          ["beds", "Bd", null, "num"],
+          ["baths", "Ba", null, "num"],
+          ["neighborhood", "Neighborhood"],
+          ["mailing_is_same_as_situs", "Owner-occ?"]
+        ],
+        search: t => `(folio.ilike.*${t}*,owner_name_1.ilike.*${t}*,site_address_1.ilike.*${t}*)`,
+        drawer: "generic"
+      },
+      accela_details: {
+        label: "Accela detail scrapes",
+        select: "permit_number,status,applicant_name,contractor_company,contractor_license,site_address,valuation,inspections_count,documents_count,applied_date",
+        order: "applied_date.desc.nullslast",
+        cols: [
+          ["applied_date", "Applied", dateish],
+          ["permit_number", "Permit #", v => `<span class="pill">${esc(v)}</span>`],
+          ["status", "Status"],
+          ["applicant_name", "Applicant"],
+          ["contractor_company", "Contractor co."],
+          ["contractor_license", "License"],
+          ["site_address", "Site"],
+          ["inspections_count", "Insp.", null, "num"]
+        ],
+        search: t => `(permit_number.ilike.*${t}*,site_address.ilike.*${t}*,contractor_company.ilike.*${t}*,applicant_name.ilike.*${t}*)`,
+        drawer: "permitByField"
+      },
+      lp_licenses: {
+        label: "Contractor licenses",
+        select: "license_number,license_type,business_name,qualifier_name,address,issue_date,expiration_date",
+        order: "expiration_date.desc.nullslast",
+        cols: [
+          ["license_number", "License #", v => `<span class="pill">${esc(v)}</span>`],
+          ["license_type", "Type"],
+          ["business_name", "Business"],
+          ["qualifier_name", "Qualifier"],
+          ["issue_date", "Issued", dateish],
+          ["expiration_date", "Expires", dateish]
+        ],
+        search: t => `(license_number.ilike.*${t}*,business_name.ilike.*${t}*,qualifier_name.ilike.*${t}*)`,
+        drawer: "generic"
+      },
+      land_sales: {
+        label: "Land sales",
+        select: "sale_date,sale_price,address,city,grantor,grantee,deed_type,just_value,signal_score",
+        order: "sale_date.desc.nullslast",
+        cols: [
+          ["sale_date", "Sale date", dateish],
+          ["sale_price", "Price", money, "num"],
+          ["address", "Address"],
+          ["city", "City"],
+          ["grantor", "Grantor"],
+          ["grantee", "Grantee"],
+          ["deed_type", "Deed"],
+          ["signal_score", "Score", null, "num"]
+        ],
+        search: t => `(address.ilike.*${t}*,grantor.ilike.*${t}*,grantee.ilike.*${t}*)`,
+        drawer: "generic"
+      },
+      foia_workflow_events: {
+        label: "Permit workflow events (FOIA)",
+        select: "event_date,permit_number,task_name,task_status",
+        order: "event_date.desc.nullslast",
+        cols: [
+          ["event_date", "Event", dateish],
+          ["permit_number", "Permit #", v => `<span class="pill">${esc(v)}</span>`],
+          ["task_name", "Task"],
+          ["task_status", "Status"]
+        ],
+        search: t => `(permit_number.ilike.*${t}*,task_name.ilike.*${t}*)`,
+        drawer: "permitByField"
+      },
+      owner_resolution: {
+        label: "Owner resolution",
+        select: "permit_number,resolved_owner_name,resolved_owner_source,confidence,requires_human_verification,folio,resolved_at",
+        order: "resolved_at.desc.nullslast",
+        cols: [
+          ["permit_number", "Permit #", v => `<span class="pill">${esc(v)}</span>`],
+          ["resolved_owner_name", "Resolved owner"],
+          ["resolved_owner_source", "Source"],
+          ["confidence", "Conf.", null, "num"],
+          ["requires_human_verification", "Needs human?"],
+          ["folio", "Folio"]
+        ],
+        search: t => `(permit_number.ilike.*${t}*,resolved_owner_name.ilike.*${t}*,folio.ilike.*${t}*)`,
+        drawer: "permitByField"
+      }
+    };
+
+    const PRESETS = [
+      { label: "Latest permits", table: "permits", extra: {} },
+      { label: "High value $100K+", table: "permits", extra: { valuation_usd_clean: "gte.100000" } },
+      { label: "Latest recordings", table: "broward_clerk_records_doc", extra: {} },
+      { label: "Deeds", table: "broward_clerk_records_doc", extra: { doc_type_code: "eq.D" } },
+      { label: "Mortgages", table: "broward_clerk_records_doc", extra: { doc_type_code: "eq.M" } },
+      { label: "NOCs", table: "broward_clerk_records_doc", extra: { doc_type_code: "eq.NOC" } },
+      { label: "Liens", table: "broward_clerk_records_doc", extra: { doc_type_code: "eq.LIE" } },
+      { label: "Judgments", table: "broward_clerk_records_doc", extra: { doc_type_code: "eq.FJ" } },
+      { label: "FDEP latest", table: "fdep_erp", extra: {} },
+      { label: "Cranes (FAA)", table: "faa_oeaaa", extra: { structure_type: "like.CRANE*", in_broward: "eq.true" } },
+      { label: "Top signals", table: "signals_v2_context", extra: {} },
+      { label: "Owner flips", table: "gis_enrichment", extra: { flip_flag: "eq.true" } },
+      { label: "Licenses", table: "lp_licenses", extra: {} }
+    ];
+
+    const state = { table: "permits", offset: 0, extra: {}, search: "", rows: [] };
+
+    function buildControls() {
+      q("#table-select").innerHTML = Object.entries(TABLES).map(([k, c]) => `<option value="${k}">${esc(c.label)}</option>`).join("");
+      q("#preset-row").innerHTML = PRESETS.map((p, i) => `<button class="chip" type="button" data-preset="${i}">${esc(p.label)}</button>`).join("");
+      q("#preset-row").addEventListener("click", e => {
+        const b = e.target.closest("[data-preset]");
+        if (!b) return;
+        const p = PRESETS[Number(b.dataset.preset)];
+        state.table = p.table; state.extra = Object.assign({}, p.extra); state.offset = 0; state.search = "";
+        q("#table-select").value = p.table; q("#search-input").value = "";
+        document.querySelectorAll(".chip").forEach(c => c.dataset.active = c === b ? "true" : "false");
+        loadTable();
+      });
+      q("#table-select").addEventListener("change", () => { state.table = q("#table-select").value; state.extra = {}; state.offset = 0; clearChips(); loadTable(); });
+      q("#search-input").addEventListener("keydown", e => { if (e.key === "Enter") { state.search = e.target.value; state.offset = 0; loadTable(); } });
+      q("#refresh-btn").addEventListener("click", () => { state.search = q("#search-input").value; loadTable(); });
+      q("#prev-btn").addEventListener("click", () => { state.offset = Math.max(0, state.offset - PAGE); loadTable(); });
+      q("#next-btn").addEventListener("click", () => { state.offset += PAGE; loadTable(); });
+      q("#drawer-close").addEventListener("click", closeDrawer);
+      q("#drawer-veil").addEventListener("click", closeDrawer);
+      document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+    }
+    function clearChips() { document.querySelectorAll(".chip").forEach(c => c.dataset.active = "false"); }
+
+    async function loadTable() {
+      const cfg = TABLES[state.table];
+      const thead = q("#data-table thead");
+      const tbody = q("#data-table tbody");
+      thead.innerHTML = "<tr>" + cfg.cols.map(c => `<th>${esc(c[1])}</th>`).join("") + "</tr>";
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="${cfg.cols.length}">Loading…</td></tr>`;
+      const params = { select: cfg.select, order: cfg.order, limit: String(PAGE), offset: String(state.offset) };
+      Object.assign(params, state.extra);
+      const term = cleanSearch(state.search);
+      if (term) params.or = cfg.search(term);
+      try {
+        const data = await rows(state.table, params);
+        state.rows = data;
+        if (!data.length) {
+          tbody.innerHTML = `<tr class="empty-row"><td colspan="${cfg.cols.length}">No rows for this view.</td></tr>`;
+        } else {
+          tbody.innerHTML = data.map((r, i) => "<tr data-i=\"" + i + "\">" + cfg.cols.map(c => {
+            const [field, , fmt, cls] = c;
+            const raw = r[field];
+            const val = fmt ? fmt(raw) : esc(raw == null ? "" : raw);
+            return `<td class="${cls || ""}">${val === "" || val == null ? "<span style='color:var(--muted)'>—</span>" : val}</td>`;
+          }).join("") + "</tr>").join("");
+        }
+        q("#page-note").textContent = "rows " + (state.offset + 1) + "–" + (state.offset + data.length);
+        q("#prev-btn").disabled = state.offset === 0;
+        q("#next-btn").disabled = data.length < PAGE;
+        tableCount(state.table, Object.assign({}, state.extra, term ? { or: cfg.search(term) } : {})).then(n => {
+          q("#count-note").textContent = n != null ? n.toLocaleString() + " matching rows" : "";
+        }).catch(() => {});
+        tbody.querySelectorAll("tr[data-i]").forEach(tr => tr.addEventListener("click", () => openDrawer(state.rows[Number(tr.dataset.i)], cfg)));
+      } catch (e) {
+        tbody.innerHTML = `<tr class="empty-row"><td colspan="${cfg.cols.length}">Could not load: ${esc(e.message)}</td></tr>`;
+      }
+    }
+
+    // ---------- case drawer ----------
+    function kvHTML(obj) {
+      return '<dl class="kv">' + Object.entries(obj).filter(([, v]) => v !== null && v !== "" && v !== undefined)
+        .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${typeof v === "string" && /^https?:\/\//.test(v) ? `<a href="${esc(v)}" target="_blank" rel="noopener">${esc(v)}</a>` : esc(typeof v === "object" ? JSON.stringify(v) : v)}</dd>`).join("") + "</dl>";
+    }
+    function miniTable(list, fields) {
+      if (!list || !list.length) return '<p class="note">none found</p>';
+      return '<table class="mini"><thead><tr>' + fields.map(f => `<th>${esc(f)}</th>`).join("") + "</tr></thead><tbody>" +
+        list.map(r => "<tr>" + fields.map(f => `<td>${esc(r[f] == null ? "" : r[f])}</td>`).join("") + "</tr>").join("") + "</tbody></table>";
+    }
+    function openDrawer(row, cfg) {
+      const drawer = q("#drawer");
+      const body = q("#drawer-body");
+      q("#drawer-veil").style.display = "block";
+      drawer.dataset.open = "true";
+      const permitNo = row.permit_number;
+      const instrument = row.instrument_number;
+      q("#drawer-title").textContent = permitNo ? "Case file · " + permitNo : instrument ? "Instrument · " + instrument : (cfg.label + " record");
+      body.innerHTML = "<h5>This record</h5>" + kvHTML(row) + '<div id="drawer-extra"><p class="loading">Weaving cross-source context…</p></div>';
+      const extra = () => q("#drawer-extra");
+      if ((cfg.drawer === "permit" || cfg.drawer === "permitByField") && permitNo) {
+        const enc = encodeURIComponent(permitNo);
+        Promise.allSettled([
+          rows("accela_details", { select: "applicant_name,contractor_company,contractor_license,site_address,valuation,status,inspections_count,documents_count,source_url", permit_number: "eq." + enc, limit: "1" }),
+          rows("gis_enrichment", { select: "gis_owner,gis_property_value,gis_last_sale_date,gis_last_sale_amount,flip_flag,owner_changed_since_permit,folio", permit_number: "eq." + enc, limit: "1" }),
+          rows("owner_resolution", { select: "resolved_owner_name,resolved_owner_source,confidence,requires_human_verification,folio", permit_number: "eq." + enc, limit: "1" }),
+          rows("signals_v2_context", { select: "composite_score,top_50_rank,top_20_rank,location_flags,operator_flags,media_flag", permit_number: "eq." + enc, limit: "1" }),
+          rows("foia_workflow_events", { select: "event_date,task_name,task_status", permit_number: "eq." + enc, order: "event_date.desc.nullslast", limit: "10" })
+        ]).then(([det, gis, own, sig, foia]) => {
+          const val = p => (p.status === "fulfilled" && p.value.length ? p.value : null);
+          let html = "";
+          html += "<h5>Accela detail</h5>" + (val(det) ? kvHTML(val(det)[0]) : '<p class="note">no detail scrape</p>');
+          html += "<h5>Ownership</h5>" + (val(own) ? kvHTML(val(own)[0]) : '<p class="note">no resolution row</p>');
+          html += "<h5>GIS parcel</h5>" + (val(gis) ? kvHTML(val(gis)[0]) : '<p class="note">no GIS enrichment</p>');
+          html += "<h5>Signal score</h5>" + (val(sig) ? kvHTML(val(sig)[0]) : '<p class="note">not scored</p>');
+          html += "<h5>Workflow trail (latest 10)</h5>" + miniTable(val(foia) || [], ["event_date", "task_name", "task_status"]);
+          extra().innerHTML = html;
+        });
+      } else if (cfg.drawer === "clerk" && instrument) {
+        const enc = encodeURIComponent(instrument);
+        Promise.allSettled([
+          rows("broward_clerk_records_party", { select: "name,role_code,sequence_number", instrument_number: "eq." + enc, order: "sequence_number.asc", limit: "40" }),
+          rows("broward_clerk_records_legal", { select: "legal_description,parcel_id", instrument_number: "eq." + enc, limit: "10" })
+        ]).then(([party, legal]) => {
+          const val = p => (p.status === "fulfilled" ? p.value : []);
+          extra().innerHTML =
+            "<h5>Parties</h5>" + miniTable(val(party), ["role_code", "name"]) +
+            "<h5>Legal / parcel</h5>" + miniTable(val(legal), ["parcel_id", "legal_description"]);
+        });
+      } else {
+        extra().innerHTML = "";
+      }
+    }
+    function closeDrawer() {
+      q("#drawer").dataset.open = "false";
+      q("#drawer-veil").style.display = "none";
+    }
+
+    buildControls();
+    paintHealth();
+    loadTable();
+  </script>
+</body>
+</html>
