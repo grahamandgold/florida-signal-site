@@ -18,6 +18,21 @@ ENVFILE="$HOME/.florida_signal_supabase_env"
 if [ -f "$ENVFILE" ]; then set -a; source "$ENVFILE"; set +a; fi
 
 log(){ echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >>"$LOG"; }
+
+# Log rotation only: roll at 5 MB, retain 3 rotated copies. No other retention system;
+# per-date NDJSON cleanup remains tied to verified Supabase insertion (see below).
+rotate_log(){
+  [ -f "$LOG" ] || return 0
+  local size; size=$(stat -f%z "$LOG" 2>/dev/null || echo 0)
+  [ "$size" -lt 5242880 ] && return 0
+  rm -f "$LOG.3"
+  [ -f "$LOG.2" ] && mv "$LOG.2" "$LOG.3"
+  [ -f "$LOG.1" ] && mv "$LOG.1" "$LOG.2"
+  mv "$LOG" "$LOG.1"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') log rotated at ${size} bytes (retaining 3 copies)" >>"$LOG"
+}
+rotate_log
+
 log "=== acclaim pull start (maxdates=$MAXDATES maxpages=$MAXPAGES) ==="
 
 # 1) Last verified SFTP business date (authoritative floor — we only pull dates AFTER this).

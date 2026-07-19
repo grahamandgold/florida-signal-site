@@ -192,3 +192,43 @@ verified `EMPTY`, so the runner refuses to mark it complete and exits nonzero �
 correct per the rules, but it means a genuinely record-less current day stays in the backlog until
 the empty state is confirmable. Empty-state detection for the current/no-result day is the single
 remaining refinement; it does not affect completed-date integrity.
+
+---
+## Addendum — Acclaim empty-state fix + cleanup closure (2026-07-19 ~14:20 EDT)
+
+### Empty-state detection (final refinement)
+Acclaim's true zero-result signature is a **visible leaf element whose text is exactly
+"No Results to Display"** (confirmed in the live DOM); `.t-status-text` matching `of 0` is accepted
+as an equivalent signal. The harvester now resolves five distinct states in priority order:
+**CF** (title matches Attention Required / Just a moment / Access denied) → **GRID** (a
+`#SearchGridContainer` row containing a 7+ digit instrument) → **EMPTY** (positive signature above)
+→ **WAIT** → timeout. `EMPTY|0|0` is returned **only** on positive detection; unresolved states
+return `INCOMPLETE|0|0|<reason>` (`cloudflare_block`, `timeout_no_result_state`, `not_ready_*`) with a
+nonzero exit. Emptiness is never inferred from absence.
+
+**Tests:** empty 2026-07-19 → `EMPTY|0|0`, marked **done**, agent exit 0, backlog now `[]` ·
+forced failure (invalid-route copy in /tmp) → `INCOMPLETE|0|0|not_ready_WAIT`, **0 rows written** ·
+heavy 2026-07-13 regression → `OK|6|2909`, 2,909 rows. Commit `db5b483`.
+
+**Sunday 2026-07-19 is a valid zero-record day** (Acclaim itself reported "No Results to Display";
+07-11/07-12/07-18 behaved identically). It is not a scraper failure and is recorded as complete.
+
+### ACTION LOG — cleanup (2026-07-19)
+Deleted **verified manual test artifacts only**, total **1,463,735 bytes**:
+`/tmp/fs_heavy.ndjson` (725,255) · `/tmp/fs_heavy.status` (26) · `/tmp/fs_acclaim_test.ndjson` (2,603) ·
+`/tmp/fs_acclaim_test.log` (1,420) · `/tmp/fs_empty.status` (21) · `/tmp/fs_fail.status` (40) ·
+`/tmp/fs_fail_harvest.applescript` (9,088) · `/tmp/fs_regress.ndjson` (725,255) · `/tmp/fs_regress.status` (27).
+Each deletion is timestamped in `~/Library/Logs/florida-acclaim.log`.
+
+**Verification basis:** 2026-07-13's rows are confirmed present in Supabase (2,909 unique instruments)
+and a rerun of `acclaim_upsert.py` reported "all 2909 harvested rows already present" — nothing was
+pending upload. **Confirmed NOT removed:** `acclaim_state.json` (1,956 B), `florida-acclaim.log`,
+`florida-acclaim.launchd.log`, `~/.florida_signal_supabase_env` (all verified present after cleanup);
+no incomplete/failed-run artifact existed or was touched.
+
+### Retention policy (as implemented — deliberately minimal)
+- **Log rotation only:** `florida-acclaim.log` rolls at **5 MB**, retaining **3** copies (`.1/.2/.3`).
+- **Per-date NDJSON:** unchanged behaviour — deleted by `acclaim_pull.sh` only after a date reaches
+  `done` (harvest OK/EMPTY **and** rows ≥ displayed total, i.e. verified Supabase insertion).
+  Files for an incomplete/failed date are **retained** for retry.
+- **No 7-day raw-file retention system was added.**
