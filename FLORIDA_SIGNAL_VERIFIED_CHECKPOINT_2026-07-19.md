@@ -93,7 +93,16 @@ shadow run 5 of 5.**
 | Permits | 127,945 |
 | Active pg_cron jobs | 4 |
 
-**This checkpoint performed NO writes to Supabase.**
+**pg_cron schedules (verified 2026-07-19 23:22 UTC):**
+
+| Job | Name | Schedule | Note |
+|---|---|---|---|
+| 1 | `refresh_dashboard_cache` | **`0 */3 * * *`** | **changed from `*/30 * * * *` — see §9a** |
+| 2 | `fdep-erp-daily` | `20 9 * * *` | unchanged |
+| 3 | `faa-oeaaa-daily` | `40 9 * * *` | unchanged |
+| 4 | `clerk-preliminary-reconcile` | `0 10 * * *` | unchanged |
+
+**One approved production change was made: the job-1 cadence (§9a). No other database write.**
 
 ### Mac — residential dependency
 **Exactly ONE launch agent is loaded: `com.floridasignal.acclaim` (last exit 0).**
@@ -395,6 +404,77 @@ select status, count(*) from broward_parcel_range_ledger group by 1;
 Parcel import: `drop table broward_parcel_geography, broward_parcel_import_runs, broward_parcel_range_ledger; drop function fs_normalize_folio(text);`
 Shadow timer: `sudo systemctl disable --now florida-signals-shadow.timer` then remove the unit files — the run has no side effects beyond artifact files.
 Site changes: unmerged on PR #1; reverting the branch reverts everything.
+
+---
+
+## 9a. PRODUCTION CHANGE — dashboard cache cadence (2026-07-19, Andy-approved)
+
+**This is the ONLY production change made during this checkpoint sequence.**
+
+### ACTION LOG — 2026-07-19 23:22 UTC
+| | |
+|---|---|
+| Object | Supabase `cron.job` **jobid 1** (`refresh_dashboard_cache`) |
+| Old schedule | **`*/30 * * * *`** (every 30 minutes, 48 runs/day) |
+| New schedule | **`0 */3 * * *`** (00,03,06,09,12,15,18,21 UTC — 8 runs/day) |
+| Command | **unchanged** — `set statement_timeout to '240s'; select public.refresh_dashboard_cache();` |
+| Applied with | `select cron.alter_job(1, schedule := '0 */3 * * *');` |
+| Authorised by | Andy, explicitly, as "Option A only" |
+| First run on new schedule | 2026-07-20 00:00 UTC (2026-07-19 20:00 ET) |
+
+**Nothing else changed.** No table, index, function, view, trigger, RLS policy, data row,
+service, timer or compute tier. `dashboard_payload()` untouched. `refresh_dashboard_cache()`
+was **not** manually invoked (`pg_stat_statements.calls` still 955). `pg_stat_statements` was
+**not** reset. Cron jobs 2, 3 and 4 verified unchanged.
+
+### Why (measured, not assumed)
+`refresh_dashboard_cache()` was **75.5% of all shared block reads** on this database:
+955 calls · 82.3 s mean · 91,966,442 blocks read · 18,871,451 temp blocks written.
+That is **789 MB read + 162 MB temp per run**, and at 48 runs/day **~37.9 GB read + 7.8 GB
+temp daily**. At 8 runs/day the same work costs **~6.3 GB/day** — roughly an **83% reduction**
+in the single largest IO consumer.
+
+Root causes inside `dashboard_payload()` (diagnosed, **not** fixed — that is Option D, still
+unapproved): a full `permits ⟕ gis_enrichment` join (127,945 × 104,062) whose hash spills to
+disk; timestamp columns stored as **TEXT** (`last_enriched_at`, `parcel_checked_at`,
+`geocoded_at`, `last_seen_at`, `last_updated_at`) forcing a regex + substring + cast on every
+row, which **no index can ever help**; and `gis_enrichment` rescanned 5+ times per call.
+
+### RESTORE / ROLLBACK — one statement, instantly reversible
+```sql
+select cron.alter_job(1, schedule := '*/30 * * * *');
+```
+No migration, no data change, no redeploy. Verify with
+`select jobid, schedule, active from cron.job order by jobid;`
+
+### Product impact
+`dashboard_cache` is a snapshot consumed by `server.py`, `cms/data.html` and `app.js`. It now
+refreshes every 3 hours instead of every 30 minutes. **No page calls
+`refresh_dashboard_cache()` directly** (verified by grep across the repo) and **no second
+scheduler invokes it** (verified: 1 cron job, 0 other public functions). Cards that read the
+cache may show a figure up to 3 hours old; the Data Desk feed-health cards do **not** read the
+cache — they query source tables directly and are unaffected.
+
+### RISK REGISTER — ADD
+> **The dashboard cache can now be up to 3 hours stale.** Accepted deliberately to protect
+> database IO. If a consumer ever needs fresher data than 3 hours, do **not** simply restore the
+> 30-minute cadence — split the payload (Option B) so cheap operational health refreshes
+> frequently and expensive historical analytics refreshes rarely.
+
+> **`permits` stores timestamps as TEXT.** This blocks indexing, forces per-row regex and casts,
+> and is the underlying cause of both the dashboard refresh cost and the 6.5 s
+> `permits ORDER BY last_updated_at` query. Option D is designed but unapproved.
+
+### MASTER TO-DO — ADD
+> Monitor for 72 hours from 2026-07-19 23:22 UTC: cache-hit %, temp-file growth, Disk IO
+> Budget, refresh duration, failures/timeouts, dashboard freshness.
+> **Baselines at change time:** cache hit **75.45%** · temp total **211 GB** since 2026-04-26 ·
+> refresh mean **82.3 s** · 91,966,442 blocks read over 955 calls ·
+> `dashboard_cache.updated_at` = 2026-07-19 23:00:00 UTC.
+> **Success looks like:** cache hit >90%, daily temp growth <2 GB, no timeouts.
+> **Compute upgrade threshold:** only if, after this change AND Option D, sustained IO stays
+> >70% of budget for 7 consecutive days with no one-time import running. Do **not** upgrade on
+> account of the one-time parcel import.
 
 ---
 
