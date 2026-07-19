@@ -30,16 +30,27 @@ not there. It is in `grahamandgold/florida-signal`.
 ## 2. VERIFIED CURRENT STATE (checked 2026-07-19 evening)
 
 ### GitHub
+
+Three different HEADs get confused in this project, so they are named separately here.
+
 | Item | Verified value |
 |---|---|
 | Site repo branch | `claudette/launch-day` |
-| Site local HEAD | `8daad11` |
-| PR #1 head (`codex/florida-signal-rebuild`) | `8daad11` — **identical, 0 unpushed** |
-| `origin/main` (site) | `ba45b46` |
-| PR #1 status | **OPEN · DRAFT · 28 commits** |
-| Mergeability | `MERGEABLE` / `CLEAN` when last computed. **It cannot be merged because it is a DRAFT** — that is the only blocker |
-| Merged? | **NOTHING has been merged** |
+| **Current documentation HEAD** (local) | **`ce1493a`** (`ce1493a8583bdb92d37f6cfc50ecd4b7648be7b9`) — documentation only; changed no application code |
+| **Prior product-code HEAD** | **`8daad11`** — the last commit that changed application behaviour (map lockup asset versioning, overlay z-order, CSS consolidation). **This is the commit that describes what the site currently does.** |
+| **Remote PR #1 head** (`codex/florida-signal-rebuild`) | **`ce1493a`** — byte-identical to local |
+| Unpushed commits | **0** (verified by `git rev-list --count`) |
+| Uncommitted changes | **0** |
+| `origin/main` (site) | `ba45b46` — PR #1 has never been merged into it |
+| PR #1 status | **OPEN · DRAFT · NOT MERGED** (verified via `gh pr view 1 --json mergedAt` → null) |
+| Mergeability | `MERGEABLE` / `CLEAN` when last computed. **It cannot be merged because it is a DRAFT.** That is the only blocker — there is no conflict and no rebase is needed |
 | Engine repo HEAD | `12f3d7b` on `main` |
+
+> **Verification note.** An earlier draft of this document recorded the PR head as `8daad11`.
+> That reading came from a `gh pr view` issued in the same shell command as the push, before
+> GitHub had recomputed the ref — an API cache race, not a real divergence. Re-verified from
+> three independent sources (local `git rev-parse`, `origin/` remote ref, and the GitHub API
+> `headRefOid`), all three return `ce1493a`. **Corrected 2026-07-19.**
 
 ### DigitalOcean — `florida-signal-runtime` (production)
 **Deployed path `/srv/grahamandgold/florida-signal/app` is at `12f3d7b` on `main` — identical to
