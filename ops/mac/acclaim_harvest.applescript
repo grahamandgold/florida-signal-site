@@ -46,22 +46,40 @@ on run argv
 		execute t javascript "(function(){var d=document.getElementById('RecordDate'); d.value='" & targetDate & "'; d.dispatchEvent(new Event('change',{bubbles:true})); document.getElementById('btnSearch').click(); return 'searched';})()"
 	end tell
 
-	-- Wait for results (or a verified empty result).
+	-- Wait for results, a POSITIVELY-detected empty result, or a distinguishable failure.
+	-- States: GRID (rows present) · EMPTY (explicit no-results signature) · CF (Cloudflare)
+	--         WAIT (still loading). Anything unresolved after the window is a timeout, never EMPTY.
 	set gridState to "WAIT"
 	repeat 14 times
 		delay 2
 		tell application "Google Chrome"
-			set gridState to execute t javascript "(function(){var s=(document.querySelector('.t-status-text')||{}).innerText||'';if(/of\\s*0\\b/.test(s))return 'EMPTY';var r=document.querySelectorAll('#SearchGridContainer tbody tr');for(var i=0;i<r.length;i++){if(/\\b\\d{7,}\\b/.test(r[i].innerText))return 'GRID';}return 'WAIT';})()"
+			set gridState to execute t javascript "(function(){
+if(/Attention Required|Just a moment|Access denied/i.test(document.title))return 'CF';
+var r=document.querySelectorAll('#SearchGridContainer tbody tr');
+for(var i=0;i<r.length;i++){if(/\\b\\d{7,}\\b/.test(r[i].innerText))return 'GRID';}
+var s=(document.querySelector('.t-status-text')||{}).innerText||'';
+if(/of\\s*0\\b/.test(s))return 'EMPTY';
+var all=document.querySelectorAll('body *');
+for(var j=0;j<all.length;j++){var e=all[j];if(e.children.length)continue;
+ var txt=(e.innerText||'').trim();
+ if(/^no results to display$/i.test(txt)&&e.offsetParent!==null)return 'EMPTY';}
+return 'WAIT';})()"
 		end tell
-		if gridState is "GRID" or gridState is "EMPTY" then exit repeat
+		if gridState is "GRID" or gridState is "EMPTY" or gridState is "CF" then exit repeat
 	end repeat
 	if gridState is "EMPTY" then
+		-- Verified zero-record date: Acclaim positively reported "No Results to Display".
 		tell application "Google Chrome" to close w
 		return "EMPTY|0|0"
 	end if
-	if gridState is not "GRID" then
+	if gridState is "CF" then
 		tell application "Google Chrome" to close w
-		return "INCOMPLETE|0|0|grid_never_loaded"
+		return "INCOMPLETE|0|0|cloudflare_block"
+	end if
+	if gridState is not "GRID" then
+		-- No grid AND no positive empty-state message: treat as timeout/failure, never as empty.
+		tell application "Google Chrome" to close w
+		return "INCOMPLETE|0|0|timeout_no_result_state"
 	end if
 	delay 2
 
