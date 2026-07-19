@@ -1040,7 +1040,7 @@
      Adds a curated, clustered, multi-source Signal layer on top of the existing map.
      Preserves all legacy behaviour: the raw permit points layer, storm lens, overlays and heat
      map are untouched. Only eligible Signals render; excluded ones never reach the map. */
-  const signalState = { service: null, all: [], layer: null, filters: { sources: {}, status: "all", days: 120 }, loaded: false, error: null };
+  const signalState = { service: null, all: [], layer: null, counts: {}, totals: null, errors: [], filters: { sources: {}, status: "all", days: 365 }, loaded: false, error: null };
 
   function signalSourceKey(signal) {
     if (signal.source_table === "permits") return "permits";
@@ -1118,6 +1118,7 @@
     if (countEl) countEl.textContent = formatNumber(items.length);
     const emptyEl = el("#signal-empty-state");
     if (emptyEl) emptyEl.hidden = items.length > 0;
+    renderSignalCounts();
   }
 
   function renderSignalControls() {
@@ -1128,44 +1129,101 @@
     signalState.all.forEach(function (s) { if (s.public_eligibility) { const k = signalSourceKey(s); counts[k] = (counts[k] || 0) + 1; } });
     const sources = [["permits", "Development · permits"], ["faa", "FAA / cranes"], ["fdep", "Environmental · FDEP"]];
     host.innerHTML =
-      '<div class="signal-controls__row"><p class="eyebrow">Live Signals · <span id="signal-layer-count">0</span> shown</p></div>' +
+      '<div class="signal-controls__row"><p class="signal-readout" id="signal-count-readout">Loading…</p></div>' +
       '<div class="signal-controls__row signal-controls__sources">' + sources.map(function (pair) {
         return '<label class="signal-toggle"><input type="checkbox" data-signal-source="' + pair[0] + '" checked><span>' + escapeHtml(pair[1]) + ' (' + (counts[pair[0]] || 0) + ')</span></label>';
       }).join("") + '</div>' +
       '<div class="signal-controls__row">' +
         '<label class="signal-field"><span>Verification</span><select data-signal-status><option value="all">All</option><option value="verified">Verified only</option><option value="preliminary">Preliminary only</option></select></label>' +
-        '<label class="signal-field"><span>Window</span><select data-signal-days><option value="30">30 days</option><option value="60">60 days</option><option value="120" selected>120 days</option><option value="365">1 year</option></select></label>' +
+        '<label class="signal-field"><span>Window</span><select data-signal-days><option value="30">30 days</option><option value="60">60 days</option><option value="120">120 days</option><option value="365" selected>1 year</option></select></label>' +
       '</div>' +
       '<ul class="signal-legend">' + Object.keys(V.LAYER_LABEL).map(function (k) {
         return '<li><i style="background:' + V.LAYER_COLOR[k] + '"></i>' + escapeHtml(V.LAYER_LABEL[k]) + '</li>';
       }).join("") + '</ul>' +
       '<p class="signal-empty" id="signal-empty-state" hidden>No Signals match these filters. Widen the window or re-enable a source.</p>' +
-      (signalState.error ? '<p class="signal-error">Some sources are unavailable: ' + escapeHtml(signalState.error) + '</p>' : '');
+      ((signalState.errors && signalState.errors.length) ? '<p class="signal-error">Temporarily unavailable: ' + escapeHtml(signalState.errors.map(function (e) { return e.source; }).join(', ')) + ' — this is a source error, not zero records.</p>' : '');
 
     els("[data-signal-source]", host).forEach(function (box) {
-      box.addEventListener("change", function () { signalState.filters.sources[box.dataset.signalSource] = box.checked; drawSignalLayer(); });
+      box.addEventListener("change", function () { signalState.filters.sources[box.dataset.signalSource] = box.checked; loadSignalsForView(); });
     });
     const statusSel = el("[data-signal-status]", host);
-    if (statusSel) statusSel.addEventListener("change", function () { signalState.filters.status = statusSel.value; drawSignalLayer(); });
+    if (statusSel) statusSel.addEventListener("change", function () { signalState.filters.status = statusSel.value; drawSignalLayer(); renderSignalCounts(); });
     const daysSel = el("[data-signal-days]", host);
-    if (daysSel) daysSel.addEventListener("change", function () { signalState.filters.days = Number(daysSel.value); drawSignalLayer(); });
+    if (daysSel) daysSel.addEventListener("change", function () { signalState.filters.days = Number(daysSel.value); loadSignalsForView(); });
+  }
+
+  function signalBoundsFromMap() {
+    if (!state.map) return null;
+    var b = state.map.getBounds();
+    return { south: b.getSouth().toFixed(5), north: b.getNorth().toFixed(5),
+             west: b.getWest().toFixed(5), east: b.getEast().toFixed(5) };
+  }
+
+  function signalQueryOptions(useBounds) {
+    var f = signalState.filters;
+    var startDate = new Date(Date.now() - f.days * 86400000).toISOString().slice(0, 10);
+    var sources = Object.keys(f.sources).filter(function (k) { return f.sources[k] !== false; });
+    return {
+      bounds: useBounds === false ? null : signalBoundsFromMap(),
+      startDate: startDate,
+      sources: sources.length ? sources : ["permits", "faa", "fdep"],
+      limit: 600, offset: 0
+    };
+  }
+
+  function renderSignalCounts() {
+    var host = el("#signal-count-readout");
+    if (!host) return;
+    var c = signalState.counts || {};
+    var loaded = signalState.all.filter(function (s) { return s.public_eligibility; }).length;
+    var visible = visibleSignals().length;
+    var filteredTotal = ["permits", "faa", "fdep"].reduce(function (sum, k) {
+      var v = c[k] && c[k].filteredTotal; return v == null ? sum : sum + v;
+    }, 0);
+    var anyUnknown = ["permits", "faa", "fdep"].some(function (k) { return c[k] && c[k].filteredTotal == null; });
+    var eligTotal = signalState.totals && signalState.totals.all;
+    host.innerHTML =
+      '<strong>' + formatNumber(visible) + '</strong> Signals in this view · ' +
+      formatNumber(loaded) + ' loaded' +
+      (filteredTotal && !anyUnknown ? ' · <b>' + formatNumber(filteredTotal) + '</b> match current filters' : '') +
+      (eligTotal ? '<small>' + formatNumber(eligTotal) + ' eligible Signals across Broward (all dates)</small>' : '');
+  }
+
+  var signalLoadTimer = 0;
+  async function loadSignalsForView(opts) {
+    if (!signalState.service) return;
+    var host = el("[data-signal-controls]");
+    if (host) host.setAttribute("data-loading", "1");
+    try {
+      var result = await signalState.service.load(signalQueryOptions((opts && opts.all) ? false : true));
+      if (result.stale) return;                       // a newer request won
+      signalState.all = result.signals;
+      signalState.counts = result.counts;
+      signalState.errors = result.errors || [];
+      renderSignalControls();
+      drawSignalLayer();
+      renderSignalCounts();
+    } catch (error) {
+      if (host) host.innerHTML = '<p class="signal-error">Signals are temporarily unavailable. No substitute data is shown.</p>';
+    } finally {
+      if (host) host.removeAttribute("data-loading");
+    }
+  }
+
+  function scheduleSignalReload() {
+    window.clearTimeout(signalLoadTimer);
+    signalLoadTimer = window.setTimeout(function () { loadSignalsForView(); }, 420);   // debounce pan/zoom
   }
 
   async function initSignalLayer() {
     if (!state.map || !window.FloridaSignalV1 || !el("[data-signal-controls]")) return;
-    const host = el("[data-signal-controls]");
+    var host = el("[data-signal-controls]");
     host.innerHTML = '<p class="signal-loading">Loading Signals…</p>';
-    try {
-      signalState.service = window.FloridaSignalV1.createService({ supabaseUrl: SUPABASE_URL, key: SUPABASE_KEY });
-      const result = await signalState.service.load({ windowDays: 365 });
-      signalState.all = result.signals;
-      signalState.error = result.errors.length ? result.errors.join("; ") : null;
-      signalState.loaded = true;
-      renderSignalControls();
-      drawSignalLayer();
-    } catch (error) {
-      host.innerHTML = '<p class="signal-error">Signals are temporarily unavailable. No substitute data is shown.</p>';
-    }
+    signalState.service = window.FloridaSignalV1.createService({ supabaseUrl: SUPABASE_URL, key: SUPABASE_KEY });
+    // Unbounded eligible totals first (server-side counts only — no rows transferred).
+    signalState.service.totals({}).then(function (t) { signalState.totals = t; renderSignalCounts(); }).catch(function () {});
+    await loadSignalsForView();
+    state.map.on("moveend zoomend", scheduleSignalReload);
   }
 
   async function initMaps() {

@@ -303,3 +303,41 @@ ruleset, deterministic intelligence pass, bounded read-only service); map integr
 (clustered multi-source Signal layer, source/verification/date filters, legend, Signal Cards, Reset-view
 control on every map, enlarged centered brand lockup linking to thefloridasignal.com for embeds);
 `tests/signals.test.js` (45 assertions, all passing); `supabase/migrations/20260719_003_map_signal_candidates.sql`.
+
+---
+## Addendum — Complete bounded data discovery (2026-07-19 night)
+
+### DECISION LOG
+Florida Signal complete-data support means all eligible records are discoverable through bounded,
+filterable retrieval. It does NOT mean loading entire source tables into the browser. The public map
+displays curated Signals; the Data Room provides deeper record access; the Data Wire CMS controls
+editorial review. Existing scoring logic must be inventoried and reconciled before new scoring rules
+are introduced. Meeting agendas, packets, staff reports, minutes and exhibits are a core Signal source family.
+
+### Complete counts (server-verified 2026-07-19)
+| Source | Total | Geocoded | Eligible+geocoded |
+|---|---:|---:|---:|
+| Permits | 127,945 | 103,864 | **14,884** |
+| FAA (Broward) | 472 | 472 | 472 (142 cranes) |
+| FDEP | 8,309 | 8,309 | 8,309 |
+
+The previous 700/300/400 fixed samples are retired. Retrieval is now viewport-bounded, date-filtered,
+source-filtered, deterministically ordered, capped at 600 rows/request, debounced (420ms) on pan/zoom,
+with stale-response cancellation via a sequence guard and dedupe by `signal_id`.
+
+### Counts are now separated honestly
+Readout distinguishes **in this view / loaded / match current filters / eligible across Broward**.
+`count=exact` on `permits` times out (Postgres 57014, 127k rows), so counts use `count=planned`
+(planner estimate) and are labelled **approx.** Row queries are exact.
+
+### RISK REGISTER (verified)
+- Fixed sample limits can falsely appear to represent complete coverage — retired; counts now labelled.
+- A failed source request can falsely appear as zero records — mitigated: failures render as
+  "Temporarily unavailable … this is a source error, not zero records" and never as 0.
+- Raw full-table map loading can overwhelm browsers — mitigated: 600-row cap + clustering + bbox.
+
+### MASTER TO-DO
+- Complete reliable geographic linkage for selected Clerk records.
+- Complete meeting-document ingestion after existing logic and municipality coverage are inventoried.
+- Implement controlled source-health, reconciliation, Signal-refresh and publication-freshness loops.
+- Finish CMS review UI actions (approve/hold/reject currently service-role).

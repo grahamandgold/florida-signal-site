@@ -421,67 +421,143 @@
     return s;
   }
 
-  // ---------- PHASE 4: bounded read-only service ----------
-  // Uses the site's existing Supabase REST convention. Never loads whole tables.
+  // ---------- Bounded, viewport-aware retrieval service ----------
+  // Complete-data support = every eligible record is DISCOVERABLE through bounded, filterable
+  // queries. It never means loading whole tables into the browser. Each request is capped,
+  // deterministically ordered, geographically bounded, and cancellable.
+  var PERMIT_ELIGIBLE_OR = "(valuation_usd_clean.gte.500000,description.ilike.*demol*,permit_type.ilike.*demol*," +
+    "description.ilike.*roof*,permit_type.ilike.*roof*,description.ilike.*seawall*,description.ilike.*shutter*," +
+    "description.ilike.*window*,description.ilike.*generator*,description.ilike.*drainage*,description.ilike.*storm*)";
+
   function createService(cfg) {
     var SB = cfg.supabaseUrl.replace(/\/$/, "") + "/rest/v1/";
     var KEY = cfg.key;
-    var LIMITS = { permits: 700, faa: 300, fdep: 400 };
+    var PAGE_CAP = cfg.pageCap || 600;      // hard per-request ceiling
+    var seq = 0;                            // stale-response guard
 
-    function q(table, params) {
-      var url = new URL(SB + table);
-      Object.keys(params).forEach(function (k) { url.searchParams.set(k, params[k]); });
-      return fetch(url, { headers: { apikey: KEY, Accept: "application/json" } }).then(function (r) {
-        if (!r.ok) throw new Error(table + " HTTP " + r.status);
-        return r.json();
-      });
+    var SOURCES = {
+      permits: {
+        table: "permits", latCol: "lat", lonCol: "lon", dateCol: "applied_date", kind: "permit",
+        select: "permit_number,address,permit_type,description,valuation_usd_clean,applied_date,last_seen_at,lat,lon,region,contractor_name,applicant_name,owner_name,work_type",
+        order: "applied_date.desc.nullslast", extra: { or: PERMIT_ELIGIBLE_OR }
+      },
+      faa: {
+        table: "faa_oeaaa", latCol: "lat", lonCol: "lon", dateCol: "date_entered", kind: "faa",
+        select: "asn,date_entered,structure_type,structure_description,agl_height,status_code,sponsor,nearest_city,lat,lon,in_broward,first_fetched_at,last_fetched_at",
+        order: "date_entered.desc.nullslast", extra: { in_broward: "eq.true" }
+      },
+      fdep: {
+        table: "fdep_erp", latCol: "lat", lonCol: "lon", dateCol: "received_date", kind: "fdep",
+        select: "permit_id,objectid,project_name,applicant_company,applicant_name,permit_type,permit_status,agency_action,received_date,street_address,city,lat,lon,documents_url,first_fetched_at,last_fetched_at",
+        order: "received_date.desc.nullslast", extra: {}
+      }
+    };
+
+    function buildParams(src, o) {
+      var p = {};
+      Object.keys(src.extra).forEach(function (k) { p[k] = src.extra[k]; });
+      p[src.latCol] = "not.is.null";
+      if (o.bounds) {
+        p[src.latCol] = "gte." + o.bounds.south;
+        p[src.latCol + ".lte"] = null; // placeholder removed below
+      }
+      return p;
     }
 
-    function since(days) {
-      var d = new Date(Date.now() - days * 86400000);
-      return d.toISOString().slice(0, 10);
+    // PostgREST needs repeated keys for ranges, so build the query string manually.
+    function urlFor(src, o, opts) {
+      var u = new URL(SB + src.table);
+      var q = u.searchParams;
+      Object.keys(src.extra).forEach(function (k) { q.set(k, src.extra[k]); });
+      if (o.bounds) {
+        q.append(src.latCol, "gte." + o.bounds.south);
+        q.append(src.latCol, "lte." + o.bounds.north);
+        q.append(src.lonCol, "gte." + o.bounds.west);
+        q.append(src.lonCol, "lte." + o.bounds.east);
+      } else {
+        q.append(src.latCol, "not.is.null");
+        q.append(src.lonCol, "not.is.null");
+      }
+      if (o.startDate) q.append(src.dateCol, "gte." + o.startDate);
+      if (o.endDate) q.append(src.dateCol, "lte." + o.endDate);
+      if (o.minValuation && src.kind === "permit") q.append("valuation_usd_clean", "gte." + o.minValuation);
+      if (opts && opts.countOnly) { q.set("select", src.latCol); q.set("limit", "1"); }
+      else {
+        q.set("select", src.select);
+        q.set("order", src.order);
+        q.set("limit", String(Math.min(o.limit || PAGE_CAP, PAGE_CAP)));
+        q.set("offset", String(o.offset || 0));
+      }
+      return u;
+    }
+
+    function headers(countMode) {
+      var h = { apikey: KEY, Accept: "application/json" };
+      if (countMode) h.Prefer = "count=planned";   // exact count times out on permits (57014); planner estimate is instant
+      return h;
+    }
+
+    function countFor(srcKey, o, signal) {
+      var src = SOURCES[srcKey];
+      return fetch(urlFor(src, o, { countOnly: true }), { headers: headers(true), signal: signal })
+        .then(function (r) {
+          var cr = r.headers.get("content-range") || "";
+          var total = cr.split("/")[1];
+          return total && total !== "*" ? Number(total) : null;
+        }).catch(function () { return null; });
+    }
+
+    function fetchSource(srcKey, o, signal) {
+      var src = SOURCES[srcKey];
+      return fetch(urlFor(src, o), { headers: headers(false), signal: signal }).then(function (r) {
+        if (!r.ok) throw new Error(srcKey + " HTTP " + r.status);
+        return r.json();
+      }).then(function (rows) { return { kind: src.kind, key: srcKey, rows: rows }; });
     }
 
     return {
-      LIMITS: LIMITS,
-      // Returns { signals, counts, errors } — never throws for a single-source failure.
+      PAGE_CAP: PAGE_CAP,
+      // Unbounded eligible totals (server-side counts, no rows transferred).
+      totals: function (o) {
+        var opt = o || {};
+        return Promise.all([countFor("permits", opt), countFor("faa", opt), countFor("fdep", opt)])
+          .then(function (c) { return { permits: c[0], faa: c[1], fdep: c[2], all: (c[0] || 0) + (c[1] || 0) + (c[2] || 0) }; });
+      },
+      // Viewport/filter load. Returns signals + counts + per-source errors; stale calls resolve stale:true.
       load: function (options) {
         var o = options || {};
-        var windowDays = o.windowDays || 120;
-        var jobs = [
-          q("permits", {
-            select: "permit_number,address,permit_type,description,valuation_usd_clean,applied_date,last_seen_at,lat,lon,region,contractor_name,applicant_name,owner_name,work_type",
-            applied_date: "gte." + since(windowDays),
-            lat: "not.is.null", lon: "not.is.null",
-            order: "applied_date.desc.nullslast", limit: String(LIMITS.permits)
-          }).then(function (rows) { return { kind: "permit", rows: rows }; }),
-          q("faa_oeaaa", {
-            select: "asn,date_entered,structure_type,structure_description,agl_height,status_code,sponsor,nearest_city,lat,lon,in_broward,first_fetched_at,last_fetched_at",
-            in_broward: "eq.true", lat: "not.is.null",
-            order: "date_entered.desc.nullslast", limit: String(LIMITS.faa)
-          }).then(function (rows) { return { kind: "faa", rows: rows }; }),
-          q("fdep_erp", {
-            select: "permit_id,objectid,project_name,applicant_company,applicant_name,permit_type,permit_status,agency_action,received_date,street_address,city,lat,lon,documents_url,first_fetched_at,last_fetched_at",
-            lat: "not.is.null",
-            order: "received_date.desc.nullslast", limit: String(LIMITS.fdep)
-          }).then(function (rows) { return { kind: "fdep", rows: rows }; })
-        ];
+        var mySeq = ++seq;
+        var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+        var sig = controller ? controller.signal : undefined;
+        var wanted = o.sources && o.sources.length ? o.sources : ["permits", "faa", "fdep"];
+        var jobs = wanted.map(function (k) { return fetchSource(k, o, sig); });
+        var countJobs = wanted.map(function (k) { return countFor(k, o, sig); });
 
-        return Promise.allSettled(jobs).then(function (results) {
+        return Promise.all([Promise.allSettled(jobs), Promise.allSettled(countJobs)]).then(function (both) {
+          if (mySeq !== seq) return { stale: true, signals: [], counts: {}, errors: [] };
           var signals = [], counts = {}, errors = [], seen = {};
-          results.forEach(function (res) {
-            if (res.status !== "fulfilled") { errors.push(String(res.reason && res.reason.message || res.reason)); return; }
-            var kind = res.value.kind, built = 0, excluded = 0;
+          both[0].forEach(function (res, i) {
+            var key = wanted[i];
+            var filtered = both[1][i].status === "fulfilled" ? both[1][i].value : null;
+            if (res.status !== "fulfilled") {
+              // A failed request is an ERROR, never a zero-record claim.
+              errors.push({ source: key, message: String(res.reason && res.reason.message || res.reason) });
+              counts[key] = { eligible: null, loaded: 0, filteredTotal: filtered, failed: true };
+              return;
+            }
+            var loaded = 0, excluded = 0;
             res.value.rows.forEach(function (row) {
-              var s = build(row, kind);
-              if (!s || seen[s.signal_id]) return;      // deterministic dedupe by signal_id
+              var s = build(row, res.value.kind);
+              if (!s || seen[s.signal_id]) return;
               seen[s.signal_id] = 1;
-              if (s.public_eligibility) built++; else excluded++;
-              signals.push(s);
+              if (s.public_eligibility) { loaded++; signals.push(s); } else excluded++;
             });
-            counts[kind] = { eligible: built, excluded: excluded, fetched: res.value.rows.length };
+            counts[key] = { loaded: loaded, excluded: excluded, fetched: res.value.rows.length,
+                            filteredTotal: filtered, failed: false,
+                            hasMore: res.value.rows.length >= Math.min(o.limit || PAGE_CAP, PAGE_CAP) };
           });
-          return { signals: signals, counts: counts, errors: errors, generated_at: new Date().toISOString() };
+          return { stale: false, signals: signals, counts: counts, errors: errors,
+                   offset: o.offset || 0, generated_at: new Date().toISOString() };
         });
       }
     };
