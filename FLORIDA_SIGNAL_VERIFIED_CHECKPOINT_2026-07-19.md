@@ -383,6 +383,33 @@ Site changes: unmerged on PR #1; reverting the branch reverts everything.
 
 ---
 
+## 9b. DOCUMENTATION AUTHORITY — decision, risk, to-do (added 2026-07-19)
+
+### DECISION LOG — ADD
+> **The canonical Florida Signal AI handoff and verified operating checkpoint live in
+> `00_Company_Admin` alongside `GRAHAM_AND_GOLD_START_HERE`. Backup and recovery folders
+> preserve historical snapshots and are not the authority for current operating documentation.**
+
+Canonical Drive location for this document:
+`Graham & Gold Shared Drive / 00_Company_Admin / FLORIDA_SIGNAL_VERIFIED_CHECKPOINT_2026-07-19.md`
+
+### RISK REGISTER — ADD
+> **The prior authoritative Florida Signal AI handoff was stored inside a dated
+> backup/recovery subtree, creating a risk of misclassification or loss during backup cleanup.**
+
+Verified path of the prior handoff:
+`Graham & Gold Shared Drive / 08_Backups_and_Recovery / Mac_Recovery_2026-07-12 /
+04_RECOVERY_REPORTS_AND_MANIFESTS / FLORIDA_SIGNAL_AI_HANDOFF_2026-07-16_rev2_EOD.md`
+It remains in place — not moved, renamed or deleted — with a companion supersession note
+beside it pointing to this checkpoint.
+
+### MASTER TO-DO — ADD
+> **Audit the Shared Drive for other current authoritative documents stored only inside
+> migration, backup, snapshot or recovery folders. Do not move anything until authority and
+> dependencies are verified.**
+
+---
+
 ## 10. DOCUMENTS SUPERSEDED BY THIS CHECKPOINT
 
 - `DESKTOP_HANDOFF_STEP1_2026-07-19.md` — **SUPERSEDED — PRESERVED FOR HISTORY.** Reason:
