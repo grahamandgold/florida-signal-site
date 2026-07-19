@@ -390,3 +390,54 @@ problem** — no amount of parcel geography fixes it.
 - Investigate `broward_clerk_records_link` as a verified path from mortgages/liens/LP to a deed's parcel.
 - Audit Michigan and Florida parcel/folio normalization paths separately — identifier rules do not transfer.
 - Stratified 50-record quality verification before any Clerk record becomes map-eligible.
+
+---
+## Addendum — Instrument-link inheritance audit (2026-07-19, final)
+
+### DECISION LOG
+The county parcel import is COMPLETE only when every expected source range is reconciled. A COMPLETE
+sub-run does not prove whole-county completion. Direct Clerk parcel linkage and inherited linkage via
+official instrument relationships are **separate linkage methods**. Mortgages, liens, lis pendens and
+judgments may not inherit parcel geography without a verified exact instrument relationship to a
+parcel-bearing record.
+
+### `broward_clerk_records_link` — schema and semantics (verified)
+56,526 rows. Shape: `source_instrument_number` → `target_instrument_number`, each with a doc type and
+side flag, plus `display_label`. Relationships are official (from the Clerk `lnk-ver` file) and
+directional. Dominant pattern is **satisfaction/release → original instrument** (RST 25,662 rows) and
+**certified judgment → judgment** (CFJ→FJ). Critically, **~25,662 rows carry a null or `-NOT SHOWN`
+target**, making them unusable for linkage.
+
+### Inherited-parcel test — the path DOES NOT WORK
+Path tested (both directions), exact instrument match only:
+non-parcel instrument → exact official link → parcel-bearing instrument → exact 12-char folio → county parcel geography
+
+| Doc type | Instruments | Usable link | Links to parcel-bearing | **Inheritable parcels** |
+|---|---:|---:|---:|---:|
+| RST satisfactions | 42,335 | 37,466 | 264 | **140** |
+| FJ judgments | 14,669 | 457 | 0 | **0** |
+| **M mortgages** | 10,357 | 1,251 | 1 | **1** |
+| **LIE liens** | 7,388 | 403 | 0 | **0** |
+| AST assignments | 3,233 | 3,201 | 2 | 0 |
+| CFJ certified judgments | 1,537 | 1,503 | 0 | **0** |
+| **LP lis pendens** | 1,281 | 214 | 0 | **0** |
+| MOD modifications | 204 | 184 | 0 | 0 |
+
+**Conclusion:** the Clerk link file connects instruments to other **non-parcel** instruments
+(satisfaction→mortgage, certified judgment→judgment). It effectively never reaches a deed. Combined
+with the earlier finding that only deed-type instruments carry `parcel_id` in the `lgl-ver` legal file,
+**mortgages, liens, lis pendens and judgments cannot be mapped from the current Clerk SFTP feed by any
+verified path.** This is a source-data limitation. Only **deeds (7,903 mappable)** and
+**easements (386)** are viable today.
+
+### RISK REGISTER (verified)
+- High-concurrency parcel imports (70-way fan-out) saturated the database, caused read-statement
+  timeouts, and left range coverage unverifiable. Serial or ≤3-way concurrency required going forward.
+- A Clerk instrument relationship does **not** prove shared property; inheritance must never be assumed.
+
+### MASTER TO-DO
+- Finish parcel import serially with a range ledger (404,082 / 554,358 = 72.9% loaded; 0 duplicate
+  OBJECTIDs, 0 null coordinates, 34,034 alphanumeric folios).
+- For mortgages/liens/LP: the only remaining credible path is **BCPA per-folio lookup or a
+  Clerk-provided legal file that includes non-deed instruments** — both require separate approval.
+- Connect **deeds only** to SignalV1/map/CMS once stratified verification passes.
