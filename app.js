@@ -309,6 +309,29 @@
     const barTime = el("#live-bar-time");
     if (barTime) barTime.textContent = permitTimestamp ? "Permits synced " + formatDate(permitTimestamp, { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "Source clock unavailable";
 
+    const railLine = el("#rail-signal-line");
+    if (railLine && state.featured.length) {
+      const railMoney = function (v) {
+        const n = Number(v);
+        if (!Number.isFinite(n) || n <= 0) return null;
+        return n >= 1000000 ? "$" + (n / 1000000).toFixed(1).replace(/\.0$/, "") + "M" : "$" + Math.round(n / 1000) + "K";
+      };
+      const railItems = state.featured.slice(0, 8).map(function (r) {
+        const money = railMoney(r.valuation_usd_clean);
+        const place = r.address || r.permit_number || "Fort Lauderdale";
+        const kind = r.work_type || r.permit_type || "application";
+        return (money ? money + " " : "") + String(kind).toLowerCase() + " filed · " + place;
+      }).filter(Boolean);
+      if (railItems.length) {
+        let railIndex = 0;
+        railLine.textContent = railItems[0];
+        window.setInterval(function () {
+          railIndex = (railIndex + 1) % railItems.length;
+          railLine.textContent = railItems[railIndex];
+        }, 6200);
+      }
+    }
+
     if (state.records.length && (el("#signal-list") || el("#lead-list") || el("#graphic-desk"))) await Promise.allSettled([loadNeighborhoods()]);
     if (el("#graphic-desk")) await Promise.allSettled([loadZipBoundaries()]);
     renderSignals();

@@ -7,27 +7,30 @@
   <meta name="referrer" content="no-referrer">
   <title>Data Desk — Florida Signal Internal Viewer</title>
   <meta name="description" content="Private read-only viewer over the Florida Signal intelligence store.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
   <style>
     :root {
       color-scheme: light;
       --ink: #061b33;
       --ink-soft: #183b58;
-      --teal: #009e92;
-      --teal-dark: #00786f;
-      --teal-pale: #dff5f2;
-      --coral: #ff6b43;
+      --teal: #b08b2e;
+      --teal-dark: #7d6220;
+      --teal-pale: #f5efdd;
+      --coral: #c25a3a;
       --gold: #f4c94e;
       --paper: #ffffff;
-      --wash: #eff7f8;
-      --line: #cad8dc;
-      --muted: #667d8e;
+      --wash: #fbf9f3;
+      --line: #ded7c4;
+      --muted: #6e6c5e;
       --danger: #a52828;
       --danger-pale: #fff0ee;
-      --success: #08705f;
+      --success: #14588c;
       --shadow: 0 1px 0 rgba(6,27,51,.08), 0 14px 34px rgba(6,27,51,.06);
       --radius: 0;
-      --serif: Georgia, "Times New Roman", serif;
-      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --serif: "Newsreader", Georgia, "Times New Roman", serif;
+      --sans: "DM Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     }
     * { box-sizing: border-box; }
@@ -36,8 +39,8 @@
       margin: 0;
       min-width: 320px;
       background:
-        linear-gradient(90deg, rgba(0,158,146,.07) 1px, transparent 1px) 0 0 / 84px 84px,
-        linear-gradient(rgba(0,158,146,.07) 1px, transparent 1px) 0 0 / 84px 84px,
+        linear-gradient(90deg, rgba(176,139,46,.07) 1px, transparent 1px) 0 0 / 84px 84px,
+        linear-gradient(rgba(176,139,46,.07) 1px, transparent 1px) 0 0 / 84px 84px,
         var(--wash);
       color: var(--ink);
       font-family: var(--sans);
@@ -137,7 +140,7 @@
     .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table { border-collapse: collapse; width: 100%; font-size: .87rem; min-width: 640px; }
     thead th {
-      text-align: left; position: sticky; top: 0; background: var(--ink); color: white;
+      text-align: left; position: sticky; top: 0; background: #f3eedd; color: var(--ink); border-bottom: 2px solid var(--ink);
       padding: 9px 12px; font-size: .72rem; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap;
     }
     tbody td { padding: 9px 12px; border-bottom: 1px solid #e4ecef; vertical-align: top; }
@@ -185,7 +188,6 @@
   <header class="masthead">
     <div class="masthead__inner">
       <div class="brand" aria-label="Florida Signal internal data desk">
-        <span class="brand__mark" aria-hidden="true"></span>
         <div>
           <div class="eyebrow">Internal · Graham &amp; Gold LLC</div>
           <h1>Data <span>Desk</span></h1>

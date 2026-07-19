@@ -12,6 +12,9 @@ if [ ! -s "$TOKEN_FILE" ]; then
 fi
 TOKEN="$(cat "$TOKEN_FILE")"
 
+# Mailchimp credentials, if configured via ops/set_mailchimp_key.command
+[ -f "$HOME/.florida_signal_mailchimp_env" ] && source "$HOME/.florida_signal_mailchimp_env"
+
 cd "$DIR"
 
 # Stop any previous instances (kill whatever holds the ports)

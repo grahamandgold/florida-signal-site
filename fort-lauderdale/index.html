@@ -29,7 +29,7 @@
   <link rel="alternate" type="application/json" href="/data/site-catalog.json" title="Florida Signal machine-readable site catalog">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Figtree:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="/styles.css">
   <script type="application/ld+json">
@@ -96,7 +96,7 @@
   <header class="site-header">
     <div class="shell site-header__inner">
       <a class="brand" href="/fort-lauderdale/" aria-label="Florida Signal home">
-        <span class="brand__lockup"><img class="brand__emblem" src="/assets/mark-full-color.png" alt="" width="192" height="192"><span class="brand__words"><span class="brand__name">Florida S<i>i</i>gnal</span><span class="brand__tag">Development Intelligence</span></span></span>
+        <span class="brand__lockup"><img class="brand__emblem" src="/assets/mark-full-color.png" alt="" width="192" height="192"><span class="brand__words"><span class="brand__name">Florida <i>Signal</i></span><span class="brand__tag">Development Intelligence</span></span></span>
       </a>
       <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav">
         <span></span><span></span><span></span><span class="sr-only">Open navigation</span>
@@ -114,7 +114,7 @@
   <section class="mobile-live-rail" aria-label="Live Florida Signal intelligence">
     <div class="mobile-live-rail__head">
       <p><span class="pulse" aria-hidden="true"></span><strong>Top signals · live now</strong></p>
-      <p data-updated>Connecting to the public record…</p>
+      <p id="rail-signal-line">Reading today’s top signals…</p>
     </div>
     <div class="mobile-live-rail__viewport" data-mobile-live-rail tabindex="0" aria-label="Swipe through current Florida Signal data">
       <div class="mobile-live-rail__track">
@@ -150,7 +150,7 @@
 
   <section class="mobile-field-test" data-mobile-field-test aria-label="Mobile Field Test">
     <button class="mobile-field-test__trigger" type="button" data-mobile-field-toggle aria-expanded="false" aria-controls="mobile-field-panel">
-      <span><small>Live map · field mode</small><strong>What’s moving around me?</strong></span>
+      <span><small>Live map · field mode</small><strong>Our top signals</strong></span>
       <i aria-hidden="true"><b></b></i>
     </button>
     <div class="mobile-field-test__panel" id="mobile-field-panel" data-mobile-field-panel hidden>
@@ -468,7 +468,7 @@
   <footer class="site-footer">
     <div class="shell site-footer__grid">
       <div>
-        <img src="/assets/lockup-horizontal-transparent.png" alt="Florida Signal" width="1000" height="248">
+        <img src="/assets/lockup-2026-horizontal.png" alt="Florida Signal" width="1000" height="248">
         <p>Development intelligence for Fort Lauderdale and Broward County.</p>
       </div>
       <div>
