@@ -2648,3 +2648,42 @@ a.brand { width: auto; max-width: none; }
 .map-publish-tools--map { flex-direction: row !important; flex-wrap: wrap; align-items: center;
   top: auto !important; bottom: 16px; right: 14px; max-width: min(360px, calc(100% - 28px)); }
 @media (max-width: 620px) { .map-publish-tools--map { bottom: 12px; right: 10px; max-width: calc(100% - 20px); } }
+
+/* Share rail lives inside the Leaflet container now: horizontal, bottom-left, clear of the legend. */
+.leaflet-container > .map-publish-tools--map { position: absolute; z-index: 700;
+  flex-direction: row !important; flex-wrap: nowrap; align-items: center; gap: 7px;
+  left: 12px; right: auto !important; top: auto !important; bottom: 14px;
+  width: max-content; max-width: calc(100% - 24px); padding: 8px 10px;
+  border: 1px solid rgba(8,42,84,.14); background: rgba(255,255,255,.96);
+  box-shadow: 0 14px 34px rgba(8,42,84,.18); }
+.leaflet-container > .map-publish-tools--map .publish-social { width: 36px; min-width: 36px !important; height: 36px; min-height: 36px !important; }
+@media (max-width: 620px) {
+  .leaflet-container > .map-publish-tools--map { left: 8px; bottom: 10px; gap: 5px; padding: 6px 7px; }
+  .leaflet-container > .map-publish-tools--map .publish-social { width: 32px; min-width: 32px !important; height: 32px; min-height: 32px !important; }
+  .leaflet-container > .map-publish-tools--map a:not(.publish-social), .leaflet-container > .map-publish-tools--map button:not(.publish-social) { display: none; }
+}
+
+/* FINAL: map share rail — force a single horizontal row anchored inside the map's bottom-right.
+   (Its containing block is .full-map-canvas; earlier selectors missed and it stacked 41px wide,
+   straddling the map edge.) */
+.full-map-canvas .map-publish-tools--map,
+.map-publish-tools.map-publish-tools--map {
+  position: absolute !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  width: max-content !important;
+  max-width: calc(100% - 40px) !important;
+  left: auto !important; right: 22px !important;
+  top: auto !important; bottom: 18px !important;
+  gap: 7px !important; padding: 8px 11px !important;
+  border: 1px solid rgba(8,42,84,.14) !important;
+  background: rgba(255,255,255,.96) !important;
+  box-shadow: 0 14px 34px rgba(8,42,84,.18) !important;
+}
+.map-publish-tools.map-publish-tools--map .publish-social { width: 36px !important; min-width: 36px !important; height: 36px !important; min-height: 36px !important; }
+@media (max-width: 620px) {
+  .map-publish-tools.map-publish-tools--map { right: 10px !important; bottom: 12px !important; gap: 5px !important; padding: 6px 8px !important; }
+  .map-publish-tools.map-publish-tools--map .publish-social { width: 32px !important; min-width: 32px !important; height: 32px !important; min-height: 32px !important; }
+  .map-publish-tools.map-publish-tools--map a:not(.publish-social), .map-publish-tools.map-publish-tools--map button:not(.publish-social) { display: none !important; }
+}

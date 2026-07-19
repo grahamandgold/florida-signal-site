@@ -823,6 +823,17 @@
     }).join("");
   }
 
+  // The share rail is authored outside the map; its positioning ancestor is a narrow column, so it
+  // straddled the map edge. Re-parent it into the Leaflet container so it anchors to the map itself.
+  function adoptMapShareRail(map) {
+    const container = map.getContainer();
+    if (!container) return;
+    const rail = document.querySelector(".map-publish-tools--map");
+    if (!rail || container.contains(rail)) return;
+    container.appendChild(rail);
+    if (window.L && L.DomEvent) L.DomEvent.disableClickPropagation(rail);
+  }
+
   function addMapReset(map, home) {
     const container = map.getContainer();
     if (!container || container.querySelector(".map-reset-control")) return;
@@ -884,6 +895,7 @@
     const map = L.map(node, { zoomControl: true, scrollWheelZoom: false, attributionControl: true, preferCanvas: true }).setView(settings.center || [26.129, -80.144], settings.zoom || 12);
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(map);
     addMapBrand(map);
+    adoptMapShareRail(map);
     addMapReset(map, { center: (typeof settings !== 'undefined' && settings.center) || [26.129, -80.144], zoom: (typeof settings !== 'undefined' && settings.zoom) || 12 });
     const bounds = [];
     const titleNode = el("#" + name + "-spotlight-title");
