@@ -115,8 +115,8 @@ of five review runs are complete. It has never generated a published brief.
 
 ## 4. What each layer of v2.6 actually does
 
-**Gates (v2.0, unchanged):** A = development intent (demo/new-construction rules or literal
-type/description match; `dormant_address_reawakens` deliberately excluded). B = economic
+**Gates (v2.0, historical scorer label corrected):** A = consequential filed scope (demo/new-construction rules or literal
+type/description match; this is **not** evidence of owner intent, approval or future development; `dormant_address_reawakens` deliberately excluded). B = economic
 weight (value rules or raw valuation ≥ $500k). C = 2+ distinct rule families. On the
 original dataset: 3,204 candidates → 2,402 passed (75%), 802 dropped (25%).
 

@@ -529,15 +529,15 @@ def normalized_story_taxonomy(item: dict[str, Any]) -> dict[str, list[str]]:
         "geography": normalize_taxonomy_values(item.get("geography_tags") or item.get("places") or item.get("neighborhoods"), "geography"),
         "entity": normalize_taxonomy_values(item.get("entity_tags") or item.get("entities"), "entity"),
         "source": normalize_taxonomy_values(item.get("source_tags"), "source"),
-        "audience": normalize_taxonomy_values(item.get("audience_tags"), "audience"),
+        "persona": normalize_taxonomy_values(item.get("persona_tags") or item.get("audience_tags"), "persona"),
         "urgency": normalize_taxonomy_values(item.get("urgency_tags") or item.get("urgency"), "urgency"),
         "neighborhood": normalize_taxonomy_values([item.get("neighborhood")] if item.get("neighborhood") else [], "neighborhood"),
         "zip": normalize_taxonomy_values([item.get("zip")] if item.get("zip") else [], "zip"),
     }
     if not taxonomy["source"]:
         taxonomy["source"] = ["source:florida-desk"]
-    if not taxonomy["audience"]:
-        taxonomy["audience"] = ["audience:development-intelligence"]
+    if not taxonomy["persona"]:
+        taxonomy["persona"] = ["persona:development-intelligence"]
     return taxonomy
 
 
@@ -546,6 +546,9 @@ def normalize_wire_story(item: dict[str, Any], endpoint: str) -> dict[str, Any] 
         return None
     city = str(item.get("city") or "").strip().lower()
     if city != CMS_CITY:
+        return None
+    neighborhood = str(item.get("neighborhood") or "").strip()
+    if not neighborhood:
         return None
     review_status = str(item.get("review_status") or item.get("status") or "").lower()
     approved_at = item.get("wire_approved_at") or item.get("approved_at") or item.get("published_at")
@@ -579,7 +582,7 @@ def normalize_wire_story(item: dict[str, Any], endpoint: str) -> dict[str, Any] 
         "taxonomy": taxonomy,
         "lat": item.get("lat"),
         "lon": item.get("lon"),
-        "neighborhood": item.get("neighborhood"),
+        "neighborhood": neighborhood,
         "zip": item.get("zip"),
         "review_status": "approved",
         "slug": str(item.get("slug") or ""),

@@ -455,15 +455,15 @@
       if (kind === "demolition") {
         s.headline = "Demolition permit filed at " + where;
         s.what_happened = "A demolition permit application was filed.";
-        s.why_it_matters = "Demolition filings often precede redevelopment of a parcel.";
-        s.what_to_watch = "Watch for a follow-on construction application at the same address.";
+        s.why_it_matters = "A demolition filing makes the parcel worth reviewing for a possible physical change; it does not establish redevelopment intent.";
+        s.what_to_watch = "Watch for a separately sourced, later application at the same parcel. Do not assume the filings are connected without record evidence.";
       } else if (kind === "storm-related") {
         s.headline = "Storm-related work filed at " + where;
         s.why_it_matters = "The filing describes hardening or repair-type work (roofing, openings, drainage, seawall or generator).";
         s.what_to_watch = "Watch whether similar filings cluster on nearby blocks.";
       } else if (kind === "high-value") {
         s.headline = (amt ? amt + " " : "High-value ") + "permit application filed at " + where;
-        s.why_it_matters = "Declared value of " + (amt || "$500,000 or more") + " signals a substantial project on this parcel.";
+        s.why_it_matters = "The applicant-declared amount of " + (amt || "$500,000 or more") + " makes this a higher-priority filing to review; it is not audited project cost or economic impact.";
         s.what_to_watch = "Watch for issuance, contractor changes and related sub-permits.";
       } else {
         s.headline = "Permit application filed at " + where;
@@ -479,7 +479,7 @@
         ? "Crane proposal enters FAA review near " + (s.municipality || "Broward")
         : "Tall-structure filing appears near " + (s.municipality || "Broward");
       s.why_it_matters = isCrane
-        ? "Crane cases are filed before tall equipment goes up, so they can surface large projects earlier than local permits."
+        ? "A crane filing can identify proposed tall equipment before installation, but the federal case alone does not establish a local project, approval or construction schedule."
         : "Tall-structure cases indicate a proposed height that requires federal airspace review.";
       s.what_changed = s._status_code ? "FAA case status: " + s._status_code + "." : null;
       s.what_to_watch = "Watch for a determination and for matching local permit activity at the same location.";
@@ -490,7 +490,7 @@
       s.headline = act
         ? "State agency action recorded for " + (s.project_name || "Broward project")
         : "Environmental permit application filed" + (s.municipality ? " in " + s.municipality : "");
-      s.why_it_matters = "Environmental resource permits cover work such as docks, seawalls, stormwater and wetland impacts, and are often filed ahead of visible construction.";
+      s.why_it_matters = "The filing identifies a state environmental-review category such as docks, seawalls, stormwater or wetlands. It does not establish impact, approval, timing or a causal link to another filing.";
       s.what_changed = act ? "Agency action: " + act + "." : null;
       s.what_to_watch = "Watch for a status change and for related local permits at the same site.";
       s.caveat = "This is a state environmental permit record. It does not establish environmental impact, approval, or that work has begun. Source permit type: " + (s._permit_type || "not stated") + ".";
@@ -508,8 +508,8 @@
         s.what_happened = amt
           ? "A deed with a stated amount of " + amt + " was recorded."
           : "A deed was recorded for this parcel.";
-        s.why_it_matters = "Recorded deeds are the public trail of who is buying property, and where.";
-        s.what_to_watch = "Watch for permit, demolition or FAA activity on the same parcel after a transfer.";
+        s.why_it_matters = "The recorded deed supplies a dated instrument, stated parties and parcel trail worth reviewing; the index alone does not establish beneficial ownership, deal purpose or development intent.";
+        s.what_to_watch = "If later permit, demolition or FAA records appear on the same parcel, treat each as a separate event. Sequence and shared location do not prove causation.";
         s.caveat = "This is a recorded deed on the public record, matched to the county parcel by exact folio. " +
           "The stated amount is what the instrument declares — it is not an appraisal, not a market value, and not proof the sale was arm's length. " +
           "A recorded deed does not prove that ownership changed in the way you might assume, that development is planned, or that any construction will occur.";
@@ -521,7 +521,7 @@
         (amt ? " · stated " + amt : "");
     } else if (String(s.source_table).indexOf("clerk") > -1) {
       s.headline = titleish(s.signal_subtype) + " recorded";
-      s.why_it_matters = "Recorded instruments show ownership, financing and construction-notice activity.";
+      s.why_it_matters = "The instrument type can direct a reader to a recorded document worth reviewing; its legal effect and relationship to other activity cannot be inferred from the index alone.";
       s.caveat = s.verification_status === STATUS.PRELIMINARY
         ? "PRELIMINARY: read from the Clerk's public search ahead of the verified county feed. Not yet reconciled to the official record."
         : "Official recorded instrument.";

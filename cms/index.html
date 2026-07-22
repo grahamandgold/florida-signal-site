@@ -587,7 +587,7 @@
               <label>
                 <span class="label">County <span class="required" aria-hidden="true">*</span></span>
                 <input name="county" value="broward-county" required pattern="[a-z0-9][a-z0-9-]{1,79}" autocomplete="off">
-                <span class="field-help">Hidden geography metadata; use the stable county key.</span>
+                <span class="field-help">Routing metadata for expansion; readers see the neighborhood first.</span>
               </label>
               <label class="span-2">
                 <span class="label">Headline <span class="required" aria-hidden="true">*</span></span>
@@ -674,24 +674,25 @@
                 <span class="field-help">Comma-separated; use the shared naming convention.</span>
               </label>
               <label>
-                <span class="label">Geography tags <span class="required" aria-hidden="true">*</span></span>
-                <input name="geography_tags" required placeholder="city, neighborhood, corridor">
+                <span class="label">Additional place / corridor tags <span class="required" aria-hidden="true">*</span></span>
+                <input name="geography_tags" required placeholder="las-olas-corridor, waterfront, citywide">
               </label>
               <label>
                 <span class="label">Entity tags</span>
                 <input name="entity_tags" placeholder="agency, applicant, company">
               </label>
               <label>
-                <span class="label">Audience tags</span>
-                <input name="audience_tags" placeholder="brokers, developers, contractors">
+                <span class="label">Persona tags</span>
+                <input name="audience_tags" placeholder="broker-agent, developer, contractor, neighborhood-leader, owner-association">
               </label>
               <label>
                 <span class="label">Urgency tags</span>
                 <input name="urgency_tags" placeholder="today, agenda-watch, storm-window">
               </label>
               <label>
-                <span class="label">Neighborhood</span>
-                <input name="neighborhood" maxlength="160">
+                <span class="label">Primary neighborhood <span class="required" aria-hidden="true">*</span></span>
+                <input name="neighborhood" maxlength="160" required>
+                <span class="field-help">Use the official resolved name. Do not infer it from a ZIP or nearby landmark.</span>
               </label>
               <label>
                 <span class="label">ZIP</span>
@@ -934,6 +935,7 @@
         const blocks = [];
         if (!String(story.county || '').trim()) blocks.push('County is required');
         if (!String(story.city || '').trim()) blocks.push('City is required');
+        if (!String(story.neighborhood || '').trim()) blocks.push('A primary official neighborhood is required');
         if (!String(story.headline || '').trim()) blocks.push('Headline is required');
         if (!String(story.dek || '').trim()) blocks.push('Summary is required');
         if (!String(story.body || '').trim()) blocks.push('Story body is required');

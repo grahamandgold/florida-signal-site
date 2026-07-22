@@ -3,7 +3,9 @@
 **Market:** Broward County  
 **Live city:** Fort Lauderdale  
 **Publisher:** Graham & Gold LLC  
-**Last local verification:** July 19, 2026 (see `CLAUDETTE_HANDOFF_2026-07-19.md`)
+**Last local verification:** July 22, 2026 (see `PRODUCT_CORRECTION_2026-07-22.md`)
+
+> **July 22 correction:** the public header now rotates each source's next scheduled operation; it no longer presents one global “next data pull.” Meeting dates/links are automated, but public agenda-item extraction is not connected: the current public Agenda Recon output has zero packets and zero cleared properties. Keep this distinction visible.
 
 This document is the operational truth for the public site. It separates the date an event happened from the time Florida Signal collected, synchronized, enriched or published it.
 

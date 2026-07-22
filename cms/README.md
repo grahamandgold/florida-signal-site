@@ -5,7 +5,7 @@ The Data Wire is the source-gated editorial CMS that powers Florida Signal and i
 It is a focused, clean-room port of the useful Michigan Intel Desk patterns:
 
 - private draft queues never appear on a public endpoint;
-- every story/brief carries both a `market` key and a required `city` key;
+- every story/brief carries `market`, county and city routing keys plus a required primary official neighborhood;
 - source, claims, taxonomy and human-editor checks must all pass;
 - the public site reads only city-scoped endpoints such as `/api/wire/packets?market=broward&city=fort-lauderdale` and `/api/agenda-recon?market=broward&city=fort-lauderdale`;
 - Agenda Recon properties require a cited official source, coordinates and explicit clearance;
@@ -62,7 +62,7 @@ Send `Authorization: Bearer $DATA_WIRE_ADMIN_TOKEN`.
 
 A brief cannot publish until it is a complete **VERIFIED Story Packet**: required city, headline, dek, body, event date, dated current trigger, defensible project identity, public source URL/title, at least one source-bound claim slot, topic and geography tags, `claims_status: passed`, `validator_status: passed`, `tags_status: passed`, and a named human editor. Needs-verification packets remain private. The CMS computes a source hash and records approval history.
 
-An agenda-property item cannot publish until it has a required city, official packet URL, meeting title/date, item number, property address, coordinates, proposed action, source page and a named human editor.
+An agenda-property item cannot publish until it has a required city, official packet URL, meeting title/date, item number, property address, coordinates, proposed action, source page and a named human editor. It may also carry cited packet clues, official attachment/rendering URLs, lifecycle state and an official outcome source. Proposal materials must remain labeled as proposal materials.
 
 ## Production work still required
 
