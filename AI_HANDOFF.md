@@ -1,6 +1,9 @@
 # Florida Signal — AI Handoff
 
-Last verified: July 19, 2026 (Claudette session — see `CLAUDETTE_HANDOFF_2026-07-19.md` for the full launch-day changelog)
+Last verified: July 22, 2026 (Codex product-correction pass)
+
+> ## ⇢ CURRENT PUBLIC-PRODUCT TRUTH: `PRODUCT_CORRECTION_2026-07-22.md`
+> Read this first for the neighborhood-first product contract, mobile Field Edition, persona Lead Generator, shared taxonomy, Agenda Parcel Tracker boundary, automation schedule, legal guardrails, tests and remaining launch blockers. Older handoffs remain historical evidence; they do not override the July 22 correction.
 
 > ## ⇢ START HERE FIRST: `FLORIDA_SIGNAL_VERIFIED_CHECKPOINT_2026-07-19.md`
 > Every claim in that document was verified directly against GitHub, Supabase, the DigitalOcean

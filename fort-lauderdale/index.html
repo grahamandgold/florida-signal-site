@@ -113,46 +113,47 @@
     </div>
   </header>
 
-  <section class="mobile-live-rail" aria-label="Live Florida Signal intelligence">
-    <div class="mobile-live-rail__head">
-      <p><span class="pulse" aria-hidden="true"></span><strong>Top signals · live now</strong></p>
-      <p id="rail-signal-line">Reading today’s top signals…</p>
+  <section class="mobile-toolkit" data-mobile-toolkit aria-labelledby="mobile-toolkit-title">
+    <div class="mobile-toolkit__head">
+      <p><span class="pulse" aria-hidden="true"></span>Mobile Field Edition · live neighborhood toolkit</p>
+      <h2 id="mobile-toolkit-title">Explore around you now.</h2>
+      <span>Choose how you work. Every tool opens a sourced record, a named place and a defined date window. Curated for field use with veteran newsroom judgment.</span>
+      <aside><strong>Different on desktop:</strong> the Analyst Workspace adds full-width comparison maps, deeper record joins, methodology and reporting tools.</aside>
     </div>
-    <div class="mobile-live-rail__viewport" data-mobile-live-rail tabindex="0" aria-label="Swipe through current Florida Signal data">
-      <div class="mobile-live-rail__track">
-        <a class="mobile-live-card mobile-live-card--signal" href="#signals" data-mobile-live-card>
-          <span>Newest high-value application</span>
-          <strong id="mobile-live-story" aria-live="polite">Reading the newest application…</strong>
-          <small>Application clock · open the cited record <b>→</b></small>
-        </a>
-        <a class="mobile-live-card" href="/fort-lauderdale/neighborhoods/#full-map" data-mobile-live-card>
-          <span>Permit universe</span>
-          <strong data-stat="permits">—</strong>
-          <small><b data-stat="mapped">—</b> mapped · open the live field map →</small>
-        </a>
-        <a class="mobile-live-card mobile-live-card--diagram" href="/fort-lauderdale/graphics/#place-lens" data-mobile-live-card data-dod-link>
-          <span>Diagram of the day</span>
-          <strong data-dod-title>Place Lens</strong>
-          <small>Neighborhood constellation + ZIP signal rings →</small>
-        </a>
-        <a class="mobile-live-card mobile-live-card--gold" href="/fort-lauderdale/broward-record/" data-mobile-live-card>
-          <span>Broward record</span>
-          <strong data-stat="broward-docs">—</strong>
-          <small>Deeds, liens + NOCs · through <b data-stat="broward-fresh">—</b></small>
-        </a>
-        <a class="mobile-live-card mobile-live-card--meeting" href="/fort-lauderdale/meetings/" data-mobile-live-card>
-          <span>Next room watched</span>
-          <strong data-mobile-meeting-title>Checking official calendars…</strong>
-          <small data-mobile-meeting-date>Meeting clock connecting</small>
-        </a>
-      </div>
+    <div class="mobile-toolkit__personas" aria-label="Choose a working lens">
+      <button type="button" data-mobile-persona="all" aria-pressed="true">All tools</button>
+      <button type="button" data-mobile-persona="developer" aria-pressed="false">Developer</button>
+      <button type="button" data-mobile-persona="broker" aria-pressed="false">Broker / agent</button>
+      <button type="button" data-mobile-persona="contractor" aria-pressed="false">Contractor</button>
+      <button type="button" data-mobile-persona="neighborhood" aria-pressed="false">Neighborhood</button>
+      <button type="button" data-mobile-persona="owner" aria-pressed="false">Owner / association</button>
     </div>
-    <div class="mobile-live-rail__foot"><span data-mobile-live-position>Auto · 1 / 5</span><i aria-hidden="true"></i><a href="/fort-lauderdale/neighborhoods/#full-map">Open live map ↗</a></div>
+    <p class="mobile-toolkit__status" data-mobile-toolkit-status aria-live="polite">Showing the complete field toolkit.</p>
+    <div class="mobile-toolkit__grid">
+      <button class="mobile-tool mobile-tool--primary" type="button" data-mobile-field-jump data-personas="all developer broker contractor neighborhood owner"><i aria-hidden="true">◎</i><strong>Around me</strong><span>Rank nearby filings</span></button>
+      <button class="mobile-tool mobile-tool--report" type="button" data-field-brief-open data-personas="all developer broker contractor neighborhood owner"><i aria-hidden="true">＋</i><strong>My Field Report</strong><span>Collect, organize + share</span></button>
+      <a class="mobile-tool" href="/fort-lauderdale/neighborhoods/?source=permits&amp;window=30d#full-map" data-personas="all developer broker contractor neighborhood owner" data-tool-count="neighborhoods"><i aria-hidden="true">⌖</i><strong>Neighborhood map</strong><span>Place + 30-day window</span></a>
+      <a class="mobile-tool" href="/fort-lauderdale/neighborhoods/?source=permits&amp;window=30d&amp;work=high-value#full-map" data-personas="all developer broker" data-tool-count="high-value"><i aria-hidden="true">$</i><strong>High-value filings</strong><span>Applicant-declared amounts</span></a>
+      <a class="mobile-tool" href="/fort-lauderdale/meetings/" data-personas="all developer broker neighborhood owner" data-tool-count="meetings"><i aria-hidden="true">◫</i><strong>Meetings + agendas</strong><span>What may be decided</span></a>
+      <a class="mobile-tool" href="/fort-lauderdale/broward-record/" data-personas="all developer broker neighborhood"><i aria-hidden="true">≋</i><strong>Property trail</strong><span>Separate records; no causal claim</span></a>
+      <a class="mobile-tool" href="/fort-lauderdale/graphics/#operator-board" data-personas="all developer contractor" data-tool-count="contractors"><i aria-hidden="true">↗</i><strong>Active contractors</strong><span>Who appears in filings</span></a>
+      <a class="mobile-tool" href="/fort-lauderdale/neighborhoods/?lens=storm&amp;source=permits&amp;window=30d#full-map" data-personas="all contractor neighborhood owner" data-tool-count="resilience"><i aria-hidden="true">◉</i><strong>Resilience work</strong><span>Hardening scopes filed</span></a>
+      <a class="mobile-tool" href="/fort-lauderdale/neighborhoods/?source=permits&amp;window=30d&amp;work=demolition#full-map" data-personas="all developer broker neighborhood" data-tool-count="demolition"><i aria-hidden="true">×</i><strong>Demolition watch</strong><span>Filing, not future intent</span></a>
+      <a class="mobile-tool" href="/fort-lauderdale/neighborhoods/?source=permits&amp;window=30d&amp;work=openings#full-map" data-personas="all contractor owner" data-tool-count="openings"><i aria-hidden="true">▤</i><strong>Windows + doors</strong><span>Opening work filed</span></a>
+      <a class="mobile-tool" href="/fort-lauderdale/neighborhoods/?source=permits&amp;window=30d&amp;work=roofs#full-map" data-personas="all contractor owner" data-tool-count="roofs"><i aria-hidden="true">⌂</i><strong>Roof work</strong><span>Roof scopes filed</span></a>
+      <a class="mobile-tool" href="/fort-lauderdale/neighborhoods/?source=permits&amp;window=30d&amp;work=marine#full-map" data-personas="all broker contractor neighborhood owner" data-tool-count="marine"><i aria-hidden="true">≈</i><strong>Marine + seawalls</strong><span>Waterfront work filed</span></a>
+      <a class="mobile-tool" href="/fort-lauderdale/neighborhoods/?source=permits&amp;window=30d&amp;work=generators#full-map" data-personas="all contractor owner" data-tool-count="generators"><i aria-hidden="true">ϟ</i><strong>Generators</strong><span>Backup-power work filed</span></a>
+    </div>
+    <section class="mobile-lead-generator" aria-labelledby="mobile-lead-title">
+      <div class="mobile-lead-generator__head"><p>Live research queue</p><h3 id="mobile-lead-title">Persona Lead Generator</h3><span data-mobile-lead-lens>All-tools lens · ranking current mapped filings</span></div>
+      <div class="mobile-lead-generator__list" data-mobile-leads><p>Connecting to the current permit application window…</p></div>
+      <small>Research leads are ranked public filings—not contracts, approvals, owner intent, demand forecasts or recommendations. Open the source before acting.</small>
+    </section>
   </section>
 
   <section class="mobile-field-test" data-mobile-field-test aria-label="Mobile Field Test">
     <button class="mobile-field-test__trigger" type="button" data-mobile-field-toggle aria-expanded="false" aria-controls="mobile-field-panel">
-      <span><small>Live map · field mode</small><strong>Our top signals</strong></span>
+      <span><small>Private browser location · field mode</small><strong>Search around me</strong></span>
       <i aria-hidden="true"><b></b></i>
     </button>
     <div class="mobile-field-test__panel" id="mobile-field-panel" data-mobile-field-panel hidden>
@@ -180,6 +181,7 @@
           <div class="hero-command-row" aria-label="Live intelligence shortcuts">
             <a class="hero-map-command" href="/fort-lauderdale/neighborhoods/#full-map"><i aria-hidden="true"><b></b></i><span><small>Live field map</small><strong>Search the block</strong></span><em aria-hidden="true">→</em></a>
           </div>
+          <p class="desktop-workspace-note"><strong>Desktop Analyst Workspace.</strong> Built for comparison maps, cited record joins and report building. On mobile, Florida Signal becomes a faster location-aware Field Edition with persona toolkits.</p>
           <form class="signup signup--hero" data-signup-form>
             <label class="sr-only" for="hero-email">Email address</label>
             <input id="hero-email" name="email" type="email" autocomplete="email" placeholder="Your email address" required>
@@ -218,13 +220,13 @@
               <div class="data-flipper__panel window-watch window-watch--24 is-active" data-flip-panel>
                 <a class="window-watch__link" href="#activity" aria-label="Open the fourteen-day permit application chart">
                   <span class="window-watch__number">24<small>HOURS</small></span>
-                  <span class="window-watch__copy"><em>IN THE LATEST FILING DAY</em><strong><b data-window-24-count>—</b> permit applications</strong><small data-window-24-date>Reading official application dates…</small><i>Event date—not pull time →</i></span>
+                  <span class="window-watch__copy"><em>IN THE LATEST FILING DAY</em><strong><b data-window-24-count>—</b> permit applications</strong><small data-window-24-date>Reading official application dates…</small><small><b>Why it matters:</b> a fast read of filing-desk activity—not approvals, starts or completed jobs.</small><i>Event date—not pull time →</i></span>
                 </a>
               </div>
               <div class="data-flipper__panel window-watch window-watch--7" data-flip-panel hidden>
                 <a class="window-watch__link" href="#activity" aria-label="Open the fourteen-day permit application chart">
                   <span class="window-watch__number">7<small>DAYS</small></span>
-                  <span class="window-watch__copy"><em>IN THE LATEST SEVEN DAYS</em><strong><b data-window-7-count>—</b> permit applications</strong><small><span data-window-7-trend>—</span> versus the prior seven-day window</small><i data-window-7-dates>Reading official application dates…</i></span>
+                  <span class="window-watch__copy"><em>IN THE LATEST SEVEN DAYS</em><strong><b data-window-7-count>—</b> permit applications</strong><small><span data-window-7-trend>—</span> versus the prior seven-day window</small><small><b>Why it matters:</b> the comparison identifies a change worth investigating; it does not explain what caused it.</small><i data-window-7-dates>Reading official application dates…</i></span>
                 </a>
               </div>
               <div class="data-flipper__panel diagram-watch" data-flip-panel hidden>

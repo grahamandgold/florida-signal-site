@@ -58,6 +58,11 @@
   const applicationWindowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13);
   const APPLICATION_WINDOW_START = applicationWindowDate.getFullYear() + "-" + String(applicationWindowDate.getMonth() + 1).padStart(2, "0") + "-" + String(applicationWindowDate.getDate()).padStart(2, "0");
   const state = { dashboard: null, records: [], featured: [], applicationDates: [], cms: { configured: false, connected: false, stories: [] }, storms: [], stormPayload: null, siteMode: { storm_watch: "off" }, meetings: [], neighborhoods: null, zipBoundaries: null, map: null, markerLayer: null, polygonLayer: null, searchMarker: null, searchResults: [], leadResults: [], spotlightMaps: {}, overlayLayers: {}, overlayVisibility: { points: true, neighborhoods: true }, lens: "all", leadLens: "new" };
+  const MAP_PARAMS = new URLSearchParams(window.location.search);
+  state.workLens = String(MAP_PARAMS.get("work") || "").toLowerCase();
+  state.lens = MAP_PARAMS.get("lens") === "storm" || MAP_PARAMS.get("storm") === "ready" ? "storm" : "all";
+  const requestedWindowMatch = String(MAP_PARAMS.get("window") || "").match(/^(14|30|60|120|365)d?$/);
+  const REQUESTED_MAP_DAYS = requestedWindowMatch ? Number(requestedWindowMatch[1]) : (MAP_PARAMS.get("agenda") ? 30 : 365);
   let stormTickerTimer = null;
 
   function el(selector, root) { return (root || document).querySelector(selector); }
@@ -85,15 +90,41 @@
     els('[data-stat="' + name + '"]').forEach(function (node) { node.textContent = value; });
   }
   function recordDate(record) { return record.applied_date || record.issued_date || record.last_seen_at; }
+  function recordPlainScope(record) {
+    const text = [record.description, record.permit_type, record.permit_category, record.work_type].join(" ").replace(/\s+/g, " ").trim();
+    const patterns = [
+      [/cath(?:eterization)?\s+lab/i, "a cardiac catheterization lab"],
+      [/sanitary.+blockage|blockage.+sanitary/i, "building-wide sanitary plumbing repairs"],
+      [/dock.+(?:sea\s*wall|seawall)|(?:sea\s*wall|seawall).+dock/i, "dock and seawall work"],
+      [/(?:impact).*(?:window|door)|(?:window|door).*(?:impact)/i, "impact-window and door work"],
+      [/(?:window|door|glazing|opening|shutter)/i, "window, door or opening work"],
+      [/(?:re-?roof|roof replacement|roof repair)/i, "roof work"],
+      [/(?:sea\s*wall|seawall)/i, "seawall work"],
+      [/(?:dock|marine)/i, "dock or marine work"],
+      [/(?:generator)/i, "generator work"],
+      [/(?:demolition|\bdemo\b)/i, "demolition"],
+      [/(?:new construction|new building)/i, "new construction"],
+      [/(?:structural)/i, "structural work"],
+      [/(?:plumb|sewer|drain)/i, "plumbing or drainage work"],
+      [/(?:mechanical|hvac|air condition)/i, "mechanical or air-conditioning work"],
+      [/(?:electric|solar)/i, "electrical work"],
+      [/(?:pool|spa)/i, "pool or spa work"],
+      [/(?:addition|alteration|renovation|remodel)/i, "renovation or alteration work"]
+    ];
+    const match = patterns.find(function (entry) { return entry[0].test(text); });
+    return match ? match[1] : "";
+  }
+  function recordSourceScope(record) {
+    const description = String(record.description || "").replace(/\s+/g, " ").trim();
+    if (!description || description.toLowerCase() === String(record.address || "").replace(/\s+/g, " ").trim().toLowerCase()) return "";
+    return description.length > 180 ? description.slice(0, 177).replace(/\s+\S*$/, "") + "…" : description;
+  }
   function recordHeadline(record) {
     const address = titleCase(String(record.address || "an address").replace(/\s+/g, " ").trim());
-    const description = String(record.description || "").replace(/\s+/g, " ").trim();
-    const generic = /^(online )?(walk-thru|structural permit|window and door permit|mechanical permit|plumbing permit|electrical permit)$/i;
-    if (description && description.length >= 8 && !generic.test(description) && description.toLowerCase() !== String(record.address || "").toLowerCase()) {
-      const clean = description.length > 85 ? description.slice(0, 82).replace(/\s+\S*$/, "") + "…" : description;
-      return titleCase(clean) + " · " + address;
-    }
-    return titleCase(record.permit_type || "Permit") + " filed at " + address;
+    const scope = recordPlainScope(record);
+    if (scope) return "Permit filed for " + scope + " at " + address;
+    const kind = String(record.permit_type || record.permit_category || "Permit").replace(/\bpermit\b/ig, "").replace(/\s+/g, " ").trim();
+    return (kind ? titleCase(kind) + " permit" : "Permit") + " filed at " + address;
   }
   function isStormRecord(record) {
     return /(roof|reroof|re-roof|seawall|sea wall|impact|window|door|generator|drain|flood|elevation|shutter|waterproof|dock|marine)/i.test([record.permit_type, record.permit_category, record.description].join(" "));
@@ -109,6 +140,11 @@
     return record.region && !/fort lauderdale/i.test(record.region) ? titleCase(record.region) : "Fort Lauderdale";
   }
 
+  function recordNeighborhood(record) {
+    const matched = findNeighborhoodForRecord(record);
+    return matched && matched !== "Location not mapped" && matched !== "Outside matched City boundary" ? matched : "";
+  }
+
   function tagSlug(value) {
     return String(value || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   }
@@ -119,7 +155,10 @@
 
   function recordTaxonomy(record) {
     const text = [record.permit_type, record.permit_category, record.description, record.work_type].join(" ").toLowerCase();
-    const tags = ["market:broward", "county:broward-county", "city:fort-lauderdale", "source:city-permit", "geography:" + tagSlug(recordPlace(record)), "audience:field-desk"];
+    const neighborhood = recordNeighborhood(record);
+    const tags = ["market:broward", "county:broward-county", "city:fort-lauderdale", "source:city-permit", "persona:field-desk"];
+    if (neighborhood) tags.push("neighborhood:" + tagSlug(neighborhood));
+    else tags.push("location-status:neighborhood-unresolved");
     if (isStormRecord(record)) tags.push("topic:storm-readiness");
     if (isAssociationRecord(record)) tags.push("topic:association-condo");
     if (/(demo|demolition)/.test(text)) tags.push("topic:demolition");
@@ -138,7 +177,8 @@
 
   function taxonomyLine(tags, prefix) {
     const visible = uniqueTags(tags || []).filter(function (tag) { return /^(topic|urgency|asset):/.test(tag); }).slice(0, 3).map(function (tag) { return titleCase(tag.split(":").slice(1).join(" ").replace(/-/g, " ")); });
-    return visible.length ? '<span class="taxonomy-line"><b>' + escapeHtml(prefix || "Filed under") + ' ·</b>' + escapeHtml(visible.join(" · ")) + '</span>' : "";
+    const label = !prefix || prefix === "Filed under" ? "Context" : prefix;
+    return visible.length ? '<span class="taxonomy-line"><b>' + escapeHtml(label) + ' ·</b>' + escapeHtml(visible.join(" · ")) + '</span>' : "";
   }
 
   function initTaxonomyDefaults() {
@@ -311,7 +351,15 @@
     else if (pageName === "graphics" || pageName === "method") freshness = permitClock + " · " + dashboardClock + " · cards name their event clocks";
     els("[data-updated]").forEach(function (node) { node.textContent = freshness; });
     const barTime = el("#live-bar-time");
-    if (barTime) barTime.textContent = permitTimestamp ? "Permits synced " + formatDate(permitTimestamp, { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "Source clock unavailable";
+    if (barTime) barTime.dataset.lastSync = permitTimestamp ? "Permits synced " + formatDate(permitTimestamp, { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "Permit sync unavailable";
+    const mobileFeedTime = el(".live-bar__countdown-mobile");
+    if (mobileFeedTime) mobileFeedTime.dataset.applicationThrough = applicationThrough ? "Permits through " + formatDate(applicationThrough, { month: "short", day: "numeric", timeZone: "America/New_York" }) : "Permit event date unavailable";
+    const mappedDates = state.records.map(function (record) { return record.applied_date; }).filter(Boolean).sort();
+    const sampleWindow = mappedDates.length ? formatDate(mappedDates[0], { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) + "–" + formatDate(mappedDates[mappedDates.length - 1], { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "date window unavailable";
+    els("[data-map-sample-explainer]").forEach(function (node) {
+      node.innerHTML = '<strong>What you are seeing:</strong> ' + escapeHtml(formatNumber(state.records.length)) + ' of the newest geocoded Fort Lauderdale permit applications returned for ' + escapeHtml(sampleWindow) + '. The 700-row ceiling keeps phones responsive; it is not the total universe. The multi-source Signals layer separately reloads up to 600 eligible records inside the map view as you pan, zoom or narrow the window.';
+    });
+    renderMobileToolkitCounts();
 
     const railLine = el("#rail-signal-line");
     if (railLine && state.featured.length) {
@@ -322,9 +370,7 @@
       };
       const railItems = state.featured.slice(0, 8).map(function (r) {
         const money = railMoney(r.valuation_usd_clean);
-        const place = r.address || r.permit_number || "Fort Lauderdale";
-        const kind = r.work_type || r.permit_type || "application";
-        return (money ? money + " " : "") + String(kind).toLowerCase() + " filed · " + place;
+        return (money ? money + " · " : "") + recordHeadline(r);
       }).filter(Boolean);
       if (railItems.length) {
         let railIndex = 0;
@@ -375,6 +421,13 @@
     return PUBLIC_ROUTES.briefs + "?story=" + encodeURIComponent(story.id || story.slug || "");
   }
 
+  function storyPlaceLine(story) {
+    const neighborhood = String(story.neighborhood || "").trim() || "Neighborhood not yet resolved";
+    const city = titleCase(String(story.city || "fort-lauderdale").replace(/-/g, " "));
+    const county = titleCase(String(story.county || "broward-county").replace(/-/g, " "));
+    return [neighborhood, story.zip ? "ZIP " + story.zip : "", city, county].filter(Boolean).join(" · ");
+  }
+
   function renderStoriesPage(loadError) {
     const grid = el("#stories-grid");
     const reader = el("#story-reader");
@@ -401,7 +454,7 @@
       reader.hidden = false;
       reader.innerHTML = '<a class="story-reader__back" href="' + PUBLIC_ROUTES.briefs + '">← All approved briefs</a>' +
         (selected.hero_image ? '<figure><img src="' + escapeHtml(selected.hero_image) + '" alt=""><figcaption>Florida Signal story image · source and licensing retained by the desk</figcaption></figure>' : '') +
-        '<header>' + taxonomyLine(tags, "Filed under") + '<p class="story-reader__date">Event date ' + escapeHtml(formatDate(selected.event_date || selected.published_at, { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + ' · approved ' + escapeHtml(formatDate(selected.published_at, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })) + ' ET</p><h1>' + escapeHtml(selected.title) + '</h1><p class="story-reader__dek">' + escapeHtml(selected.summary || "") + '</p><span>By ' + escapeHtml(selected.byline || "Florida Signal Desk") + '</span><button class="story-report-add" type="button" data-report-add data-report-id="story:' + escapeHtml(selected.slug || selected.id || publicStoryUrl(selected)) + '" data-report-title="' + escapeHtml(selected.title) + '" data-report-meta="Approved Florida Signal brief · ' + escapeHtml(formatDate(selected.event_date || selected.published_at, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '" data-report-url="' + escapeHtml(publicStoryUrl(selected)) + '" data-report-tags="' + taxonomyAttribute(tags) + '">＋ Add to report</button></header><div class="story-reader__body">' + body + '</div><footer><strong>Sources</strong>' + sourceLinks.filter(Boolean).map(function (url, index) { return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noreferrer">Open cited source ' + (index + 1) + ' ↗</a>'; }).join("") + '<small>Florida Signal separates event dates from pull, enrichment and publication times.</small></footer>';
+        '<header>' + taxonomyLine(tags, "Filed under") + '<p class="story-place">' + escapeHtml(storyPlaceLine(selected)) + '</p><p class="story-reader__date">Event date ' + escapeHtml(formatDate(selected.event_date || selected.published_at, { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + ' · approved ' + escapeHtml(formatDate(selected.published_at, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })) + ' ET</p><h1>' + escapeHtml(selected.title) + '</h1><p class="story-reader__dek">' + escapeHtml(selected.summary || "") + '</p><span>By ' + escapeHtml(selected.byline || "Florida Signal Desk") + '</span><button class="story-report-add" type="button" data-report-add data-report-id="story:' + escapeHtml(selected.slug || selected.id || publicStoryUrl(selected)) + '" data-report-title="' + escapeHtml(selected.title) + '" data-report-meta="' + escapeHtml(storyPlaceLine(selected)) + ' · approved Florida Signal brief" data-report-url="' + escapeHtml(publicStoryUrl(selected)) + '" data-report-tags="' + taxonomyAttribute(tags) + '">＋ Add to report</button></header><div class="story-reader__body">' + body + '</div><footer><strong>Sources</strong>' + sourceLinks.filter(Boolean).map(function (url, index) { return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noreferrer">Open cited source ' + (index + 1) + ' ↗</a>'; }).join("") + '<small>Florida Signal separates event dates from pull, enrichment and publication times.</small></footer>';
       grid.hidden = true;
       document.title = selected.title + " — Florida Signal";
       return;
@@ -416,7 +469,7 @@
       const tags = Array.isArray(story.tags) ? story.tags : [];
       return '<article class="story-card ' + (index === 0 ? "story-card--lead" : "") + '">' +
         (story.hero_image ? '<a class="story-card__image" href="' + publicStoryUrl(story) + '"><img src="' + escapeHtml(story.hero_image) + '" alt=""></a>' : '<a class="story-card__mark" href="' + publicStoryUrl(story) + '" aria-label="Open ' + escapeHtml(story.title) + '"><img src="/assets/emblem-2026.png" alt=""></a>') +
-        '<div>' + taxonomyLine(tags, "Filed under") + '<p class="story-card__date">' + escapeHtml(formatDate(story.event_date || story.published_at, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '</p><h2><a href="' + publicStoryUrl(story) + '">' + escapeHtml(story.title) + '</a></h2><p>' + escapeHtml(story.summary || "Approved Florida Desk report") + '</p><footer><span>' + escapeHtml(story.byline || "Florida Signal Desk") + '</span><a href="' + publicStoryUrl(story) + '">Read + sources →</a><button type="button" data-report-add data-report-id="story:' + escapeHtml(story.slug || story.id || publicStoryUrl(story)) + '" data-report-title="' + escapeHtml(story.title) + '" data-report-meta="Approved Florida Signal brief · ' + escapeHtml(formatDate(story.event_date || story.published_at, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '" data-report-url="' + escapeHtml(publicStoryUrl(story)) + '" data-report-tags="' + taxonomyAttribute(tags) + '">＋ Add to report</button></footer></div></article>';
+        '<div>' + taxonomyLine(tags, "Filed under") + '<p class="story-place">' + escapeHtml(storyPlaceLine(story)) + '</p><p class="story-card__date">' + escapeHtml(formatDate(story.event_date || story.published_at, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '</p><h2><a href="' + publicStoryUrl(story) + '">' + escapeHtml(story.title) + '</a></h2><p>' + escapeHtml(story.summary || "Approved Florida Desk report") + '</p><footer><span>' + escapeHtml(story.byline || "Florida Signal Desk") + '</span><a href="' + publicStoryUrl(story) + '">Read + sources →</a><button type="button" data-report-add data-report-id="story:' + escapeHtml(story.slug || story.id || publicStoryUrl(story)) + '" data-report-title="' + escapeHtml(story.title) + '" data-report-meta="' + escapeHtml(storyPlaceLine(story)) + ' · approved Florida Signal brief" data-report-url="' + escapeHtml(publicStoryUrl(story)) + '" data-report-tags="' + taxonomyAttribute(tags) + '">＋ Add to report</button></footer></div></article>';
     }).join("");
   }
 
@@ -456,7 +509,7 @@
       const tags = recordTaxonomy(record);
       return '<div class="signal-row-wrap" data-signal-tags="' + taxonomyAttribute(tags) + '"><a class="signal-row" href="' + recordUrl(record) + '">' +
         '<div class="signal-row__date">' + escapeHtml(formatDate(recordDate(record), { month: "short", day: "numeric", timeZone: "America/New_York" })) + '</div>' +
-        '<div>' + placeSignature(record) + taxonomyLine(tags) + '<h3>' + escapeHtml(recordHeadline(record)) + '</h3><p class="signal-row__meta">' + escapeHtml(record.permit_number || "Record ID pending") + ' · ' + escapeHtml(contractor) + '</p></div>' +
+        '<div>' + placeSignature(record) + taxonomyLine(tags) + '<h3>' + escapeHtml(recordHeadline(record)) + '</h3>' + (recordSourceScope(record) ? '<p class="signal-row__source-scope"><b>Official scope:</b> ' + escapeHtml(recordSourceScope(record)) + '</p>' : '') + '<p class="signal-row__meta">' + escapeHtml(record.permit_number || "Record ID pending") + ' · ' + escapeHtml(contractor) + '</p></div>' +
         '<div class="signal-row__value"><strong>' + (Number.isFinite(value) && value > 0 ? escapeHtml(moneyFormat.format(value)) : "Filed") + '</strong><span>' + (Number.isFinite(value) && value > 0 ? "declared value" : "public record") + '</span></div>' +
         '<span class="signal-row__arrow" aria-hidden="true">→</span></a>' + recordShareMarkup(record) + '</div>';
     }).join("");
@@ -559,6 +612,7 @@
     const response = await fetch(NEIGHBORHOODS_URL, { cache: "force-cache" });
     if (!response.ok) throw new Error("Neighborhood layer unavailable");
     state.neighborhoods = await response.json();
+    renderMobileToolkitCounts();
     return state.neighborhoods;
   }
 
@@ -609,7 +663,7 @@
     const tags = recordTaxonomy(record);
     return placeSignature(record) + '<div class="popup-kicker">' + escapeHtml(record.permit_type || "Permit record") + '</div>' +
       '<div class="popup-title">' + escapeHtml(titleCase(String(record.address || "Address pending").replace(/\s+/g, " "))) + '</div>' +
-      '<div class="popup-meta">' + escapeHtml(record.description || record.permit_number || "Public record") + (Number.isFinite(value) && value > 0 ? "<br><strong>" + escapeHtml(moneyFormat.format(value)) + " declared value</strong>" : "") + '</div>' +
+      '<div class="popup-meta"><strong>Plain English:</strong> ' + escapeHtml(recordPlainScope(record) || "permit activity") + (recordSourceScope(record) ? '<br><span class="popup-official-scope"><b>Official scope:</b> ' + escapeHtml(recordSourceScope(record)) + '</span>' : '') + (Number.isFinite(value) && value > 0 ? "<br><strong>" + escapeHtml(moneyFormat.format(value)) + " declared value</strong>" : "") + '</div>' +
       '<p class="popup-record-clock">Applied ' + escapeHtml(formatDate(record.applied_date, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + ' · ' + escapeHtml(record.permit_number || "record ID pending") + '</p>' +
       '<div class="popup-actions" aria-label="Investigate this filing">' +
         '<a href="' + escapeHtml(investigate.street) + '" target="_blank" rel="noreferrer" title="Open nearby Google Street View"><span aria-hidden="true">◉</span>Street</a>' +
@@ -633,10 +687,11 @@
     state.markerLayer = L.layerGroup().addTo(map);
     records.forEach(function (record) {
       if (!Number.isFinite(Number(record.lat)) || !Number.isFinite(Number(record.lon))) return;
+      const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
       const marker = L.circleMarker([Number(record.lat), Number(record.lon)], {
-        radius: Number(record.valuation_usd_clean) >= 500000 ? 7 : 5,
+        radius: coarsePointer ? (Number(record.valuation_usd_clean) >= 500000 ? 11 : 9) : (Number(record.valuation_usd_clean) >= 500000 ? 8 : 6),
         color: "#ffffff",
-        weight: 1.5,
+        weight: coarsePointer ? 2.2 : 1.8,
         fillColor: markerColor(record),
         fillOpacity: .88
       }).bindPopup(mapPopup(record));
@@ -648,8 +703,28 @@
     if (!state.overlayVisibility.points) state.markerLayer.remove();
   }
 
+  function recordMatchesWorkLens(record, lens) {
+    const text = [record.permit_type, record.permit_category, record.description, record.work_type].join(" ");
+    const tests = {
+      openings: /(impact|window|door|glazing|opening|shutter)/i,
+      roofs: /roof/i,
+      marine: /(seawall|sea wall|dock|marine)/i,
+      drainage: /(drain|flood|elevation|sewer)/i,
+      generators: /(generator|electric|solar)/i,
+      mechanical: /(mechanical|hvac|air condition)/i,
+      pools: /(\bpool\b|\bspa\b)/i,
+      demolition: /(demolition|\bdemo\b)/i,
+      "high-value": /./
+    };
+    if (!lens || !tests[lens]) return true;
+    if (lens === "high-value") return Number(record.valuation_usd_clean || 0) >= 100000;
+    return tests[lens].test(text);
+  }
+
   function activeMapRecords() {
-    return state.lens === "storm" ? state.records.filter(isStormRecord) : state.records;
+    return state.records.filter(function (record) {
+      return (state.lens !== "storm" || isStormRecord(record)) && recordMatchesWorkLens(record, state.workLens);
+    });
   }
 
   function haversineKm(aLat, aLon, bLat, bLon) {
@@ -688,9 +763,22 @@
 
   function overlayFeatureLabel(kind, feature) {
     const properties = feature.properties || {};
-    if (kind === "zip") return "ZIP " + (properties.ZCTA5 || properties.BASENAME || "area");
+    if (kind === "zip") return zipPlaceLabel(properties.ZCTA5 || properties.BASENAME || "area");
     if (kind === "corridor") return (properties.BASENAME || properties.NAME || "Broward municipality") + " · full permit connector queued";
     return properties.NAME || properties.BASENAME || CENSUS_LAYERS[kind].label;
+  }
+
+  function zipPlaceLabel(value) {
+    const zip = String(value || "");
+    const areas = {
+      "33301": "Downtown + Las Olas area", "33304": "Victoria Park + Central Beach area",
+      "33305": "Wilton Manors + Coral Ridge area", "33306": "Coral Ridge + Bayview area",
+      "33308": "North Beach + Galt Mile area", "33309": "Cypress Creek area",
+      "33311": "Northwest Fort Lauderdale area", "33312": "Riverland + Edgewood area",
+      "33315": "Croissant Park + River Oaks area", "33316": "Rio Vista + Harbor Beach area",
+      "33317": "Plantation area", "33334": "Oakland Park + North Andrews area"
+    };
+    return "ZIP " + zip + (areas[zip] ? " · " + areas[zip] : " · Broward area");
   }
 
   async function buildBoundaryOverlay(kind) {
@@ -816,7 +904,7 @@
       const storm = item.records.filter(isStormRecord).length;
       const dates = item.records.map(function (record) { return record.applied_date; }).filter(Boolean).sort();
       const dateSpan = dates.length ? formatDate(dates[0], { month: "short", day: "numeric" }) + "–" + formatDate(dates[dates.length - 1], { month: "short", day: "numeric", year: "numeric" }) : "Application dates pending";
-      const tags = uniqueTags(["format:neighborhood-brief", "geography:" + tagSlug(item.name), "audience:field-desk"].concat(item.records.reduce(function (all, record) { return all.concat(recordTaxonomy(record)); }, [])));
+      const tags = uniqueTags(["format:neighborhood-brief", "neighborhood:" + tagSlug(item.name), "persona:field-desk", "persona:neighborhood-leader"].concat(item.records.reduce(function (all, record) { return all.concat(recordTaxonomy(record)); }, [])));
       if (/(downtown|flagler village|progresso|poinsettia)/i.test(item.name)) tags.push("topic:corridor-transit");
       const template = tags.includes("topic:association-condo") ? "association" : tags.includes("topic:waterfront") ? "waterfront" : tags.includes("topic:storm-readiness") && storm >= 3 ? "storm" : tags.includes("topic:corridor-transit") ? "corridor" : tags.includes("urgency:high-value") ? "high-value" : "development";
       tags.push("template:" + template);
@@ -885,7 +973,7 @@
     container.appendChild(btn);
   }
 
-  function addMapBrand(map) {
+  function addMapBrand(map, mode) {
     const container = map.getContainer();
     if (!container || container.querySelector(".map-signal-control")) return;
     const badge = document.createElement("a");
@@ -903,11 +991,17 @@
     if (!container.querySelector(".map-key")) {
       const key = document.createElement("div");
       key.className = "map-key";
-      key.innerHTML = '<b>Key · permit applications</b>' +
-        '<span><i style="background:#00b8dc"></i>Application</span>' +
-        '<span><i style="background:#071b32"></i>$500K+ declared</span>' +
-        '<span><i style="background:#1767ff"></i>Storm-related</span>' +
-        '<span><i style="background:#ff6d3a"></i>Demolition</span>';
+      if (mode === "meeting") {
+        key.innerHTML = '<b>Key · meeting rooms</b><span><i style="background:#1767ff"></i>Public-body venue</span><span><i style="background:#ff6d3a"></i>Industry venue</span><small>Room pins are not project parcels</small>';
+      } else if (mode === "agenda") {
+        key.innerHTML = '<b>Key · agenda parcels</b><span><i style="background:#ffcf4a"></i>Source-cleared property item</span><span><i style="background:#7654b5"></i>Focused discussion parcel</span><small>Scheduled discussion is not an outcome</small>';
+      } else {
+        key.innerHTML = '<b>Key · permit applications</b>' +
+          '<span><i style="background:#00b8dc"></i>Application</span>' +
+          '<span><i style="background:#071b32"></i>$500K+ declared</span>' +
+          '<span><i style="background:#1767ff"></i>Storm-related</span>' +
+          '<span><i style="background:#ff6d3a"></i>Demolition</span>';
+      }
       L.DomEvent.disableClickPropagation(key);
       container.appendChild(key);
     }
@@ -928,7 +1022,7 @@
     }
     const map = L.map(node, { zoomControl: true, scrollWheelZoom: false, attributionControl: true, preferCanvas: true }).setView(settings.center || [26.129, -80.144], settings.zoom || 12);
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(map);
-    addMapBrand(map);
+    addMapBrand(map, name === "meeting" ? "meeting" : "permits");
     adoptMapShareRail(map);
     addMapReset(map, { center: (typeof settings !== 'undefined' && settings.center) || [26.129, -80.144], zoom: (typeof settings !== 'undefined' && settings.zoom) || 12 });
     const bounds = [];
@@ -1006,7 +1100,7 @@
       maxZoom: 20,
       attribution: '&copy; OpenStreetMap &copy; CARTO'
     }).addTo(map);
-    addMapBrand(map);
+    addMapBrand(map, MAP_PARAMS.get("agenda") ? "agenda" : "permits");
     addMapReset(map, { center: (typeof settings !== 'undefined' && settings.center) || [26.129, -80.144], zoom: (typeof settings !== 'undefined' && settings.zoom) || 12 });
     const geojson = await loadNeighborhoods();
     state.polygonLayer = L.geoJSON(geojson, {
@@ -1016,7 +1110,7 @@
         layer.on("click", function () { map.fitBounds(layer.getBounds(), { padding: [22, 22], maxZoom: 15 }); });
       }
     }).addTo(map);
-    const records = state.lens === "storm" ? state.records.filter(isStormRecord) : state.records;
+    const records = activeMapRecords();
     drawMarkers(map, records);
     const items = neighborhoodCounts(geojson.features || [], records);
     renderNeighborhoodLists(items, map);
@@ -1033,6 +1127,19 @@
     if (areaParam) {
       const targetArea = (geojson.features || []).find(function (feature) { return neighborhoodName(feature).toLowerCase() === areaParam.toLowerCase(); });
       if (targetArea) map.fitBounds(L.geoJSON(targetArea).getBounds(), { padding: [25, 25], maxZoom: 15 });
+    }
+    const agendaLat = Number(MAP_PARAMS.get("lat"));
+    const agendaLon = Number(MAP_PARAMS.get("lon"));
+    if (MAP_PARAMS.get("agenda") && Number.isFinite(agendaLat) && Number.isFinite(agendaLon)) {
+      const agendaAddress = MAP_PARAMS.get("agenda") || "Agenda property";
+      const agendaItem = MAP_PARAMS.get("item") || "Item number pending";
+      const agendaMeeting = MAP_PARAMS.get("meeting") || "Official meeting";
+      const agendaFolio = MAP_PARAMS.get("folio") || "";
+      const agendaSource = MAP_PARAMS.get("source") || "";
+      const safeSource = /^https?:\/\//i.test(agendaSource) ? agendaSource : "";
+      const popup = '<div class="popup-kicker">Agenda Parcel Tracker · item ' + escapeHtml(agendaItem) + '</div><div class="popup-title">' + escapeHtml(agendaAddress) + '</div><div class="popup-meta">' + escapeHtml(agendaMeeting) + (agendaFolio ? '<br>County folio: ' + escapeHtml(agendaFolio) : '') + '<br><strong>Scheduled discussion is not an approval or outcome.</strong></div>' + (safeSource ? '<div class="popup-actions"><a href="' + escapeHtml(safeSource) + '" target="_blank" rel="noreferrer"><span>↗</span>Cited packet</a></div>' : '');
+      L.circleMarker([agendaLat, agendaLon], { radius: 13, color: "#fff", weight: 3, fillColor: "#7654b5", fillOpacity: .98 }).addTo(map).bindPopup(popup).openPopup();
+      map.setView([agendaLat, agendaLon], 17);
     }
     state.map = map;
     return map;
@@ -1053,7 +1160,7 @@
 
   const signalState = {
     service: null, all: [], layer: null, counts: {}, totals: null, errors: [],
-    filters: { sources: {}, status: "all", days: 365, minAmount: 0, municipality: "" },
+    filters: { sources: {}, status: "all", days: REQUESTED_MAP_DAYS, minAmount: state.workLens === "high-value" ? 100000 : 0, municipality: "" },
     search: { query: "", results: [], searching: false, ran: false },
     loaded: false, error: null
   };
@@ -1077,6 +1184,20 @@
       if (f.status === "verified" && s.verification_status !== "VERIFIED") return false;
       if (f.status === "preliminary" && s.verification_status !== "PRELIMINARY") return false;
       if (s.source_record_date && s.source_record_date < cutoff) return false;
+      if (state.workLens) {
+        const workText = [s.headline, s.project_name, s.why_it_matters, s.what_changed, s.public_label].join(" ");
+        const signalWorkTests = {
+          openings: /(impact|window|door|glazing|opening|shutter)/i,
+          roofs: /roof/i,
+          marine: /(seawall|sea wall|dock|marine)/i,
+          drainage: /(drain|flood|elevation|sewer)/i,
+          generators: /(generator|electric|solar)/i,
+          mechanical: /(mechanical|hvac|air condition)/i,
+          pools: /(\bpool\b|\bspa\b)/i,
+          demolition: /(demolition|\bdemo\b)/i
+        };
+        if (signalWorkTests[state.workLens] && !signalWorkTests[state.workLens].test(workText)) return false;
+      }
       // The amount threshold applies ONLY to sources that publish an amount (permits, deeds).
       // FAA and FDEP records state no amount, so a threshold must not silently erase them.
       if (f.minAmount > 0 && AMOUNT_SOURCES[signalSourceKey(s)] &&
@@ -1128,8 +1249,8 @@
   // room for both, so Leaflet pans the map instead of dropping the card behind an overlay.
   var SIGNAL_POPUP_OPTIONS = {
     maxWidth: 340, className: "signal-popup", autoPan: true,
-    autoPanPaddingTopLeft: L.point(24, 104),     // brand badge sits at the top centre
-    autoPanPaddingBottomRight: L.point(24, 120)  // key sits bottom-left, credit strip below
+    autoPanPaddingTopLeft: [24, 104],     // Leaflet converts point-like arrays when a map exists.
+    autoPanPaddingBottomRight: [24, 120]  // Non-map pages can load app.js without a global L.
   };
 
   // Belt and braces alongside the CSS :has() rule — older engines still dim the overlays.
@@ -1151,9 +1272,10 @@
       ? L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 46, spiderfyOnMaxZoom: true, showCoverageOnHover: false })
       : L.layerGroup();
     items.forEach(function (s) {
+      const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
       const marker = L.circleMarker([s.latitude, s.longitude], {
-        radius: s.editorial_priority >= 70 ? 8 : 6,
-        color: "#ffffff", weight: 1.6,
+        radius: coarsePointer ? (s.editorial_priority >= 70 ? 12 : 10) : (s.editorial_priority >= 70 ? 9 : 7),
+        color: "#ffffff", weight: coarsePointer ? 2.3 : 1.8,
         fillColor: V.LAYER_COLOR[s.layer] || "#1767ff",
         fillOpacity: .92
       });
@@ -1185,6 +1307,7 @@
     };
     const f = signalState.filters;
     const cities = uniqueTags(signalState.all.map(function (s) { return s._raw && s._raw.situs_city; })).sort();
+    const workFocusLabels = { openings: "windows, doors + shutters", roofs: "roof work", marine: "seawalls + marine work", drainage: "plumbing + drainage", generators: "electrical + generator work", mechanical: "mechanical + HVAC", pools: "pools + spas", demolition: "demolition", "high-value": "$100K+ declared filings" };
 
     const families = V.SOURCE_FAMILIES.map(function (fam) {
       if (fam.status !== "live") {
@@ -1202,6 +1325,7 @@
 
     host.innerHTML =
       '<div class="signal-controls__row"><p class="signal-readout" id="signal-count-readout">Loading…</p></div>' +
+      (state.workLens ? '<div class="signal-focus"><span>Focused diagram view</span><strong>' + escapeHtml(workFocusLabels[state.workLens] || titleCase(state.workLens)) + ' · ' + escapeHtml(String(f.days)) + '-day source window</strong><a href="' + PUBLIC_ROUTES.neighborhoods + '?source=permits#full-map">Clear focus</a></div>' : '') +
       '<form class="signal-search" data-signal-search>' +
         '<label class="signal-field signal-field--grow"><span>Search</span>' +
           '<input type="search" data-signal-query placeholder="Address, folio, instrument, permit, owner" value="' + escapeHtml(signalState.search.query) + '"></label>' +
@@ -1215,7 +1339,7 @@
           '<option value="verified"' + (f.status === "verified" ? " selected" : "") + '>Verified only</option>' +
           '<option value="preliminary"' + (f.status === "preliminary" ? " selected" : "") + '>Preliminary only</option></select></label>' +
         '<label class="signal-field"><span>Window</span><select data-signal-days>' +
-          [30, 60, 120, 365].map(function (d) {
+          [14, 30, 60, 120, 365].map(function (d) {
             return '<option value="' + d + '"' + (f.days === d ? " selected" : "") + '>' + (d === 365 ? "1 year" : d + " days") + '</option>';
           }).join("") + '</select></label>' +
         '<label class="signal-field"><span>Stated amount</span><select data-signal-amount>' +
@@ -1426,6 +1550,9 @@
     var host = el("[data-signal-controls]");
     host.innerHTML = '<p class="signal-loading">Loading Signals…</p>';
     signalState.service = window.FloridaSignalV1.createService({ supabaseUrl: SUPABASE_URL, key: SUPABASE_KEY });
+    if (MAP_PARAMS.get("source") === "permits") {
+      SIGNAL_SOURCE_KEYS.forEach(function (source) { signalState.filters.sources[source] = source === "permits"; });
+    }
     // Unbounded eligible totals first (server-side counts only — no rows transferred).
     signalState.service.totals({}).then(function (t) { signalState.totals = t; renderSignalCounts(); }).catch(function () {});
     bindPopupOverlayGuard(state.map);
@@ -1447,7 +1574,7 @@
     state.lens = lens === "storm" ? "storm" : "all";
     els("[data-map-lens]").forEach(function (button) { button.classList.toggle("is-active", button.dataset.mapLens === state.lens); });
     if (!state.map || !state.neighborhoods) return;
-    const records = state.lens === "storm" ? state.records.filter(isStormRecord) : state.records;
+    const records = activeMapRecords();
     drawMarkers(state.map, records);
     if (state.overlayVisibility.heat) {
       const heat = rebuildHeatLayer();
@@ -1462,7 +1589,6 @@
   }
 
   function initLensSwitch() {
-    if (new URLSearchParams(window.location.search).get("storm") === "ready") state.lens = "storm";
     els("[data-map-lens]").forEach(function (button) {
       button.classList.toggle("is-active", button.dataset.mapLens === state.lens);
       button.addEventListener("click", function () {
@@ -1660,6 +1786,7 @@
       const meetings = Array.isArray(payload.meetings) ? payload.meetings : [];
       if (!meetings.length) throw new Error("No upcoming meetings published");
       state.meetings = meetings;
+      renderMobileToolkitCounts();
       if (date && title && meta && agenda && video) {
         let meetingIndex = 0;
         function renderMeeting() {
@@ -1668,7 +1795,10 @@
           date.textContent = formatDate(meetingDate, { weekday: "short", month: "short", day: "numeric" }) + (meeting.time ? " · " + meeting.time : "");
           title.textContent = meeting.title;
           const remaining = Math.max(0, meetings.length - 1);
-          meta.textContent = meeting.location + (remaining ? " · " + remaining + " more watched" : "");
+          const meetingCity = titleCase(String(meeting.city || "").replace(/-/g, " "));
+          let meetingCounty = titleCase(String(meeting.county || "").replace(/-/g, " "));
+          if (meetingCounty && !/county$/i.test(meetingCounty)) meetingCounty += " County";
+          meta.textContent = [meetingCity, meetingCounty, meeting.location].filter(Boolean).join(" · ") + (remaining ? " · " + remaining + " more watched" : "");
           agenda.href = meeting.agenda_url || meeting.details_url || payload.calendar_url;
           agenda.textContent = (meeting.link_label || (meeting.agenda_available ? "Agenda" : "Official calendar")) + " ↗";
           if (meeting.watch_url) {
@@ -1705,7 +1835,14 @@
     const count = el("#meeting-count");
     const updated = el("#meeting-feed-updated");
     if (count) count.textContent = formatNumber(meetings.length) + " upcoming meetings watched";
-    if (updated) updated.textContent = "Official calendar checked " + formatDate(payload.updated_at, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET · refreshed every 15 minutes";
+    if (updated) updated.textContent = "Calendar display checked " + formatDate(payload.updated_at, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET · display cache 15 minutes";
+
+    function meetingJurisdiction(meeting) {
+      const city = titleCase(String(meeting.city || "").replace(/-/g, " "));
+      let county = titleCase(String(meeting.county || "").replace(/-/g, " "));
+      if (county && !/county$/i.test(county)) county += " County";
+      return [city, county].filter(Boolean).join(" · ") || "Jurisdiction pending";
+    }
 
     function meetingType(meeting) {
       const value = meeting.title.toLowerCase();
@@ -1726,7 +1863,7 @@
         const watchLabel = type === "industry" ? "Industry" : type === "development" ? "Development review" : type === "commission" ? "Commission" : "Public board";
         return '<article class="meeting-row" data-signal-tags="' + taxonomyAttribute(tags) + '">' +
           '<div class="meeting-row__date"><span>' + escapeHtml(formatDate(meetingDate, { weekday: "short" })) + '</span><strong>' + escapeHtml(formatDate(meetingDate, { day: "numeric" })) + '</strong><small>' + escapeHtml(formatDate(meetingDate, { month: "short" })) + ' · ' + escapeHtml(meeting.time || "Time pending") + '</small></div>' +
-          '<div class="meeting-row__body"><p>' + escapeHtml(watchLabel) + ' · ' + escapeHtml(daysAway ? "in " + daysAway + " days" : "today") + '</p><h2>' + escapeHtml(meeting.title) + '</h2><span>' + escapeHtml(meeting.location || "Location pending") + '</span><small>' + escapeHtml(meeting.source) + '</small></div>' +
+          '<div class="meeting-row__body"><p>' + escapeHtml(watchLabel) + ' · ' + escapeHtml(daysAway ? "in " + daysAway + " day" + (daysAway === 1 ? "" : "s") : "today") + '</p><div class="meeting-jurisdiction">' + escapeHtml(meetingJurisdiction(meeting)) + '</div><h2>' + escapeHtml(meeting.title) + '</h2><div class="meeting-agenda-state ' + (meeting.agenda_available ? 'is-posted' : 'is-watching') + '">' + (meeting.agenda_available ? 'Agenda posted · packet ready to inspect' : 'Agenda not posted · source watch active') + '</div><span>' + escapeHtml(meeting.location || "Location pending") + '</span><small>' + escapeHtml(meeting.source) + '</small></div>' +
           '<div class="meeting-row__actions"><a class="meeting-row__details" href="' + escapeHtml(meetingUrl) + '" target="_blank" rel="noreferrer">' + agendaLabel + '</a>' +
           (meeting.watch_url ? '<a class="meeting-row__watch" href="' + escapeHtml(meeting.watch_url) + '" target="_blank" rel="noreferrer"><span class="meeting-tv" aria-hidden="true"></span>Watch live</a>' : '') +
           (meeting.ical_url ? '<a class="meeting-row__calendar" href="' + escapeHtml(meeting.ical_url) + '" target="_blank" rel="noreferrer" aria-label="Add ' + escapeHtml(meeting.title) + ' to calendar">＋ Calendar</a>' : '') +
@@ -1743,9 +1880,41 @@
     render("all");
   }
 
+  function agendaList(value) {
+    if (Array.isArray(value)) return value.filter(Boolean);
+    if (!value) return [];
+    if (typeof value === "string") {
+      try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed.filter(Boolean) : []; }
+      catch (error) { return value.split(/\n|,/).map(function (item) { return item.trim(); }).filter(Boolean); }
+    }
+    return [];
+  }
+
+  function agendaFieldMapUrl(item) {
+    const params = new URLSearchParams();
+    params.set("agenda", item.property_address || "Agenda property");
+    if (item.item_number) params.set("item", item.item_number);
+    if (item.meeting_title) params.set("meeting", item.meeting_title);
+    if (item.folio) params.set("folio", item.folio);
+    if (Number.isFinite(Number(item.lat))) params.set("lat", String(item.lat));
+    if (Number.isFinite(Number(item.lon))) params.set("lon", String(item.lon));
+    if (/^https?:\/\//i.test(String(item.source_url || ""))) params.set("source", item.source_url);
+    return PUBLIC_ROUTES.neighborhoods + "?" + params.toString() + "#full-map";
+  }
+
+  function agendaEvidenceMarkup(item) {
+    const clues = agendaList(item.packet_clues).slice(0, 6);
+    const renderings = agendaList(item.renderings).filter(function (url) { return /^https?:\/\//i.test(String(url)); }).slice(0, 4);
+    const place = [item.neighborhood, item.zip ? "ZIP " + item.zip : ""].filter(Boolean).join(" · ") || "Neighborhood not yet resolved";
+    return '<div class="agenda-evidence"><p><strong>Parcel context.</strong> ' + escapeHtml(place) + (item.folio ? ' · folio ' + escapeHtml(item.folio) : '') + '</p>' +
+      (clues.length ? '<div class="agenda-clues"><strong>Packet clues · cited proposal materials</strong><ul>' + clues.map(function (clue) { return '<li>' + escapeHtml(clue) + '</li>'; }).join("") + '</ul></div>' : '<p class="agenda-clues-empty">No packet clue has been cleared for display.</p>') +
+      (renderings.length ? '<div class="agenda-renderings" aria-label="Official packet renderings">' + renderings.map(function (url, index) { return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noreferrer"><img src="' + escapeHtml(url) + '" alt="Rendering or plan image ' + (index + 1) + ' from the cited agenda packet" loading="lazy"><span>Packet image ' + (index + 1) + ' ↗</span></a>'; }).join("") + '</div>' : '') + '</div>';
+  }
+
   async function loadAgendaRecon() {
     const mapNode = el("#agenda-recon-map");
     const results = el("#agenda-recon-results");
+    const hotTopics = el("#agenda-hot-topics");
     if (!mapNode || !results) return;
     try {
       const response = await fetch(apiUrl("/api/agenda-recon"), { cache: "no-store" });
@@ -1762,7 +1931,7 @@
       if (window.L) {
         const reconMap = L.map(mapNode, { zoomControl: true, scrollWheelZoom: false, attributionControl: true }).setView([26.129, -80.144], 12);
         L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(reconMap);
-        addMapBrand(reconMap);
+        addMapBrand(reconMap, "agenda");
         const bounds = [];
         items.forEach(function (item) {
           const point = [Number(item.lat), Number(item.lon)];
@@ -1770,19 +1939,27 @@
           const street = "https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=" + point.join(",");
           const satellite = "https://www.google.com/maps/@?api=1&map_action=map&center=" + point.join(",") + "&zoom=19&basemap=satellite";
           const reconTags = uniqueTags(["format:agenda-recon", "market:" + tagSlug(item.market || "broward"), "county:" + tagSlug(item.county || "broward-county"), "city:" + tagSlug(item.city || "fort-lauderdale"), "topic:agenda-recon", "source:official-agenda"].concat(item.neighborhood ? ["neighborhood:" + tagSlug(item.neighborhood)] : []).concat(item.zip ? ["zip:" + tagSlug(item.zip)] : []));
-          L.circleMarker(point, { radius: 8, color: "#071b32", weight: 2, fillColor: "#ffcf4a", fillOpacity: .95 }).addTo(reconMap).bindPopup('<div class="popup-kicker">Agenda Recon · item ' + escapeHtml(item.item_number) + '</div><div class="popup-title">' + escapeHtml(item.property_address) + '</div><div class="popup-meta">' + escapeHtml(item.meeting_title) + '</div><div class="popup-actions"><a href="' + escapeHtml(street) + '" target="_blank" rel="noreferrer"><span>◉</span>Street</a><a href="' + escapeHtml(satellite) + '" target="_blank" rel="noreferrer"><span>◇</span>Satellite</a><a href="' + escapeHtml(item.source_url) + '" target="_blank" rel="noreferrer"><span>↗</span>Packet</a><button type="button" data-report-add data-report-id="agenda:' + escapeHtml(item.source_hash || item.source_url) + '" data-report-title="' + escapeHtml(item.property_address + " · " + item.meeting_title) + '" data-report-meta="' + escapeHtml(item.meeting_date + " · item " + item.item_number) + '" data-report-url="' + escapeHtml(item.source_url) + '" data-report-tags="' + taxonomyAttribute(reconTags) + '"><span>＋</span>Add to report</button></div>');
+          L.circleMarker(point, { radius: 8, color: "#071b32", weight: 2, fillColor: "#ffcf4a", fillOpacity: .95 }).addTo(reconMap).bindPopup('<div class="popup-kicker">Agenda Parcel Tracker · item ' + escapeHtml(item.item_number) + '</div><div class="popup-title">' + escapeHtml(item.property_address) + '</div><div class="popup-meta">' + escapeHtml(item.meeting_title) + '<br>Scheduled discussion is not an outcome.</div><div class="popup-actions"><a href="' + escapeHtml(agendaFieldMapUrl(item)) + '"><span>⌖</span>Field map</a><a href="' + escapeHtml(street) + '" target="_blank" rel="noreferrer"><span>◉</span>Street</a><a href="' + escapeHtml(satellite) + '" target="_blank" rel="noreferrer"><span>◇</span>Satellite</a><a href="' + escapeHtml(item.source_url) + '" target="_blank" rel="noreferrer"><span>↗</span>Packet</a><button type="button" data-report-add data-report-id="agenda:' + escapeHtml(item.source_hash || item.source_url) + '" data-report-title="' + escapeHtml(item.property_address + " · " + item.meeting_title) + '" data-report-meta="' + escapeHtml(item.meeting_date + " · item " + item.item_number) + '" data-report-url="' + escapeHtml(item.source_url) + '" data-report-tags="' + taxonomyAttribute(reconTags) + '"><span>＋</span>Add to report</button></div>');
         });
         if (bounds.length) reconMap.fitBounds(bounds, { padding: [35, 35], maxZoom: 15 });
       }
       if (status) status.textContent = items.length ? formatNumber(items.length) + " source-cleared agenda propert" + (items.length === 1 ? "y" : "ies") : "No future property item has cleared the source gate yet";
+      if (hotTopics) {
+        hotTopics.innerHTML = items.length ? items.slice(0, 6).map(function (item) {
+          const why = item.proposed_action || "A property-specific item is scheduled for public review.";
+          return '<article class="agenda-topic"><p>Agenda parcel tracker · item ' + escapeHtml(item.item_number) + '</p><h3>' + escapeHtml(item.property_address) + '</h3><span><strong>What may be decided.</strong> ' + escapeHtml(why) + '</span><small>' + escapeHtml(item.meeting_title) + ' · ' + escapeHtml(formatDate(item.meeting_date, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '</small>' + agendaEvidenceMarkup(item) + '<div class="agenda-topic__actions"><a href="' + escapeHtml(agendaFieldMapUrl(item)) + '">Open parcel on field map →</a><a href="' + escapeHtml(item.source_url) + '" target="_blank" rel="noreferrer">Open cited packet ↗</a></div></article>';
+        }).join("") : '<div class="agenda-topic agenda-topic--empty"><p>Agenda signal status</p><h3>No hot topic has cleared the public evidence gate.</h3><span><strong>Why it matters.</strong> ' + escapeHtml(formatNumber(payload.packets_posted || 0)) + ' future packet' + (Number(payload.packets_posted || 0) === 1 ? ' is' : 's are') + ' posted, but no property topic currently has all required fields: cited agenda item, address or folio, coordinate match and editor clearance. Florida Signal will not manufacture a summary from the meeting title.</span></div>';
+      }
       results.innerHTML = items.length ? items.map(function (item) {
         const tags = uniqueTags(["format:agenda-recon", "market:" + tagSlug(item.market || "broward"), "county:" + tagSlug(item.county || "broward-county"), "city:" + tagSlug(item.city || "fort-lauderdale"), "topic:agenda-recon", "source:official-agenda"].concat(item.neighborhood ? ["neighborhood:" + tagSlug(item.neighborhood)] : []).concat(item.zip ? ["zip:" + tagSlug(item.zip)] : []));
-        return '<article class="recon-result" data-signal-tags="' + taxonomyAttribute(tags) + '"><p>' + escapeHtml(item.meeting_date) + ' · item ' + escapeHtml(item.item_number) + '</p><h3>' + escapeHtml(item.property_address) + '</h3><span>' + escapeHtml(item.proposed_action || item.meeting_title) + '</span><div><a href="' + escapeHtml(item.source_url) + '" target="_blank" rel="noreferrer">Open cited packet ↗</a><a href="' + PUBLIC_ROUTES.neighborhoods + '?q=' + encodeURIComponent(item.property_address) + '">Open field map →</a><button type="button" data-report-add data-report-id="agenda:' + escapeHtml(item.source_hash || item.source_url) + '" data-report-title="' + escapeHtml(item.property_address + " · " + item.meeting_title) + '" data-report-meta="' + escapeHtml(item.meeting_date + " · item " + item.item_number) + '" data-report-url="' + escapeHtml(item.source_url) + '" data-report-tags="' + taxonomyAttribute(tags) + '">＋ Add to report</button></div></article>';
+        const tracker = titleCase(String(item.tracker_status || "agenda-posted").replace(/-/g, " "));
+        return '<article class="recon-result" data-signal-tags="' + taxonomyAttribute(tags) + '"><p>' + escapeHtml(item.meeting_date) + ' · item ' + escapeHtml(item.item_number) + '</p><div class="recon-result__lifecycle"><span>Agenda posted</span><span>Parcel resolved</span><span>Editor cleared</span><span>' + escapeHtml(tracker) + '</span></div><h3>' + escapeHtml(item.property_address) + '</h3><span>' + escapeHtml(item.proposed_action || item.meeting_title) + '</span>' + agendaEvidenceMarkup(item) + (item.official_outcome ? '<p class="recon-result__outcome"><strong>Official outcome.</strong> ' + escapeHtml(item.official_outcome) + (item.outcome_source_url ? ' <a href="' + escapeHtml(item.outcome_source_url) + '" target="_blank" rel="noreferrer">Cited result ↗</a>' : '') + '</p>' : '<p class="recon-result__outcome">No official outcome has been posted and cited.</p>') + '<div><a href="' + escapeHtml(item.source_url) + '" target="_blank" rel="noreferrer">Open cited packet ↗</a><a href="' + escapeHtml(agendaFieldMapUrl(item)) + '">Open parcel on field map →</a><button type="button" data-report-add data-report-id="agenda:' + escapeHtml(item.source_hash || item.source_url) + '" data-report-title="' + escapeHtml(item.property_address + " · " + item.meeting_title) + '" data-report-meta="' + escapeHtml(item.meeting_date + " · item " + item.item_number) + '" data-report-url="' + escapeHtml(item.source_url) + '" data-report-tags="' + taxonomyAttribute(tags) + '">＋ Add to report</button></div></article>';
       }).join("") : '<p class="meeting-empty"><strong>Watching, not guessing.</strong> No upcoming official packet currently contains a property item that has completed extraction, coordinate resolution and editorial clearance.</p>';
     } catch (error) {
       results.innerHTML = '<p class="meeting-empty">Agenda sweep is temporarily unavailable. No older or inferred property pins are being substituted.</p>';
       const status = el("#recon-map-status");
       if (status) status.textContent = "Source check needed";
+      if (hotTopics) hotTopics.innerHTML = '<div class="agenda-topic agenda-topic--empty"><p>Agenda signal status</p><h3>Agenda extraction is temporarily unavailable.</h3><span>No stale or inferred hot topic is being substituted.</span></div>';
     }
   }
 
@@ -1842,19 +2019,19 @@
     const neighborhoodItems = state.neighborhoods ? neighborhoodCounts(state.neighborhoods.features || [], state.records).slice(0, 7).map(function (item) { return { label: item.name, value: item.count }; }) : streets;
     const zipItems = state.zipBoundaries ? (state.zipBoundaries.features || []).map(function (feature) {
       const hits = state.records.filter(function (record) { return pointInFeature([Number(record.lon), Number(record.lat)], feature); });
-      return { label: String((feature.properties || {}).ZCTA5 || (feature.properties || {}).NAME || "ZIP"), value: hits.length };
+      return { label: zipPlaceLabel((feature.properties || {}).ZCTA5 || (feature.properties || {}).NAME || "ZIP"), value: hits.length };
     }).filter(function (item) { return item.value > 0; }).sort(function (a, b) { return b.value - a.value || a.label.localeCompare(b.label); }).slice(0, 5) : [];
 
     const tradeDefinitions = [
-      { label: "Roofs", test: /roof/i },
-      { label: "Windows + doors", test: /(window|door|glazing|shutter)/i },
-      { label: "Electrical", test: /(electric|generator|solar)/i },
-      { label: "Mechanical", test: /(mechanical|hvac|air condition)/i },
-      { label: "Plumbing", test: /(plumb|sewer|drain)/i },
-      { label: "Marine + seawall", test: /(marine|seawall|sea wall|dock)/i }
+      { label: "Roofs", test: /roof/i, work: "roofs" },
+      { label: "Windows + doors", test: /(window|door|glazing|shutter)/i, work: "openings" },
+      { label: "Electrical", test: /(electric|generator|solar)/i, work: "generators" },
+      { label: "Mechanical", test: /(mechanical|hvac|air condition)/i, work: "mechanical" },
+      { label: "Plumbing", test: /(plumb|sewer|drain)/i, work: "drainage" },
+      { label: "Marine + seawall", test: /(marine|seawall|sea wall|dock)/i, work: "marine" }
     ];
     const trades = tradeDefinitions.map(function (family) {
-      return { label: family.label, value: state.records.filter(function (record) { return family.test.test([record.permit_type, record.permit_category, record.description].join(" ")); }).length };
+      return { label: family.label, value: state.records.filter(function (record) { return family.test.test([record.permit_type, record.permit_category, record.description].join(" ")); }).length, href: PUBLIC_ROUTES.neighborhoods + "?source=permits&window=30d&work=" + family.work + "#full-map" };
     }).sort(function (a, b) { return b.value - a.value; }).slice(0, 5);
 
     const highValue = state.featured.filter(function (record) { return Number(record.valuation_usd_clean) > 0; });
@@ -1880,7 +2057,8 @@
       const maximum = Math.max.apply(null, items.map(function (item) { return Number(item.value || item.n || 0); }).concat([1]));
       return '<div class="graphic-bars">' + items.map(function (item, index) {
         const value = Number(item.value || item.n || 0);
-        return '<div class="graphic-bar-row"><span>' + escapeHtml(item.label || item.t || item.b || item.c) + '</span><div><i class="' + (colorClass || "") + '" style="--graphic-width:' + Math.max(value ? 4 : 0, Math.round(value / maximum * 100)) + '%;--graphic-delay:' + (index * .07) + 's"></i></div><strong>' + escapeHtml(formatNumber(value, value >= 10000)) + '</strong></div>';
+        const row = '<span>' + escapeHtml(item.label || item.t || item.b || item.c) + '</span><div><i class="' + (colorClass || "") + '" style="--graphic-width:' + Math.max(value ? 4 : 0, Math.round(value / maximum * 100)) + '%;--graphic-delay:' + (index * .07) + 's"></i></div><strong>' + escapeHtml(formatNumber(value, value >= 10000)) + '</strong>';
+        return item.href ? '<a class="graphic-bar-row" href="' + escapeHtml(item.href) + '" aria-label="Open ' + escapeHtml(item.label) + ' on the live map">' + row + '</a>' : '<div class="graphic-bar-row">' + row + '</div>';
       }).join("") + '</div>';
     }
 
@@ -1918,22 +2096,50 @@
 
     function meetingTimeline(items) {
       return '<div class="graphic-timeline">' + items.slice(0, 5).map(function (meeting, index) {
-        return '<div><i></i><time>' + escapeHtml(formatDate(meeting.date, { month: "short", day: "numeric", timeZone: "America/New_York" })) + '</time><span>' + escapeHtml(meeting.title) + '</span><small>' + escapeHtml(meeting.location || "Official room") + '</small></div>';
+        const city = titleCase(String(meeting.city || "").replace(/-/g, " "));
+        let county = titleCase(String(meeting.county || "").replace(/-/g, " "));
+        if (county && !/county$/i.test(county)) county += " County";
+        return '<div><i></i><time>' + escapeHtml(formatDate(meeting.date, { month: "short", day: "numeric", timeZone: "America/New_York" })) + '</time><span>' + escapeHtml(meeting.title) + '</span><small>' + escapeHtml([city, county].filter(Boolean).join(" · ") || meeting.location || "Jurisdiction pending") + '</small></div>';
       }).join("") + '</div>';
     }
 
     function card(slug, kicker, title, dek, body, options) {
       const settings = options || {};
+      const impactStories = {
+        "application-pulse": "A sustained rise can change staffing, review pressure and when a field team should start investigating—but the chart alone does not identify approvals or completed projects.",
+        "place-lens": "Concentration helps a broker, neighborhood leader or operator decide which blocks deserve record-level review; it does not establish demand, causation or future value.",
+        "trades-pulse": "The mix shows which scopes are entering the public process, giving operators a sharper research queue without implying an award, solicitation or start of work.",
+        "high-value": "Declared amounts can help triage consequential filings, but they are applicant-supplied figures—not audited cost, financing, market value or economic impact.",
+        "value-universe": "Property context helps test whether a filing is proportionate to the parcel and surrounding record; it is not an appraisal or investment recommendation.",
+        "operator-board": "Repeated appearances identify who is active in the filing record and worth researching; they do not rank quality, capacity, compliance or performance.",
+        "records-desk": "A defensible join reduces research time and reveals documents that may warrant review. It never substitutes for title work or proves that one record caused another.",
+        "company-lens": "Shared identifiers can reveal an investigation path across public records. Similar names or addresses alone do not prove control, affiliation or beneficial ownership.",
+        "storm-window": "The mix helps owners and associations see which resilience scopes are entering the permit process nearby, without claiming damage, completion, code compliance or vendor demand.",
+        "meetings-watch": "The date tells you when to show up; the cited agenda item tells you what may change. No topic is summarized until the packet is published and cleared."
+      };
+      const personaStories = {
+        "application-pulse": ["developers", "contractors", "city-watchers"],
+        "place-lens": ["neighborhood-leaders", "brokers-agents", "developers"],
+        "trades-pulse": ["contractors", "suppliers", "developers"],
+        "high-value": ["developers", "brokers-agents", "land-use-teams"],
+        "value-universe": ["owners", "brokers-agents", "property-researchers"],
+        "operator-board": ["contractors", "developers", "vendors"],
+        "records-desk": ["land-use-teams", "title-researchers", "brokers-agents"],
+        "company-lens": ["property-researchers", "journalists", "compliance-teams"],
+        "storm-window": ["owners-associations", "contractors", "neighborhood-leaders"],
+        "meetings-watch": ["neighborhood-leaders", "developers", "land-use-teams"]
+      };
       const pageUrl = window.location.origin + CITY_ROOT + "/share/" + encodeURIComponent(slug) + ".html";
       const embedUrl = window.location.origin + window.location.pathname + "?embed=" + encodeURIComponent(slug);
       const embedCode = '<iframe src="' + embedUrl + '" width="100%" height="620" loading="lazy" title="Florida Signal — ' + title.replace(/<[^>]+>/g, "") + '"></iframe>';
       const shareTitle = "Florida Signal · " + title.replace(/<[^>]+>/g, "");
-      const tags = uniqueTags(["format:graphic", "source:florida-signal", "topic:" + tagSlug(slug)].concat(settings.tags || []));
+      const personas = settings.personas || personaStories[slug] || ["development-intelligence"];
+      const tags = uniqueTags(["format:graphic", "source:florida-signal", "topic:" + tagSlug(slug)].concat(personas.map(function (persona) { return "persona:" + tagSlug(persona); })).concat(settings.tags || []));
       const openLink = settings.href ? '<a class="graphic-card__open" href="' + escapeHtml(settings.href) + '">' + escapeHtml(settings.linkLabel || "Open the connected intelligence") + ' →</a>' : '';
       return '<article class="graphic-card ' + (settings.tone === "navy" ? "graphic-card--navy " : "") + (settings.wide ? "graphic-card--wide" : "") + '" data-signal-tags="' + taxonomyAttribute(tags) + '" id="' + slug + '">' +
         '<div class="graphic-card__top"><p>' + escapeHtml(kicker) + '</p><span>' + escapeHtml(settings.status || "REAL RECORD") + '</span></div>' +
         '<span class="graphic-card__crest" aria-hidden="true"><img src="/assets/emblem-2026.png" alt=""></span>' +
-        '<h2>' + title + '</h2><p class="graphic-card__dek">' + dek + '</p>' + openLink + '<div class="graphic-card__body">' + body + '</div>' +
+        '<h2>' + title + '</h2><p class="graphic-card__dek">' + dek + '</p><p class="graphic-card__personas"><strong>Useful for.</strong> ' + escapeHtml(personas.map(function (persona) { return titleCase(String(persona).replace(/-/g, " ")); }).join(" · ")) + '</p><p class="graphic-card__impact"><strong>Why it matters.</strong> ' + escapeHtml(settings.impact || impactStories[slug] || "Use the cited record and named date window to decide what deserves closer review.") + '</p>' + openLink + '<div class="graphic-card__body">' + body + '</div>' +
         '<p class="graphic-card__clock">' + escapeHtml(settings.clock || "Public event date · data update shown") + '</p><a class="graphic-card__sponsor" href="mailto:desk@thefloridasignal.com?subject=' + encodeURIComponent("Sponsor Florida Signal graphic: " + slug) + '"><span>Present this intelligence</span><strong>Your logo here ↗</strong></a>' +
         '<div class="graphic-card__brand"><span><img src="/assets/' + (settings.tone === "navy" ? "emblem-2026-white.png" : "emblem-2026.png") + '" alt=""><b>Florida Signal</b><small>Development intelligence</small></span><time>' + escapeHtml(settings.stamp || applicationWindowStamp) + '</time><div>' +
         '<a class="publish-social publish-social--x" data-network="X" href="https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareTitle) + '&url=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on X">X</a>' +
@@ -1951,36 +2157,36 @@
     const recordRings = rings([
       { label: "Broward instruments", value: Number(stats.broward_docs || 0) },
       { label: "Parcel-linked permits", value: Number(stats.p_parcel || 0) },
-      { label: "Ownership changes", value: Number(stats.owner_chg || 0) },
-      { label: "Flip signals", value: Number(stats.flip || 0) }
+      { label: "Later owner-field updates", value: Number(stats.owner_chg || 0) },
+      { label: "Sequence review flags", value: Number(stats.flip || 0) }
     ]);
     const placeBody = '<div class="graphic-geo"><section><p>NEIGHBORHOOD CONSTELLATION</p>' + bubbles(neighborhoodItems) + '</section><section><p>ZIP SIGNAL RINGS</p>' + (zipItems.length ? rings(zipItems) : '<div class="graphic-empty">ZIP boundary match loading…</div>') + '</section></div>';
     const companyNetwork = network([
-      { value: formatNumber(stats.owner_chg), label: "Owner changes" },
+      { value: formatNumber(stats.owner_chg), label: "Owner-field updates" },
       { value: formatNumber(stats.eff_owner), label: "Owners resolved" },
       { value: formatNumber(stats.eff_value), label: "Values joined" },
       { value: formatNumber(stats.p_parcel), label: "Parcel links" }
     ]);
     const stormFamilies = [
-      { label: "Roofs", test: /roof/i },
-      { label: "Windows + shutters", test: /(window|door|glazing|shutter|opening)/i },
-      { label: "Drainage", test: /(drain|flood|elevation|sewer)/i },
-      { label: "Seawalls + marine", test: /(seawall|sea wall|marine|dock)/i },
-      { label: "Generators + electric", test: /(generator|electric|solar)/i }
+      { label: "Roofs", test: /roof/i, work: "roofs" },
+      { label: "Windows + shutters", test: /(window|door|glazing|shutter|opening)/i, work: "openings" },
+      { label: "Drainage", test: /(drain|flood|elevation|sewer)/i, work: "drainage" },
+      { label: "Seawalls + marine", test: /(seawall|sea wall|marine|dock)/i, work: "marine" },
+      { label: "Generators + electric", test: /(generator|electric|solar)/i, work: "generators" }
     ];
     const stormMix = stormFamilies.map(function (family) {
-      return { label: family.label, value: stormRecords.filter(function (record) { return family.test.test([record.permit_type, record.permit_category, record.description, record.work_type].join(" ")); }).length };
+      return { label: family.label, value: stormRecords.filter(function (record) { return family.test.test([record.permit_type, record.permit_category, record.description, record.work_type].join(" ")); }).length, href: PUBLIC_ROUTES.neighborhoods + "?lens=storm&source=permits&window=30d&work=" + family.work + "#full-map" };
     }).filter(function (item) { return item.value > 0; });
     const cards = [
-      card("application-pulse", "APPLICATION DATES · 14 CALENDAR DAYS", formatNumber(applicationTotal) + " <em>FILED</em>", "Fort Lauderdale permit applications grouped by the date the public application was filed—not by the day a batch arrived.", pulseBody, { tone: "navy", wide: true, status: "LIVE QUERY", stamp: applicationWindowStamp, clock: "City permit table · applied_date · window " + spanDate(APPLICATION_WINDOW_START, now.toISOString().slice(0, 10)) + " · latest filing present " + stampDate(applicationThrough) + " · zero days retained", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Explore these filings on the live map" }),
-      card("place-lens", "HYPERLOCAL · OFFICIAL BOUNDARIES", "PLACE <em>LENS</em>", "The newest geocoded application sample resolved into official City neighborhoods and Census ZIP areas. Circle size expresses relative filing count inside this sample.", placeBody, { wide: true, status: "CITY + CENSUS", stamp: mappedStamp, clock: "Newest " + formatNumber(state.records.length) + " geocoded permit applications returned · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · City neighborhoods + Census ZCTAs", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Open the neighborhood and ZIP map" }),
-      card("trades-pulse", "DIAGRAM OF THE DAY · LIVE WORK MIX", "WHAT FORT LAUDERDALE IS <em>BUILDING</em>", "Permit categories become momentum intelligence when trade mix, place and filing time are read together.", bars(trades), { tone: "navy", wide: true, status: "LIVE QUERY", stamp: mappedStamp, clock: "Newest " + formatNumber(state.records.length) + " geocoded applications · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · categories may overlap when one filing names more than one trade", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Investigate the work mix on the map" }),
-      card("high-value", "CAPPED HIGH-VALUE FILING QUEUE", highValueTop ? escapeHtml(moneyFormat.format(Number(highValueTop.valuation_usd_clean))) + " <em>TOP FILING</em>" : "VALUE <em>PENDING</em>", highValueTop ? escapeHtml(recordHeadline(highValueTop)) : "No valued high-dollar filing is available in the current query.", tiles([{ value: highValue.length ? formatNumber(highValue.length) : "0", label: "valued records returned" }, { value: highValueTotal ? compactFormat.format(highValueTotal) : "$0", label: "declared value in returned queue" }]), { stamp: featuredStamp, clock: "First " + formatNumber(state.featured.length) + " records in ordered current-month $100K+ query · applied_date span " + spanDate(featuredDates[0], featuredDates.slice(-1)[0]) + " · not a complete monthly total", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Open the exact high-value filings" }),
+      card("application-pulse", "FOR OWNERS + OPERATORS · 14 CALENDAR DAYS", formatNumber(applicationTotal) + " <em>APPLICATIONS</em>", "How busy is the public filing desk right now? These are applications grouped by their official application date—not approvals, completed jobs, or the day our batch arrived.", pulseBody, { tone: "navy", wide: true, status: "LIVE QUERY", stamp: applicationWindowStamp, clock: "City permit table · applied_date · window " + spanDate(APPLICATION_WINDOW_START, now.toISOString().slice(0, 10)) + " · latest filing present " + stampDate(applicationThrough) + " · zero days retained", href: PUBLIC_ROUTES.neighborhoods + "?source=permits&window=14d#full-map", linkLabel: "See the same 14-day filing window on the map" }),
+      card("place-lens", "FOR BROKERS + NEIGHBORHOODS · OFFICIAL BOUNDARIES", "WHERE ARE FILINGS <em>CONCENTRATING?</em>", "The newest geocoded application sample grouped into City neighborhoods and named Census ZIP areas. Larger circles mean more filings inside this returned sample—not stronger demand or future appreciation.", placeBody, { wide: true, status: "CITY + CENSUS", stamp: mappedStamp, clock: "Newest " + formatNumber(state.records.length) + " geocoded permit applications returned · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · City neighborhoods + Census ZCTAs", href: PUBLIC_ROUTES.neighborhoods + "?source=permits&window=30d#full-map", linkLabel: "Open this place view on the live map" }),
+      card("trades-pulse", "FOR CONTRACTORS + OWNERS · LIVE WORK MIX", "WHAT KINDS OF WORK ARE <em>BEING FILED?</em>", "Use the work mix to decide where to investigate next. A filing is not a contract award, proof that work started, or evidence that an owner is seeking bids.", bars(trades), { tone: "navy", wide: true, status: "LIVE QUERY", stamp: mappedStamp, clock: "Newest " + formatNumber(state.records.length) + " geocoded applications · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · categories may overlap when one filing names more than one trade", href: PUBLIC_ROUTES.neighborhoods + "?source=permits&window=30d#full-map", linkLabel: "Tap a trade above or open the permit map" }),
+      card("high-value", "FOR DEVELOPERS + LENDERS · CAPPED REVIEW QUEUE", highValueTop ? escapeHtml(moneyFormat.format(Number(highValueTop.valuation_usd_clean))) + " <em>LARGEST RETURNED FILING</em>" : "VALUE <em>PENDING</em>", highValueTop ? escapeHtml(recordHeadline(highValueTop)) : "No valued high-dollar filing is available in the current query.", tiles([{ value: highValue.length ? formatNumber(highValue.length) : "0", label: "valued records returned" }, { value: highValueTotal ? compactFormat.format(highValueTotal) : "$0", label: "declared value in returned queue" }]), { stamp: featuredStamp, clock: "First " + formatNumber(state.featured.length) + " records in ordered current-month $100K+ query · applied_date span " + spanDate(featuredDates[0], featuredDates.slice(-1)[0]) + " · declared amounts are not verified project cost and this is not a complete monthly total", href: PUBLIC_ROUTES.neighborhoods + "?source=permits&window=30d&work=high-value#full-map", linkLabel: "Open the returned $100K+ filings on the map" }),
       card("value-universe", "ENRICHED PROPERTY CONTEXT", "VALUE <em>LADDER</em>", "Where parcel-linked permit records sit across the best-available property-value universe.", bars(values), { tone: "navy", stamp: cacheStamp, clock: "Verified dashboard snapshot · enriched property values · update time shown", href: PUBLIC_ROUTES.broward, linkLabel: "Open the Broward property record" }),
       card("operator-board", "NORMALIZED CONTRACTOR NAMES", "OPERATOR <em>BOARD</em>", "Names appearing most often in the normalized public record set. This measures filing activity—not quality or performance.", ranks(contractors), { stamp: cacheStamp, clock: "Verified dashboard snapshot · normalized contractor names · not a performance ranking", href: PUBLIC_ROUTES.broward, linkLabel: "Open the operator evidence" }),
-      card("records-desk", "BROWARD RECORD · COVERAGE", "RECORDS <em>DESK</em>", "Recorded instruments, parcel links, ownership changes and permit joins—shown with their separate scales and source dates.", recordRings + '<p class="graphic-inline-stat"><strong>' + formatNumber(parcelCoverage) + '%</strong> of tracked permit records parcel-linked</p>', { tone: "navy", stamp: browardStamp, clock: "Broward records · latest recording date " + (stats.broward_fresh ? formatDate(stats.broward_fresh, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "pending"), href: PUBLIC_ROUTES.broward, linkLabel: "Open deeds, liens and ownership intelligence" }),
-      card("company-lens", "SUNBIZ + OWNERSHIP RESOLUTION", "WHO IS <em>BEHIND IT</em>", "An address becomes an entity trail through public company filings, parcel joins and recorded instruments.", companyNetwork, { stamp: cacheStamp, clock: "Verified data snapshot · state registration/filing dates drive company movement; pull time shows freshness only", href: PUBLIC_ROUTES.broward, linkLabel: "Follow the ownership trail" }),
-      card("storm-window", "ROOFS · WINDOWS · DRAINAGE · GENERATORS", formatNumber(stormRecords.length) + " <em>LOCAL FILINGS</em>", "What the current permit sample says people are hardening. These are applications—not completed installations or evidence of storm damage.", stormMix.length ? bars(stormMix, "graphic-bar--storm") : '<div class="graphic-empty">No classified hardening filings are present in this mapped application window.</div>', { tone: "navy", stamp: mappedStamp, status: "STORM WATCH DATA", clock: "Mapped hardening applications · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · categories may overlap", href: PUBLIC_ROUTES.storm, linkLabel: "Open the filings and official outlook on Storm Watch" }),
+      card("records-desk", "BROWARD RECORD · COVERAGE", "WHICH RECORDS <em>CAN BE JOINED?</em>", "Recorded instruments, parcel links, ownership changes and permit joins—shown with separate scales and source dates. A join means the identifiers match; it does not establish causation, intent, or superior title.", recordRings + '<p class="graphic-inline-stat"><strong>' + formatNumber(parcelCoverage) + '%</strong> of tracked permit records parcel-linked</p>', { tone: "navy", stamp: browardStamp, clock: "Broward records · latest recording date " + (stats.broward_fresh ? formatDate(stats.broward_fresh, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "pending"), href: PUBLIC_ROUTES.broward, linkLabel: "Inspect the joined records and their caveats" }),
+      card("company-lens", "SUNBIZ + OWNERSHIP RESOLUTION", "WHICH PUBLIC RECORDS <em>SHARE AN ENTITY?</em>", "Entity, parcel and instrument names can create an investigation trail. A shared or similar name is not proof of beneficial ownership, control, affiliation, or responsibility for a permit.", companyNetwork, { stamp: cacheStamp, clock: "Verified data snapshot · registration, recording and permit dates remain separate · name and parcel joins require source and confidence · no causal inference", href: PUBLIC_ROUTES.broward, linkLabel: "Inspect the entity trail and source records" }),
+      card("storm-window", "FOR OWNERS + ASSOCIATIONS · ROOFS, OPENINGS, DRAINAGE", formatNumber(stormRecords.length) + " <em>HARDENING-RELATED FILINGS</em>", "Where are hardening-related applications appearing? These are applications—not completed installations, proof of storm damage, code compliance, or evidence that an owner is seeking a vendor.", stormMix.length ? bars(stormMix, "graphic-bar--storm") : '<div class="graphic-empty">No classified hardening filings are present in this mapped application window.</div>', { tone: "navy", stamp: mappedStamp, status: "STORM WATCH DATA", clock: "Mapped hardening-related applications · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · categories may overlap", href: PUBLIC_ROUTES.neighborhoods + "?lens=storm&source=permits&window=30d#full-map", linkLabel: "Tap a category above or open the storm filing map" }),
       card("meetings-watch", "PUBLIC + INDUSTRY ROOMS", nextMeeting ? escapeHtml(formatDate(nextMeeting.date, { month: "short", day: "numeric", timeZone: "America/New_York" })) + " <em>ON DECK</em>" : "ROOMS <em>WATCHED</em>", nextMeeting ? escapeHtml(nextMeeting.title) : "The official calendar is being checked; no meeting is inferred from stale data.", state.meetings.length ? meetingTimeline(state.meetings) : '<div class="graphic-empty">Official calendar check in progress…</div>', { stamp: meetingStamp, clock: "Scheduled meeting span " + spanDate(meetingDates[0], meetingDates.slice(-1)[0]) + " · official/public and named industry calendars · refreshed every 15 minutes", href: PUBLIC_ROUTES.meetings, linkLabel: "Open agendas, rooms and stream links" })
     ];
 
@@ -2002,7 +2208,7 @@
     root.innerHTML = embedSlug ? (visibleCards.join("") || '<p class="loading-row">That graphic is not available.</p>') : [
       group("today", "01 · Now", "The live picture", "The application clock and today’s work mix.", ["application-pulse", "trades-pulse"], true),
       group("places", "02 · Places", "Where it is moving", "Neighborhood, ZIP, value and operator context.", ["place-lens", "high-value", "operator-board"]),
-      group("property", "03 · Property", "Who and what sit behind it", "Parcel, instrument, ownership and entity joins.", ["records-desk", "value-universe", "company-lens"]),
+      group("property", "03 · Property", "How the records connect", "Parcel, instrument, owner-field and entity joins—with no causal inference.", ["records-desk", "value-universe", "company-lens"]),
       group("watch", "04 · Watch", "What is coming next", "Hardening filings, official outlooks, agendas and rooms.", ["storm-window", "meetings-watch"])
     ].join("");
     els("[data-copy-embed]", root).forEach(function (button) {
@@ -2042,20 +2248,21 @@
     const title = el(".diagram-watch__title strong", panel);
     const detail = el(".diagram-watch__title span", panel);
     const insight = el("[data-diagram-insight]", panel);
+    const diagramLink = el(".diagram-watch__link", panel);
     const day = el("[data-diagram-day]", panel);
     if (!chart) return;
     const categories = [
-      { label: "Mechanical", pattern: /mechanical|hvac|air condition|a\/c/i },
-      { label: "Plumbing", pattern: /plumb|drain|sewer/i },
-      { label: "Electrical", pattern: /electr|solar/i },
-      { label: "Roofs", pattern: /roof/i },
-      { label: "Windows + doors", pattern: /window|door|shutter|opening/i },
-      { label: "Pools + spas", pattern: /\bpool\b|\bspa\b/i }
+      { label: "Mechanical", pattern: /mechanical|hvac|air condition|a\/c/i, work: "mechanical" },
+      { label: "Plumbing", pattern: /plumb|drain|sewer/i, work: "drainage" },
+      { label: "Electrical", pattern: /electr|solar/i, work: "generators" },
+      { label: "Roofs", pattern: /roof/i, work: "roofs" },
+      { label: "Windows + doors", pattern: /window|door|shutter|opening/i, work: "openings" },
+      { label: "Pools + spas", pattern: /\bpool\b|\bspa\b/i, work: "pools" }
     ].map(function (category) {
       const value = state.records.filter(function (record) {
         return category.pattern.test([record.permit_type, record.permit_category, record.description, record.work_type].join(" "));
       }).length;
-      return { label: category.label, value: value };
+      return { label: category.label, value: value, work: category.work };
     }).sort(function (a, b) { return b.value - a.value; });
     const maximum = Math.max.apply(null, categories.map(function (category) { return category.value; }).concat([1]));
     const classifiedTotal = categories.reduce(function (sum, category) { return sum + category.value; }, 0);
@@ -2066,9 +2273,13 @@
     const leader = categories[0];
     const share = classifiedTotal && leader ? Math.round((leader.value / classifiedTotal) * 100) : 0;
     if (day) day.textContent = "Diagram of the day · " + new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: "America/New_York" }).format(new Date());
-    if (title) title.textContent = "What Fort Lauderdale is building";
+    if (title) title.textContent = "What kinds of work are being filed?";
     if (detail) detail.textContent = dates.length ? "Mapped permits · applied " + formatDate(dates[0], { month: "short", day: "numeric" }) + "–" + formatDate(dates[dates.length - 1], { month: "short", day: "numeric" }) : "Current mapped application window";
-    if (insight) insight.textContent = leader && leader.value ? leader.label + " leads: " + formatNumber(leader.value) + " records · " + formatNumber(share) + "% of the categories shown. We connect trade mix, place and filing time to uncover momentum intelligence." : "No classified permit mix is available in the current mapped sample.";
+    if (insight) insight.textContent = leader && leader.value ? "Why it matters: " + leader.label + " appears most often in the returned sample (" + formatNumber(leader.value) + " records; " + formatNumber(share) + "% of categories shown). That makes it a priority for record-level review—not proof of contracts awarded, work started or market demand." : "No classified permit mix is available in the current mapped sample.";
+    if (diagramLink && leader && leader.work) {
+      diagramLink.href = PUBLIC_ROUTES.neighborhoods + "?source=permits&window=30d&work=" + encodeURIComponent(leader.work) + "#full-map";
+      diagramLink.setAttribute("aria-label", "Open " + leader.label + " permit filings in the live 30-day map window");
+    }
     chart.setAttribute("aria-label", categories.map(function (category) { return category.label + " " + formatNumber(category.value); }).join(", ") + ". Current mapped permit application sample.");
   }
 
@@ -2219,6 +2430,134 @@
     window.setInterval(advance, 4600);
   }
 
+  function mobileLeadRank(record, persona, newestDate) {
+    const text = [record.permit_type, record.permit_category, record.description, record.work_type].join(" ");
+    const value = Number(record.valuation_usd_clean || 0);
+    const recordTime = Date.parse(String(record.applied_date || "") + "T12:00:00-04:00");
+    const age = Number.isFinite(recordTime) && Number.isFinite(newestDate) ? Math.max(0, Math.round((newestDate - recordTime) / 86400000)) : 30;
+    let score = Math.max(0, 24 - age);
+    const reasons = [];
+    if (value >= 500000) { score += 35; reasons.push("$500K+ applicant-declared value"); }
+    else if (value >= 100000) { score += 20; reasons.push("$100K+ applicant-declared value"); }
+    if (persona === "developer") {
+      if (/demolition|\bdemo\b/i.test(text)) { score += 38; reasons.push("demolition scope filed"); }
+      if (/new construction|new building|structural|addition/i.test(text)) { score += 32; reasons.push("construction or structural scope filed"); }
+    } else if (persona === "broker") {
+      if (record.is_commercial === true || /commercial/i.test(text)) { score += 28; reasons.push("commercial filing"); }
+      if (/seawall|sea wall|dock|marine|waterfront/i.test(text)) { score += 24; reasons.push("waterfront-related scope"); }
+      if (/new construction|addition|renovation/i.test(text)) { score += 20; reasons.push("material property-work scope"); }
+    } else if (persona === "contractor") {
+      if (!String(record.contractor_name || "").trim()) { score += 42; reasons.push("no contractor named in returned record"); }
+      if (/roof|window|door|generator|seawall|dock|plumb|drain|mechanical|hvac|electric/i.test(text)) { score += 27; reasons.push("trade-specific scope"); }
+    } else if (persona === "neighborhood") {
+      if (/demolition|new construction|structural/i.test(text)) { score += 34; reasons.push("consequential neighborhood scope"); }
+      if (isStormRecord(record)) { score += 20; reasons.push("resilience-related scope"); }
+      if (recordNeighborhood(record)) score += 12;
+    } else if (persona === "owner") {
+      if (isStormRecord(record)) { score += 38; reasons.push("resilience-related scope"); }
+      if (isAssociationRecord(record)) { score += 28; reasons.push("association or condo context"); }
+      if (/roof|window|door|generator|seawall|dock|drain/i.test(text)) { score += 22; reasons.push("owner-relevant work type"); }
+    } else {
+      if (/demolition|new construction|structural/i.test(text)) { score += 25; reasons.push("consequential filed scope"); }
+      if (isStormRecord(record)) { score += 14; reasons.push("resilience-related scope"); }
+    }
+    if (!reasons.length) reasons.push("recent application in the mapped window");
+    return { record: record, score: score, reasons: reasons.slice(0, 2) };
+  }
+
+  function renderMobileLeadGenerator(persona) {
+    const root = el("[data-mobile-toolkit]");
+    const list = root ? el("[data-mobile-leads]", root) : null;
+    if (!root || !list) return;
+    const active = persona || root.getAttribute("data-active-persona") || "all";
+    const lens = el("[data-mobile-lead-lens]", root);
+    const labels = { all: "All-tools", developer: "Developer", broker: "Broker / agent", contractor: "Contractor", neighborhood: "Neighborhood leader", owner: "Owner / association" };
+    if (lens) lens.textContent = labels[active] + " lens · ranked from the current mapped application window";
+    if (!state.records.length) {
+      list.innerHTML = "<p>Connecting to the current permit application window…</p>";
+      return;
+    }
+    const newestDate = Math.max.apply(null, state.records.map(function (record) { return Date.parse(String(record.applied_date || "") + "T12:00:00-04:00"); }).filter(Number.isFinite));
+    const ranked = state.records.map(function (record) { return mobileLeadRank(record, active, newestDate); }).sort(function (a, b) { return b.score - a.score || String(b.record.applied_date || "").localeCompare(String(a.record.applied_date || "")); }).slice(0, 3);
+    list.innerHTML = ranked.map(function (item, index) {
+      const record = item.record;
+      const neighborhood = recordNeighborhood(record) || "Neighborhood not yet resolved";
+      const meta = neighborhood + " · applied " + formatDate(record.applied_date, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
+      const tags = recordTaxonomy(record).concat(["format:persona-lead", "persona:" + tagSlug(active)]);
+      return '<article class="mobile-lead-item"><a class="mobile-lead" href="' + recordUrl(record) + '"><b>' + String(index + 1).padStart(2, "0") + '</b><em>' + escapeHtml(item.reasons.join(" · ")) + '</em><strong>' + escapeHtml(recordHeadline(record)) + '</strong><span>' + escapeHtml(meta) + ' · open cited filing →</span></a><button type="button" data-report-add data-report-id="permit:' + escapeHtml(record.permit_number || recordUrl(record)) + '" data-report-title="' + escapeHtml(recordHeadline(record)) + '" data-report-meta="' + escapeHtml(meta) + '" data-report-url="' + escapeHtml(recordUrl(record)) + '" data-report-tags="' + taxonomyAttribute(tags) + '">＋ Field report</button></article>';
+    }).join("");
+  }
+
+  function renderMobileToolkitCounts() {
+    const root = el("[data-mobile-toolkit]");
+    if (!root) return;
+    const records = state.records || [];
+    const recordText = function (record) { return [record.permit_type, record.permit_category, record.description, record.work_type].join(" "); };
+    const counts = {
+      "high-value": records.filter(function (record) { return Number(record.valuation_usd_clean || 0) >= 100000; }).length,
+      meetings: state.meetings.length,
+      contractors: new Set(records.map(function (record) { return String(record.contractor_name || "").trim().toLowerCase(); }).filter(Boolean)).size,
+      resilience: records.filter(isStormRecord).length,
+      demolition: records.filter(function (record) { return /demolition|\bdemo\b/i.test(recordText(record)); }).length,
+      openings: records.filter(function (record) { return /window|door|glazing|opening|shutter/i.test(recordText(record)); }).length,
+      roofs: records.filter(function (record) { return /roof|reroof|re-roof/i.test(recordText(record)); }).length,
+      marine: records.filter(function (record) { return /seawall|sea wall|dock|marine/i.test(recordText(record)); }).length,
+      generators: records.filter(function (record) { return /generator/i.test(recordText(record)); }).length,
+      neighborhoods: new Set(records.map(recordNeighborhood).filter(Boolean)).size
+    };
+    const suffixes = {
+      "high-value": "$100K+ applicant-declared filings",
+      meetings: "upcoming rooms watched",
+      contractors: "named contractors in sample",
+      resilience: "hardening-type filings",
+      demolition: "demolition filings",
+      openings: "opening-work filings",
+      roofs: "roof-work filings",
+      marine: "marine or seawall filings",
+      generators: "generator filings",
+      neighborhoods: "official neighborhoods represented"
+    };
+    els("[data-tool-count]", root).forEach(function (tool) {
+      const key = tool.getAttribute("data-tool-count");
+      const span = el("span", tool);
+      if (span && Number.isFinite(counts[key]) && (counts[key] > 0 || records.length || state.meetings.length)) span.textContent = formatNumber(counts[key]) + " " + suffixes[key];
+    });
+    renderMobileLeadGenerator();
+  }
+
+  function initMobileToolkit() {
+    const root = el("[data-mobile-toolkit]");
+    if (!root) return;
+    const buttons = els("[data-mobile-persona]", root);
+    const tools = els("[data-personas]", root);
+    const status = el("[data-mobile-toolkit-status]", root);
+    const labels = { all: "complete field toolkit", developer: "developer lens", broker: "broker / agent lens", contractor: "contractor lens", neighborhood: "neighborhood leader lens", owner: "owner / association lens" };
+    function selectPersona(persona) {
+      buttons.forEach(function (button) { button.setAttribute("aria-pressed", String(button.getAttribute("data-mobile-persona") === persona)); });
+      let shown = 0;
+      tools.forEach(function (tool) {
+        const personas = String(tool.getAttribute("data-personas") || "").split(/\s+/);
+        const visible = persona === "all" || personas.includes(persona) || personas.includes("all");
+        tool.hidden = !visible;
+        if (visible) shown += 1;
+      });
+      if (status) status.textContent = "Showing " + shown + " tools for the " + labels[persona] + ". Counts use the current mapped sample.";
+      root.setAttribute("data-active-persona", persona);
+      renderMobileLeadGenerator(persona);
+    }
+    buttons.forEach(function (button) { button.addEventListener("click", function () { selectPersona(button.getAttribute("data-mobile-persona") || "all"); }); });
+    const fieldJump = el("[data-mobile-field-jump]", root);
+    if (fieldJump) fieldJump.addEventListener("click", function () {
+      const fieldRoot = el("[data-mobile-field-test]");
+      const toggle = fieldRoot ? el("[data-mobile-field-toggle]", fieldRoot) : null;
+      if (toggle && toggle.getAttribute("aria-expanded") !== "true") toggle.click();
+      if (fieldRoot) fieldRoot.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    selectPersona("all");
+    renderMobileToolkitCounts();
+    loadNeighborhoods().then(renderMobileToolkitCounts).catch(function () { /* Unresolved remains explicit. */ });
+  }
+
   function initHomepagePriority() {
     const main = el("main#main");
     const signals = el("#signals", main);
@@ -2262,7 +2601,7 @@
       fieldMap = L.map(mapNode, { zoomControl: true, scrollWheelZoom: false, attributionControl: true, preferCanvas: true }).setView([26.129, -80.144], 12);
       L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(fieldMap);
       pointLayer = L.layerGroup().addTo(fieldMap);
-      addMapBrand(fieldMap);
+      addMapBrand(fieldMap, "permits");
       return fieldMap;
     }
 
@@ -2370,7 +2709,7 @@
     if (el(".city-interests", form)) return;
     const preferences = document.createElement("details");
     preferences.className = "signup-preferences";
-    preferences.innerHTML = '<summary><span>Personalize your brief</span><strong>Fort Lauderdale · All intel</strong></summary><div class="signup-preferences__body"></div>';
+    preferences.innerHTML = '<summary><span>Optional · personalize</span><strong>Fort Lauderdale · All intel</strong></summary><div class="signup-preferences__body"></div>';
     const preferenceBody = el(".signup-preferences__body", preferences);
     const fieldset = document.createElement("fieldset");
     fieldset.className = "city-interests";
@@ -2390,7 +2729,7 @@
         const city = BROWARD_CITIES.find(function (entry) { return entry[0] === input.value; });
         return city ? city[1] : input.value;
       });
-      selectedCityLabel = selected.length === 1 ? selected[0] : selected.length + " cities";
+      selectedCityLabel = selected.length === 1 ? selected[0] : selected.length ? selected.length + " cities" : "Fort Lauderdale";
       updatePreferenceSummary();
     }
     fieldset.addEventListener("change", updateSummary);
@@ -2405,12 +2744,12 @@
       }).join("") + '</div>';
     preferenceBody.appendChild(interestSet);
     const note = document.createElement("p");
-    note.textContent = "Fort Lauderdale is live. Other city choices record your interests—no coverage promises.";
+    note.textContent = "You can ignore this section. Email + ZIP signs you up for Fort Lauderdale and every topic. Other city choices only record where you want future coverage—no coverage promise.";
     preferenceBody.appendChild(note);
     form.insertBefore(preferences, message || null);
     function updateInterestSummary() {
       const selected = els('input[name="interests"]:checked', interestSet);
-      selectedInterestLabel = selected.length === BRIEF_INTERESTS.length ? "All intel" : selected.length ? selected.length + " topics" : "Choose topics";
+      selectedInterestLabel = selected.length === BRIEF_INTERESTS.length || !selected.length ? "All intel" : selected.length + " topics";
       updatePreferenceSummary();
     }
     interestSet.addEventListener("change", updateInterestSummary);
@@ -2427,15 +2766,10 @@
         const zip = el('input[name="zip"]', form);
         const message = el("[data-signup-message]", form);
         if (!input || !zip || !message) return;
-        const cities = els('input[name="cities"]:checked', form).map(function (checkbox) { return checkbox.value; });
-        const interests = els('input[name="interests"]:checked', form).map(function (checkbox) { return checkbox.value; });
-        if (!cities.length) {
-          message.classList.add("is-error");
-          message.textContent = "Choose at least one Broward city.";
-          const selector = el(".signup-preferences", form);
-          if (selector) selector.open = true;
-          return;
-        }
+        const selectedCities = els('input[name="cities"]:checked', form).map(function (checkbox) { return checkbox.value; });
+        const selectedInterests = els('input[name="interests"]:checked', form).map(function (checkbox) { return checkbox.value; });
+        const cities = selectedCities.length ? selectedCities : [ACTIVE_CITY];
+        const interests = selectedInterests.length ? selectedInterests : BRIEF_INTERESTS.map(function (interest) { return interest[0]; });
         message.classList.remove("is-error");
         message.textContent = "Saving your place…";
         try {
@@ -2530,7 +2864,7 @@
     const page = document.body.getAttribute("data-page") || "home";
     if (page === "home" || el(".cross-page-promo")) return;
     const promos = {
-      neighborhoods: { image: "/social/graphic-desk/place-lens.png", alt: "Florida Signal neighborhood and ZIP intelligence diagram", kicker: "From the field to the pattern", title: "See what the mapped filings add up to.", copy: "Live diagrams turn block-level records into neighborhood momentum.", label: "Open the Data Room", url: PUBLIC_ROUTES.graphics + "#place-lens", target: ".live-map-stage" },
+      neighborhoods: { image: "/social/graphic-desk/place-lens.png", alt: "Florida Signal neighborhood and ZIP intelligence diagram", kicker: "From the field to the pattern", title: "See which blocks deserve a closer look.", copy: "Live diagrams organize current filing counts into a research queue; they do not claim demand, causation or future value.", label: "Open the Data Room", url: PUBLIC_ROUTES.graphics + "#place-lens", target: ".live-map-stage" },
       meetings: { image: "/assets/photos/fort-lauderdale-barrier-island-skyline-adobe-257427799.jpg", alt: "Fort Lauderdale skyline and waterways", kicker: "From agenda to address", title: "Take the meeting into the field.", copy: "Open cited properties, nearby filings and neighborhood context on the live map.", label: "Open the live map", url: PUBLIC_ROUTES.neighborhoods + "#full-map", target: ".meeting-board" },
       storm: { image: "/assets/photos/fort-lauderdale-construction-cranes-adobe-490952530.jpg", alt: "Tower cranes above Fort Lauderdale construction", kicker: "Beyond the weather window", title: "See the development pipeline still moving.", copy: "Switch from readiness records to the wider live permit and neighborhood map.", label: "Open the live map", url: PUBLIC_ROUTES.neighborhoods + "#full-map", target: ".storm-map-focus" },
       graphics: { image: "/assets/photos/fort-lauderdale-waterfront-neighborhoods-aerial-adobe-428926084.jpg", alt: "Aerial view of Fort Lauderdale waterfront neighborhoods", kicker: "Take the diagram outside", title: "Move from pattern to parcel.", copy: "Search the block, inspect the filing and cross-check Street View or satellite.", label: "Open field intelligence", url: PUBLIC_ROUTES.neighborhoods + "#full-map", target: ".graphic-desk-section" },
@@ -2860,6 +3194,36 @@
     return target;
   }
 
+  function nextEasternTimes(now, times) {
+    return times.map(function (time) { return nextEasternDaily(now, time[0], time[1]); }).sort(function (a, b) { return a - b; })[0];
+  }
+
+  function nextInterval(now, minutes) {
+    const eastern = easternParts(now);
+    const remainingSeconds = ((minutes - (eastern.minute % minutes)) * 60) - eastern.second;
+    return new Date(now.getTime() + Math.max(1, remainingSeconds) * 1000);
+  }
+
+  function feedSchedule(now) {
+    return [
+      { label: "Permit mirror", next: nextInterval(now, 30), detail: "public permit mirror; source intake remains nightly" },
+      { label: "Meeting calendar", next: nextInterval(now, 15), detail: "published dates and links; not agenda-item extraction" },
+      { label: "Agenda source watch", next: nextEasternTimes(now, [[6, 30], [12, 30], [16, 30]]), detail: "packet monitor; topics publish only after evidence clearance" },
+      { label: "Clerk records", next: nextEasternDaily(now, 9, 30), detail: "Broward recorded-document source cycle" },
+      { label: "Business filings", next: nextEasternDaily(now, 23, 30), detail: "Florida Division of Corporations enrichment" },
+      { label: "Permit source intake", next: nextEasternDaily(now, 22, 0), detail: "City permit application intake" },
+      { label: "Freshness audit", next: nextEasternTimes(now, [[7, 0], [17, 0]]), detail: "independent feed clocks checked" }
+    ].sort(function (a, b) { return a.next - b.next; });
+  }
+
+  function countdownLabel(target, now) {
+    const totalMinutes = Math.max(1, Math.ceil((target.getTime() - now.getTime()) / 60000));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (!hours) return totalMinutes + "m";
+    return hours + "h" + (minutes ? " " + minutes + "m" : "");
+  }
+
   function initDataCountdown() {
     const time = el("#live-bar-time");
     const lead = el(".live-bar__inner p:first-child");
@@ -2869,31 +3233,22 @@
     mobile.className = "live-bar__countdown-mobile";
     lead.appendChild(mobile);
     if (!el(".live-bar__processing", lead)) lead.insertAdjacentHTML("beforeend", '<span class="live-bar__processing" aria-label="Feeds processing"><i></i><i></i><i></i></span>');
-    label.textContent = "Newest signals";
-    label.dataset.defaultLabel = "Newest signals";
-
-    function clock(ms) {
-      const total = Math.max(0, Math.floor(ms / 1000));
-      const hours = Math.floor(total / 3600);
-      const minutes = Math.floor((total % 3600) / 60);
-      const seconds = total % 60;
-      return [hours, minutes, seconds].map(function (value) { return String(value).padStart(2, "0"); }).join(":");
+    label.textContent = "Live source schedule";
+    label.dataset.defaultLabel = "Live source schedule";
+    function renderSchedule() {
+      if (document.body.classList.contains("storm-mode")) return;
+      const current = new Date();
+      const feeds = feedSchedule(current);
+      const index = Math.floor(current.getTime() / 6000) % feeds.length;
+      const feed = feeds[index];
+      const message = "Next · " + feed.label + " in " + countdownLabel(feed.next, current);
+      time.textContent = message;
+      const lastSync = time.dataset.lastSync ? " " + time.dataset.lastSync + "." : "";
+      time.title = feed.detail + ". Scheduled " + formatDate(feed.next.toISOString(), { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET." + lastSync + " Event dates and successful pull times remain separate.";
+      mobile.textContent = message.toUpperCase();
     }
-    function render() {
-      if (document.body.classList.contains("storm-mode")) { mobile.textContent = ""; return; }
-      const now = new Date();
-      const jobs = [
-        { label: "Permits", target: nextEasternDaily(now, 22, 0) },
-        { label: "Sunbiz", target: nextEasternDaily(now, 23, 30) }
-      ].sort(function (a, b) { return a.target - b.target; });
-      const job = jobs[0];
-      const remaining = clock(job.target - now);
-      time.textContent = "NEXT PULL · " + job.label.toUpperCase() + " · " + remaining;
-      time.title = job.label + " scheduled for " + job.target.toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
-      mobile.textContent = "NEXT " + job.label.toUpperCase() + " · " + remaining;
-    }
-    render();
-    window.setInterval(render, 1000);
+    renderSchedule();
+    window.setInterval(renderSchedule, 1000);
   }
 
   function initMapPublishing() {
@@ -3149,6 +3504,7 @@
     })();
     initLockups();
     initMobileLiveRail();
+    initMobileToolkit();
     initHomepagePriority();
     initMobileFieldTest();
     initLensSwitch();

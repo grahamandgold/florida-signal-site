@@ -212,6 +212,13 @@ def init_db() -> None:
               lon real,
               neighborhood text,
               zip text,
+              tracker_status text not null default 'agenda-posted',
+              packet_clues text not null default '[]',
+              attachments text not null default '[]',
+              renderings text not null default '[]',
+              official_outcome text,
+              outcome_source_url text,
+              last_checked_at text,
               editor_status text not null default 'draft',
               editor_name text,
               editor_note text,
@@ -244,6 +251,17 @@ def init_db() -> None:
             db.execute("alter table agenda_recon add column city text not null default 'fort-lauderdale'")
         if "county" not in agenda_columns:
             db.execute("alter table agenda_recon add column county text not null default 'broward-county'")
+        for column, definition in {
+            "tracker_status": "text not null default 'agenda-posted'",
+            "packet_clues": "text not null default '[]'",
+            "attachments": "text not null default '[]'",
+            "renderings": "text not null default '[]'",
+            "official_outcome": "text",
+            "outcome_source_url": "text",
+            "last_checked_at": "text",
+        }.items():
+            if column not in agenda_columns:
+                db.execute(f"alter table agenda_recon add column {column} {definition}")
         db.execute("create index if not exists agenda_market_city_status on agenda_recon(market, city, editor_status, meeting_date)")
         db.commit()
 
@@ -269,12 +287,40 @@ def story_json(row: sqlite3.Row | dict[str, Any], *, public: bool = False) -> di
         [f"market:{item.get('market')}", f"county:{item.get('county')}", f"city:{item.get('city')}"]
         + ([f"neighborhood:{slugify(str(item.get('neighborhood')))}"] if item.get("neighborhood") else [])
         + ([f"zip:{item.get('zip')}"] if item.get("zip") else [])
-        + item["topic_tags"] + item["geography_tags"] + item["entity_tags"] + item["audience_tags"] + item["urgency_tags"]
+        + namespaced_tags(item["topic_tags"], "topic")
+        + namespaced_tags(item["geography_tags"], "geography")
+        + namespaced_tags(item["entity_tags"], "entity")
+        + namespaced_tags(item["audience_tags"], "persona")
+        + namespaced_tags(item["urgency_tags"], "urgency")
     ))
     if public:
         for key in ("editor_note", "unresolved_issues"):
             item.pop(key, None)
     return item
+
+
+def agenda_json(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    item = dict(row)
+    for key in ("packet_clues", "attachments", "renderings"):
+        item[key] = json_array(item.get(key))
+    return item
+
+
+def namespaced_tags(values: Any, namespace: str) -> list[str]:
+    tags: list[str] = []
+    for raw in list_value(values):
+        text = str(raw).strip().lower()
+        if not text:
+            continue
+        if ":" in text:
+            supplied, text = text.split(":", 1)
+            prefix = slugify(supplied) or namespace
+        else:
+            prefix = namespace
+        value = slugify(text)
+        if value:
+            tags.append(f"{prefix}:{value}")
+    return list(dict.fromkeys(tags))
 
 
 def story_blocks(item: dict[str, Any]) -> list[str]:
@@ -287,6 +333,8 @@ def story_blocks(item: dict[str, Any]) -> list[str]:
         city_value(item.get("city"))
     except ValueError:
         blocks.append("A city is required")
+    if not str(item.get("neighborhood") or "").strip():
+        blocks.append("A primary official neighborhood is required")
     required = (("headline", "Headline"), ("dek", "Summary"), ("body", "Story body"), ("event_date", "Event date"), ("source_title", "Source title"))
     for key, label in required:
         if not str(item.get(key) or "").strip():
@@ -424,7 +472,7 @@ class Handler(SimpleHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as db:
                 db.row_factory = sqlite3.Row
                 rows = db.execute("select * from agenda_recon where market=? and city=? and editor_status='cleared' order by meeting_date, item_number", (market, city)).fetchall()
-            items = [dict(row) for row in rows if not agenda_blocks(dict(row))]
+            items = [agenda_json(row) for row in rows if not agenda_blocks(dict(row))]
             self.reply({"market": market, "city": city, "items": items, "generated_at": now_iso(), "gate": "editor-cleared cited properties only"})
             return
         if route == "/api/admin/stories":
@@ -610,6 +658,13 @@ class Handler(SimpleHTTPRequestHandler):
                 "source_page": payload.get("source_page") if isinstance(payload.get("source_page"), int) else None, "source_hash": hashlib.sha256(str(payload.get("source_url") or "").encode()).hexdigest() if payload.get("source_url") else None,
                 "lat": payload.get("lat") if isinstance(payload.get("lat"), (int, float)) else None, "lon": payload.get("lon") if isinstance(payload.get("lon"), (int, float)) else None,
                 "neighborhood": str(payload.get("neighborhood") or "").strip() or None, "zip": str(payload.get("zip") or "").strip() or None,
+                "tracker_status": str(payload.get("tracker_status") or "agenda-posted").strip()[:80],
+                "packet_clues": json.dumps(list_value(payload.get("packet_clues"))[:30]),
+                "attachments": json.dumps([str(url).strip() for url in list_value(payload.get("attachments")) if public_url(url)][:30]),
+                "renderings": json.dumps([str(url).strip() for url in list_value(payload.get("renderings")) if public_url(url)][:12]),
+                "official_outcome": str(payload.get("official_outcome") or "").strip()[:1000] or None,
+                "outcome_source_url": str(payload.get("outcome_source_url") or "").strip()[:1000] if public_url(payload.get("outcome_source_url")) else None,
+                "last_checked_at": str(payload.get("last_checked_at") or created).strip()[:40],
                 "editor_status": "draft", "editor_name": str(payload.get("editor_name") or "").strip() or None, "editor_note": str(payload.get("editor_note") or "").strip() or None,
                 "created_at": created, "updated_at": created,
             }
