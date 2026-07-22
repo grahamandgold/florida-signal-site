@@ -23,8 +23,13 @@ Chrome via AppleScript on the residential Mac. `execute javascript` (Chrome → 
   oldest-first, capped by `ACCLAIM_MAX_DATES` (8) and `ACCLAIM_MAX_PAGES` (60). Per-date state; resumes
   after failure; self-heals gaps when the Mac was off (recompute-from-verified-max, not a fragile cursor).
   Exits nonzero on any failure. Logs → `~/Library/Logs/florida-acclaim.log`.
-- `com.floridasignal.acclaim.plist` — LaunchAgent, twice daily **12:00 + 19:00** local, absolute paths,
-  logs outside repo. Installed at `~/Library/LaunchAgents/`.
+- `com.floridasignal.acclaim.plist` — LaunchAgent at **00:30, 12:00, 19:00 and 22:30** local,
+  plus `RunAtLoad` catch-up, absolute paths, logs outside repo. Installed at
+  `~/Library/LaunchAgents/`.
+
+The target selector does not query the still-forming current day before noon. An `EMPTY`
+current-day grid is never marked done; only an empty date strictly before today is final. This
+prevents a pre-release visit from suppressing the later retry.
 
 ## Reconciliation (server-side, Supabase — off the Mac)
 `public.reconcile_clerk_preliminary()` matches preliminary rows to `broward_clerk_records_doc` by

@@ -52,24 +52,7 @@ log "verified SFTP through: $VERIFIED_MAX"
 # 2) Candidate dates = (verified_max, today], oldest first, capped. Dates already fully present
 #    in the preliminary table (and marked done in state) are skipped; the per-row upsert filter
 #    is the final idempotency guard, so a Mac-was-off gap is always backfilled, never skipped.
-TARGETS=$(/usr/bin/python3 - "$VERIFIED_MAX" "$MAXDATES" "$STATE" <<'PY'
-import sys,datetime,json,os
-base=datetime.date.fromisoformat(sys.argv[1]); cap=int(sys.argv[2]); statef=sys.argv[3]
-today=datetime.date.today()
-done=set()
-if os.path.exists(statef):
-    try:
-        st=json.load(open(statef))
-        done={d for d,v in st.get("dates",{}).items() if v.get("status")=="done"}
-    except Exception: pass
-out=[]; d=base+datetime.timedelta(days=1)
-while d<=today and len(out)<cap:
-    iso=d.isoformat()
-    if iso not in done: out.append(f"{d.month}/{d.day}/{d.year}|{iso}")
-    d+=datetime.timedelta(days=1)
-print("\n".join(out))
-PY
-)
+TARGETS=$(/usr/bin/python3 "$DIR/acclaim_targets.py" "$VERIFIED_MAX" "$MAXDATES" "$STATE")
 
 if [ -z "$TARGETS" ]; then
   log "no missing dates after verified max; backlog empty"; echo "nothing to backfill"; exit 0
@@ -101,7 +84,14 @@ while IFS= read -r LINE; do
   # total Acclaim displayed (allowing rows the grid shows without an instrument number).
   DSTATUS=incomplete
   if [ "$STATUS" = "EMPTY" ]; then
-    DSTATUS=done
+    # EMPTY is final only for a date strictly before today. Acclaim can render an empty
+    # current-day grid before the county releases that day's recordings.
+    if [ "$ISO" = "$(date '+%Y-%m-%d')" ]; then
+      FAIL=1
+      log "DATE INCOMPLETE $ISO: current-day EMPTY is not a release confirmation"
+    else
+      DSTATUS=done
+    fi
   elif [ "$STATUS" = "OK" ] && [ "$FOUND" -ge "$TOTAL_SHOWN" ]; then
     DSTATUS=done
   else
