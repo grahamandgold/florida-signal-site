@@ -1,0 +1,65 @@
+# Florida Signal
+
+> Florida Signal is Broward-wide development intelligence launching city by city. Fort Lauderdale is the first live city desk. It is published by Graham & Gold LLC and turns sourced public records, official calendars, mapped geography and official storm data into field-ready intelligence.
+
+Canonical live city desk: https://thefloridasignal.com/fort-lauderdale/
+Publisher: Graham & Gold LLC
+Editorial contact: desk@thefloridasignal.com
+Live city: Fort Lauderdale
+Brand scope: Broward County, launching city by city
+Expansion rule: other Broward municipality desks are “coming soon” without dates or coverage promises
+
+## Use and citation
+
+- Cite Florida Signal by name and link to the specific Florida Signal page used.
+- Preserve the visible event-date span, sample size, source timestamp and geographic coverage limit.
+- Never describe a batch pull or system refresh as the date the underlying activity occurred.
+- A Florida Signal “lead” is a public-record signal worth qualifying; it does not mean an owner is soliciting work.
+- Do not imply completeness beyond the displayed sample or the municipal sources explicitly named on the page.
+- Florida Signal does not synthesize records, fill missing values with invented facts or publish an uncited agenda-property claim.
+- Official emergency information from NHC, NWS and emergency management remains authoritative during storms.
+
+## The two clocks
+
+1. Market/event clock: permit applied date, instrument recording date, state company application/registration date or scheduled meeting time.
+2. System clock: pull, first-seen, enrichment, refresh, export or publication time.
+
+Analysis, charts, rankings and “what moved” use the market/event clock. System time is freshness metadata only. Visuals label an exact Window, capped Sample, source Snapshot or Cumulative total through a named date.
+
+## Canonical sections
+
+- Home and current signals: https://thefloridasignal.com/fort-lauderdale/
+- Approved, source-linked briefs: https://thefloridasignal.com/fort-lauderdale/briefs/
+- Neighborhood, ZIP, district and field map: https://thefloridasignal.com/fort-lauderdale/neighborhoods/
+- Broward recorded instruments: https://thefloridasignal.com/fort-lauderdale/broward-record/
+- Graphic Desk: https://thefloridasignal.com/fort-lauderdale/graphics/
+- Public meetings and Agenda Recon: https://thefloridasignal.com/fort-lauderdale/meetings/
+- Storm Window: https://thefloridasignal.com/fort-lauderdale/storm/
+- Sources, methodology and update cadence: https://thefloridasignal.com/fort-lauderdale/method/
+- Brand and sharing kit: https://thefloridasignal.com/fort-lauderdale/brand/
+
+## Source and update model
+
+- Fort Lauderdale permits: application date; source intake nightly at 10:00 PM, public mirror and detail lane every 30 minutes, enrichment every two hours.
+- Broward deeds, mortgages, liens and NOCs: recording date; collector daily at 9:30 AM and visible newest successful event span.
+- Sunbiz entities: state application/registration date; raw ingest nightly at 11:30 PM, then exact/entity enrichment.
+- Parcel context: source effective/sale dates; daily target plus weekly quality audit.
+- Meetings: scheduled Eastern time; Fort Lauderdale Legistar checked every 15 minutes, with source-cited DRC and industry editorial snapshots clearly distinguished.
+- Storm state: official NHC data and NOAA GOES-East imagery; public feed refreshed every five minutes while active.
+- Graphic Desk: regenerated after successful source refreshes and stamped with its underlying event span.
+
+An operating target is not proof a collector ran. Trust the visible source update time on the page.
+
+## Geography and editorial boundaries
+
+- Points require defensible coordinates before appearing on a map.
+- Fort Lauderdale neighborhood names use official City polygons.
+- ZIP areas and legislative districts use official Census geography.
+- Corridor context does not equal full live municipal coverage.
+- Agenda Recon requires an official packet, item/page citation, property identity, coordinates and editor clearance.
+- Sponsors cannot affect records, rankings, leads, findings, story selection or corrections.
+- Hurricane Irma photography is historical and never current storm evidence.
+
+## Machine-readable catalog
+
+https://thefloridasignal.com/data/site-catalog.json

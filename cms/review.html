@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Signal Review — The Data Wire</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    color-scheme: light;
+    --ink:#061b33; --ink-soft:#183b58;
+    --teal:#1767ff; --teal-dark:#0d47c4; --teal-pale:#e9f0fd;
+    --paper:#ffffff; --wash:#f5f8fd; --line:#d7e0ee; --muted:#62708a;
+    --danger:#a52828; --danger-pale:#fff0ee; --success:#12a07e; --gold:#8a6d1a;
+    --serif:"Montserrat","Newsreader",Georgia,serif;
+    --sans:"Figtree","DM Sans",ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55}
+  header{background:#fff;border-bottom:1px solid var(--line);padding:18px 24px;display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between}
+  .brand{display:flex;align-items:baseline;gap:10px}
+  .brand b{font-family:"Montserrat",var(--sans);font-size:17px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
+  .brand span{font-size:9.5px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+  .gate{margin:0;padding:8px 24px;background:#fff7e2;border-bottom:1px solid #f0e0b4;font-size:12px;color:var(--gold)}
+  main{padding:22px 24px 60px;max-width:1180px;margin:0 auto}
+  .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:18px}
+  label.f{display:flex;flex-direction:column;gap:3px;font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  select,input,textarea{font-family:var(--sans);font-size:13px;color:var(--ink);background:#fff;border:1px solid var(--line);padding:7px 9px;min-height:34px}
+  textarea{min-height:64px;resize:vertical;width:100%}
+  button{font-family:"Montserrat",var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:8px 13px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;min-height:34px}
+  button:hover{border-color:var(--teal);color:var(--teal)}
+  button.primary{background:var(--ink);border-color:var(--ink);color:#fff}
+  button.primary:hover{background:var(--teal);border-color:var(--teal);color:#fff}
+  .card{background:var(--paper);border:1px solid var(--line);padding:16px 18px;margin-bottom:14px}
+  .card h2{margin:0 0 4px;font-family:"Montserrat",var(--sans);font-size:16px;font-weight:700;line-height:1.3}
+  .meta{margin:0 0 10px;font-size:11px;color:var(--muted)}
+  .facts{display:grid;grid-template-columns:auto 1fr;gap:2px 14px;margin:0 0 12px;font-size:12px}
+  .facts dt{color:var(--muted);font-weight:700}
+  .facts dd{margin:0}
+  .pill{display:inline-block;padding:3px 9px;font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+  .pill.NEW{background:#e8effc;color:var(--teal)}
+  .pill.REVIEWING{background:#e8effc;color:var(--ink)}
+  .pill.APPROVED{background:#e2f5ec;color:var(--success)}
+  .pill.REJECTED{background:#fbe9e9;color:var(--danger)}
+  .pill.HOLD{background:#fdf3d7;color:var(--gold)}
+  .pill.NEEDS_MORE_REPORTING{background:#fdf3d7;color:var(--gold)}
+  .edit{display:grid;gap:8px;margin-bottom:12px}
+  .dests{display:flex;flex-wrap:wrap;gap:8px 16px;margin:0 0 12px}
+  .dests label{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-soft);min-height:30px;cursor:pointer}
+  .actions{display:flex;flex-wrap:wrap;gap:8px}
+  .status{margin:10px 0 0;font-size:11.5px;color:var(--muted)}
+  .status.err{color:var(--danger)}
+  .empty{padding:26px;text-align:center;color:var(--muted);background:#fff;border:1px solid var(--line)}
+
+  .stage-nav { background: var(--ink); }
+  .stage-nav__inner { max-width:1600px; margin:0 auto; display:grid; grid-template-columns:repeat(3,1fr); }
+  .stage-nav__stage { display:block; padding:13px clamp(14px,2.4vw,28px); border-right:1px solid rgba(255,255,255,.14); color:rgba(255,255,255,.66); text-decoration:none; }
+  .stage-nav__stage:last-child { border-right:0; }
+  .stage-nav__stage b { display:block; font-family:var(--serif); font-size:12px; font-weight:700; letter-spacing:.04em; color:rgba(255,255,255,.9); }
+  .stage-nav__stage small { display:block; margin-top:2px; font-size:10.5px; line-height:1.4; }
+  .stage-nav__stage:hover { background:rgba(255,255,255,.07); color:#fff; }
+  .stage-nav__stage:hover b { color:#fff; }
+  .stage-nav__stage[aria-current="page"] { background:var(--teal); color:rgba(255,255,255,.86); }
+  .stage-nav__stage[aria-current="page"] b { color:#fff; }
+  @media(max-width:720px){
+    .stage-nav__inner { grid-template-columns:1fr; }
+    .stage-nav__stage { border-right:0; border-bottom:1px solid rgba(255,255,255,.14); padding:11px 14px; }
+    .stage-nav__stage small { display:inline; margin-left:6px; }
+  }
+  @media(max-width:620px){
+    header,main{padding-left:14px;padding-right:14px}
+    .facts{grid-template-columns:1fr;gap:1px}
+    .facts dt{margin-top:6px}
+    .bar label.f,.bar select{width:100%}
+    .actions button{flex:1 1 132px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><b>THE DATA WIRE</b><span>Signal review</span></div>
+  <div class="bar" style="margin:0">
+    <label class="f"><span>Status</span>
+      <select id="filter-status">
+        <option value="NEW" selected>New</option>
+        <option value="REVIEWING">Reviewing</option>
+        <option value="HOLD">Hold</option>
+        <option value="NEEDS_MORE_REPORTING">Needs more reporting</option>
+        <option value="APPROVED">Approved</option>
+        <option value="REJECTED">Rejected</option>
+        <option value="">All</option>
+      </select>
+    </label>
+    <button id="reload">Reload</button>
+  </div>
+</header>
+  <!-- Shared desk navigation. See cms/ADR-001-data-wire-information-architecture.md.
+       Keep this block identical in index.html, data.html and review.html. -->
+  <nav class="stage-nav" aria-label="Data Wire stages">
+    <div class="stage-nav__inner">
+      <a class="stage-nav__stage" href="/data.html">
+        <b>1 &middot; Data Desk</b><small>Look. Every source, raw and read-only.</small></a>
+      <a class="stage-nav__stage" href="/review.html" aria-current="page">
+        <b>2 &middot; Signal Review</b><small>Decide. Approve, hold or reject candidates.</small></a>
+      <a class="stage-nav__stage" href="/index.html">
+        <b>3 &middot; Editorial Desk</b><small>Write. Source-gated packets, cleared by a human.</small></a>
+    </div>
+  </nav>
+<p class="gate">Approving a Signal records an editorial decision. It does not publish anything, anywhere. This queue is isolated from the shadow scorer registries.</p>
+<main>
+  <div id="list"><p class="empty">Loading queue…</p></div>
+</main>
+<script>
+(function () {
+  "use strict";
+  var DESTINATIONS = [
+    ["live_signals_map", "Live Signals Map"],
+    ["signals_page", "Signals page"],
+    ["daily_intel_brief", "Daily Intel Brief"],
+    ["neighborhood_page", "Neighborhood page"],
+    ["broward_record", "Broward Record"]
+  ];
+  var ACTIONS = [
+    ["APPROVED", "Approve", "primary"],
+    ["HOLD", "Hold", ""],
+    ["NEEDS_MORE_REPORTING", "Needs more reporting", ""],
+    ["REJECTED", "Reject", ""]
+  ];
+  var token = "";
+  var listEl = document.getElementById("list");
+
+  function esc(v) {
+    return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function money(n) {
+    var v = Number(n);
+    if (!isFinite(v) || v <= 0) return null;
+    return "$" + v.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  }
+
+  async function getToken() {
+    if (token) return token;
+    try {
+      var r = await fetch("/api/local-session");
+      if (r.ok) { token = (await r.json()).token || ""; }
+    } catch (e) { /* fall through to prompt */ }
+    if (!token) token = window.prompt("Desk token") || "";
+    return token;
+  }
+
+  async function api(path, options) {
+    var t = await getToken();
+    var opts = options || {};
+    opts.headers = Object.assign({ "Content-Type": "application/json", "Authorization": "Bearer " + t }, opts.headers || {});
+    var r = await fetch(path, opts);
+    var body = await r.json().catch(function () { return {}; });
+    if (!r.ok) throw new Error(body.error || ("HTTP " + r.status));
+    return body;
+  }
+
+  function cardHtml(item) {
+    var facts = [
+      ["Clerk instrument", item.source_record_id],
+      ["County parcel (folio)", item.verified_parcel_id],
+      ["Recorded", item.source_record_date],
+      ["Stated amount", money(item.amount)],
+      ["Signal type", item.signal_type],
+      ["Located by", item.verified_parcel_id ? "Exact county folio match" : "—"],
+      ["Assigned to", item.assigned_reviewer]
+    ].filter(function (row) { return row[1]; });
+
+    return '<article class="card" data-qid="' + esc(item.queue_id) + '">' +
+      '<span class="pill ' + esc(item.review_status) + '">' + esc(item.review_status.replace(/_/g, " ")) + '</span>' +
+      '<h2>' + esc(item.editor_headline || item.generated_headline || item.signal_id) + '</h2>' +
+      '<p class="meta">' + esc(item.generated_summary || "") + '</p>' +
+      '<dl class="facts">' + facts.map(function (row) {
+        return "<dt>" + esc(row[0]) + "</dt><dd>" + esc(row[1]) + "</dd>";
+      }).join("") + '</dl>' +
+      '<div class="edit">' +
+        '<label class="f"><span>Headline</span><input data-field="editor_headline" value="' +
+          esc(item.editor_headline || item.generated_headline || "") + '"></label>' +
+        '<label class="f"><span>Summary</span><textarea data-field="editor_summary">' +
+          esc(item.editor_summary || item.generated_summary || "") + '</textarea></label>' +
+        '<label class="f"><span>Editor notes</span><textarea data-field="editor_notes">' +
+          esc(item.editor_notes || "") + '</textarea></label>' +
+        '<label class="f"><span>Assign reviewer</span><input data-field="assigned_reviewer" value="' +
+          esc(item.assigned_reviewer || "") + '"></label>' +
+      '</div>' +
+      '<div class="dests">' + DESTINATIONS.map(function (d) {
+        var on = (item.destinations || []).indexOf(d[0]) > -1;
+        return '<label><input type="checkbox" data-dest="' + d[0] + '"' + (on ? " checked" : "") + '>' + esc(d[1]) + "</label>";
+      }).join("") + "</div>" +
+      '<div class="actions">' +
+        '<button data-save>Save edits</button>' +
+        ACTIONS.map(function (a) {
+          return '<button data-status="' + a[0] + '"' + (a[2] ? ' class="' + a[2] + '"' : "") + ">" + esc(a[1]) + "</button>";
+        }).join("") +
+      "</div>" +
+      '<p class="status" data-status-line></p>' +
+    "</article>";
+  }
+
+  function collect(card) {
+    var body = {};
+    card.querySelectorAll("[data-field]").forEach(function (input) {
+      body[input.dataset.field] = input.value;
+    });
+    body.destinations = Array.prototype.slice
+      .call(card.querySelectorAll("[data-dest]"))
+      .filter(function (box) { return box.checked; })
+      .map(function (box) { return box.dataset.dest; });
+    return body;
+  }
+
+  async function send(card, extra) {
+    var line = card.querySelector("[data-status-line]");
+    line.className = "status";
+    line.textContent = "Saving…";
+    try {
+      var body = Object.assign(collect(card), extra || {});
+      var res = await api("/api/admin/review-queue/" + card.dataset.qid, {
+        method: "POST", body: JSON.stringify(body)
+      });
+      line.textContent = res.note || "Saved.";
+      if (extra && extra.review_status) {
+        var pill = card.querySelector(".pill");
+        pill.className = "pill " + extra.review_status;
+        pill.textContent = extra.review_status.replace(/_/g, " ");
+      }
+    } catch (error) {
+      line.className = "status err";
+      line.textContent = "Not saved: " + error.message;
+    }
+  }
+
+  function wire(card) {
+    card.querySelector("[data-save]").addEventListener("click", function () { send(card); });
+    card.querySelectorAll("[data-status]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        send(card, { review_status: button.dataset.status, decided_by: "desk" });
+      });
+    });
+  }
+
+  async function load() {
+    listEl.innerHTML = '<p class="empty">Loading queue…</p>';
+    var status = document.getElementById("filter-status").value;
+    try {
+      var data = await api("/api/admin/review-queue" + (status ? "?status=" + encodeURIComponent(status) : ""));
+      if (!data.items.length) {
+        listEl.innerHTML = '<p class="empty">No Signals with this status. Nothing is waiting on you.</p>';
+        return;
+      }
+      listEl.innerHTML = data.items.map(cardHtml).join("");
+      listEl.querySelectorAll(".card").forEach(wire);
+    } catch (error) {
+      listEl.innerHTML = '<p class="empty">Queue unavailable: ' + esc(error.message) +
+        '<br><small>If this says the service-role key is not set, start the desk with SUPABASE_SERVICE_ROLE_KEY exported.</small></p>';
+    }
+  }
+
+  document.getElementById("reload").addEventListener("click", load);
+  document.getElementById("filter-status").addEventListener("change", load);
+  load();
+})();
+</script>
+</body>
+</html>

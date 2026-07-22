@@ -1,0 +1,593 @@
+# Florida Signal — Claudette session handoff
+**Date:** Sunday, July 19, 2026 (launch day)
+**Operator:** Andy · **Agent:** Claudette (Claude, Cowork)
+**Repo state:** branch `claudette/launch-day`; pushed through commit `75c677e` (rounds 1–2). Round 3 changes are LOCAL ONLY (not yet pushed — Andy to say "push").
+
+---
+
+## What shipped today
+
+### New data sources (live in Supabase `florida-signal-prod`)
+| Source | Table | Rows (at build) | Refresh |
+|---|---|---|---|
+| FDEP Environmental Resource Permits (docks/seawalls/wetlands; layers 0+1, Broward bbox) | `fdep_erp` | 8,309 | Edge function `fdep-erp-sync`, pg_cron daily 09:20 UTC |
+| FAA OE/AAA obstruction cases (state=FL, OE+NRA; cranes flagged) | `faa_oeaaa` | 7,053 (472 Broward, 142 cranes) | Edge function `faa-oeaaa-sync`, pg_cron daily 09:40 UTC |
+| Broward Clerk PRELIMINARY same-day recordings (AcclaimWeb public search; ~3 days ahead of verified SFTP) | `broward_clerk_preliminary` | ingests via scheduled agent | Claude task noon + 7pm weekdays |
+
+Both edge functions use a private `?key=` (custom auth, verify_jwt off). All new tables: RLS on, anon SELECT (public records). Anon read policies were also added to existing public-record tables (clerk docs/party/legal/link, foia_workflow_events, gis_enrichment, bcpa_*, accela_*, enrichment, land_sales, lp_licenses). `leads` and `tier3_briefs` remain locked.
+
+### Diagnostics / fixes
+- **Clerk feed "9 days behind" = source QA lag, not data loss.** SFTP publishes ~6–9 days behind; DB verified complete vs server (byte-level parse check passed). Droplet collector skips runs occasionally (one-bd-per-run design); Claude catch-up task (2:15pm weekdays) makes it self-healing.
+- **`refresh_dashboard_cache` cron was `active=false` since Jul 11.** Ran once manually, re-armed at every 30 min (`cron.job` id 1).
+- **Signals v2** — 250 rows Apr 26–29 was a pilot. A SHADOW scorer runs daily 05:45 on the droplet under a five-run editorial gate (see scheduled task `florida-shadow-run-review`; ledger + open PRs in repo docs). Run 5 completes Mon Jul 20 — after Andy's review, say "merge" on the open PRs.
+
+### Product / desks
+- **Data Desk** (`cms/data.html`): read-only intelligence viewer — feed-health cards, preset field views (Deeds/Mortgages/NOCs/Liens/Judgments/FDEP/Cranes/Top signals/Owner flips/Licenses), searchable explorer, cross-source case drawers (permit → Accela detail + owner resolution + GIS + signal score + workflow trail; instrument → parties + legal).
+- **Data Wire CMS**: rebranded to the new Data Wire logo (navy/electric/wire-green on bright paper, Montserrat/Figtree, square corners). Local auto-unlock: `GET /api/local-session` (loopback + env opt-in only); token form hides when active.
+- **Launchers:** `~/Applications/Florida Signal Desk.app` and `~/Applications/The Data Wire.app` (+ Desktop aliases, custom icon tiles). Both run `ops/launch_local.sh`.
+
+### Site (public)
+- **Brand:** Atlantic palette (navy `#082a54`, electric `#1767ff`), Montserrat headlines + Figtree body, new `lockup-2026` art everywhere; header lockup is live text (two-tone FLORIDA/SIGNAL + divider) so DEVELOPMENT INTELLIGENCE is legible at all sizes.
+- **Copy:** CTA is now "Get Daily Intel Brief" (was 6:15 Brief) in all 18 spots; "What's moving." → "Our top signals."; mobile ticker line now rotates real high-value filings (was "Permit mirror synced…").
+- **Diagram of the day** now genuinely rotates daily (7 diagrams, deterministic by date).
+- **Mobile:** overflow fixed (root cause: `.section-head` flex min-content), micro-text floors, thumb-size taps. QA sweeps on home/graphics/neighborhoods/meetings show no horizontal scroll.
+- **Record rows:** action toolbar no longer overlaps headlines (now flows below content).
+- **Signup:** Mailchimp configured (`mailchimp_configured: true`); personalize panel styled + compact (collapsed by default; topics grid fixed at 2 columns).
+
+### Automations (complete list)
+| What | Where | When |
+|---|---|---|
+| FDEP sync | Supabase pg_cron → edge fn | daily 09:20 UTC |
+| FAA sync | Supabase pg_cron → edge fn | daily 09:40 UTC |
+| Dashboard cache rebuild | Supabase pg_cron | every 30 min |
+| Permit mirror | droplet (existing) | ~every 30 min |
+| Clerk SFTP verified ingest | droplet (existing) + Claude catch-up task | droplet ~9:30am; catch-up 2:15pm weekdays |
+| Preliminary same-day recordings | Claude task (browser + Supabase) | noon + 7pm weekdays |
+| Social PNG re-export | Claude task (Playwright, data-health gated) | 9:40pm daily |
+| Shadow scorer + morning review | droplet timer + Claude task | 05:45 / 08:20 daily (gate ends Jul 20) |
+
+**Claude-dependency note:** only the catch-up, same-day, and social-export tasks run through Claude on the Mac. Everything else survives without Claude. Port-to-droplet sprint is planned (droplet `florida-signal-runtime` is reachable via `ssh florida`).
+
+---
+
+## Not done yet (priority order)
+1. **Push round 3 to GitHub** (this doc + visual fixes + auto-unlock + icons). Awaiting Andy's "push".
+2. **Droplet migration sprint** (~half day): move Acclaim same-day scraper, clerk catch-up, social export to systemd timers; removes Mac/Claude dependence.
+3. **Signals gate completion** (Jul 20): review run 5 report, merge open PRs, then schedule production scorer + surface Top-20 in Data Desk/site.
+4. **RealAuction foreclosures** (easy win, distress signal, folio-exact).
+5. **Remaining roadmap sources:** Broward BCS unsafe structures + contractor licenses (HIGH-RISK scrape — needs explicit go), Broward AGOL GIS/utility/CRA layers, municipal liens, city meeting-minutes text mining, deeper BCPA raw_json extraction, Sunbiz health metadata exposure.
+6. **CMS production hosting** (always-on server, real auth, HTTPS, backups) — required before paid tiers.
+7. **Mailchimp campaign work:** first Daily Intel Brief template + send flow (connector available in Claude).
+8. **Visual QA backlog:** micro-text inside some meeting/diagram cards on mobile; full pass on storm/method/briefs/brand pages; regenerate 10 social PNGs with Atlantic brand (nightly task will do this at 9:40pm — verify first run).
+9. **Multi-city Broward expansion** (coming-soon template exists; shared code pattern per AI_HANDOFF rules).
+
+## Keys & private files (all outside the repo)
+- Desk token: `~/.florida_signal_datawire_token`
+- Mailchimp env: `~/.florida_signal_mailchimp_env`
+- Supabase publishable key: public by design (RLS is the boundary). Service-role key never used client-side.
+- Edge-function sync key: embedded in function code + pg_cron URLs (server-side only).
+
+## The rules that still govern everything
+Event dates over pull dates · state windows and caps · no source, no claim · preliminary ≠ verified (Acclaim rows carry `source='acclaimweb-public-search'` until the matching SFTP business date lands) · human editor gates all public briefs (Data Wire) · droplet is production, enrich additively, never delete.
+
+---
+## Addendum — Clerk catch-up migration closure (2026-07-19 ~13:15 EDT)
+
+**DECISION LOG:** The verified Broward Clerk catch-up now runs on DigitalOcean through a GitHub-tracked systemd timer and dedicated Python virtual environment. The previous Claude-scheduled catch-up is disabled and retained only for rollback.
+
+**Facts:** units + script installed on florida-signal-runtime, byte-identical to repo @ `dcbf6b4` (sha256 5c5f1b14… / e082d00a… / 447350bd…). Venv `/srv/grahamandgold/florida-signal/.venv-clerk-catchup` (Python 3.12.3, paramiko==5.0.0 pinned in ops/droplet/requirements-clerk-catchup.txt; no /home/andy/.local dependence). Unit hardened: User/Group=andy, WorkingDirectory, EnvironmentFile, NoNewPrivileges, PrivateTmp, ProtectSystem=full, ProtectHome=true, UMask=0027, TimeoutStartSec=900, Restart=no; timer Persistent=true + RandomizedDelaySec=120; next fire Mon 2026-07-20 ~14:11 EDT. Manual venv run: Result=success/exit 0, "Nothing to ingest; verified table matches server" (DB max business_date 2026-07-10 = server release; doc count 149,999 unchanged — no deletes/overwrites). Failure fixture (no env): systemd recorded exit-code/status=1. Journal contains zero secret strings. Install history disclosure: units first installed + manually run 12:59–13:00 EDT by operator via Codex (between shadow runs 4 and 5), one unit revision (User=andy) after first-start failure; hardened install from GitHub at ~13:12 EDT with operator authorization.
+
+**SHADOW-GATE DISCLOSURE (for run-5 report):** An unrelated Clerk catch-up unit was installed and manually executed on the host between shadow runs 4 and 5. It uses disjoint schedules (14:10 vs 05:45), no shared locks (scorer: /tmp/florida-signals-shadow.lock), disjoint code paths and data outputs (scorer: SQLite/CSV, no EnvironmentFile). The change is disclosed; scorer evidence must NOT be described as occurring on an unchanged host.
+
+**MASTER TO-DO:** Verify the next scheduled weekday Clerk catch-up (Mon 2026-07-20 ~14:11 EDT) and confirm the nightly health check reports its row-level result. Later: evaluate dedicated least-privilege service account; decide venv ownership pattern for other droplet jobs.
+
+**RISK REGISTER:** (1) Service runs as the general `andy` production operator account (passwordless sudo on host); dedicated least-privilege account remains a future hardening item after full path/permission mapping. (2) RESOLVED: user-site paramiko dependence removed via pinned venv.
+
+**Automation inventory changes:** Clerk SFTP catch-up → droplet systemd (production path); Claude task `broward-clerk-catchup-sync` DISABLED (emergency rollback only); nightly `regenerate-social-graphics` task now doubles as the Clerk health audit (alerts on timer inactive, failure, 3-day silence, or freshness lag).
+
+**Status labels:** Acclaim: CURRENT DIGITALOCEAN EGRESS BLOCKED — alternative execution architecture unresolved. Social export: CURRENTLY MAC-LOCAL — server-side rendering migration not yet designed.
+
+---
+## Addendum — Acclaim preliminary pipeline off Claude (2026-07-19 pm)
+
+**DECISION LOG:** The early Clerk pipeline uses twice-daily native Mac Acclaim collection with automatic missed-date backfill and later reconciliation against the authoritative Clerk SFTP feed. (Acclaim is Cloudflare-protected AND the DigitalOcean IP is blocked, so preliminary collection must run on the residential Mac via real Chrome; verified SFTP catch-up remains on the droplet.)
+
+**Built (ops/mac/, GitHub-tracked):** acclaim_harvest.applescript (real-Chrome, Cloudflare-passing), acclaim_upsert.py (idempotent pre-filter insert, service role, preliminary label), acclaim_state.py (per-date state + backlog), acclaim_pull.sh (oldest-first backfill, resume, nonzero on fail, logs to ~/Library/Logs/florida-acclaim.log), com.floridasignal.acclaim.plist (LaunchAgent 12:00 + 19:00). Reconciliation: additive columns on broward_clerk_preliminary (verification_status, preliminary_first_seen_at, verified_business_date, verified_doc_type, reconciled_at, conflict_flag, conflict_note) + public.reconcile_clerk_preliminary() + pg_cron clerk-preliminary-reconcile daily 10:00 UTC.
+
+**Proven 2026-07-19:** real July-13 records harvested through Chrome past Cloudflare; inserted to broward_clerk_preliminary labeled acclaimweb-public-search; re-run inserted 0 (idempotent); reconcile matched 1 → verified (official business date + doc type attached, first_seen + source preserved), flagged 1 date-conflict without merging; verified broward_clerk_records_doc untouched (149,963). LaunchAgent kickstart ran the backfill detached from Claude (weekends 0 records, weekdays backfilling oldest-first with state persisted).
+
+**MASTER TO-DO:** Verify three independent scheduled Acclaim runs and one real preliminary-to-verified reconciliation (fixture proof done; awaiting an organic match when the SFTP feed catches up to a preliminary date).
+
+**RISK REGISTER:** The preliminary Acclaim pipeline remains dependent on a powered-on Mac, logged-in user session, usable Chrome profile, and residential connection until a dedicated residential runner replaces it. (Also: first scheduled launch may prompt once for osascript→Chrome Automation permission.)
+
+**Scheduling transition:** Claude task broward-sameday-recordings kept ENABLED as fallback until THREE independent successful LaunchAgent runs, then disable (not delete), label EMERGENCY ROLLBACK ONLY.
+
+**Automation inventory delta:** Acclaim preliminary → native Mac LaunchAgent 12:00 + 19:00 (primary) + Claude task (active fallback); reconciliation → Supabase pg_cron 10:00 UTC; nightly health task now covers SFTP catch-up + Acclaim + social export.
+
+**Status labels:** Acclaim: CURRENT DIGITALOCEAN EGRESS BLOCKED — runs on residential Mac (working). Social export: CURRENTLY MAC-LOCAL — server-side rendering migration not yet designed.
+
+---
+## Addendum — Acclaim completeness + authority checkpoint (2026-07-19 late)
+
+### OPERATIONAL STATUS: **OPERATIONAL — COMPLETE DAILY COVERAGE** (proven on one heavy day; remaining backlog dates recollecting)
+
+**Root cause of the "3-page halt" (resolved):** it was never a pagination bug. The Telerik grid's
+default page size is **5 rows**; the harvester's 60-page safety cap therefore yielded exactly
+60 × 5 = **300 rows** on every heavy date. The grid offers page sizes 25/50/100/150/200/250/**500**.
+The harvester now sets **500** after each search, so a ~2,900-record day is **6 pages**.
+
+**Pagination hardening (ops/mac/acclaim_harvest.applescript):** reads the displayed total and
+computes expected pages; re-queries DOM after every AJAX refresh; advances via the **pager-scoped**
+`.t-pager .t-arrow-next` (the date-picker has an identical arrow — previously ambiguous); waits for
+the first row's instrument number to actually change (true AJAX completion, not a fixed sleep);
+detects repeated pages and exits nonzero; honours a configurable cap but returns
+`INCOMPLETE|pages|total|reason` when the cap is hit. Returns `OK|pages|total`, `EMPTY|0|0`, or
+`INCOMPLETE|...`. `acclaim_pull.sh` marks a date **done only when** status=OK **and** rows ≥ displayed
+total (or a verified EMPTY), otherwise records `incomplete`, sets a nonzero exit, and stops so the
+next run resumes that date.
+
+**Heavy-day proof — 2026-07-13:** Acclaim displayed **2,909 records / 6 pages**; processed **6/6
+pages**; extracted **2,909 rows**; **2,909 unique instruments**; 0 duplicates; 0 malformed;
+0 missing-field rows; first instrument `120977412`, last `120980320`; inserted **2,609 new**
+(300 already present from the earlier partial run, correctly deduped); **rerun inserted 0**.
+No result cap or partitioning required — full retrieval is possible via page size 500.
+
+**Idempotency bug found and fixed during proof:** the existing-key pre-filter hit PostgREST's
+1,000-row response cap, so a rerun attempted duplicate inserts (HTTP 409). `acclaim_upsert.py` now
+pages the lookup with `Range` headers. Post-fix rerun: "all 2909 harvested rows already present".
+
+**Phase 3 correction:** 2026-07-14/15/16/17 (300 rows each under the old cap) were reset to
+`incomplete` in state and are being fully recollected oldest-first by the LaunchAgent; 07-11/07-12/
+07-18 are verified 0-record weekend dates. Partially harvested dates are **not** marked complete.
+
+### DECISION LOG
+Temporarily approve `com.floridasignal.acclaim` as a sixth Florida Mac agent solely for twice-daily
+preliminary Acclaim collection until a dedicated residential runner is deployed and verified.
+(The five previously approved Florida Mac agents remain enabled and untouched.)
+
+### MASTER TO-DO
+Move the Acclaim LaunchAgent to a dedicated residential runner after three complete scheduled runs
+and verified reconciliation.
+
+### RISK REGISTER
+The preliminary same-day pipeline remains dependent on the Mac, logged-in user session, Chrome,
+Apple Events permissions, and complete Telerik pagination.
+
+### Mac agent inventory (6)
+1–5. Previously approved Florida Mac agents (Claude scheduled tasks) — unchanged, still enabled.
+6. **`com.floridasignal.acclaim`** — LaunchAgent, `~/Library/LaunchAgents/`, twice daily 12:00 + 19:00,
+   ExecStart `ops/mac/acclaim_pull.sh`, logs `~/Library/Logs/florida-acclaim.log`, state
+   `~/Library/Application Support/FloridaSignal/acclaim_state.json`.
+   Rollback: `launchctl bootout gui/$(id -u)/com.floridasignal.acclaim` + re-enable Claude task
+   `broward-sameday-recordings` (kept ENABLED as fallback until three complete scheduled runs).
+
+### Supabase source-of-truth
+Live reconciliation objects are now tracked at `supabase/migrations/` (001 table+policy+indexes,
+002 reconciliation columns+function+pg_cron, README inventory). Verified live-vs-GitHub: columns,
+indexes, single SELECT policy, 0 triggers, cron `0 10 * * *` active invoking only
+`reconcile_clerk_preliminary()`; tracked SQL contains **no** writes to authoritative
+`broward_clerk_records_*` tables and **no** secrets. Rollback SQL documented, not executed.
+
+### Phase 3 recollection result (verified 2026-07-19 14:06 EDT)
+Every previously-partial date was fully recollected, each matching Acclaim's displayed total exactly:
+
+| Record date | Rows | Displayed total | Pages | Status |
+|---|---:|---:|---:|---|
+| 2026-07-11 (Sat) | 0 | 0 | 0 | done (verified empty) |
+| 2026-07-12 (Sun) | 0 | 0 | 0 | done (verified empty) |
+| 2026-07-13 | 2,909 | 2,909 | 6/6 | done |
+| 2026-07-14 | 3,007 | 3,007 | 7/7 | done |
+| 2026-07-15 | 2,475 | 2,475 | 5/5 | done |
+| 2026-07-16 | 2,877 | 2,877 | 6/6 | done |
+| 2026-07-17 | 2,501 | 2,501 | 6/6 | done |
+| 2026-07-18 (Sat) | 0 | 0 | 0 | done (verified empty) |
+| 2026-07-19 (Sun, today) | 0 | — | 0 | **incomplete** — `grid_never_loaded`; correctly NOT marked complete |
+
+DB totals: **13,769 preliminary rows** (= 2909+3007+2475+2877+2501, no duplicates), leading date
+**2026-07-17 vs verified 2026-07-10 — a 7-day lead**. Authoritative `broward_clerk_records_doc`
+unchanged at 149,963 throughout.
+
+**One open item (honest):** today's date (Sunday 07-19) returns `grid_never_loaded` rather than a
+verified `EMPTY`, so the runner refuses to mark it complete and exits nonzero — conservative and
+correct per the rules, but it means a genuinely record-less current day stays in the backlog until
+the empty state is confirmable. Empty-state detection for the current/no-result day is the single
+remaining refinement; it does not affect completed-date integrity.
+
+---
+## Addendum — Acclaim empty-state fix + cleanup closure (2026-07-19 ~14:20 EDT)
+
+### Empty-state detection (final refinement)
+Acclaim's true zero-result signature is a **visible leaf element whose text is exactly
+"No Results to Display"** (confirmed in the live DOM); `.t-status-text` matching `of 0` is accepted
+as an equivalent signal. The harvester now resolves five distinct states in priority order:
+**CF** (title matches Attention Required / Just a moment / Access denied) → **GRID** (a
+`#SearchGridContainer` row containing a 7+ digit instrument) → **EMPTY** (positive signature above)
+→ **WAIT** → timeout. `EMPTY|0|0` is returned **only** on positive detection; unresolved states
+return `INCOMPLETE|0|0|<reason>` (`cloudflare_block`, `timeout_no_result_state`, `not_ready_*`) with a
+nonzero exit. Emptiness is never inferred from absence.
+
+**Tests:** empty 2026-07-19 → `EMPTY|0|0`, marked **done**, agent exit 0, backlog now `[]` ·
+forced failure (invalid-route copy in /tmp) → `INCOMPLETE|0|0|not_ready_WAIT`, **0 rows written** ·
+heavy 2026-07-13 regression → `OK|6|2909`, 2,909 rows. Commit `db5b483`.
+
+**Sunday 2026-07-19 is a valid zero-record day** (Acclaim itself reported "No Results to Display";
+07-11/07-12/07-18 behaved identically). It is not a scraper failure and is recorded as complete.
+
+### ACTION LOG — cleanup (2026-07-19)
+Deleted **verified manual test artifacts only**, total **1,463,735 bytes**:
+`/tmp/fs_heavy.ndjson` (725,255) · `/tmp/fs_heavy.status` (26) · `/tmp/fs_acclaim_test.ndjson` (2,603) ·
+`/tmp/fs_acclaim_test.log` (1,420) · `/tmp/fs_empty.status` (21) · `/tmp/fs_fail.status` (40) ·
+`/tmp/fs_fail_harvest.applescript` (9,088) · `/tmp/fs_regress.ndjson` (725,255) · `/tmp/fs_regress.status` (27).
+Each deletion is timestamped in `~/Library/Logs/florida-acclaim.log`.
+
+**Verification basis:** 2026-07-13's rows are confirmed present in Supabase (2,909 unique instruments)
+and a rerun of `acclaim_upsert.py` reported "all 2909 harvested rows already present" — nothing was
+pending upload. **Confirmed NOT removed:** `acclaim_state.json` (1,956 B), `florida-acclaim.log`,
+`florida-acclaim.launchd.log`, `~/.florida_signal_supabase_env` (all verified present after cleanup);
+no incomplete/failed-run artifact existed or was touched.
+
+### Retention policy (as implemented — deliberately minimal)
+- **Log rotation only:** `florida-acclaim.log` rolls at **5 MB**, retaining **3** copies (`.1/.2/.3`).
+- **Per-date NDJSON:** unchanged behaviour — deleted by `acclaim_pull.sh` only after a date reaches
+  `done` (harvest OK/EMPTY **and** rows ≥ displayed total, i.e. verified Supabase insertion).
+  Files for an incomplete/failed date are **retained** for retry.
+- **No 7-day raw-file retention system was added.**
+
+---
+## Addendum — Live Signals Map audit (Phase 1) + safety stop (2026-07-19 late)
+
+### DECISION LOG
+The Live Signals Map is the first public integration target and the product spine for Florida Signal.
+It will display curated, explainable Signals rather than raw source-record dumps.
+
+### MASTER TO-DO
+Connect mapped permit, Broward FAA, FDEP and selected geographically verified Clerk signals to the
+website through one versioned Signal contract, then feed editorially meaningful Signals into the
+candidate registry.
+
+### VERIFIED ARCHITECTURE (behavior-checked, not inferred)
+- **Public map:** `buildMap()` in `app.js` binds to `#full-map` (Neighborhoods `/fort-lauderdale/neighborhoods/#full-map`), `#home-map`, `#data-room-map`. Leaflet `L.map`, `preferCanvas:true`.
+- **Marker source = permits ONLY.** `state.records` = **700** newest current-month geocoded permits (`permits` table, `lat/lon not null`, limit 700). FAA/FDEP/Clerk/preliminary appear **nowhere** on the map or in `app.js`.
+- **"Layers" are permit color-codes, not sources:** `markerColor()` → Demolition `#ff6d3a`, Storm `#1767ff`, $500K+ `#071b32`, default `#00b8dc` — all computed from permit text/valuation.
+- **No clustering.** `drawMarkers()` uses a plain `L.layerGroup` of `L.circleMarker`; no `markercluster`. Heat overlay exists (`L.heatLayer`).
+- **Only filter = storm lens** (`activeMapRecords()`). No source / date-range / preliminary-vs-verified / municipality filters.
+- **Signal Card = permit popup** (`mapPopup()`): permit_type, address, declared value, applied_date, permit_number, Street/Satellite/City-source links, Share, Add-to-report.
+- **Row limits:** 700 mapped, 40 high-value, 24 search, 1000×N application-date counts. Publishable Supabase key + RLS.
+
+### SOURCE DATA READINESS (verified counts + coordinates)
+- **FAA `faa_oeaaa`:** 472 Broward, **142 Broward cranes**, all 472 with WGS84 lat/lon inside the Broward box (e.g. crane `26.0161,-80.2139`). ✅ map-ready.
+- **FDEP `fdep_erp`:** **8,309**, all with WGS84 lat/lon inside the Broward box (e.g. `26.0826,-80.1163`). ✅ map-ready.
+- **Preliminary Clerk `broward_clerk_preliminary`:** 13,769 rows — **NO coordinates or folio**; only names/instrument/doc_type/legal text. Cannot be mapped without a folio→parcel-centroid or address geocode join (not present). ⚠️ not directly map-ready.
+- **Permits:** current map source, geocoded. ✅
+
+### SAFETY STOP (Phase 7) — the editorial registries are the frozen scorer's ledger
+`brief_candidate_registry` (0 rows) and `brief_publication_registry` (0 rows) are **not** blank generic
+review queues. Their columns (`story_key, entity_key, module, folio_set, event_fingerprint, figures_hash,
+source_fingerprint, times_seen, drop_reason, run_id` / publication delivery tracking) show they are the
+**shadow scorer's fingerprint-based promotion + dedup + delivery ledger** — part of the weekly signal
+packet pipeline that is **FROZEN under the five-run editorial gate (run 5 completes Mon 2026-07-20)**.
+Writing map-derived signals into these tables would contaminate the scorer's ledger and risk the open
+gate. Per Phase 7 and the scorer-frozen rule, I am stopping to explain before writing to them.
+
+---
+## Addendum — Live Signals Map + editorial queue (2026-07-19 evening)
+
+### DECISION LOG
+The Live Signals Map is the first public product spine for Florida Signal. Existing permit, FAA and
+FDEP records are normalized into a shared Signal model (SignalV1) before display or editorial review.
+Map-derived editorial candidates use a separate review queue (`map_signal_candidates`) and do NOT write
+into the frozen shadow scorer registries. The Data Desk is the inspection surface. The Data Wire CMS is
+the editorial review surface. No Signal publishes automatically.
+
+### MASTER TO-DO
+- Connect geographically verified Clerk events after a reliable parcel/address relationship exists
+  (the deferred `fromClerk` resolver interface is already in place and manufactures no coordinates).
+- Connect approved Signals to the Daily Intel Brief after the review flow is proven.
+- Reconcile `map_signal_candidates` with the broader scorer architecture only after the five-run gate
+  closes and the interface is explicitly reviewed.
+- Build the click-to-approve Signal review UI in the Data Wire CMS (transitions currently service-role).
+
+### RISK REGISTER (verified in this build)
+- Raw source volume can overwhelm the map without bounded loading and clustering — mitigated: per-source
+  caps (permits 700 / FAA 300 / FDEP 400), date-window filter, marker clustering.
+- Poor geographic links can create misleading markers — mitigated: Clerk mapping deferred; a
+  null-coordinate bug (`Number(null)===0` placing records at 0,0) was found by tests and fixed.
+- Preliminary records can be misunderstood if not visibly labelled — mitigated: PRELIMINARY badge on
+  every card; CONFLICT/NEEDS_REVIEW are never public-eligible.
+- Generated wording can overstate filings — mitigated: deterministic evidence + mandatory caveats
+  ("application", "filing", "does not prove work has started", "does NOT mean construction has started").
+
+### What shipped
+`signals.js` (SignalV1 model, permit/FAA/FDEP adapters + deferred Clerk resolver interface, eligibility
+ruleset, deterministic intelligence pass, bounded read-only service); map integration in `app.js`
+(clustered multi-source Signal layer, source/verification/date filters, legend, Signal Cards, Reset-view
+control on every map, enlarged centered brand lockup linking to thefloridasignal.com for embeds);
+`tests/signals.test.js` (45 assertions, all passing); `supabase/migrations/20260719_003_map_signal_candidates.sql`.
+
+---
+## Addendum — Complete bounded data discovery (2026-07-19 night)
+
+### DECISION LOG
+Florida Signal complete-data support means all eligible records are discoverable through bounded,
+filterable retrieval. It does NOT mean loading entire source tables into the browser. The public map
+displays curated Signals; the Data Room provides deeper record access; the Data Wire CMS controls
+editorial review. Existing scoring logic must be inventoried and reconciled before new scoring rules
+are introduced. Meeting agendas, packets, staff reports, minutes and exhibits are a core Signal source family.
+
+### Complete counts (server-verified 2026-07-19)
+| Source | Total | Geocoded | Eligible+geocoded |
+|---|---:|---:|---:|
+| Permits | 127,945 | 103,864 | **14,884** |
+| FAA (Broward) | 472 | 472 | 472 (142 cranes) |
+| FDEP | 8,309 | 8,309 | 8,309 |
+
+The previous 700/300/400 fixed samples are retired. Retrieval is now viewport-bounded, date-filtered,
+source-filtered, deterministically ordered, capped at 600 rows/request, debounced (420ms) on pan/zoom,
+with stale-response cancellation via a sequence guard and dedupe by `signal_id`.
+
+### Counts are now separated honestly
+Readout distinguishes **in this view / loaded / match current filters / eligible across Broward**.
+`count=exact` on `permits` times out (Postgres 57014, 127k rows), so counts use `count=planned`
+(planner estimate) and are labelled **approx.** Row queries are exact.
+
+### RISK REGISTER (verified)
+- Fixed sample limits can falsely appear to represent complete coverage — retired; counts now labelled.
+- A failed source request can falsely appear as zero records — mitigated: failures render as
+  "Temporarily unavailable … this is a source error, not zero records" and never as 0.
+- Raw full-table map loading can overwhelm browsers — mitigated: 600-row cap + clustering + bbox.
+
+### MASTER TO-DO
+- Complete reliable geographic linkage for selected Clerk records.
+- Complete meeting-document ingestion after existing logic and municipality coverage are inventoried.
+- Implement controlled source-health, reconciliation, Signal-refresh and publication-freshness loops.
+- Finish CMS review UI actions (approve/hold/reject currently service-role).
+
+---
+## Addendum — Parcel authority import + Clerk linkage by document type (2026-07-19, late)
+
+### DECISION LOG
+Broward parcel/folio identifiers are canonical **12-character ALPHANUMERIC** strings (e.g. `484306BH0010`).
+Letters and leading zeros are significant. **Digits-only normalization is prohibited** — it strips letters
+and collapses distinct parcels (measured: 1,295 collision groups spanning 5,056 folios).
+The prior **1,096 / 7.9%** linkage figure is **SUPERSEDED — PRESERVED FOR HISTORY**: it contained false
+collisions. The corrected pre-import baseline was **737 exact matches (~5.0%)**.
+
+### Import state (verified)
+Official source count **554,358**. Loaded **404,082 parcels (72.9%)** into `broward_parcel_geography`.
+Zero null coordinates. Zero duplicate source OBJECTIDs (rows = distinct OBJECTIDs at every check).
+Import runs recorded in `broward_parcel_import_runs`; **1 run status=COMPLETE** (tail range only —
+NOT whole-county coverage). Remaining offsets still need sweeping before a whole-county COMPLETE
+can be claimed. **No recurring parcel schedule was created.**
+
+### Clerk linkage by document type — STRUCTURAL LIMIT FOUND
+| Doc type | Instruments | With valid folio | Mappable | Unique parcels |
+|---|---:|---:|---:|---:|
+| **D — deeds** | 15,487 | 15,137 | **7,903** | 7,592 |
+| EAS — easements | 502 | 471 | 386 | 379 |
+| TSD | 1,897 | 51 | 23 | 11 |
+| NOT | 2,225 | 27 | 17 | 16 |
+| **M — mortgages** | 10,357 | **0** | **0** | 0 |
+| **LIE — liens** | 7,388 | **0** | **0** | 0 |
+| **LP — lis pendens** | 1,281 | **0** | **0** | 0 |
+| **FJ — final judgments** | 14,669 | **0** | **0** | 0 |
+| AFF / CP / CPX / DC / CMV / FJX | 17,995 | 0 | 0 | 0 |
+
+**Root cause:** the Clerk's `lgl-ver` (legal) file carries `parcel_id` almost exclusively for
+**deed-type** instruments. Mortgages, liens, lis pendens and judgments have **no legal/parcel rows at
+all** in the source. This is a **source-structure limitation, not a normalization or parcel-coverage
+problem** — no amount of parcel geography fixes it.
+
+### RISK REGISTER (verified)
+- Digits-only folio normalization collapsed distinct alphanumeric parcels and produced false matches.
+  **Persisted impact: NONE** — the rule existed only in read-only audit SQL (verified: 0 Clerk rows in
+  `map_signal_candidates`, 0 reconciled preliminary rows, 0 conflict rows). No production correction needed.
+- Mortgage/lien/lis-pendens mapping cannot be achieved through the Clerk legal file; it requires a
+  separate verified relationship (e.g. instrument→instrument links in `broward_clerk_records_link`,
+  or BCPA per-folio lookup). Unverified as of this checkpoint.
+
+### MASTER TO-DO
+- Finish sweeping remaining parcel offsets until whole-county page coverage is provably COMPLETE.
+- Investigate `broward_clerk_records_link` as a verified path from mortgages/liens/LP to a deed's parcel.
+- Audit Michigan and Florida parcel/folio normalization paths separately — identifier rules do not transfer.
+- Stratified 50-record quality verification before any Clerk record becomes map-eligible.
+
+---
+## Addendum — Instrument-link inheritance audit (2026-07-19, final)
+
+### DECISION LOG
+The county parcel import is COMPLETE only when every expected source range is reconciled. A COMPLETE
+sub-run does not prove whole-county completion. Direct Clerk parcel linkage and inherited linkage via
+official instrument relationships are **separate linkage methods**. Mortgages, liens, lis pendens and
+judgments may not inherit parcel geography without a verified exact instrument relationship to a
+parcel-bearing record.
+
+### `broward_clerk_records_link` — schema and semantics (verified)
+56,526 rows. Shape: `source_instrument_number` → `target_instrument_number`, each with a doc type and
+side flag, plus `display_label`. Relationships are official (from the Clerk `lnk-ver` file) and
+directional. Dominant pattern is **satisfaction/release → original instrument** (RST 25,662 rows) and
+**certified judgment → judgment** (CFJ→FJ). Critically, **~25,662 rows carry a null or `-NOT SHOWN`
+target**, making them unusable for linkage.
+
+### Inherited-parcel test — the path DOES NOT WORK
+Path tested (both directions), exact instrument match only:
+non-parcel instrument → exact official link → parcel-bearing instrument → exact 12-char folio → county parcel geography
+
+| Doc type | Instruments | Usable link | Links to parcel-bearing | **Inheritable parcels** |
+|---|---:|---:|---:|---:|
+| RST satisfactions | 42,335 | 37,466 | 264 | **140** |
+| FJ judgments | 14,669 | 457 | 0 | **0** |
+| **M mortgages** | 10,357 | 1,251 | 1 | **1** |
+| **LIE liens** | 7,388 | 403 | 0 | **0** |
+| AST assignments | 3,233 | 3,201 | 2 | 0 |
+| CFJ certified judgments | 1,537 | 1,503 | 0 | **0** |
+| **LP lis pendens** | 1,281 | 214 | 0 | **0** |
+| MOD modifications | 204 | 184 | 0 | 0 |
+
+**Conclusion:** the Clerk link file connects instruments to other **non-parcel** instruments
+(satisfaction→mortgage, certified judgment→judgment). It effectively never reaches a deed. Combined
+with the earlier finding that only deed-type instruments carry `parcel_id` in the `lgl-ver` legal file,
+**mortgages, liens, lis pendens and judgments cannot be mapped from the current Clerk SFTP feed by any
+verified path.** This is a source-data limitation. Only **deeds (7,903 mappable)** and
+**easements (386)** are viable today.
+
+### RISK REGISTER (verified)
+- High-concurrency parcel imports (70-way fan-out) saturated the database, caused read-statement
+  timeouts, and left range coverage unverifiable. Serial or ≤3-way concurrency required going forward.
+- A Clerk instrument relationship does **not** prove shared property; inheritance must never be assumed.
+
+### MASTER TO-DO
+- Finish parcel import serially with a range ledger (404,082 / 554,358 = 72.9% loaded; 0 duplicate
+  OBJECTIDs, 0 null coordinates, 34,034 alphanumeric folios).
+- For mortgages/liens/LP: the only remaining credible path is **BCPA per-folio lookup or a
+  Clerk-provided legal file that includes non-deed instruments** — both require separate approval.
+- Connect **deeds only** to SignalV1/map/CMS once stratified verification passes.
+
+---
+## Addendum — County parcel import COMPLETE + deed/easement property layer connected (2026-07-19, evening)
+
+### WHOLE-COUNTY PARCEL IMPORT — COMPLETE (provable)
+
+Coverage is now proved by a **range ledger** (`broward_parcel_range_ledger`), not by a tail batch.
+The county source is partitioned into **110 disjoint OBJECTID ranges of 20,000** covering
+`[0 … 2,199,999]`, which contains the source's true span (`min OBJECTID 2 … max 2,185,857`).
+Each range carries an expected row count taken from the county's **own `returnCountOnly`**.
+
+| Ledger proof | Value |
+|---|---:|
+| Expected ranges | 110 |
+| Completed ranges | **110** |
+| Failed ranges | **0** |
+| Unfinished ranges | **0** |
+| Gaps or overlaps between ranges | **0** |
+| Source rows expected (sum of per-range county counts) | **554,358** |
+| Source rows received | **554,358** |
+| Source rows accepted | 539,213 |
+| Source rows rejected | 50 |
+| Duplicate folios collapsed (same page) | 15,095 |
+
+`539,213 + 50 + 15,095 = 554,358` — the ledger reconciles exactly, and the sum of the 110
+independent county counts equals the county's own published total of **554,358**.
+
+### FINAL PARCEL INTEGRITY
+
+| Measure | Value |
+|---|---:|
+| Official source count | 554,358 |
+| Final loaded rows | **532,470** |
+| Distinct source OBJECTIDs | 532,470 |
+| Unique canonical folios | 532,470 |
+| Numeric folios | 482,572 |
+| Alphanumeric folios | 49,898 |
+| Duplicate folios in the table | **0** |
+| Duplicate source OBJECTIDs | **0** |
+| Missing coordinates | **0** |
+| Out-of-Broward coordinates | **0** |
+| Address coverage | 524,214 (98.5%) |
+| Municipality coverage | **0 — see below** |
+| Final import status | **COMPLETE** |
+
+**Reconciliation of 554,358 → 532,470 (fully explained, no unexplained loss):**
+554,358 source rows − 50 rejected (county-published centroid outside the Broward bounding box;
+isolated to 3 ranges, 0.009%) = 554,308 valid − 21,838 folio duplicates = **532,470 stored**.
+The table is keyed on canonical folio, so a parcel represented by several polygons (condo and
+common-element geometry) collapses to one centroid. 15,095 of those duplicates were seen inside a
+single page and counted by the ledger; the remaining 6,743 were the same folio appearing in
+different pages or ranges and collapsed on upsert. 15,095 + 6,743 = 21,838.
+
+### VERIFIED FACTS discovered during the import
+- **The county's `MUNICIPALITY` column is empty for all 554,358 records.** Confirmed directly against
+  the source (`where MUNICIPALITY IS NOT NULL` returns count 0). The only city value on the layer is
+  `SITUS_CITY`, a **two-letter county code** (FL, PI, HW, MM, CS, PB, DV, PL, SU, DB, TM, WS…) with no
+  published lookup table. Codes are surfaced exactly as the county writes them; **no label is guessed.**
+- **The layer has no `SITE_ADDRESS` field.** Situs address is stored as components
+  (`SITUS_STREET_NUMBER / _DIRECTION / _NAME / _TYPE / _UNIT_NUMBER`) and is now composed on ingest.
+  The earlier import stored a null address for every row because it used Palm Beach field names.
+- The layer publishes ~230 fields. Requesting `outFields=*` made a single edge invocation parse tens
+  of megabytes and hit `WORKER_RESOURCE_LIMIT`; the import only became reliable once the field list
+  was restricted to the columns actually stored.
+- The layer also publishes, per parcel, the last five sales with a **Clerk Instrument Number (`SALE1_CIN`)**,
+  deed type, sale date and stamp figure. **It cannot be used to cross-check our deeds: BCPA's most
+  recent sale is 2024-09-27 while our Clerk holdings begin 2026-04-23 — the two datasets do not overlap in time.**
+
+### DEED AND EASEMENT LINKAGE (exact canonical folio only)
+
+| | Deeds (`D`) | Easements (`EAS`) |
+|---|---:|---:|
+| Total instruments | 15,487 | 502 |
+| Instruments with a valid 12-char folio | 15,137 | 471 |
+| Distinct folio references | 15,456 | 490 |
+| Exact parcel matches / mappable | **10,337** | **461** |
+| Unique mapped parcels | 9,585 | 436 |
+| Folio present but not in the parcel layer | 4,800 | 10 |
+| No valid folio | 350 | 31 |
+| Match rate | **66.75%** | **91.83%** |
+| Official (verified feed) | all 15,487 | all 502 |
+| Preliminary (Acclaim) | 0 mappable — preliminary records have no legal file, so no folio | — |
+
+Map-eligible after conflict screening: **10,233 deeds** and **452 easements**
+(104 deeds and 9 easements reference more than one parcel and are held back as CONFLICT).
+
+The 4,800 unmatched deed folios use the same folio prefixes as matched ones (47–51), so they are
+Broward folios absent from the current tax-roll snapshot — splits, combines and newly created
+parcels — **not** a normalization defect.
+
+`TSD` (1,897 instruments, 1,506 with a parcel row) is a deed-family code that has **not** been
+classified and is deliberately excluded pending a documented reading of the county's code list.
+
+### STRATIFIED VERIFICATION — 46 samples retained in `broward_linkage_verification_samples`
+
+26 deeds, 10 easements, 10 alphanumeric folios; 12 distinct municipalities; condominium, residential,
+commercial-industrial and high-value strata; all instruments from the official verified feed.
+
+| Result | Count |
+|---|---:|
+| VERIFIED | 38 |
+| CONFLICT (multi-parcel instruments) | 3 |
+| UNRESOLVED (folio absent from the parcel layer) | 5 |
+
+No CONFLICT or UNRESOLVED record is map-eligible — enforced in SQL (`map_eligible`) and again in the
+adapter (`exclusion_reasons`), and asserted by unit tests.
+
+Independent checks performed:
+- The $180,000,000 sample (instrument 120843560, folio 504210460010) was **re-queried against the live
+  county layer**: OBJECTID 257808, situs components, use code and centroid all matched the stored row
+  to five decimal places.
+- 9 of 10 alphanumeric folios resolve to **condominium** parcels (use code 04) carrying a unit number
+  in the situs address; the tenth is a warehouse condo unit. This is what an alphanumeric Broward
+  folio denotes, and it confirms the alphanumeric normalization is behaving correctly.
+
+### DECISION LOG
+- The current Clerk SFTP legal and link files support verified parcel mapping **primarily for
+  deed-type instruments and easements**. Mortgages, liens, lis pendens and judgments are **not
+  map-eligible** without a separate verified property-link source. Accepted as a source limitation;
+  no further effort is being spent forcing them through the existing link table.
+- Coverage of a bulk import is proved by a **range ledger reconciled against the source's own counts**.
+  A COMPLETE sub-run is not evidence of whole-county completion.
+- The linkage view is materialised (`broward_property_transfer_map`) purely for interactive read
+  performance — the un-materialised join exceeded the statement timeout (57014). **No schedule is
+  attached to it**; refresh is manual and explicit.
+- Municipality is presented as the county's raw situs code. Inventing city labels for undocumented
+  two-letter codes would be an assumption, so it is not done.
+
+### RISK REGISTER
+- **An instrument-link relationship does not prove shared property** and must never be used as parcel
+  inheritance without verified evidence.
+- High-concurrency imports saturate the database. The proven configuration is **3 workers × 8 ranges**;
+  larger per-invocation batches hit the edge runtime's resource limit and silently strand ranges in
+  `IN_PROGRESS` (a stale-reclaim step is required after any such failure).
+- `broward_property_transfer_map` is a point-in-time snapshot. It does **not** refresh itself, so newly
+  ingested Clerk records will not appear on the map until someone runs the refresh.
+- The map's per-request cap is 600 records per source. Dense views are therefore incomplete by design;
+  the readout now says so explicitly rather than implying full coverage.
+
+### MASTER TO-DO
+- **Investigate separate official or document-derived linkage paths for mortgages, liens, lis pendens
+  and judgments.** These categories must not be described as supported by the current Clerk SFTP
+  mapping path. Candidate paths (each needs its own approval): BCPA per-folio lookup, or asking the
+  Clerk whether a legal file covering non-deed instruments exists.
+- Obtain an official Broward `SITUS_CITY` two-letter code table so the municipality filter can show
+  city names instead of codes.
+- Classify `TSD` and the remaining deed-family codes against the county's published code list.
+- Decide the refresh cadence for `broward_property_transfer_map` (currently manual by design).
+- Persona coverage gaps: contractor NOC mapping does not exist (NOCs carry no parcel), and Government
+  and Risk & Legal map families remain empty and are labelled as such.

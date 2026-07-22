@@ -1,0 +1,23 @@
+[Unit]
+Description=Florida Signal public API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=andy
+WorkingDirectory=/srv/grahamandgold/florida-signal-site
+EnvironmentFile=-/srv/grahamandgold/florida-signal/secrets/public-site.env
+Environment=FLORIDA_SIGNAL_DB_PATH=/srv/grahamandgold/florida-signal/data/public-api/florida_signal_cms.sqlite
+Environment=FLORIDA_SIGNAL_PUBLIC_ORIGINS=https://thefloridasignal.com,https://www.thefloridasignal.com
+ExecStart=/usr/bin/python3 server.py --host 127.0.0.1 --port 4173
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/grahamandgold/florida-signal/data/public-api
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,1278 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="referrer" content="no-referrer">
+  <title>The Data Wire — Internal Editorial Desk</title>
+  <meta name="description" content="Private, source-gated editorial desk for Florida Signal.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Figtree:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #061b33;
+      --ink-soft: #183b58;
+      --teal: #1767ff;
+      --teal-dark: #0d47c4;
+      --teal-pale: #e9f0fd;
+      --coral: #c25a3a;
+      --gold: #f4c94e;
+      --paper: #ffffff;
+      --wash: #f5f8fd;
+      --line: #d7e0ee;
+      --muted: #62708a;
+      --danger: #a52828;
+      --danger-pale: #fff0ee;
+      --success: #12a07e;
+      --shadow: 0 20px 50px rgba(6, 27, 51, .10);
+      --radius: 0;
+      --serif: "Montserrat", "Newsreader", Georgia, serif;
+      --sans: "Figtree", "DM Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      background:
+        linear-gradient(90deg, rgba(23,103,255,.05) 1px, transparent 1px) 0 0 / 84px 84px,
+        linear-gradient(rgba(23,103,255,.05) 1px, transparent 1px) 0 0 / 84px 84px,
+        var(--wash);
+      color: var(--ink);
+      font-family: var(--sans);
+      line-height: 1.5;
+    }
+
+    button, input, textarea, select { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .48; }
+    a { color: inherit; }
+    :focus-visible { outline: 3px solid var(--coral); outline-offset: 3px; }
+
+    .skip-link {
+      position: fixed;
+      left: 16px;
+      top: 12px;
+      z-index: 100;
+      transform: translateY(-160%);
+      background: var(--ink);
+      color: white;
+      padding: 10px 14px;
+      border-radius: 8px;
+    }
+    .skip-link:focus { transform: translateY(0); }
+
+    .masthead {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(255,255,255,.94);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(14px);
+    }
+
+    /* ===== Shared desk navigation (ADR-001) — identical in index/data/review ===== */
+    .stage-nav { background: var(--ink); }
+    .stage-nav__inner {
+      max-width: 1600px; margin: 0 auto; display: grid;
+      grid-template-columns: repeat(3, 1fr);
+    }
+    .stage-nav__stage {
+      display: block; padding: 13px clamp(14px, 2.4vw, 28px);
+      border-right: 1px solid rgba(255,255,255,.14);
+      color: rgba(255,255,255,.66); text-decoration: none;
+    }
+    .stage-nav__stage:last-child { border-right: 0; }
+    .stage-nav__stage b {
+      display: block; font-family: var(--serif); font-size: 12px; font-weight: 700;
+      letter-spacing: .04em; color: rgba(255,255,255,.9);
+    }
+    .stage-nav__stage small { display: block; margin-top: 2px; font-size: 10.5px; line-height: 1.4; }
+    .stage-nav__stage:hover { background: rgba(255,255,255,.07); color: #fff; }
+    .stage-nav__stage:hover b { color: #fff; }
+    .stage-nav__stage[aria-current="page"] { background: var(--teal); color: rgba(255,255,255,.86); }
+    .stage-nav__stage[aria-current="page"] b { color: #fff; }
+    @media (max-width: 720px) {
+      .stage-nav__inner { grid-template-columns: 1fr; }
+      .stage-nav__stage { border-right: 0; border-bottom: 1px solid rgba(255,255,255,.14); padding: 11px 14px; }
+      .stage-nav__stage small { display: inline; margin-left: 6px; }
+    }
+    .masthead__inner {
+      max-width: 1600px;
+      margin: 0 auto;
+      min-height: 94px;
+      padding: 16px clamp(18px, 3.3vw, 56px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 28px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+    .brand__mark {
+      width: 44px;
+      height: 56px;
+      flex: 0 0 auto;
+      position: relative;
+      border-radius: 58% 42% 55% 45% / 38% 46% 54% 62%;
+      background: var(--ink);
+      box-shadow: inset -8px -8px 0 var(--teal), inset -13px -13px 0 #49c6dc;
+      transform: skew(-3deg);
+    }
+    .brand__mark::after {
+      content: "";
+      position: absolute;
+      left: 13px;
+      bottom: 7px;
+      width: 4px;
+      height: 35px;
+      background: white;
+      box-shadow: 9px 7px 0 white;
+      transform: skew(3deg);
+    }
+    .eyebrow {
+      color: var(--teal-dark);
+      font-size: .75rem;
+      font-weight: 800;
+      letter-spacing: .17em;
+      text-transform: uppercase;
+    }
+    .brand h1 {
+      margin: 1px 0 0;
+      font: 600 clamp(1.45rem, 2.2vw, 2rem)/1 var(--serif);
+      letter-spacing: -.025em;
+    }
+    .brand h1 span { color: var(--teal-dark); }
+    .brand__sub {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: .77rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .connection {
+      display: flex;
+      align-items: end;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .field--compact { width: min(190px, 24vw); }
+    .field--token { width: min(240px, 30vw); }
+    .label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--ink-soft);
+      font-size: .7rem;
+      font-weight: 800;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid #afc1c7;
+      border-radius: 8px;
+      background: var(--paper);
+      color: var(--ink);
+      padding: 11px 12px;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    input:hover, textarea:hover, select:hover { border-color: #7f989f; }
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--teal-dark);
+      box-shadow: 0 0 0 3px rgba(23,103,255,.16);
+      outline: none;
+    }
+    textarea { min-height: 110px; resize: vertical; }
+    .button {
+      min-height: 44px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      background: var(--ink);
+      color: white;
+      padding: 10px 16px;
+      font-weight: 800;
+      letter-spacing: .02em;
+      transition: transform .15s ease, background .15s ease, border-color .15s ease;
+    }
+    .button:hover { background: var(--ink-soft); transform: translateY(-1px); }
+    .button--teal { background: var(--teal-dark); }
+    .button--teal:hover { background: #0a3aa0; }
+    .button--ghost { border-color: var(--line); background: white; color: var(--ink); }
+    .button--ghost:hover { background: var(--wash); }
+    .button--danger { background: var(--danger); }
+    .button--danger:hover { background: #831d1d; }
+    .button--small { min-height: 38px; padding: 7px 12px; font-size: .82rem; }
+
+    .status-strip {
+      background: var(--ink);
+      color: white;
+    }
+    .status-strip__inner {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 9px clamp(18px, 3.3vw, 56px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      font-size: .79rem;
+    }
+    .status-copy { display: flex; align-items: center; gap: 9px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 5px rgba(244,201,78,.14); }
+    .status-dot[data-state="ready"] { background: #12a07e; box-shadow: 0 0 0 5px rgba(18,160,126,.16); }
+    .status-dot[data-state="error"] { background: var(--coral); box-shadow: 0 0 0 5px rgba(255,107,67,.14); }
+    .privacy-note { color: #bfd0da; }
+
+    main {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: clamp(28px, 4vw, 58px) clamp(18px, 3.3vw, 56px) 80px;
+    }
+    .intro {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 430px);
+      gap: clamp(28px, 7vw, 100px);
+      align-items: end;
+      margin-bottom: 34px;
+    }
+    .intro h2 {
+      max-width: 760px;
+      margin: 6px 0 0;
+      font: 500 clamp(2.7rem, 6vw, 6.5rem)/.9 var(--serif);
+      letter-spacing: -.065em;
+    }
+    .intro h2 span { color: var(--teal-dark); }
+    .intro__copy {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: clamp(1rem, 1.4vw, 1.2rem);
+      border-top: 3px solid var(--coral);
+      padding-top: 18px;
+    }
+    .intro__copy strong { color: var(--ink); }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(520px, 1.04fr) minmax(420px, .96fr);
+      gap: 22px;
+      align-items: start;
+    }
+    .panel {
+      background: rgba(255,255,255,.96);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .panel__header {
+      padding: 24px 26px 20px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      gap: 20px;
+    }
+    .panel__header h3 { margin: 2px 0 5px; font: 600 clamp(1.55rem, 2vw, 2.15rem)/1.05 var(--serif); }
+    .panel__header p { margin: 0; color: var(--muted); font-size: .9rem; }
+    .panel__body { padding: 26px; }
+    .panel__accent { height: 7px; background: linear-gradient(90deg, var(--teal) 0 60%, var(--gold) 60% 78%, var(--coral) 78%); }
+
+    .form-section { margin: 0 0 28px; padding: 0; border: 0; }
+    .form-section:last-child { margin-bottom: 0; }
+    .form-section legend {
+      width: 100%;
+      margin: 0 0 15px;
+      padding: 0 0 9px;
+      border-bottom: 1px solid var(--line);
+      color: var(--ink);
+      font-size: .76rem;
+      font-weight: 900;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+    .grid--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .span-2 { grid-column: span 2; }
+    .span-3 { grid-column: span 3; }
+    .field-help { display: block; margin-top: 5px; color: var(--muted); font-size: .76rem; }
+    .required { color: var(--danger); }
+    .form-footer {
+      margin: 30px -26px -26px;
+      padding: 20px 26px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 18px;
+      background: var(--teal-pale);
+      border-top: 1px solid #bee3df;
+    }
+    .form-footer p { margin: 0; max-width: 500px; color: var(--ink-soft); font-size: .82rem; }
+
+    .queue-tools { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .queue-city-filter { width: auto; min-height: 38px; padding: 7px 34px 7px 10px; border-radius: 7px; background-color: #fff; font-size: .8rem; font-weight: 750; }
+    .filter {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 0;
+      padding: 7px 12px;
+      background: white;
+      color: var(--ink-soft);
+      font-size: .77rem;
+      font-weight: 800;
+    }
+    .filter[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: white; }
+    .queue { display: grid; gap: 14px; }
+    .empty {
+      min-height: 290px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 40px 24px;
+      border: 1px dashed #9eb4ba;
+      border-radius: 13px;
+      background: linear-gradient(135deg, #fff, #f2f9fa);
+      color: var(--muted);
+    }
+    .empty strong { display: block; margin-bottom: 6px; color: var(--ink); font: 600 1.5rem var(--serif); }
+    .wire-card {
+      position: relative;
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--teal);
+      border-radius: 11px;
+      background: white;
+      padding: 18px;
+    }
+    .wire-card[data-status="hold"] { border-left-color: var(--coral); }
+    .wire-card[data-status="approved"], .wire-card[data-status="published"] { border-left-color: var(--success); }
+    .wire-card__top { display: flex; justify-content: space-between; gap: 16px; align-items: start; }
+    .wire-card h4 { margin: 5px 0 4px; font: 600 1.35rem/1.12 var(--serif); }
+    .wire-card__meta { margin: 0; color: var(--muted); font-size: .76rem; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 25px;
+      border-radius: 0;
+      padding: 4px 9px;
+      background: var(--teal-pale);
+      color: var(--teal-dark);
+      font-size: .65rem;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .badge--hold { background: var(--danger-pale); color: var(--danger); }
+    .badge--approved { background: #e5f5e9; color: #155b36; }
+    .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 13px 0; }
+    .tag { border-bottom: 2px solid #8cd7d1; padding: 2px 1px; color: var(--ink-soft); font-size: .7rem; font-weight: 800; }
+    .packet-meta {
+      margin: 14px 0;
+      padding: 13px 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 9px;
+      color: var(--ink-soft);
+      font-size: .77rem;
+    }
+    .packet-meta p { margin: 0; }
+    .packet-meta strong { color: var(--ink); }
+    .packet-meta__counts { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--muted); }
+    .verification {
+      color: var(--danger);
+      font-size: .68rem;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .verification[data-verified="true"] { color: var(--success); }
+    .gate {
+      margin: 14px 0;
+      padding: 11px 12px;
+      border-radius: 8px;
+      background: var(--danger-pale);
+      color: #76241f;
+      font-size: .77rem;
+    }
+    .gate[data-clear="true"] { background: #e9f8f2; color: var(--success); }
+    .gate strong { display: block; margin-bottom: 3px; }
+    .gate ul { margin: 4px 0 0 17px; padding: 0; }
+    .wire-card__actions { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 4px; }
+
+    dialog {
+      width: min(620px, calc(100vw - 32px));
+      max-height: calc(100vh - 32px);
+      border: 0;
+      border-radius: 16px;
+      padding: 0;
+      box-shadow: 0 30px 90px rgba(6,27,51,.35);
+      color: var(--ink);
+    }
+    dialog::backdrop { background: rgba(4,21,39,.7); backdrop-filter: blur(3px); }
+    .dialog__head { padding: 24px 26px 19px; border-bottom: 1px solid var(--line); }
+    .dialog__head h3 { margin: 5px 0 0; font: 600 1.8rem/1.08 var(--serif); }
+    .dialog__body { padding: 24px 26px; overflow: auto; }
+    .dialog__footer { padding: 18px 26px; background: var(--wash); border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 10px; }
+    .human-check {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-top: 18px;
+      padding: 13px;
+      border: 1px solid #e4bbaa;
+      border-radius: 8px;
+      background: #fff8f5;
+      font-size: .82rem;
+    }
+    .human-check input { width: auto; margin-top: 4px; }
+    .alert {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      z-index: 50;
+      max-width: min(440px, calc(100vw - 40px));
+      border-radius: 10px;
+      background: var(--ink);
+      color: white;
+      box-shadow: var(--shadow);
+      padding: 14px 18px;
+      font-weight: 700;
+    }
+    .alert[data-kind="error"] { background: var(--danger); }
+    .alert[hidden] { display: none; }
+
+    @media (max-width: 1120px) {
+      .masthead__inner { align-items: flex-start; flex-direction: column; }
+      .connection { width: 100%; justify-content: stretch; }
+      .field--compact, .field--token { width: auto; flex: 1 1 190px; }
+      .workspace { grid-template-columns: 1fr; }
+      .queue-panel { order: -1; }
+    }
+
+    @media (max-width: 720px) {
+      .masthead { position: static; }
+      .masthead__inner { min-height: auto; gap: 18px; }
+      .connection { display: grid; grid-template-columns: 1fr; align-items: stretch; }
+      .field--compact, .field--token { width: 100%; }
+      .connection .button { width: 100%; }
+      .status-strip__inner { align-items: flex-start; flex-direction: column; }
+      .intro { grid-template-columns: 1fr; gap: 24px; }
+      .intro h2 { font-size: clamp(3.2rem, 17vw, 5.2rem); }
+      .panel__header { flex-direction: column; }
+      .queue-tools { justify-content: flex-start; }
+      .panel__header, .panel__body { padding-left: 18px; padding-right: 18px; }
+      .grid, .grid--three { grid-template-columns: 1fr; }
+      .span-2, .span-3 { grid-column: auto; }
+      .form-footer { margin-left: -18px; margin-right: -18px; flex-direction: column; align-items: stretch; }
+      .form-footer .button { width: 100%; }
+      .wire-card__top { flex-direction: column-reverse; gap: 6px; }
+      .wire-card__actions .button { flex: 1 1 120px; }
+      .dialog__footer { flex-direction: column-reverse; }
+      .dialog__footer .button { width: 100%; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
+
+    /* Data Wire logo harmony: block-modern headlines, no italics */
+    h1, h2, h3, h4 { font-style: normal; }
+    .intro h2 { letter-spacing: -.03em !important; font-weight: 700 !important; }
+    .intro h2 span, .brand h1 span, .section-label h3, .drawer__head h4 { font-style: normal !important; }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#workspace">Skip to editorial workspace</a>
+
+  <header class="masthead">
+    <div class="masthead__inner">
+      <div class="brand" aria-label="The Data Wire internal editorial desk">
+        <div>
+          <div class="eyebrow">Internal · Graham &amp; Gold LLC</div>
+          <img src="/datawire-lockup.png" alt="The Data Wire" style="display:block;width:min(238px,52vw);height:auto;margin:6px 0 2px;">
+          <p class="brand__sub">Source-gated editorial desk</p>
+        </div>
+      </div>
+
+      <form class="connection" id="connection-form">
+        <label class="field--compact">
+          <span class="label">Market key</span>
+          <input id="market" name="market" value="broward" required pattern="[a-z0-9][a-z0-9-]{1,39}" autocomplete="off" aria-describedby="market-help">
+        </label>
+        <label class="field--token">
+          <span class="label">Admin token</span>
+          <input id="admin-token" name="admin-token" type="password" required autocomplete="off" spellcheck="false" aria-describedby="token-help">
+        </label>
+        <button class="button button--teal" type="submit">Open desk</button>
+        <button class="button button--ghost" type="button" id="lock-desk">Lock</button>
+      </form>
+      <span id="market-help" hidden>Lowercase letters, numbers, and hyphens only.</span>
+      <span id="token-help" hidden>The token is stored only for this browser tab session.</span>
+    </div>
+  </header>
+
+  <div class="status-strip">
+    <div class="status-strip__inner">
+      <div class="status-copy" role="status" aria-live="polite">
+        <span class="status-dot" id="status-dot" data-state="locked" aria-hidden="true"></span>
+        <span id="desk-status">Desk locked · enter the local admin token</span>
+      </div>
+      <div class="privacy-note">Token stays in this tab · drafts never enter the public wire</div>
+    </div>
+  </div>
+
+  <!-- Shared desk navigation. See cms/ADR-001-data-wire-information-architecture.md.
+       Keep this block identical in index.html, data.html and review.html. -->
+  <nav class="stage-nav" aria-label="Data Wire stages">
+    <div class="stage-nav__inner">
+      <a class="stage-nav__stage" href="/data.html">
+        <b>1 · Data Desk</b><small>Look. Every source, raw and read-only.</small></a>
+      <a class="stage-nav__stage" href="/review.html">
+        <b>2 · Signal Review</b><small>Decide. Approve, hold or reject candidates.</small></a>
+      <a class="stage-nav__stage" href="/index.html" aria-current="page">
+        <b>3 · Editorial Desk</b><small>Write. Source-gated packets, cleared by a human.</small></a>
+    </div>
+  </nav>
+
+  <main id="workspace">
+    <section class="intro" aria-labelledby="page-title">
+      <div>
+        <div class="eyebrow">Human editor required</div>
+        <h2 id="page-title">Build the record.<br><span>Clear the signal.</span></h2>
+      </div>
+      <p class="intro__copy"><strong>Nothing publishes from here by accident.</strong> Every packet needs a public source, a defensible taxonomy, passed claims checks, and the name of the editor who cleared it.</p>
+    </section>
+
+    <div class="workspace">
+      <section class="panel compose-panel" aria-labelledby="compose-title">
+        <div class="panel__accent" aria-hidden="true"></div>
+        <header class="panel__header">
+          <div>
+            <div class="eyebrow">Private workspace</div>
+            <h3 id="compose-title">Create a draft story</h3>
+            <p>Required fields are marked. Saving creates a private draft only.</p>
+          </div>
+          <span class="badge">Draft gate</span>
+        </header>
+        <form class="panel__body" id="story-form">
+          <fieldset class="form-section">
+            <legend>01 · Story</legend>
+            <div class="grid">
+              <label>
+                <span class="label">City <span class="required" aria-hidden="true">*</span></span>
+                <select name="city" required>
+                  <option value="fort-lauderdale" selected>Fort Lauderdale · live desk</option>
+                  <option value="coconut-creek">Coconut Creek · coming soon</option><option value="cooper-city">Cooper City · coming soon</option><option value="coral-springs">Coral Springs · coming soon</option>
+                  <option value="dania-beach">Dania Beach · coming soon</option><option value="davie">Davie · coming soon</option><option value="deerfield-beach">Deerfield Beach · coming soon</option>
+                  <option value="hallandale-beach">Hallandale Beach · coming soon</option><option value="hillsboro-beach">Hillsboro Beach · coming soon</option><option value="hollywood">Hollywood · coming soon</option>
+                  <option value="lauderdale-by-the-sea">Lauderdale-by-the-Sea · coming soon</option><option value="lauderdale-lakes">Lauderdale Lakes · coming soon</option><option value="lauderhill">Lauderhill · coming soon</option>
+                  <option value="lazy-lake">Lazy Lake · coming soon</option><option value="lighthouse-point">Lighthouse Point · coming soon</option><option value="margate">Margate · coming soon</option>
+                  <option value="miramar">Miramar · coming soon</option><option value="north-lauderdale">North Lauderdale · coming soon</option><option value="oakland-park">Oakland Park · coming soon</option>
+                  <option value="parkland">Parkland · coming soon</option><option value="pembroke-park">Pembroke Park · coming soon</option><option value="pembroke-pines">Pembroke Pines · coming soon</option>
+                  <option value="plantation">Plantation · coming soon</option><option value="pompano-beach">Pompano Beach · coming soon</option><option value="sea-ranch-lakes">Sea Ranch Lakes · coming soon</option>
+                  <option value="southwest-ranches">Southwest Ranches · coming soon</option><option value="sunrise">Sunrise · coming soon</option><option value="tamarac">Tamarac · coming soon</option>
+                  <option value="west-park">West Park · coming soon</option><option value="weston">Weston · coming soon</option><option value="wilton-manors">Wilton Manors · coming soon</option>
+                </select>
+                <span class="field-help">Required on every brief. Only Fort Lauderdale has a public desk.</span>
+              </label>
+              <label>
+                <span class="label">County <span class="required" aria-hidden="true">*</span></span>
+                <input name="county" value="broward-county" required pattern="[a-z0-9][a-z0-9-]{1,79}" autocomplete="off">
+                <span class="field-help">Hidden geography metadata; use the stable county key.</span>
+              </label>
+              <label class="span-2">
+                <span class="label">Headline <span class="required" aria-hidden="true">*</span></span>
+                <input name="headline" required maxlength="300" placeholder="A precise, record-led headline">
+              </label>
+              <label class="span-2">
+                <span class="label">Summary / dek <span class="required" aria-hidden="true">*</span></span>
+                <textarea name="dek" required maxlength="1000" rows="3" placeholder="What changed, where, and why it matters."></textarea>
+              </label>
+              <label class="span-2">
+                <span class="label">Story body <span class="required" aria-hidden="true">*</span></span>
+                <textarea name="body" required rows="9" placeholder="Write the sourced brief. Distinguish the record from analysis."></textarea>
+              </label>
+              <label>
+                <span class="label">Byline</span>
+                <input name="byline" value="Florida Signal Desk" maxlength="120">
+              </label>
+              <label>
+                <span class="label">Event date <span class="required" aria-hidden="true">*</span></span>
+                <input name="event_date" type="date" required>
+                <span class="field-help">The event or filing date, not the batch-pull time.</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="form-section">
+            <legend>02 · Verification brief</legend>
+            <div class="grid">
+              <label>
+                <span class="label">Verification status <span class="required" aria-hidden="true">*</span></span>
+                <select name="verification_status" required>
+                  <option value="needs_verification">Needs verification</option>
+                  <option value="verified">Verified by editor</option>
+                </select>
+              </label>
+              <label>
+                <span class="label">Current trigger <span class="required" aria-hidden="true">*</span></span>
+                <input name="current_trigger" required maxlength="1000" placeholder="The new filing, vote, application, transaction or other change">
+              </label>
+              <label class="span-2">
+                <span class="label">Project identity basis <span class="required" aria-hidden="true">*</span></span>
+                <textarea name="project_identity_basis" required rows="3" maxlength="3000" placeholder="Explain how the parcel, project, applicant and cited record were matched."></textarea>
+              </label>
+              <label class="span-2">
+                <span class="label">Claim slots (JSON) <span class="required" aria-hidden="true">*</span></span>
+                <textarea name="claim_slots" required rows="6" spellcheck="false" placeholder="Paste a JSON array. Each object should pair one material claim with its source URL and exact document locator."></textarea>
+                <span class="field-help">No unsupported prose: one claim per object, with a public source and page, section, row or record locator.</span>
+              </label>
+              <label class="span-2">
+                <span class="label">Unresolved issues</span>
+                <textarea name="unresolved_issues" rows="3" placeholder="One unresolved reporting issue per line. Leave blank only when all material questions are resolved."></textarea>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="form-section">
+            <legend>03 · Source</legend>
+            <div class="grid">
+              <label class="span-2">
+                <span class="label">Public source URL <span class="required" aria-hidden="true">*</span></span>
+                <input name="source_url" type="url" required placeholder="https://official-public-source.example/...">
+              </label>
+              <label>
+                <span class="label">Source title <span class="required" aria-hidden="true">*</span></span>
+                <input name="source_title" required maxlength="500" placeholder="Agency, packet, filing or document title">
+              </label>
+              <label>
+                <span class="label">Source publication date</span>
+                <input name="source_published_at" type="date">
+              </label>
+              <label class="span-2">
+                <span class="label">Hero image URL</span>
+                <input name="hero_image" type="url" placeholder="https://...">
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="form-section">
+            <legend>04 · Taxonomy and place</legend>
+            <div class="grid">
+              <label>
+                <span class="label">Topic tags <span class="required" aria-hidden="true">*</span></span>
+                <input name="topic_tags" required placeholder="development, permits">
+                <span class="field-help">Comma-separated; use the shared naming convention.</span>
+              </label>
+              <label>
+                <span class="label">Geography tags <span class="required" aria-hidden="true">*</span></span>
+                <input name="geography_tags" required placeholder="city, neighborhood, corridor">
+              </label>
+              <label>
+                <span class="label">Entity tags</span>
+                <input name="entity_tags" placeholder="agency, applicant, company">
+              </label>
+              <label>
+                <span class="label">Audience tags</span>
+                <input name="audience_tags" placeholder="brokers, developers, contractors">
+              </label>
+              <label>
+                <span class="label">Urgency tags</span>
+                <input name="urgency_tags" placeholder="today, agenda-watch, storm-window">
+              </label>
+              <label>
+                <span class="label">Neighborhood</span>
+                <input name="neighborhood" maxlength="160">
+              </label>
+              <label>
+                <span class="label">ZIP</span>
+                <input name="zip" inputmode="numeric" maxlength="10">
+              </label>
+              <label>
+                <span class="label">Latitude</span>
+                <input name="lat" type="number" step="any" min="-90" max="90">
+              </label>
+              <label>
+                <span class="label">Longitude</span>
+                <input name="lon" type="number" step="any" min="-180" max="180">
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="form-section">
+            <legend>05 · Editorial checks</legend>
+            <div class="grid">
+              <label>
+                <span class="label">Claims check <span class="required" aria-hidden="true">*</span></span>
+                <select name="claims_status" required>
+                  <option value="pending">Pending review</option>
+                  <option value="passed">Passed by editor</option>
+                  <option value="failed">Failed / needs work</option>
+                </select>
+              </label>
+              <label>
+                <span class="label">Taxonomy check <span class="required" aria-hidden="true">*</span></span>
+                <select name="tags_status" required>
+                  <option value="pending">Pending review</option>
+                  <option value="passed">Passed by editor</option>
+                  <option value="failed">Failed / needs work</option>
+                </select>
+              </label>
+              <label>
+                <span class="label">Claim-slot validator <span class="required" aria-hidden="true">*</span></span>
+                <select name="validator_status" required>
+                  <option value="pending">Pending validation</option>
+                  <option value="passed">Passed validation</option>
+                  <option value="failed">Failed / needs work</option>
+                </select>
+              </label>
+              <label>
+                <span class="label">Human editor <span class="required" aria-hidden="true">*</span></span>
+                <input name="editor_name" required maxlength="120" autocomplete="name" placeholder="Full name">
+              </label>
+              <label>
+                <span class="label">Editor note</span>
+                <input name="editor_note" maxlength="2000" placeholder="What still needs checking?">
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="form-footer">
+            <p><strong>AI never publishes.</strong> The public wire reads only approved, source-complete packets after a named human editor verifies every material claim.</p>
+            <button class="button button--teal" type="submit" id="save-draft">Save private draft</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel queue-panel" aria-labelledby="queue-title">
+        <div class="panel__accent" aria-hidden="true"></div>
+        <header class="panel__header">
+          <div>
+            <div class="eyebrow">Current market</div>
+            <h3 id="queue-title">Story queue</h3>
+            <p id="queue-summary">Open the desk to load the live editorial queue.</p>
+          </div>
+          <div class="queue-tools" aria-label="Filter story queue">
+            <label class="sr-only" for="queue-city-filter">Filter queue by city</label>
+            <select class="queue-city-filter" id="queue-city-filter"><option value="all">All city desks</option></select>
+            <button class="filter" type="button" data-filter="all" aria-pressed="true">All</button>
+            <button class="filter" type="button" data-filter="draft" aria-pressed="false">Drafts</button>
+            <button class="filter" type="button" data-filter="hold" aria-pressed="false">Hold</button>
+            <button class="filter" type="button" data-filter="approved" aria-pressed="false">Approved</button>
+            <button class="button button--ghost button--small" type="button" id="refresh-queue">Refresh</button>
+          </div>
+        </header>
+        <div class="panel__body">
+          <div class="queue" id="story-queue" aria-live="polite" aria-busy="false">
+            <div class="empty"><div><strong>Desk is locked</strong>Enter the market key and session token above. No data is loaded until the private API authorizes this tab.</div></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="review-dialog" aria-labelledby="review-title">
+    <form id="review-form" method="dialog">
+      <div class="dialog__head">
+        <div class="eyebrow" id="review-kicker">Human gate</div>
+        <h3 id="review-title">Review story</h3>
+      </div>
+      <div class="dialog__body">
+        <p id="review-story" class="intro__copy"></p>
+        <input type="hidden" name="story_id">
+        <input type="hidden" name="action">
+        <div class="grid" style="margin-top:20px">
+          <label class="span-2">
+            <span class="label">Human editor <span class="required" aria-hidden="true">*</span></span>
+            <input name="editor_name" required maxlength="120" autocomplete="name">
+          </label>
+          <label>
+            <span class="label">Verification status</span>
+            <select name="verification_status">
+              <option value="needs_verification">Needs verification</option>
+              <option value="verified">Verified by editor</option>
+            </select>
+          </label>
+          <label>
+            <span class="label">Claim-slot validator</span>
+            <select name="validator_status">
+              <option value="pending">Pending validation</option>
+              <option value="passed">Passed validation</option>
+              <option value="failed">Failed / needs work</option>
+            </select>
+          </label>
+          <label>
+            <span class="label">Claims check</span>
+            <select name="claims_status">
+              <option value="pending">Pending review</option>
+              <option value="passed">Passed by editor</option>
+              <option value="failed">Failed / needs work</option>
+            </select>
+          </label>
+          <label>
+            <span class="label">Taxonomy check</span>
+            <select name="tags_status">
+              <option value="pending">Pending review</option>
+              <option value="passed">Passed by editor</option>
+              <option value="failed">Failed / needs work</option>
+            </select>
+          </label>
+          <label class="span-2">
+            <span class="label">Editor note</span>
+            <textarea name="editor_note" rows="3" maxlength="2000" placeholder="Record the reason for this decision."></textarea>
+          </label>
+        </div>
+        <label class="human-check">
+          <input name="human_confirmed" type="checkbox" required>
+          <span><strong>I am the named human editor. AI never publishes.</strong><br>I reviewed the cited source, identity basis, claim slots and unresolved issues, and accept responsibility for this approval or hold decision.</span>
+        </label>
+      </div>
+      <div class="dialog__footer">
+        <button class="button button--ghost" type="button" id="cancel-review">Cancel</button>
+        <button class="button" type="submit" id="confirm-review">Confirm decision</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="alert" id="alert" role="status" aria-live="polite" hidden></div>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const SESSION_TOKEN_KEY = 'dataWireAdminToken';
+      const SESSION_MARKET_KEY = 'dataWireMarket';
+      const state = { stories: [], filter: 'all', cityFilter: 'all', connected: false };
+
+      const connectionForm = document.querySelector('#connection-form');
+      const storyForm = document.querySelector('#story-form');
+      const reviewDialog = document.querySelector('#review-dialog');
+      const reviewForm = document.querySelector('#review-form');
+      const queue = document.querySelector('#story-queue');
+      const marketInput = document.querySelector('#market');
+      const tokenInput = document.querySelector('#admin-token');
+      const statusDot = document.querySelector('#status-dot');
+      const deskStatus = document.querySelector('#desk-status');
+      const queueSummary = document.querySelector('#queue-summary');
+      const queueCityFilter = document.querySelector('#queue-city-filter');
+      const alertBox = document.querySelector('#alert');
+
+      function currentMarket() {
+        return marketInput.value.trim().toLowerCase();
+      }
+
+      function currentToken() {
+        return sessionStorage.getItem(SESSION_TOKEN_KEY) || '';
+      }
+
+      function setConnection(status, message) {
+        state.connected = status === 'ready';
+        statusDot.dataset.state = status;
+        deskStatus.textContent = message;
+      }
+
+      let alertTimer;
+      function notify(message, kind = 'success') {
+        clearTimeout(alertTimer);
+        alertBox.textContent = message;
+        alertBox.dataset.kind = kind;
+        alertBox.hidden = false;
+        alertTimer = setTimeout(() => { alertBox.hidden = true; }, 5500);
+      }
+
+      async function api(path, options = {}) {
+        const token = currentToken();
+        const headers = { ...(options.headers || {}) };
+        if (token) headers.Authorization = `Bearer ${token}`;
+        if (options.body) headers['Content-Type'] = 'application/json';
+        const response = await fetch(path, { ...options, headers });
+        let payload = {};
+        try { payload = await response.json(); } catch (_) { payload = { error: 'The desk returned an unreadable response.' }; }
+        if (!response.ok) {
+          const error = new Error(payload.error || `Request failed (${response.status})`);
+          error.blocks = payload.blocks || [];
+          error.status = response.status;
+          throw error;
+        }
+        return payload;
+      }
+
+      function listValues(value) {
+        if (Array.isArray(value)) return value.filter(Boolean);
+        return String(value || '').split(',').map(item => item.trim()).filter(Boolean);
+      }
+
+      function claimSlotValues(value) {
+        if (Array.isArray(value)) return value.filter(item => item && typeof item === 'object');
+        if (typeof value !== 'string' || !value.trim()) return [];
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed) ? parsed.filter(item => item && typeof item === 'object') : [];
+        } catch (_) { return []; }
+      }
+
+      function unresolvedValues(value) {
+        if (Array.isArray(value)) return value.map(item => String(item).trim()).filter(Boolean);
+        if (typeof value !== 'string' || !value.trim()) return [];
+        try {
+          const parsed = JSON.parse(value);
+          if (Array.isArray(parsed)) return parsed.map(item => String(item).trim()).filter(Boolean);
+        } catch (_) { /* Treat ordinary text as editor-entered lines. */ }
+        return value.split(/\r?\n/).map(item => item.trim()).filter(Boolean);
+      }
+
+      function storyBlocks(story) {
+        const blocks = [];
+        if (!String(story.county || '').trim()) blocks.push('County is required');
+        if (!String(story.city || '').trim()) blocks.push('City is required');
+        if (!String(story.headline || '').trim()) blocks.push('Headline is required');
+        if (!String(story.dek || '').trim()) blocks.push('Summary is required');
+        if (!String(story.body || '').trim()) blocks.push('Story body is required');
+        if (!String(story.event_date || '').trim()) blocks.push('Event date is required');
+        if (!String(story.source_title || '').trim()) blocks.push('Source title is required');
+        try {
+          const url = new URL(story.source_url || '');
+          if (!['http:', 'https:'].includes(url.protocol)) blocks.push('A public source URL is required');
+        } catch (_) { blocks.push('A public source URL is required'); }
+        if (!listValues(story.topic_tags).length) blocks.push('At least one topic tag is required');
+        if (!listValues(story.geography_tags).length) blocks.push('At least one geography tag is required');
+        if (story.verification_status !== 'verified') blocks.push('Story packet must be verified');
+        if (!String(story.current_trigger || '').trim()) blocks.push('Current trigger is required');
+        if (!String(story.project_identity_basis || '').trim()) blocks.push('Project identity basis is required');
+        const claimSlots = claimSlotValues(story.claim_slots);
+        if (!claimSlots.length) {
+          blocks.push('At least one source-linked claim slot is required');
+        } else if (claimSlots.some(slot => {
+          if (!String(slot.claim || '').trim()) return true;
+          try { return !['http:', 'https:'].includes(new URL(slot.source_url || '').protocol); }
+          catch (_) { return true; }
+        })) {
+          blocks.push('Every claim slot requires claim text and a public source URL');
+        }
+        if (story.validator_status !== 'passed') blocks.push('Claim-slot validator must pass');
+        if (story.claims_status !== 'passed') blocks.push('Claims check must pass');
+        if (story.tags_status !== 'passed') blocks.push('Taxonomy check must pass');
+        if (!String(story.editor_name || '').trim()) blocks.push('A named human editor is required');
+        return blocks;
+      }
+
+      function displayDate(value) {
+        if (!value) return 'No timestamp';
+        const date = new Date(value);
+        if (Number.isNaN(date.valueOf())) return String(value);
+        return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+      }
+
+      function makeElement(tag, className, text) {
+        const element = document.createElement(tag);
+        if (className) element.className = className;
+        if (text !== undefined) element.textContent = text;
+        return element;
+      }
+
+      function renderQueue() {
+        queue.replaceChildren();
+        const visible = state.stories.filter(story => {
+          if (state.cityFilter !== 'all' && story.city !== state.cityFilter) return false;
+          if (state.filter === 'all') return true;
+          if (state.filter === 'approved') return ['approved', 'published'].includes(story.status);
+          return story.status === state.filter;
+        });
+
+        const cityScope = state.cityFilter === 'all' ? 'all city desks' : queueCityFilter.options[queueCityFilter.selectedIndex]?.textContent || state.cityFilter;
+        queueSummary.textContent = `${state.stories.length} ${state.stories.length === 1 ? 'story' : 'stories'} in ${currentMarket()} · ${visible.length} shown · ${cityScope}`;
+        if (!visible.length) {
+          const empty = makeElement('div', 'empty');
+          const copy = makeElement('div');
+          copy.append(makeElement('strong', '', state.stories.length ? 'No stories in this view' : 'No stories yet'));
+          copy.append(document.createTextNode(state.stories.length ? 'Choose another filter to see the rest of the queue.' : 'The market queue is empty. Create the first sourced draft when reporting is ready.'));
+          empty.append(copy);
+          queue.append(empty);
+          return;
+        }
+
+        visible.forEach(story => {
+          const card = makeElement('article', 'wire-card');
+          card.dataset.status = story.status || 'draft';
+          card.dataset.storyId = story.id;
+
+          const top = makeElement('div', 'wire-card__top');
+          const titleWrap = makeElement('div');
+          titleWrap.append(makeElement('div', 'eyebrow', [story.county, story.city, story.neighborhood].filter(Boolean).join(' · ') || story.market || currentMarket()));
+          titleWrap.append(makeElement('h4', '', story.headline || 'Untitled draft'));
+          titleWrap.append(makeElement('p', 'wire-card__meta', `Updated ${displayDate(story.updated_at)} · ${story.byline || 'No byline'}`));
+          const statusClass = ['approved', 'published'].includes(story.status) ? 'badge badge--approved' : story.status === 'hold' ? 'badge badge--hold' : 'badge';
+          top.append(titleWrap, makeElement('span', statusClass, story.status || 'draft'));
+          card.append(top);
+
+          const tags = makeElement('div', 'tag-row');
+          [...listValues(story.geography_tags), ...listValues(story.topic_tags)].slice(0, 8).forEach(value => tags.append(makeElement('span', 'tag', value)));
+          if (tags.childElementCount) card.append(tags);
+
+          const packetMeta = makeElement('div', 'packet-meta');
+          const verification = makeElement('div', 'verification', story.verification_status === 'verified' ? 'Verified story packet' : 'Needs verification');
+          verification.dataset.verified = String(story.verification_status === 'verified');
+          packetMeta.append(verification);
+          const triggerLine = makeElement('p');
+          triggerLine.append(makeElement('strong', '', 'Current trigger: '), document.createTextNode(story.current_trigger || 'Not recorded'));
+          const identityLine = makeElement('p');
+          identityLine.append(makeElement('strong', '', 'Identity basis: '), document.createTextNode(story.project_identity_basis || 'Not recorded'));
+          const counts = makeElement('div', 'packet-meta__counts');
+          const claimSlots = claimSlotValues(story.claim_slots);
+          const unresolvedIssues = unresolvedValues(story.unresolved_issues);
+          const claimCount = claimSlots.length;
+          const issueCount = unresolvedIssues.length;
+          counts.append(makeElement('span', '', `${claimCount} sourced claim ${claimCount === 1 ? 'slot' : 'slots'}`));
+          counts.append(makeElement('span', '', issueCount ? `${issueCount} unresolved ${issueCount === 1 ? 'issue' : 'issues'}` : 'No unresolved issues'));
+          packetMeta.append(triggerLine, identityLine, counts);
+          if (claimCount) {
+            const claimsLine = makeElement('p');
+            claimsLine.append(makeElement('strong', '', 'Claim slots: '), document.createTextNode(claimSlots.slice(0, 3).map(slot => slot.claim || 'Unnamed claim').join(' · ')));
+            packetMeta.append(claimsLine);
+          }
+          if (issueCount) {
+            const issuesLine = makeElement('p');
+            issuesLine.append(makeElement('strong', '', 'Unresolved: '), document.createTextNode(unresolvedIssues.slice(0, 3).join(' · ')));
+            packetMeta.append(issuesLine);
+          }
+          card.append(packetMeta);
+
+          const blocks = storyBlocks(story);
+          const gate = makeElement('div', 'gate');
+          gate.dataset.clear = String(blocks.length === 0);
+          gate.append(makeElement('strong', '', blocks.length ? `${blocks.length} gate ${blocks.length === 1 ? 'block' : 'blocks'}` : 'Source gate clear'));
+          if (blocks.length) {
+            const list = document.createElement('ul');
+            blocks.forEach(block => list.append(makeElement('li', '', block)));
+            gate.append(list);
+          } else {
+            gate.append(document.createTextNode('Ready for a named editor to make the approval decision.'));
+          }
+          card.append(gate);
+
+          const actions = makeElement('div', 'wire-card__actions');
+          const approve = makeElement('button', 'button button--teal button--small', 'Review & approve');
+          approve.type = 'button'; approve.dataset.action = 'approve'; approve.dataset.storyId = story.id;
+          const hold = makeElement('button', 'button button--ghost button--small', 'Place on hold');
+          hold.type = 'button'; hold.dataset.action = 'hold'; hold.dataset.storyId = story.id;
+          actions.append(approve, hold);
+          if (story.source_url) {
+            const source = makeElement('a', 'button button--ghost button--small', 'Open source ↗');
+            source.href = story.source_url; source.target = '_blank'; source.rel = 'noopener noreferrer';
+            actions.append(source);
+          }
+          card.append(actions);
+          queue.append(card);
+        });
+      }
+
+      async function loadQueue() {
+        if (!currentToken()) {
+          setConnection('locked', 'Desk locked · enter the local admin token');
+          return;
+        }
+        queue.setAttribute('aria-busy', 'true');
+        setConnection('locked', `Authorizing ${currentMarket()} desk…`);
+        try {
+          const data = await api(`/api/admin/stories?market=${encodeURIComponent(currentMarket())}`);
+          state.stories = Array.isArray(data.stories) ? data.stories : [];
+          setConnection('ready', `${currentMarket()} desk connected · private editorial API`);
+          renderQueue();
+        } catch (error) {
+          state.stories = [];
+          setConnection('error', error.status === 401 ? 'Authorization failed · check the admin token' : 'Desk unavailable · check the local CMS server');
+          queue.replaceChildren();
+          const empty = makeElement('div', 'empty');
+          const copy = makeElement('div');
+          copy.append(makeElement('strong', '', 'Could not open the desk'));
+          copy.append(document.createTextNode(error.message));
+          empty.append(copy); queue.append(empty);
+          notify(error.message, 'error');
+        } finally {
+          queue.setAttribute('aria-busy', 'false');
+        }
+      }
+
+      function formPayload(form) {
+        const data = new FormData(form);
+        const payload = Object.fromEntries(data.entries());
+        ['topic_tags', 'geography_tags', 'entity_tags', 'audience_tags', 'urgency_tags'].forEach(key => { payload[key] = listValues(payload[key]); });
+        const claimInput = form.elements.claim_slots;
+        claimInput.setCustomValidity('');
+        try {
+          payload.claim_slots = JSON.parse(String(payload.claim_slots || ''));
+          if (!Array.isArray(payload.claim_slots) || !payload.claim_slots.length || payload.claim_slots.some(item => !item || typeof item !== 'object' || Array.isArray(item))) {
+            throw new Error('Claim slots must be a non-empty JSON array of objects.');
+          }
+        } catch (_) {
+          claimInput.setCustomValidity('Enter a valid, non-empty JSON array of claim objects.');
+          claimInput.reportValidity();
+          throw new Error('Claim slots need valid JSON before this draft can be saved.');
+        }
+        payload.unresolved_issues = String(payload.unresolved_issues || '').trim();
+        ['lat', 'lon'].forEach(key => {
+          const value = String(payload[key] || '').trim();
+          if (value) payload[key] = Number(value); else delete payload[key];
+        });
+        payload.market = currentMarket();
+        return payload;
+      }
+
+      connectionForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!connectionForm.reportValidity()) return;
+        marketInput.value = currentMarket();
+        sessionStorage.setItem(SESSION_MARKET_KEY, currentMarket());
+        sessionStorage.setItem(SESSION_TOKEN_KEY, tokenInput.value);
+        await loadQueue();
+      });
+
+      document.querySelector('#lock-desk').addEventListener('click', () => {
+        sessionStorage.removeItem(SESSION_TOKEN_KEY);
+        tokenInput.value = '';
+        state.stories = [];
+        setConnection('locked', 'Desk locked · token removed from this tab');
+        queueSummary.textContent = 'Open the desk to load the live editorial queue.';
+        queue.innerHTML = '<div class="empty"><div><strong>Desk is locked</strong>The session token has been cleared from this tab.</div></div>';
+        notify('Desk locked. Session token cleared.');
+      });
+
+      storyForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!storyForm.reportValidity()) return;
+        if (!currentToken()) { notify('Open the desk before saving a draft.', 'error'); tokenInput.focus(); return; }
+        let payload;
+        try { payload = formPayload(storyForm); }
+        catch (error) { notify(error.message, 'error'); return; }
+        const button = document.querySelector('#save-draft');
+        button.disabled = true; button.textContent = 'Saving draft…';
+        try {
+          const result = await api('/api/admin/stories', { method: 'POST', body: JSON.stringify(payload) });
+          const editorName = storyForm.elements.editor_name.value;
+          const byline = storyForm.elements.byline.value;
+          storyForm.reset();
+          storyForm.elements.byline.value = byline || 'Florida Signal Desk';
+          storyForm.elements.editor_name.value = editorName;
+          notify(result.blocks && result.blocks.length ? `Draft saved with ${result.blocks.length} remaining gate block${result.blocks.length === 1 ? '' : 's'}.` : 'Private draft saved.');
+          await loadQueue();
+          document.querySelector('.queue-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (error) {
+          notify(error.message, 'error');
+        } finally {
+          button.disabled = false; button.textContent = 'Save private draft';
+        }
+      });
+
+      document.querySelector('.queue-tools').addEventListener('click', event => {
+        const filter = event.target.closest('[data-filter]');
+        if (!filter) return;
+        state.filter = filter.dataset.filter;
+        document.querySelectorAll('[data-filter]').forEach(button => button.setAttribute('aria-pressed', String(button === filter)));
+        renderQueue();
+      });
+
+      queueCityFilter.addEventListener('change', () => {
+        state.cityFilter = queueCityFilter.value;
+        renderQueue();
+      });
+
+      document.querySelector('#refresh-queue').addEventListener('click', loadQueue);
+
+      queue.addEventListener('click', event => {
+        const trigger = event.target.closest('button[data-action][data-story-id]');
+        if (!trigger) return;
+        const story = state.stories.find(item => item.id === trigger.dataset.storyId);
+        if (!story) return;
+        const action = trigger.dataset.action;
+        reviewForm.reset();
+        reviewForm.elements.story_id.value = story.id;
+        reviewForm.elements.action.value = action;
+        reviewForm.elements.editor_name.value = story.editor_name || storyForm.elements.editor_name.value || '';
+        reviewForm.elements.editor_note.value = story.editor_note || '';
+        reviewForm.elements.verification_status.value = story.verification_status || 'needs_verification';
+        reviewForm.elements.validator_status.value = story.validator_status || 'pending';
+        reviewForm.elements.claims_status.value = story.claims_status || 'pending';
+        reviewForm.elements.tags_status.value = story.tags_status || 'pending';
+        document.querySelector('#review-kicker').textContent = action === 'approve' ? 'Publish gate · explicit approval' : 'Editorial hold';
+        document.querySelector('#review-title').textContent = action === 'approve' ? 'Approve for the wire' : 'Place story on hold';
+        document.querySelector('#review-story').textContent = story.headline;
+        const confirm = document.querySelector('#confirm-review');
+        confirm.textContent = action === 'approve' ? 'Approve sourced packet' : 'Confirm editorial hold';
+        confirm.className = action === 'approve' ? 'button button--teal' : 'button button--danger';
+        reviewDialog.showModal();
+      });
+
+      document.querySelector('#cancel-review').addEventListener('click', () => reviewDialog.close());
+
+      reviewForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!reviewForm.reportValidity()) return;
+        const data = new FormData(reviewForm);
+        const storyId = data.get('story_id');
+        const action = data.get('action');
+        const payload = {
+          editor_name: String(data.get('editor_name') || '').trim(),
+          editor_note: String(data.get('editor_note') || '').trim(),
+          verification_status: data.get('verification_status'),
+          validator_status: data.get('validator_status'),
+          claims_status: data.get('claims_status'),
+          tags_status: data.get('tags_status')
+        };
+        const confirm = document.querySelector('#confirm-review');
+        confirm.disabled = true; confirm.textContent = 'Recording decision…';
+        try {
+          await api(`/api/admin/stories/${encodeURIComponent(storyId)}/${action}`, { method: 'POST', body: JSON.stringify(payload) });
+          reviewDialog.close();
+          storyForm.elements.editor_name.value = payload.editor_name;
+          notify(action === 'approve' ? 'Story approved for the public wire.' : 'Story placed on editorial hold.');
+          await loadQueue();
+        } catch (error) {
+          const details = error.blocks && error.blocks.length ? ` ${error.blocks.join('; ')}` : '';
+          notify(`${error.message}.${details}`, 'error');
+        } finally {
+          confirm.disabled = false;
+          confirm.textContent = action === 'approve' ? 'Approve sourced packet' : 'Confirm editorial hold';
+        }
+      });
+
+      const savedMarket = sessionStorage.getItem(SESSION_MARKET_KEY);
+      const savedToken = sessionStorage.getItem(SESSION_TOKEN_KEY);
+      Array.from(storyForm.elements.city.options).forEach(option => {
+        queueCityFilter.append(new Option(option.textContent.replace(' · live desk', '').replace(' · coming soon', ''), option.value));
+      });
+      if (savedMarket) marketInput.value = savedMarket;
+      if (savedToken) {
+        tokenInput.value = savedToken;
+        loadQueue();
+      }
+      storyForm.elements.claim_slots.addEventListener('input', event => event.currentTarget.setCustomValidity(''));
+    })();
+  </script>
+  <script>
+  (function () {
+    var KEY = 'dataWireAdminToken', MKT = 'dataWireMarket';
+    if (sessionStorage.getItem(KEY)) { document.documentElement.setAttribute('data-local-desk', '1'); return; }
+    fetch('/api/local-session').then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      if (j && j.token && !sessionStorage.getItem(KEY)) {
+        sessionStorage.setItem(KEY, j.token);
+        sessionStorage.setItem(MKT, j.market || 'broward');
+        location.reload();
+      }
+    }).catch(function () {});
+  })();
+  </script>
+  <style>
+    html[data-local-desk="1"] .connection { display: none; }
+    html[data-local-desk="1"] .privacy-note::after { content: " · local desk auto-unlocked"; }
+  </style>
+</body>
+</html>

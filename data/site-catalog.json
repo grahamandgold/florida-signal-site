@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.1",
+  "name": "Florida Signal",
+  "publisher": {
+    "name": "Graham & Gold LLC",
+    "url": "https://thefloridasignal.com/fort-lauderdale/",
+    "email": "desk@thefloridasignal.com"
+  },
+  "coverage": {
+    "brand_scope": "Broward-wide intelligence launching city by city",
+    "live_city": {"name": "Fort Lauderdale", "slug": "fort-lauderdale", "status": "live"},
+    "expansion_status": "All other Broward municipality desks are coming soon without dates or coverage promises.",
+    "primary": ["Fort Lauderdale", "Broward County", "Florida"],
+    "geography_standard": "Official City neighborhood polygons and U.S. Census ZIP and legislative-district geography",
+    "limits": "A displayed capped sample is not a claim of complete municipal or county coverage. Corridor context is labeled separately from live source coverage."
+  },
+  "date_contract": {
+    "market_event_clock": ["permit applied_date", "instrument recording_date_iso", "Sunbiz application or registration date", "scheduled meeting time"],
+    "system_clock": ["pulled_at", "first_seen_at", "enriched_at", "cached_at", "published_at"],
+    "rule": "Charts, rankings and what-moved signals use the market/event clock. System time is freshness metadata and never substitutes for event date."
+  },
+  "surfaces": [
+    {"name": "Current signals", "url": "https://thefloridasignal.com/fort-lauderdale/", "update_target": "after successful source refreshes"},
+    {"name": "Approved briefs", "url": "https://thefloridasignal.com/fort-lauderdale/briefs/", "update_target": "after city, source, claims, taxonomy and human-editor gates pass"},
+    {"name": "Neighborhood and field map", "url": "https://thefloridasignal.com/fort-lauderdale/neighborhoods/", "update_target": "permit intake nightly; public mirror and detail every 30 minutes; enrichment every two hours"},
+    {"name": "Broward record", "url": "https://thefloridasignal.com/fort-lauderdale/broward-record/", "update_target": "Broward collector daily at 9:30 AM; always show the observed recording-date span"},
+    {"name": "Data Room", "url": "https://thefloridasignal.com/fort-lauderdale/graphics/", "update_target": "live map follows the current mapped permit sample; regenerate affected diagram exports after each successful source refresh"},
+    {"name": "Meetings and Agenda Recon", "url": "https://thefloridasignal.com/fort-lauderdale/meetings/", "update_target": "Fort Lauderdale Legistar every 15 minutes; source-cited DRC and industry listings editorially rechecked"},
+    {"name": "Storm Window", "url": "https://thefloridasignal.com/fort-lauderdale/storm/", "update_target": "official NHC/NOAA refresh while active"},
+    {"name": "Methodology", "url": "https://thefloridasignal.com/fort-lauderdale/method/", "update_target": "when source, clock or editorial rules change"}
+  ],
+  "editorial_rules": [
+    "No source, no claim.",
+    "Narrative interpretation requires human review.",
+    "Agenda properties require official packet citation, coordinates and editor clearance.",
+    "Sponsors cannot influence records, rankings, lead qualification, story selection, findings or corrections.",
+    "Florida Signal never replaces NHC, NWS or emergency-management guidance."
+  ],
+  "ai_guidance": "Preserve visible event spans, sample caps, source timestamps and coverage limits in every summary or citation.",
+  "updated": "2026-07-17"
+}

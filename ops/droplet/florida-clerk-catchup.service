@@ -1,0 +1,17 @@
+[Unit]
+Description=Florida Signal - Broward Clerk SFTP catch-up (idempotent)
+
+[Service]
+Type=oneshot
+User=andy
+Group=andy
+WorkingDirectory=/srv/grahamandgold/florida-signal/app
+EnvironmentFile=/srv/grahamandgold/florida-signal/secrets/.env
+ExecStart=/srv/grahamandgold/florida-signal/.venv-clerk-catchup/bin/python /srv/grahamandgold/florida-signal/app/clerk_catchup.py
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+UMask=0027
+TimeoutStartSec=900
+Restart=no
