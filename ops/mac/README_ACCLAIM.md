@@ -10,7 +10,8 @@ HTTP from the droplet OR from the Mac — gets a 403 "Attention Required" (prove
 only thing that passes is a **real, human-warmed Chrome** with a live `cf_clearance` cookie. The
 DigitalOcean IP is additionally datacenter-blocked. So this pipeline drives the operator's real
 Chrome via AppleScript on the residential Mac. `execute javascript` (Chrome → View → Developer →
-"Allow JavaScript from Apple Events") is already enabled.
+"Allow JavaScript from Apple Events") must be enabled in the collector's Chrome profile; when it
+is off, the job reports an action-required degraded state instead of a generic collector failure.
 
 ## Components (all in ops/mac/)
 - `acclaim_harvest.applescript` — opens a dedicated Chrome window, passes Cloudflare, searches one
@@ -20,10 +21,14 @@ Chrome via AppleScript on the residential Mac. `execute javascript` (Chrome → 
 - `acclaim_state.py` — persists per-date progress + backlog to
   `~/Library/Application Support/FloridaSignal/acclaim_state.json`.
 - `acclaim_pull.sh` — orchestrator/ExecStart. Computes missing dates AFTER the verified SFTP max,
-  oldest-first, capped by `ACCLAIM_MAX_DATES` (8) and `ACCLAIM_MAX_PAGES` (60). Per-date state; resumes
-  after failure; self-heals gaps when the Mac was off (recompute-from-verified-max, not a fragile cursor).
-  Exits nonzero on any failure. Logs → `~/Library/Logs/florida-acclaim.log`.
-- `com.floridasignal.acclaim.plist` — LaunchAgent at **00:30, 12:00, 19:00 and 22:30** local,
+  oldest-first, capped by `ACCLAIM_MAX_DATES` (8) and `ACCLAIM_MAX_PAGES` (40). Per-date state; resumes
+  after gaps, prevents overlapping runs, and bounds hung browser automation. Transient Supabase
+  reads retain the cached verified floor instead of rewinding. A Broward disclaimer redirect is
+  reported as `source_wait`; so is Chrome's operator-controlled “Allow JavaScript from Apple
+  Events” setting when disabled. In both cases, backlog and freshness warnings remain while the
+  collector exits zero. Technical automation failures still exit nonzero.
+  Logs → `~/Library/Logs/florida-acclaim.log`.
+- `com.floridasignal.acclaim.plist` — LaunchAgent at **00:30, 12:00, 19:00, and 22:30** local,
   plus `RunAtLoad` catch-up, absolute paths, logs outside repo. Installed at
   `~/Library/LaunchAgents/`.
 
