@@ -29,13 +29,19 @@ on run argv
 	repeat 20 times
 		delay 2
 		tell application "Google Chrome"
-			set probe to execute t javascript "(function(){return document.getElementById('RecordDate')?'READY':(/Attention Required|Just a moment/i.test(document.title)?'CF':'WAIT');})()"
+			set probe to execute t javascript "(function(){return document.getElementById('RecordDate')?'READY':(/\\/Disclaimer(?:\\?|$)/i.test(location.pathname)?'TERMS':(/Attention Required|Just a moment/i.test(document.title)?'CF':'WAIT'));})()"
 		end tell
-		if probe is "READY" then
+		if probe is "READY" or probe is "TERMS" then
 			set ready to true
 			exit repeat
 		end if
 	end repeat
+	if probe is "TERMS" then
+		-- Broward periodically expires the disclaimer acceptance cookie. This is an
+		-- operator gate, not a collector crash; never click an acceptance control.
+		tell application "Google Chrome" to close w
+		return "SOURCE_WAIT|0|0|terms_acceptance_required"
+	end if
 	if not ready then
 		tell application "Google Chrome" to close w
 		return "INCOMPLETE|0|0|not_ready_" & probe
