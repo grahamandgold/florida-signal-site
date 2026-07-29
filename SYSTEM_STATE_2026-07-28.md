@@ -55,7 +55,7 @@ downloaded repository copies are not authorities.
 | Fort Lauderdale route | HTTP 200; indexable; present in the public sitemap |
 | Production API hostname | No A or AAAA response on July 28 |
 | PR #3 | Open, ready for review, mergeable/clean; not deployed |
-| PR #4 | Open draft, conflicting/dirty; must not merge in its current state |
+| PR #4 | Open draft, mergeable/clean after reconciliation with `main`; not approved to merge |
 | Approved launch | **No** |
 | CMS/Mailchimp production delivery | Not proven or approved live |
 
@@ -96,7 +96,7 @@ editorial tests, resolved release branches, and written approval.
 - Engine recovery PR: `grahamandgold/florida-signal#80`, branch
   `codex/pipeline-recovery` (draft).
 - Site recovery PR: `grahamandgold/florida-signal-site#4`, branch
-  `codex/acclaim-recovery` (draft and currently conflicting).
+  `codex/acclaim-recovery` (draft, reconciled with `main`, mergeable).
 - Product/mobile work: `grahamandgold/florida-signal-site#3`, branch
   `codex/methodology-mobile-stories` (open and mergeable).
 

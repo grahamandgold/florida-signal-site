@@ -26,8 +26,9 @@ Do not change Pages, DNS, or the public build without that decision.
   behavior end to end against the production topology.
 - Remove public indexing permission until launch approval, if the chosen preview policy
   requires containment.
-- Resolve the two file conflicts in site PR #4 and verify that bringing it current with
-  `main` does not remove public-API or launch files.
+- Review the now-reconciled site PR #4 diff. Its conflicts are resolved, the public-API
+  files from `main` are retained, and the PR is mergeable; it still requires explicit review
+  and approval before merge.
 - Review PR #3 and PR #4 independently. Do not combine, merge, or deploy them by implication.
 - Run a full release checklist from a named commit, record the evidence, and obtain Andy's
   explicit launch approval.
