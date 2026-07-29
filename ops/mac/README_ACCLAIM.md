@@ -29,7 +29,12 @@ is off, the job reports an action-required degraded state instead of a generic c
   collector exits zero. Technical automation failures still exit nonzero.
   Logs → `~/Library/Logs/florida-acclaim.log`.
 - `com.floridasignal.acclaim.plist` — LaunchAgent at **00:30, 12:00, 19:00, and 22:30** local,
-  absolute paths, logs outside repo. Installed at `~/Library/LaunchAgents/`.
+  plus `RunAtLoad` catch-up, absolute paths, logs outside repo. Installed at
+  `~/Library/LaunchAgents/`.
+
+The target selector does not query the still-forming current day before noon. An `EMPTY`
+current-day grid is never marked done; only an empty date strictly before today is final. This
+prevents a pre-release visit from suppressing the later retry.
 
 ## Reconciliation (server-side, Supabase — off the Mac)
 `public.reconcile_clerk_preliminary()` matches preliminary rows to `broward_clerk_records_doc` by

@@ -4,6 +4,10 @@
   const SUPABASE_URL = "https://jrjewmzkyluxdywyusrw.supabase.co";
   // Supabase publishable keys are designed for public clients. RLS remains the access boundary.
   const SUPABASE_KEY = "sb_publishable_dEyBjKE_vcTj3YYx4p6XvA_xnkVW3Wb";
+  const API_BASE = /(^|\.)thefloridasignal\.com$/i.test(window.location.hostname)
+    ? "https://api.thefloridasignal.com"
+    : "";
+  function apiUrl(path) { return API_BASE + path; }
   const NEIGHBORHOODS_URL = "https://gis.fortlauderdale.gov/arcgis/rest/services/GeneralPurpose/gisdata/MapServer/61/query?where=1%3D1&outFields=OFFICIALNAME&returnGeometry=true&f=geojson&outSR=4326";
   const CENSUS_ENVELOPE = "-80.36,25.91,-80.04,26.36";
   const CENSUS_LAYERS = {
@@ -351,7 +355,7 @@
   async function loadCmsContent() {
     const status = el("#cms-status");
     try {
-      const response = await fetch("/api/cms", { headers: { Accept: "application/json" } });
+      const response = await fetch(apiUrl("/api/cms"), { headers: { Accept: "application/json" } });
       if (!response.ok) throw new Error("CMS adapter unavailable");
       state.cms = await response.json();
       if (status) {
@@ -1604,7 +1608,7 @@
     const updated = el("#storm-updated");
     if (!status && !updated && !el("#graphic-desk") && !el("#storm-operations") && !el(".storm-promise")) return;
     try {
-      let response = await fetch("/api/storms", { cache: "no-store" });
+      let response = await fetch(apiUrl("/api/storms"), { cache: "no-store" });
       if (!response.ok) response = await fetch("https://www.nhc.noaa.gov/CurrentStorms.json", { cache: "no-store" });
       if (!response.ok) throw new Error("NHC unavailable");
       const data = await response.json();
@@ -1650,7 +1654,7 @@
     const meetingList = el("#meeting-list");
     if ((!date || !title || !meta || !agenda || !video) && !meetingList && !el("#graphic-desk")) return;
     try {
-      const response = await fetch("/api/meetings", { cache: "no-store" });
+      const response = await fetch(apiUrl("/api/meetings"), { cache: "no-store" });
       if (!response.ok) throw new Error("Meeting calendar unavailable");
       const payload = await response.json();
       const meetings = Array.isArray(payload.meetings) ? payload.meetings : [];
@@ -1744,7 +1748,7 @@
     const results = el("#agenda-recon-results");
     if (!mapNode || !results) return;
     try {
-      const response = await fetch("/api/agenda-recon", { cache: "no-store" });
+      const response = await fetch(apiUrl("/api/agenda-recon"), { cache: "no-store" });
       if (!response.ok) throw new Error("Agenda recon unavailable");
       const payload = await response.json();
       const items = Array.isArray(payload.items) ? payload.items : [];
@@ -2435,7 +2439,7 @@
         message.classList.remove("is-error");
         message.textContent = "Saving your place…";
         try {
-          const response = await fetch("/api/subscribe", {
+          const response = await fetch(apiUrl("/api/subscribe"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: input.value, zip: zip.value, cities: cities, interests: interests, source: form.getAttribute("data-signup-source") || (form.classList.contains("signup--hero") ? "homepage-hero" : "homepage-brief") })
@@ -2563,7 +2567,7 @@
     else if (header) header.insertAdjacentElement("afterend", details);
     details.addEventListener("toggle", function () { if (details.open) trackEvent("source_health_open", { placement: page }); });
     try {
-      const response = await fetch("/api/data-health", { cache: "no-store", headers: { Accept: "application/json" } });
+      const response = await fetch(apiUrl("/api/data-health"), { cache: "no-store", headers: { Accept: "application/json" } });
       if (!response.ok) throw new Error("Data health unavailable");
       const payload = await response.json();
       const sources = Array.isArray(payload.sources) ? payload.sources : [];
@@ -2605,10 +2609,10 @@
     if (window.dataLayer && Array.isArray(window.dataLayer)) window.dataLayer.push(Object.assign({ event: name }, properties || {}));
     try {
       if (navigator.sendBeacon) {
-        const accepted = navigator.sendBeacon("/api/events", new Blob([payload], { type: "application/json" }));
+        const accepted = navigator.sendBeacon(apiUrl("/api/events"), new Blob([payload], { type: "application/json" }));
         if (accepted) return;
       }
-      fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: payload, keepalive: true }).catch(function () { /* Static hosts may not expose first-party analytics. */ });
+      fetch(apiUrl("/api/events"), { method: "POST", headers: { "Content-Type": "application/json" }, body: payload, keepalive: true }).catch(function () { /* Analytics are best-effort. */ });
     } catch (error) { /* Analytics must never block the product. */ }
   }
 
@@ -2804,7 +2808,7 @@
     (async function () {
       let mode = null;
       try {
-        let response = await fetch("/api/site-mode", { cache: "no-store" });
+        let response = await fetch(apiUrl("/api/site-mode"), { cache: "no-store" });
         if (!response.ok) response = await fetch("/data/site_mode.json", { cache: "no-store" });
         if (response.ok) mode = await response.json();
       } catch (error) { mode = null; }

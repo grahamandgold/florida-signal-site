@@ -9,6 +9,7 @@ server-side Mailchimp upsert, and an approved-only Florida Desk/CMS adapter.
 from __future__ import annotations
 
 import base64
+import argparse
 import json
 import hashlib
 import os
@@ -31,7 +32,7 @@ from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
-DB_PATH = DATA_DIR / "florida_signal_cms.sqlite"
+DB_PATH = Path(os.getenv("FLORIDA_SIGNAL_DB_PATH", str(DATA_DIR / "florida_signal_cms.sqlite"))).expanduser()
 AGENDA_RECON_PATH = DATA_DIR / "agenda_recon.json"
 SITE_MODE_PATH = DATA_DIR / "site_mode.json"
 NHC_URL = "https://www.nhc.noaa.gov/CurrentStorms.json"
@@ -45,6 +46,14 @@ ZIP_RE = re.compile(r"^\d{5}(?:-\d{4})?$")
 MAX_BODY = 4096
 RATE_WINDOW_SECONDS = 60
 RATE_LIMIT = 6
+PUBLIC_ORIGINS = {
+    origin.strip().rstrip("/")
+    for origin in os.getenv(
+        "FLORIDA_SIGNAL_PUBLIC_ORIGINS",
+        "https://thefloridasignal.com,https://www.thefloridasignal.com",
+    ).split(",")
+    if origin.strip()
+}
 _rate_lock = threading.Lock()
 _rate_hits: dict[str, list[float]] = {}
 _nhc_lock = threading.Lock()
@@ -813,9 +822,33 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
     def end_headers(self) -> None:
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+        origin = self.headers.get("Origin", "").rstrip("/")
+        if self.path.startswith("/api/") and origin in PUBLIC_ORIGINS:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Vary", "Origin")
         if self.path.endswith((".html", ".js", ".css")) or self.path.startswith("/api/"):
             self.send_header("Cache-Control", "no-store")
         super().end_headers()
+
+    def do_OPTIONS(self) -> None:  # noqa: N802
+        route = urlparse(self.path).path
+        origin = self.headers.get("Origin", "").rstrip("/")
+        if route.startswith("/api/") and origin in PUBLIC_ORIGINS:
+            self.send_response(HTTPStatus.NO_CONTENT)
+        else:
+            self.send_response(HTTPStatus.FORBIDDEN)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def client_ip(self) -> str:
+        peer = self.client_address[0]
+        if peer in {"127.0.0.1", "::1"}:
+            forwarded = self.headers.get("X-Forwarded-For", "").split(",", 1)[0].strip()
+            if forwarded:
+                return forwarded[:64]
+        return peer
 
     def json_response(self, payload: dict[str, Any], status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
@@ -931,7 +964,7 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
         if route != "/api/subscribe":
             self.json_response({"error": "Not found"}, HTTPStatus.NOT_FOUND)
             return
-        if not rate_allowed(self.client_address[0]):
+        if not rate_allowed(self.client_ip()):
             self.json_response({"error": "Please wait a minute and try again."}, HTTPStatus.TOO_MANY_REQUESTS)
             return
         try:
@@ -1001,9 +1034,13 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Florida Signal public site and API service")
+    parser.add_argument("--host", "--bind", dest="host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=4173)
+    args = parser.parse_args()
     init_db()
-    server = ThreadingHTTPServer(("127.0.0.1", 4173), FloridaSignalHandler)
-    print("Florida Signal preview: http://127.0.0.1:4173/", flush=True)
+    server = ThreadingHTTPServer((args.host, args.port), FloridaSignalHandler)
+    print(f"Florida Signal preview: http://{args.host}:{args.port}/", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
