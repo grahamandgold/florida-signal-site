@@ -1,8 +1,10 @@
 # Florida Signal
 
-**New here, human or agent? Read [`FLORIDA_SIGNAL_VERIFIED_CHECKPOINT_2026-07-19.md`](FLORIDA_SIGNAL_VERIFIED_CHECKPOINT_2026-07-19.md) first.**
-It is the verified front door: authorities, current branch and PR, what is deployed, what is
-database-applied, what is scheduled, what is local-only, and what needs Andy's approval.
+**New here, human or agent? Read [`SYSTEM_STATE_2026-07-28.md`](SYSTEM_STATE_2026-07-28.md)
+and [`REMAINING_WORK_REGISTER_2026-07-28.md`](REMAINING_WORK_REGISTER_2026-07-28.md) first.**
+They are the verified front door: authorities, current branches and PRs, public exposure,
+production state, backup policy, launch blockers, and the decisions that require Andy.
+Earlier dated checkpoints are preserved as historical evidence.
 **The scorer and collectors are not in this repository** — they live in `grahamandgold/florida-signal`.
 
 Florida Signal is Broward-wide, source-first development intelligence launching city by city. Fort Lauderdale is the first live desk. Every public content URL is scoped under `/fort-lauderdale/`; other Broward municipality paths use one shared “coming soon” template without dates or coverage promises.
@@ -47,6 +49,8 @@ The local server provides same-origin meeting, storm, CMS, agenda-recon and subs
 
 ## Operating handoff
 
+- [`SYSTEM_STATE_2026-07-28.md`](SYSTEM_STATE_2026-07-28.md) — current operational and launch truth.
+- [`REMAINING_WORK_REGISTER_2026-07-28.md`](REMAINING_WORK_REGISTER_2026-07-28.md) — unresolved decisions and launch blockers.
 - [`FLORIDA_SIGNAL_BUILD_REPORT.md`](FLORIDA_SIGNAL_BUILD_REPORT.md) — source cadence, live versus scheduled updates, date methodology, CMS/Mailchimp state and production runbook.
 - [`LIVE_DATA_OPERATIONS_HANDOFF.md`](LIVE_DATA_OPERATIONS_HANDOFF.md) — exact live-stat definitions, observed source health, update/recovery procedures and daily operating sequence.
 - [`AI_HANDOFF.md`](AI_HANDOFF.md) — data, editorial, multi-city, Storm Watch and implementation rules for the next AI or developer.

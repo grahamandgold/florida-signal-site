@@ -1,6 +1,11 @@
 # FLORIDA SIGNAL — VERIFIED CHECKPOINT
 **2026-07-19 · Graham & Gold LLC · every claim below was verified directly, not copied from chat**
 
+> **HISTORICAL SNAPSHOT.** This document accurately records the July 19 checkpoint but is
+> not current system or launch truth. Use
+> [`SYSTEM_STATE_2026-07-28.md`](SYSTEM_STATE_2026-07-28.md) and
+> [`REMAINING_WORK_REGISTER_2026-07-28.md`](REMAINING_WORK_REGISTER_2026-07-28.md).
+
 > **START HERE.** If you are a new agent or a returning human, read §1 and §2 first. They tell
 > you which authority owns what. Getting that wrong is the most common and most expensive error
 > in this project.

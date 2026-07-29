@@ -1,5 +1,10 @@
 # Florida Signal live data operations handoff
 
+> **HISTORICAL OPERATIONS SNAPSHOT.** The health table and runtime claims below record the
+> July 17–19 state. For current production, backup, parcel, Sunbiz, branch, and launch truth,
+> use [`SYSTEM_STATE_2026-07-28.md`](SYSTEM_STATE_2026-07-28.md) and
+> [`REMAINING_WORK_REGISTER_2026-07-28.md`](REMAINING_WORK_REGISTER_2026-07-28.md).
+
 **Market:** Broward County  
 **Live city:** Fort Lauderdale  
 **Publisher:** Graham & Gold LLC  
