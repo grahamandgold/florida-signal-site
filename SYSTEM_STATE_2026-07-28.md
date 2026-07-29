@@ -22,6 +22,9 @@ pipeline, or backup state.
 - The core data pipeline is operating. Today's recurring Sunbiz fault was traced to a
   duplicate legacy Mac writer and permanently retired. Only the authoritative droplet
   SFTP-corpus resolver may write production Sunbiz cache results.
+- Acclaim is the only loaded Florida Signal LaunchAgent on the Mac. The remaining legacy
+  plist files are unloaded and explicitly disabled; the retired Sunbiz-deeds plist was moved
+  out of `LaunchAgents` and its label remains disabled.
 - The final production health rollup is **GREEN** with zero failed systemd units. The
   freshness watchdog now has bounded provider-specific retries and its manifest query has
   targeted timestamp indexes.
