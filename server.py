@@ -426,6 +426,19 @@ def health_status(value: Any, current_hours: float, delayed_hours: float) -> str
     return "stale"
 
 
+def verified_clerk_status(event_time: Any, system_time: Any) -> str:
+    """Separate a healthy delayed source release from a failed collector."""
+    system_status = health_status(system_time, 30, 54)
+    event_status = health_status(event_time, 48, 240)
+    if "unavailable" in {system_status, event_status}:
+        return "unavailable"
+    if "stale" in {system_status, event_status}:
+        return "stale"
+    if "delayed" in {system_status, event_status}:
+        return "delayed"
+    return "current"
+
+
 def data_health_payload() -> dict[str, Any]:
     now = time.time()
     with _health_lock:
@@ -436,6 +449,9 @@ def data_health_payload() -> dict[str, Any]:
         latest_application: dict[str, Any] = {}
         latest_seen: dict[str, Any] = {}
         cache_row: dict[str, Any] = {}
+        verified_clerk_run: dict[str, Any] = {}
+        verified_clerk_record: dict[str, Any] = {}
+        preliminary_clerk_record: dict[str, Any] = {}
         try:
             rows = supabase_public_rows("_meta_sync_runs?select=id,completed_at,rows_synced,tables_touched,errors&order=completed_at.desc&limit=1")
             sync = rows[0] if rows else {}
@@ -453,13 +469,49 @@ def data_health_payload() -> dict[str, Any]:
             cache_row = rows[0] if rows else {}
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
             errors.append("dashboard:" + type(error).__name__)
+        try:
+            rows = supabase_public_rows(
+                "broward_clerk_records_run?select=business_date,pulled_at_utc,parse_status,observed_doc_count"
+                "&order=business_date.desc&limit=1"
+            )
+            verified_clerk_run = rows[0] if rows else {}
+            rows = supabase_public_rows(
+                "broward_clerk_records_doc?select=recording_date_iso&recording_date_iso=not.is.null"
+                "&order=recording_date_iso.desc&limit=1"
+            )
+            verified_clerk_record = rows[0] if rows else {}
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
+            errors.append("clerk-verified:" + type(error).__name__)
+        try:
+            rows = supabase_public_rows(
+                "broward_clerk_preliminary?select=record_date,fetched_at,preliminary_first_seen_at,"
+                "verification_status,source&order=record_date.desc,fetched_at.desc&limit=1"
+            )
+            preliminary_clerk_record = rows[0] if rows else {}
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
+            errors.append("clerk-preliminary:" + type(error).__name__)
         stats = cache_row.get("payload", {}).get("stats", {}) if isinstance(cache_row.get("payload"), dict) else {}
         meetings = meeting_payload()
+        verified_event_time = verified_clerk_record.get("recording_date_iso") or stats.get("broward_fresh")
+        verified_system_time = verified_clerk_run.get("pulled_at_utc") or cache_row.get("updated_at")
+        verified_doc_count = verified_clerk_run.get("observed_doc_count")
+        verified_detail = (
+            f"{verified_doc_count} documents in latest authoritative SFTP load · "
+            f"parse {verified_clerk_run.get('parse_status', 'unknown')}"
+            if verified_doc_count is not None
+            else "Authoritative SFTP documents; recording date is separate from collection time"
+        )
+        preliminary_event_time = preliminary_clerk_record.get("record_date")
+        preliminary_system_time = (
+            preliminary_clerk_record.get("preliminary_first_seen_at")
+            or preliminary_clerk_record.get("fetched_at")
+        )
         source_rows = [
             {"id": "supabase-sync", "label": "Public mirror", "status": health_status(sync.get("completed_at"), 1.25, 3), "system_time": sync.get("completed_at"), "event_through": None, "cadence": "every 30 minutes", "detail": f"{sync.get('rows_synced', 0)} rows in latest run · {sync.get('errors', 0)} errors" if sync else "No sync run visible"},
             {"id": "permits", "label": "Permit applications", "status": health_status(latest_seen.get("last_seen_at"), 30, 54), "system_time": latest_seen.get("last_seen_at"), "event_through": latest_application.get("applied_date"), "cadence": "source intake nightly; mirror every 30 minutes", "detail": "Analysis uses applied_date; last_seen_at is freshness metadata"},
             {"id": "aggregate-snapshot", "label": "Aggregate dashboard", "status": health_status(cache_row.get("updated_at"), 26, 54), "system_time": cache_row.get("updated_at"), "event_through": stats.get("permits_fresh"), "cadence": "refresh after successful aggregate build", "detail": "Counts retain their visible update time when this snapshot is delayed"},
-            {"id": "broward", "label": "Broward instruments", "status": health_status(stats.get("broward_fresh"), 48, 96), "system_time": cache_row.get("updated_at"), "event_through": stats.get("broward_fresh"), "cadence": "daily at 9:30 AM", "detail": "Deeds, mortgages, liens, NOCs and recorded instruments"},
+            {"id": "broward", "label": "Broward verified instruments", "status": verified_clerk_status(verified_event_time, verified_system_time), "verification": "verified", "system_time": verified_system_time, "event_through": verified_event_time, "cadence": "SFTP check daily at 9:30 AM plus weekday catch-up", "detail": verified_detail},
+            {"id": "clerk-preliminary", "label": "Broward preliminary recordings", "status": health_status(preliminary_event_time, 48, 96), "verification": "preliminary", "system_time": preliminary_system_time, "event_through": preliminary_event_time, "cadence": "AcclaimWeb at 12:30 AM, noon, 7 PM and 10:30 PM", "detail": "Same-day public-search text; reconciled against the authoritative SFTP feed and never presented as verified early"},
             {"id": "meetings", "label": "Meeting watch", "status": health_status(meetings.get("updated_at"), .5, 2), "system_time": meetings.get("updated_at"), "event_through": None, "cadence": "Legistar every 15 minutes; DRC and industry editorially checked", "detail": f"{len(meetings.get('meetings', []))} upcoming rooms · every row links to its public source"},
             {"id": "sunbiz", "label": "Sunbiz", "status": "unverified", "system_time": None, "event_through": None, "cadence": "raw ingest nightly at 11:30 PM; exact matching in enrichment", "detail": "Public health timestamp is not yet exposed; fuzzy writes remain off"},
         ]

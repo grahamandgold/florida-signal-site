@@ -29,7 +29,8 @@ Chrome via AppleScript on the residential Mac. `execute javascript` (Chrome → 
 
 The target selector does not query the still-forming current day before noon. An `EMPTY`
 current-day grid is never marked done; only an empty date strictly before today is final. This
-prevents a pre-release visit from suppressing the later retry.
+prevents a pre-release visit from suppressing the later retry. The state writer uses the same noon
+boundary, so a 12:30 a.m. run cannot falsely put the current date in `backlog_remaining`.
 
 ## Reconciliation (server-side, Supabase — off the Mac)
 `public.reconcile_clerk_preliminary()` matches preliminary rows to `broward_clerk_records_doc` by
@@ -42,6 +43,20 @@ runs daily 10:00 UTC. Proven 2026-07-19: 1 match verified, 1 conflict flagged, v
 - Manual run:  `launchctl kickstart -k gui/$(id -u)/com.floridasignal.acclaim`
 - Watch:       `tail -f ~/Library/Logs/florida-acclaim.log`  ·  state json above
 - Schedule:    `launchctl print gui/$(id -u)/com.floridasignal.acclaim`
+- Public clocks: `curl -fsS https://api.thefloridasignal.com/api/data-health | jq '.sources[] | select(.id == "broward" or .id == "clerk-preliminary")'`
+
+The public health contract deliberately shows two rows. `clerk-preliminary` reports the newest
+AcclaimWeb event date with `verification=preliminary`; `broward` reports the newest authoritative
+SFTP recording date with `verification=verified`. A newer preliminary date must never be used to
+advance the verified clock.
+
+## August 5, 2026 recovery evidence
+
+An interrupted local export had inserted 1,250 of 2,446 rows. The preserved 1,196-row remainder
+matched the full-file tail and recorded batch checksums, then inserted idempotently. Server-side
+reconciliation matched all 2,446 rows to SFTP with 0 conflicts and 0 aged unmatched rows. The
+recovered rows retain direct names (2,446), indirect names (2,213) and legal text (290); the
+authoritative tables were read-only throughout.
 
 ## Rollback
 `launchctl bootout gui/$(id -u)/com.floridasignal.acclaim` then re-enable the Claude task

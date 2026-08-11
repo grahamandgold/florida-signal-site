@@ -2599,7 +2599,8 @@
       grid.innerHTML = sources.map(function (source) {
         const eventClock = source.event_through ? "Event through " + formatDate(source.event_through, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "Event date varies by item";
         const systemClock = source.system_time ? "System " + formatDate(source.system_time, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "System timestamp not exposed";
-        return '<article><div><span class="source-health__status source-health__status--' + escapeHtml(source.status) + '">' + escapeHtml(source.status) + '</span><strong>' + escapeHtml(source.label) + '</strong></div><p>' + escapeHtml(eventClock) + '</p><p>' + escapeHtml(systemClock) + '</p><small>' + escapeHtml(source.cadence || "") + ' · ' + escapeHtml(source.detail || "") + '</small></article>';
+        const verification = source.verification ? '<span class="source-health__evidence source-health__evidence--' + escapeHtml(source.verification) + '">' + escapeHtml(source.verification) + '</span>' : '';
+        return '<article><div><span class="source-health__status source-health__status--' + escapeHtml(source.status) + '">' + escapeHtml(source.status) + '</span><strong>' + escapeHtml(source.label) + '</strong>' + verification + '</div><p>' + escapeHtml(eventClock) + '</p><p>' + escapeHtml(systemClock) + '</p><small>' + escapeHtml(source.cadence || "") + ' · ' + escapeHtml(source.detail || "") + '</small></article>';
       }).join("") || '<p>Source health is unavailable. The site will not substitute an inferred green status.</p>';
     } catch (error) {
       const summary = el("summary strong", details);

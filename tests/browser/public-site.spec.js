@@ -72,3 +72,23 @@ test("headline counts disclose exact and estimated quality", async ({ page }) =>
 
   expect(errors, errors.join("\n")).toEqual([]);
 });
+
+test("method desk visibly separates preliminary and verified Clerk clocks", async ({ page }) => {
+  await page.route("**/api/data-health", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sources: [
+          { id: "broward", label: "Broward verified instruments", status: "delayed", verification: "verified", event_through: "2026-08-05", system_time: "2026-08-10T18:11:44Z", cadence: "daily", detail: "authoritative SFTP" },
+          { id: "clerk-preliminary", label: "Broward preliminary recordings", status: "current", verification: "preliminary", event_through: "2026-08-10", system_time: "2026-08-11T00:56:06Z", cadence: "four times daily", detail: "reconciled later" }
+        ]
+      })
+    });
+  });
+  await page.goto("/fort-lauderdale/method/", { waitUntil: "domcontentloaded" });
+
+  await expect(page.getByText("Broward verified instruments")).toBeVisible();
+  await expect(page.getByText("Broward preliminary recordings")).toBeVisible();
+  await expect(page.locator(".source-health__evidence--verified")).toHaveText("verified");
+  await expect(page.locator(".source-health__evidence--preliminary")).toHaveText("preliminary");
+});

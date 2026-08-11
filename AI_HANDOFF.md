@@ -120,6 +120,9 @@ official-source fallback and visibly fail open to the NHC link rather than infer
 ## 2026-07-19 addendum (Claudette)
 
 - New Supabase sources: `fdep_erp`, `faa_oeaaa` (edge functions + pg_cron daily), `broward_clerk_preliminary` (AcclaimWeb same-day, PRELIMINARY until the verified SFTP business date lands — never present as verified).
+- Clerk health is a two-clock contract: `clerk-preliminary` is the early AcclaimWeb event span and `broward` is the authoritative SFTP span. Never combine the dates or remove the evidence labels.
+- The native Mac owner is `com.floridasignal.acclaim` at 00:30, 12:00, 19:00 and 22:30 local plus login catch-up. It preserves extra direct/indirect name, book/page and legal text for later fields; do not narrow the stored payload to the current UI.
+- August 5 recovery is complete: 2,446 preliminary rows matched SFTP, with 0 conflicts and 0 aged unmatched rows. See `SYSTEM_STATE_2026-08-11.md` for evidence.
 - Internal Data Desk viewer at `cms/data.html`; Data Wire local auto-unlock via `/api/local-session` (loopback + `DATA_WIRE_LOCAL_AUTOUNLOCK=1` only — keep OFF in production).
 - Brand: Atlantic palette + Montserrat/Figtree + `assets/lockup-2026-v2.png` / `assets/datawire-lockup.png`. Header lockup is live text; do not reintroduce the old PNG-only header.
 - CTA copy is "Get Daily Intel Brief" site-wide. Diagram of the day rotates daily by date.

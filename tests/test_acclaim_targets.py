@@ -13,6 +13,12 @@ SPEC.loader.exec_module(targets)
 
 
 class AcclaimTargetTests(unittest.TestCase):
+    def test_collection_end_date_excludes_forming_day_before_noon(self):
+        self.assertEqual(
+            targets.collection_end_date(dt.datetime(2026, 8, 11, 0, 30)),
+            dt.date(2026, 8, 10),
+        )
+
     def test_before_noon_excludes_current_day(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory) / "state.json"
