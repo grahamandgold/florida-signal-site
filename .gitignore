@@ -12,3 +12,6 @@ shots/
 
 # Generated visual-QA capture sets (large PNG contact sheets). Kept locally, not in git.
 audit/visual/
+node_modules/
+playwright-report/
+test-results/

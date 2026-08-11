@@ -84,6 +84,21 @@
   function setStat(name, value) {
     els('[data-stat="' + name + '"]').forEach(function (node) { node.textContent = value; });
   }
+  function setCountStat(name, value, options) {
+    const settings = options || {};
+    const prefix = settings.estimated && Number.isFinite(Number(value)) ? "≈" : "";
+    els('[data-stat="' + name + '"]').forEach(function (node) {
+      node.textContent = prefix + formatNumber(value);
+      node.dataset.countQuality = settings.estimated ? "estimated" : "exact";
+      if (settings.estimated) {
+        node.title = "Approximate database planner count; verify against the source snapshot before citation.";
+        node.setAttribute("aria-label", "Approximately " + formatNumber(value));
+      } else {
+        node.removeAttribute("title");
+        node.setAttribute("aria-label", formatNumber(value) + (settings.asOf ? " as of " + settings.asOf : ""));
+      }
+    });
+  }
   function recordDate(record) { return record.applied_date || record.issued_date || record.last_seen_at; }
   function recordHeadline(record) {
     const address = titleCase(String(record.address || "an address").replace(/\s+/g, " ").trim());
@@ -283,14 +298,16 @@
     state.applicationDates = results[6].status === "fulfilled" ? results[6].value : [];
 
     const stats = state.dashboard && state.dashboard.payload ? state.dashboard.payload.stats || {} : {};
-    const permits = results[1].status === "fulfilled" ? results[1].value : stats.permits_total;
+    const exactPermits = Number(stats.permits_total);
+    const permitsAreExact = Number.isFinite(exactPermits);
+    const permits = permitsAreExact ? exactPermits : (results[1].status === "fulfilled" ? results[1].value : null);
     // The query planner's filtered estimate is intentionally not used here; the
     // dashboard cache carries the last exact geocoded-row count and timestamp.
     const mapped = stats.p_geo || (results[2].status === "fulfilled" ? results[2].value : null);
     const sunbiz = results[3].status === "fulfilled" ? results[3].value : null;
-    setStat("permits", formatNumber(permits));
-    setStat("mapped", formatNumber(mapped));
-    setStat("sunbiz", formatNumber(sunbiz));
+    setCountStat("permits", permits, { estimated: !permitsAreExact, asOf: state.dashboard && state.dashboard.updated_at });
+    setCountStat("mapped", mapped, { estimated: !Number.isFinite(Number(stats.p_geo)), asOf: state.dashboard && state.dashboard.updated_at });
+    setCountStat("sunbiz", sunbiz, { estimated: true });
     setStat("broward-docs", formatNumber(stats.broward_docs));
     setStat("workflow", formatNumber(stats.foia_events, true));
     setStat("owner-change", formatNumber(stats.owner_chg));
@@ -1126,11 +1143,15 @@
 
   // A Signal card must never open underneath the brand badge or the key. autoPanPadding reserves
   // room for both, so Leaflet pans the map instead of dropping the card behind an overlay.
-  var SIGNAL_POPUP_OPTIONS = {
-    maxWidth: 340, className: "signal-popup", autoPan: true,
-    autoPanPaddingTopLeft: L.point(24, 104),     // brand badge sits at the top centre
-    autoPanPaddingBottomRight: L.point(24, 120)  // key sits bottom-left, credit strip below
-  };
+  function signalPopupOptions() {
+    // This function is called only from map code after Leaflet has loaded. Keeping
+    // L.point out of module initialization lets non-map pages use the shared app.
+    return {
+      maxWidth: 340, className: "signal-popup", autoPan: true,
+      autoPanPaddingTopLeft: L.point(24, 104),     // brand badge sits at the top centre
+      autoPanPaddingBottomRight: L.point(24, 120)  // key sits bottom-left, credit strip below
+    };
+  }
 
   // Belt and braces alongside the CSS :has() rule — older engines still dim the overlays.
   function bindPopupOverlayGuard(map) {
@@ -1158,7 +1179,7 @@
         fillOpacity: .92
       });
       marker.signalId = s.signal_id;              // deterministic marker identity
-      marker.bindPopup(signalCardHtml(s), SIGNAL_POPUP_OPTIONS);
+      marker.bindPopup(signalCardHtml(s), signalPopupOptions());
       layer.addLayer(marker);
     });
     signalState.layer = layer;
@@ -1333,7 +1354,7 @@
         const s = signalState.search.results[Number(btn.dataset.searchIndex)];
         if (!s || s.latitude == null || s.longitude == null || !state.map) return;
         state.map.setView([s.latitude, s.longitude], Math.max(state.map.getZoom(), 17));
-        L.popup(SIGNAL_POPUP_OPTIONS)
+        L.popup(signalPopupOptions())
           .setLatLng([s.latitude, s.longitude]).setContent(signalCardHtml(s)).openOn(state.map);
       });
     });
