@@ -78,6 +78,11 @@ Do not reactivate old jobs until the current always-on owner, inputs, outputs, i
 - A forced mirror completed at 3:11 p.m. ET: 27 tables, 10,872 rows and 0 errors, with a new
   heartbeat. A systemd-tmpfiles rule now makes the directory contract durable, and the hourly site
   monitor fails when `supabase-sync` becomes stale or unavailable.
+- The first live immediate-reconciliation call correctly failed the systemd service when the old
+  function exceeded PostgREST's statement timeout. Pipeline migration 009 added matching
+  normalized-instrument/date indexes, including a partial index limited to unverified preliminary
+  rows, and fixed the function search path. The rerun completed successfully with
+  `matched=0 conflicts=0 aged_unmatched=0`; the daily pg_cron fallback remains enabled.
 
 ## Public API production facts
 

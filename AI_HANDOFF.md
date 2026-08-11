@@ -138,7 +138,9 @@ official-source fallback and visibly fail open to the NHC link rather than infer
   hourly in addition to its four calendar fires and `RunAtLoad`.
 - `clerk_catchup.py` now runs `reconcile_clerk_preliminary()` after every authoritative run,
   including no-op runs. Daily pg_cron remains the fallback. Exact matches become verified;
-  conflicts remain quarantined and source text is preserved.
+  conflicts remain quarantined and source text is preserved. The first live RPC exposed the old
+  function's full-scan timeout; migration 009 added normalized instrument/date indexes and a fixed
+  search path. The service rerun succeeded with 0 conflicts and 0 aged unmatched rows.
 - The public mirror outage was permissions drift on the shared secrets directory, not source data
   loss. Durable contract: directory `root:andy` `0710`, pipeline `.env` `andy:andy` `0600`, and
   `public-site.env` root-only `0600`. A tmpfiles rule restores the directory contract.

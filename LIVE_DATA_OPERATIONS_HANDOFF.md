@@ -105,7 +105,8 @@ Every diagram names its application or recording window, links to the underlying
 5. Upsert by `(record_date, instrument_number)`; never overwrite the authoritative SFTP tables.
 6. Reconcile by normalized instrument number plus exact record date. The verified SFTP service does
    this immediately after every run, including a no-op run; daily pg_cron is the fallback. Flag date
-   conflicts instead of merging them.
+   conflicts instead of merging them. Migration 009 indexes both normalized join keys and limits
+   the preliminary index to still-unverified rows so archive growth does not exceed the API timeout.
 7. Confirm `/api/data-health` exposes both `clerk-preliminary` and `broward`, with `preliminary` and `verified` evidence labels respectively.
 8. Wi-Fi or power loss does not discard dates: state advances only on a complete source count, then
    the next hourly/login run recomputes gaps from the verified floor. A Broward disclaimer redirect
