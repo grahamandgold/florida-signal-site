@@ -19,7 +19,7 @@ jobs:
       SITE_BASE_URL: ${{ github.event_name == 'schedule' && 'https://thefloridasignal.com' || '' }}
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -28,7 +28,21 @@ jobs:
       - run: npm run test:browser
       - name: Check the production API boundary
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-        run: curl --fail --silent --show-error --retry 2 --connect-timeout 10 https://api.thefloridasignal.com/api/health
+        shell: bash
+        run: |
+          set -euo pipefail
+          api='https://api.thefloridasignal.com/api'
+          health="$(curl --fail --silent --show-error --retry 2 --connect-timeout 10 "$api/health")"
+          jq -e '.ok == true and .mailchimp_configured == true and .cms_configured == false' <<<"$health"
+
+          data_health="$(curl --fail --silent --show-error --retry 2 --connect-timeout 10 "$api/data-health")"
+          jq -e '(.sources | length) >= 5 and (.errors | length) == 0' <<<"$data_health"
+
+          meetings="$(curl --fail --silent --show-error --retry 2 --connect-timeout 10 "$api/meetings")"
+          jq -e '(.meetings | length) > 0' <<<"$meetings"
+
+          cms="$(curl --fail --silent --show-error --retry 2 --connect-timeout 10 "$api/cms")"
+          jq -e '.configured == false and (.gate | contains("approved-only"))' <<<"$cms"
       - name: Open or update a health incident
         if: failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         env:

@@ -66,7 +66,7 @@ Public sources
   -> newsletter/social distribution with the same source window
 ```
 
-The public site runs from `server.py` on port 4173. The private Data Wire runs from `cms/server.py` on port 8788. The Data Wire token belongs only in server environment/session storage. Never commit it or place it in public JavaScript.
+The public API runs from `server.py` on loopback port 4173 behind nginx at `https://api.thefloridasignal.com`. The private Data Wire runs locally from `cms/server.py` on port 8788 and is intentionally not connected to the public host. The Data Wire token belongs only in server environment/session storage. Never commit it or place it in public JavaScript. Use `ops/droplet/README_PUBLIC_API.md` for deployment, TLS, verification and rollback.
 
 ## Data Room contract
 
@@ -107,7 +107,13 @@ Before publishing any AI-assisted change:
 
 ## Current production caveats
 
-As of the verification date, the local health endpoint reports that CMS and Mailchimp production integrations are not configured. Some aggregate and Broward clocks are stale and Sunbiz does not expose enough source-health metadata to claim live status. See `LIVE_DATA_OPERATIONS_HANDOFF.md` for the exact snapshot and remediation sequence.
+As of the verification date, the public API and HTTPS boundary are live. `/api/health` reports
+`mailchimp_configured: true` and `cms_configured: false`; the latter is intentional because the
+shared-token Data Wire starter must remain private. Broward instruments are stale at an August 5
+recording-date clock, and Sunbiz still lacks enough public source-health metadata to claim current.
+The NHC JSON origin blocks the DigitalOcean host with HTTP 403, so the storm client must retain its
+official-source fallback and visibly fail open to the NHC link rather than infer zero storms. See
+`SYSTEM_STATE_2026-08-11.md` for the exact current state.
 
 
 
