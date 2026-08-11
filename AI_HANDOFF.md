@@ -128,3 +128,19 @@ official-source fallback and visibly fail open to the NHC link rather than infer
 - CTA copy is "Get Daily Intel Brief" site-wide. Diagram of the day rotates daily by date.
 - `dashboard_cache` pg_cron re-armed at 30-minute cadence. Clerk SFTP verified-vs-source parity confirmed 2026-07-19.
 - Full task/automation inventory and open work: `CLAUDETTE_HANDOFF_2026-07-19.md`.
+
+## 2026-08-11 recovery and permanent automation
+
+- Verified SFTP is through August 6; the newest run inserted 2,293 documents, 5,954 parties, 268
+  legal rows and 1,049 links. Acclaim preliminary is through August 11 with 2,056 rows for that day.
+- The Mac safely retained state while Wi-Fi was off. A periodic Broward disclaimer required human
+  acceptance; after acceptance the retry completed with no backlog. The LaunchAgent now retries
+  hourly in addition to its four calendar fires and `RunAtLoad`.
+- `clerk_catchup.py` now runs `reconcile_clerk_preliminary()` after every authoritative run,
+  including no-op runs. Daily pg_cron remains the fallback. Exact matches become verified;
+  conflicts remain quarantined and source text is preserved.
+- The public mirror outage was permissions drift on the shared secrets directory, not source data
+  loss. Durable contract: directory `root:andy` `0710`, pipeline `.env` `andy:andy` `0600`, and
+  `public-site.env` root-only `0600`. A tmpfiles rule restores the directory contract.
+- The forced mirror completed with 27 tables, 10,872 rows and 0 errors. The hourly GitHub monitor
+  now fails if `supabase-sync` is stale or unavailable.

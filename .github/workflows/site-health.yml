@@ -39,6 +39,7 @@ jobs:
           jq -e '
             (.sources | length) >= 7 and
             (.errors | length) == 0 and
+            any(.sources[]; .id == "supabase-sync" and (.status == "current" or .status == "delayed")) and
             any(.sources[]; .id == "broward" and .verification == "verified") and
             any(.sources[]; .id == "clerk-preliminary" and .verification == "preliminary")
           ' <<<"$data_health"

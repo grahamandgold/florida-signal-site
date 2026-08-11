@@ -29,7 +29,7 @@ is off, the job reports an action-required degraded state instead of a generic c
   collector exits zero. Technical automation failures still exit nonzero.
   Logs → `~/Library/Logs/florida-acclaim.log`.
 - `com.floridasignal.acclaim.plist` — LaunchAgent at **00:30, 12:00, 19:00, and 22:30** local,
-  plus `RunAtLoad` catch-up, absolute paths, logs outside repo. Installed at
+  plus an hourly retry and `RunAtLoad` catch-up, absolute paths, logs outside repo. Installed at
   `~/Library/LaunchAgents/`.
 
 The target selector does not query the still-forming current day before noon. An `EMPTY`
@@ -37,12 +37,21 @@ current-day grid is never marked done; only an empty date strictly before today 
 prevents a pre-release visit from suppressing the later retry. The state writer uses the same noon
 boundary, so a 12:30 a.m. run cannot falsely put the current date in `backlog_remaining`.
 
+If the Mac is awake but Wi-Fi is unavailable, the source request fails safely and the retained
+state is not advanced. When connectivity returns, the hourly retry recomputes every missing date
+from the verified SFTP floor and catches up within an hour without a manual command. macOS does not
+run this LaunchAgent while the Mac is powered off or logged out; `RunAtLoad` provides that recovery.
+A periodic Broward disclaimer page remains an operator gate: accept it in Chrome once, then the next
+hourly run resumes automatically.
+
 ## Reconciliation (server-side, Supabase — off the Mac)
 `public.reconcile_clerk_preliminary()` matches preliminary rows to `broward_clerk_records_doc` by
 normalized instrument number + record date, sets `verification_status='verified'`, attaches
 `verified_business_date`/`verified_doc_type`, preserves `preliminary_first_seen_at` + `source`, and
-**flags date conflicts** (`conflict_flag`) instead of merging. pg_cron `clerk-preliminary-reconcile`
-runs daily 10:00 UTC. Proven 2026-07-19: 1 match verified, 1 conflict flagged, verified table untouched.
+**flags date conflicts** (`conflict_flag`) instead of merging. The verified SFTP catch-up calls the
+function immediately after every run, including a no-op run; pg_cron
+`clerk-preliminary-reconcile` still runs daily at 10:00 UTC as a fallback. Proven 2026-08-11:
+August 5 and August 6 reconciled with 0 conflicts and the verified tables remained authoritative.
 
 ## Operate
 - Manual run:  `launchctl kickstart -k gui/$(id -u)/com.floridasignal.acclaim`

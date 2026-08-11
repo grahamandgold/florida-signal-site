@@ -13,8 +13,8 @@ The Broward Clerk feed has two intentionally separate lanes:
 
 | Lane | Evidence level | Event through | System observation | Operating meaning |
 |---|---|---:|---:|---|
-| AcclaimWeb public search | Preliminary | Aug 10 | Aug 10, 8:56 p.m. ET | Same-day/early rows and source text. Keep the `PRELIMINARY` label until reconciliation. |
-| Clerk SFTP | Verified | Aug 5 | Aug 10, 2:11 p.m. ET | Authoritative documents. Source publication is several days behind AcclaimWeb. |
+| AcclaimWeb public search | Preliminary | Aug 11 | Aug 11, 3:10 p.m. ET | 2,056 same-day rows and source text. Keep the `PRELIMINARY` label until reconciliation. |
+| Clerk SFTP | Verified | Aug 6 | Aug 11, 2:11 p.m. ET | 2,293 authoritative documents in the newest run. Source publication is several days behind AcclaimWeb. |
 
 The August 5 preliminary interruption was recovered from preserved source files: 2,446 unique
 rows now reconcile to SFTP with 0 conflicts and 0 aged unmatched rows. The database preserved all
@@ -98,13 +98,18 @@ Every diagram names its application or recording window, links to the underlying
 
 ### AcclaimWeb same-day recordings
 
-1. `com.floridasignal.acclaim` runs at 12:30 a.m., noon, 7 p.m. and 10:30 p.m. local and at login.
+1. `com.floridasignal.acclaim` runs at 12:30 a.m., noon, 7 p.m. and 10:30 p.m. local, hourly and at login.
 2. Before noon, the still-forming current day is not a target and must not appear in backlog state.
 3. After noon, collect the current date plus any missing dates after the verified SFTP floor, oldest first.
 4. A date is complete only when every page was read and the harvested count reaches the source total; a same-day empty result is not completion.
 5. Upsert by `(record_date, instrument_number)`; never overwrite the authoritative SFTP tables.
-6. Reconcile by normalized instrument number plus exact record date. Flag date conflicts instead of merging them.
+6. Reconcile by normalized instrument number plus exact record date. The verified SFTP service does
+   this immediately after every run, including a no-op run; daily pg_cron is the fallback. Flag date
+   conflicts instead of merging them.
 7. Confirm `/api/data-health` exposes both `clerk-preliminary` and `broward`, with `preliminary` and `verified` evidence labels respectively.
+8. Wi-Fi or power loss does not discard dates: state advances only on a complete source count, then
+   the next hourly/login run recomputes gaps from the verified floor. A Broward disclaimer redirect
+   requires one human acceptance in Chrome; the following retry resumes automatically.
 
 ### Meetings and agendas
 
@@ -197,7 +202,7 @@ Do not silently publish or refresh a number when any of these is true:
 
 ## Production work still required after the August 11 API deployment
 
-- Continue monitoring the delayed verified SFTP clock and the separate same-day Acclaim clock; do not treat source release lag as proof that the collector failed.
+- Continue monitoring the delayed verified SFTP clock and the separate same-day Acclaim clock; do not treat source release lag as proof that the collector failed. Treat a stale `supabase-sync` heartbeat as a real mirror incident.
 - Expose Sunbiz health and event-span metadata.
 - Deploy the Data Wire behind real user authentication with persistent Postgres/Supabase, backups and retained audit logs.
 - Confirm the first real consented signup is both durable locally and accepted by Mailchimp; replay only explicit-consent rows if retry is needed.
