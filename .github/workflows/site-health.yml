@@ -36,7 +36,12 @@ jobs:
           jq -e '.ok == true and .mailchimp_configured == true and .cms_configured == false' <<<"$health"
 
           data_health="$(curl --fail --silent --show-error --retry 2 --connect-timeout 10 "$api/data-health")"
-          jq -e '(.sources | length) >= 5 and (.errors | length) == 0' <<<"$data_health"
+          jq -e '
+            (.sources | length) >= 7 and
+            (.errors | length) == 0 and
+            any(.sources[]; .id == "broward" and .verification == "verified") and
+            any(.sources[]; .id == "clerk-preliminary" and .verification == "preliminary")
+          ' <<<"$data_health"
 
           meetings="$(curl --fail --silent --show-error --retry 2 --connect-timeout 10 "$api/meetings")"
           jq -e '(.meetings | length) > 0' <<<"$meetings"

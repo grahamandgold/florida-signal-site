@@ -20,7 +20,9 @@ The browser suite verifies that:
 - a planner estimate is visibly marked `≈` and labeled before citation;
 - the production API hostname answers `/api/health` during scheduled/manual monitoring;
 - Mailchimp remains configured, the private CMS remains explicitly closed, data health returns
-  source clocks without internal errors and the public meetings feed is non-empty.
+  source clocks without internal errors and the public meetings feed is non-empty; and
+- data health contains both the `broward` verified SFTP clock and the `clerk-preliminary`
+  AcclaimWeb clock with their evidence labels intact.
 
 On a failed scheduled/manual production run, the workflow opens or updates one GitHub issue and uploads the Playwright report, trace and screenshots for 14 days.
 
@@ -65,6 +67,12 @@ Read each event/system clock in `/api/data-health`. A 502 from `/api/storms` cur
 official NHC origin blocked the server host; the client must show a source-check state and an
 official link, never infer “no storm” from that transport failure.
 
+For Broward Clerk data, read the two cards independently. `current + preliminary` means the early
+AcclaimWeb lane is operating; it does not extend the verified SFTP coverage date. `delayed +
+verified` can mean the collector checked successfully but the Clerk has not released a newer
+authoritative file. Confirm `system_time`, `event_through`, `verification` and the source run before
+declaring a failure.
+
 ## Ownership boundaries
 
 | Layer | Owner / mechanism | Automatic publication allowed? |
@@ -83,6 +91,7 @@ checkout on the droplet and must be updated with the fast-forward/test/restart s
 
 - A capped sample or planner estimate appears as an exact total.
 - A source says current without a defensible event/system clock.
+- Preliminary Clerk rows appear without a visible `PRELIMINARY` evidence label or are combined into the verified total.
 - A non-map page crashes because a map library is absent.
 - Briefs or CMS substitutes draft/older content after an adapter failure.
 - Signup reports success without durable server-side acceptance.
