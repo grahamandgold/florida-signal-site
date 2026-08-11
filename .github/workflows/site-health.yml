@@ -1,0 +1,53 @@
+name: Public site health
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      SITE_BASE_URL: ${{ github.event_name == 'schedule' && 'https://thefloridasignal.com' || '' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:unit
+      - run: npm run test:browser
+      - name: Check the production API boundary
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: curl --fail --silent --show-error --retry 2 --connect-timeout 10 https://api.thefloridasignal.com/api/health
+      - name: Open or update a health incident
+        if: failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          issue_number="$(gh issue list --state open --search 'Public site health check failed in:title' --json number --jq '.[0].number // empty')"
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          if [ -n "$issue_number" ]; then
+            gh issue comment "$issue_number" --body "The public-site monitor failed again: ${run_url}"
+          else
+            gh issue create --title "Public site health check failed" --body "The scheduled browser and data-presentation checks failed. Run: ${run_url}"
+          fi
+      - name: Upload browser evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 14

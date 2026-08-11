@@ -1,6 +1,6 @@
 # Florida Signal build and operating handoff
 
-Updated July 17, 2026. This report is the launch-oriented source of truth for the build in this folder. It separates verified event data from system freshness, and finished interfaces from production infrastructure that still needs to be deployed.
+Updated July 17, 2026. This is a historical launch report. For current production truth, including the August site incident and automation state, read [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md). It separates verified event data from system freshness, and finished interfaces from production infrastructure that still needs to be deployed.
 
 ## Product outcome
 

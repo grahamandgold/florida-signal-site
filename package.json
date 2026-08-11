@@ -1,0 +1,12 @@
+{
+  "name": "florida-signal-site",
+  "private": true,
+  "scripts": {
+    "test": "npm run test:unit && npm run test:browser",
+    "test:unit": "node tests/signals.test.js && python3 -m unittest discover -s tests -v",
+    "test:browser": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1"
+  }
+}

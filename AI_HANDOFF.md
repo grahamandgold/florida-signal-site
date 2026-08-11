@@ -1,12 +1,11 @@
 # Florida Signal — AI Handoff
 
-Last verified: July 19, 2026 (Claudette session — see `CLAUDETTE_HANDOFF_2026-07-19.md` for the full launch-day changelog)
+Last verified: August 11, 2026. Start with `SYSTEM_STATE_2026-08-11.md`; the July checkpoint and Claudette handoff are historical evidence.
 
-> ## ⇢ START HERE FIRST: `FLORIDA_SIGNAL_VERIFIED_CHECKPOINT_2026-07-19.md`
-> Every claim in that document was verified directly against GitHub, Supabase, the DigitalOcean
-> runtime, this Mac and Google Drive. It tells you which authority owns what, the current branch
-> and PR, what is deployed, what is database-applied, what is scheduled, what is local-only, and
-> what requires Andy's approval. **Read it before acting on anything below.**
+> ## ⇢ START HERE FIRST: `SYSTEM_STATE_2026-08-11.md`
+> It tells you what is actually deployed, which public routes work, which automations actually
+> run, and what remains blocked. Read the July checkpoint only when historical configuration
+> evidence is needed.
 >
 > Two facts it exists to prevent you getting wrong:
 > 1. The scorer and collectors are **not in this repository** — they are in `grahamandgold/florida-signal`.

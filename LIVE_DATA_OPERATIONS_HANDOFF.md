@@ -5,7 +5,7 @@
 **Publisher:** Graham & Gold LLC  
 **Last local verification:** July 19, 2026 (see `CLAUDETTE_HANDOFF_2026-07-19.md`)
 
-This document is the operational truth for the public site. It separates the date an event happened from the time Florida Signal collected, synchronized, enriched or published it.
+This document records the July 17 operating snapshot and the durable data rules. It is not the current health report. Read [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md) for current deployment, data-clock and automation truth. The rules below continue to separate the date an event happened from the time Florida Signal collected, synchronized, enriched or published it.
 
 ## The non-negotiable date rule
 
