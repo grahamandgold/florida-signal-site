@@ -18,7 +18,9 @@ The browser suite verifies that:
 - Method and Broward Record replace placeholder freshness text;
 - the headline permit total comes from an exact snapshot; and
 - a planner estimate is visibly marked `≈` and labeled before citation;
-- the production API hostname answers `/api/health` during scheduled/manual monitoring.
+- the production API hostname answers `/api/health` during scheduled/manual monitoring;
+- Mailchimp remains configured, the private CMS remains explicitly closed, data health returns
+  source clocks without internal errors and the public meetings feed is non-empty.
 
 On a failed scheduled/manual production run, the workflow opens or updates one GitHub issue and uploads the Playwright report, trace and screenshots for 14 days.
 
@@ -48,6 +50,21 @@ SITE_BASE_URL=https://thefloridasignal.com npm run test:browser
 7. For conflicting or missing source fields, quarantine the affected output and retain raw text/provenance.
 8. Close the incident only after the production monitor passes and the underlying clock/count is independently checked.
 
+API host checks:
+
+```sh
+dig +short @ns39.domaincontrol.com api.thefloridasignal.com A
+curl -fsS https://api.thefloridasignal.com/api/health
+curl -fsS https://api.thefloridasignal.com/api/data-health
+ssh florida 'systemctl show florida-signal-public.service -p ActiveState,SubState,Result,ExecMainStatus'
+ssh florida 'sudo nginx -t; systemctl is-active certbot.timer'
+```
+
+`/api/health` proves that the boundary is reachable; it does not prove that every source is fresh.
+Read each event/system clock in `/api/data-health`. A 502 from `/api/storms` currently means the
+official NHC origin blocked the server host; the client must show a source-check state and an
+official link, never infer “no storm” from that transport failure.
+
 ## Ownership boundaries
 
 | Layer | Owner / mechanism | Automatic publication allowed? |
@@ -57,6 +74,10 @@ SITE_BASE_URL=https://thefloridasignal.com npm run test:browser
 | Source collection/enrichment | Pipeline repository and verified server/database schedules | Records may flow under source rules; conflicts stay quarantined. |
 | Public briefs | Data Wire plus named human editor | No. Human approval required. |
 | Site monitor | GitHub Actions | May report incidents; may not edit source data or merge its own repair. |
+
+Static code deploys from `main` through GitHub Pages. The Python API runs from a clean production
+checkout on the droplet and must be updated with the fast-forward/test/restart sequence in
+`ops/droplet/README_PUBLIC_API.md`. There is no autonomous AI agent with merge or editorial authority.
 
 ## Stop-the-line failures
 

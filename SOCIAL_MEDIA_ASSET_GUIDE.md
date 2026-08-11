@@ -79,7 +79,11 @@ The reusable preview/template is at `fort-lauderdale/brand/newsletter/daily-inte
 6. Storm Watch only when useful; and
 7. a single Field Brief / live map call to action.
 
-Mailchimp is not configured in the current local runtime. Do not claim automatic sync until `/api/health` reports `mailchimp_configured: true` and the city/topic interest fields have been verified end to end.
+Mailchimp configuration differs by runtime. The production public API reports
+`mailchimp_configured: true`; a local preview may remain unconfigured unless the private environment
+file is loaded. Durable local signup acceptance must remain the source of truth, and city/topic merge
+fields are best-effort until verified with a real consented signup. Campaign sending is always an
+editorial action, never an automatic consequence of API health.
 
 ## Accessibility and rights
 

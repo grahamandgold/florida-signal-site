@@ -142,7 +142,12 @@ FLORIDA_SIGNAL_EXPORT_SLUGS='application-pulse,trades-pulse' node social/export_
 
 Start from `.env.example`. Keep CMS admin tokens, Mailchimp API keys and any service-role database key server-side. The browser uses only a publishable Supabase key protected by RLS.
 
-Mailchimp is **not currently configured** in the local server. The audience/list metadata exists, but `/api/health` reports `mailchimp_configured: false`. Until a scoped API key and optional city/topic merge fields are configured, consented signups remain in the private local queue and must not be described as synced to Mailchimp.
+The production public API reports `mailchimp_configured: true`, and a read-only authenticated check
+confirmed the configured Broward audience on August 11. The private Data Wire remains unconfigured
+on the public host by design. Do not create a fake live subscriber to test the write path: isolated
+tests prove persistence and idempotency, and the first real consented signup should provide the final
+production write-path confirmation. Optional city/topic merge fields remain best-effort and must not
+block durable local acceptance.
 
 ## Stop-the-line conditions
 
@@ -157,14 +162,14 @@ Do not silently publish or refresh a number when any of these is true:
 - a Storm Watch statement could be mistaken for official safety guidance; or
 - a source-health timestamp is absent but the label says live/current.
 
-## Production work still required
+## Production work still required after the August 11 API deployment
 
 - Restore/monitor the stale aggregate and Broward collectors.
 - Expose Sunbiz health and event-span metadata.
-- Deploy the Python APIs (or serverless equivalents); static hosting alone cannot run signup, analytics or the CMS adapter.
 - Deploy the Data Wire behind real user authentication with persistent Postgres/Supabase, backups and retained audit logs.
-- Configure Mailchimp server-side and replay only explicit-consent rows with retry/alerting.
-- Add persistent analytics storage and a retention policy.
+- Confirm the first real consented signup is both durable locally and accepted by Mailchimp; replay only explicit-consent rows if retry is needed.
+- Define and document the retention policy for the persistent public API analytics SQLite database.
+- Resolve the NHC host-level 403 with an official, server-supported NOAA delivery path; until then keep the client fallback and source-check state.
 
 
 ## 2026-07-19 additions (Claudette)

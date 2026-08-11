@@ -1,6 +1,6 @@
 # Florida Signal build and operating handoff
 
-Updated July 17, 2026. This is a historical launch report. For current production truth, including the August site incident and automation state, read [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md). It separates verified event data from system freshness, and finished interfaces from production infrastructure that still needs to be deployed.
+Updated July 17, 2026. This is a historical launch report. For current production truth, including the resolved August site incident, live public API and automation state, read [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md). It separates verified event data from system freshness, and current infrastructure from the private/editorial work that remains.
 
 ## Product outcome
 
@@ -244,7 +244,12 @@ All shareable cards include a date/span and Florida Signal signature. The Graphi
 9. During a storm, activate publisher Storm Watch and compare the display against current NHC/NOAA products.
 10. Weekly, audit failed joins, duplicate entities, unresolved addresses, boundary versions, source schema changes and corrections.
 
-## Remaining production work — do not call this finished
+## Remaining production work at the July 17 checkpoint
+
+The numbered list below is historical. Items 1, 5 and the public API portion of item 10 were
+completed on August 11; current limits and verification live in `SYSTEM_STATE_2026-08-11.md` and
+`ops/droplet/README_PUBLIC_API.md`. The private Data Wire, stale/unverified source clocks, editorial
+automation limits and retention work remain open.
 
 1. Deploy the public Python endpoints or equivalent serverless functions; static GitHub Pages alone cannot run `/api/*`, signup, analytics or the CMS adapter.
 2. Deploy The Data Wire privately with HTTPS, real user/role authentication, persistent Postgres/Supabase, backups and audit retention. The current shared-token/SQLite setup is a local starter.
