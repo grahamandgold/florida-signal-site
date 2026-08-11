@@ -13,6 +13,8 @@ to the loopback Python service.
   `/srv/grahamandgold/florida-signal/data/public-api/florida_signal_cms.sqlite`
 - optional Mailchimp environment:
   `/srv/grahamandgold/florida-signal/secrets/public-site.env` (mode `0600`)
+- secrets-directory contract: `/srv/grahamandgold/florida-signal/secrets` is
+  `root:andy` mode `0710`; this permits traversal to explicitly owned files, not directory listing
 - DNS: GoDaddy A record `api` -> `142.93.253.188` (600-second TTL when created)
 - TLS: Certbot/Let's Encrypt with the system `certbot.timer`
 
@@ -27,6 +29,8 @@ run the API tests, fast-forward only, restart the service and verify the public 
 
 ```sh
 sudo install -m 0644 ops/droplet/florida-signal-public.service /etc/systemd/system/
+sudo install -m 0644 ops/droplet/florida-signal-secrets.conf /etc/tmpfiles.d/
+sudo systemd-tmpfiles --create /etc/tmpfiles.d/florida-signal-secrets.conf
 sudo install -m 0644 ops/droplet/nginx-api.thefloridasignal.com.conf \
   /etc/nginx/sites-available/api.thefloridasignal.com
 sudo ln -s /etc/nginx/sites-available/api.thefloridasignal.com \
@@ -56,6 +60,12 @@ HTTP bootstrap configuration used before certificate issuance.
 `public-site.env` must contain plain systemd assignments (`NAME=value`), not shell statements such
 as `export NAME=value`. Keep it `root:root` and mode `0600`. Never print or commit its values.
 
+The parent secrets directory must remain `root:andy` mode `0710`. The pipeline checkout's
+`app/.env` symlink resolves to `secrets/.env`, which is `andy:andy` mode `0600`; the `andy` service
+account therefore needs directory traversal. `0710` does not permit directory listing, and it does
+not make `public-site.env` readable. The tracked tmpfiles rule restores this contract after a
+rebuild or accidental permission drift.
+
 The service writes only inside the public API data directory. Keep the directory `0700` and the
 SQLite database `0600`, both owned by the service user. Back up the database before runtime or
 schema changes. Deployment must never delete subscriber or analytics rows.
@@ -83,6 +93,9 @@ modifies source/data semantics without a reconciliation record.
 curl -fsS http://127.0.0.1:4173/api/health
 curl -fsS https://api.thefloridasignal.com/api/health
 curl -fsS https://api.thefloridasignal.com/api/data-health
+stat -c '%A %U:%G %n' /srv/grahamandgold/florida-signal/secrets
+sudo -u andy test -r /srv/grahamandgold/florida-signal/app/.env
+sudo -u andy test ! -r /srv/grahamandgold/florida-signal/secrets/public-site.env
 systemctl show florida-signal-public.service -p ActiveState,SubState,Result,ExecMainStatus
 systemctl show certbot.timer -p ActiveState,UnitFileState,NextElapseUSecRealtime
 sudo nginx -t

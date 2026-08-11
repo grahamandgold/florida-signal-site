@@ -22,7 +22,9 @@ The browser suite verifies that:
 - Mailchimp remains configured, the private CMS remains explicitly closed, data health returns
   source clocks without internal errors and the public meetings feed is non-empty; and
 - data health contains both the `broward` verified SFTP clock and the `clerk-preliminary`
-  AcclaimWeb clock with their evidence labels intact.
+  AcclaimWeb clock with their evidence labels intact; and
+- the `supabase-sync` public-mirror heartbeat is `current` or `delayed`, never `stale` or
+  `unavailable`.
 
 On a failed scheduled/manual production run, the workflow opens or updates one GitHub issue and uploads the Playwright report, trace and screenshots for 14 days.
 
@@ -49,6 +51,9 @@ SITE_BASE_URL=https://thefloridasignal.com npm run test:browser
 4. For a frontend regression, reproduce locally, add or tighten a browser assertion, then repair through a pull request.
 5. For API/DNS failure, verify DNS, TLS, `/api/health`, service state and API logs before touching the client.
 6. For stale data, identify the owning schedule and last successful source event span. Never substitute page-render time.
+   If `supabase-sync` is stale, check `florida-sync.service` and verify the pipeline account can
+   traverse `/srv/grahamandgold/florida-signal/secrets` to its own `.env`; do not loosen the
+   root-only `public-site.env` file.
 7. For conflicting or missing source fields, quarantine the affected output and retain raw text/provenance.
 8. Close the incident only after the production monitor passes and the underlying clock/count is independently checked.
 
