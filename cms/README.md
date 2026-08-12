@@ -1,6 +1,14 @@
-# The Data Wire — Florida Desk CMS
+# Florida Signal Newsroom — private CMS
 
-The Data Wire is the source-gated editorial CMS that powers Florida Signal and is designed to support additional market sites without mixing their public feeds.
+Florida Signal is intentionally two separate sites:
+
+1. **Public Florida Signal** is the reader product: reporting, diagrams, live public tools and the
+   newsletter journey at `thefloridasignal.com`.
+2. **Florida Signal Newsroom** is the private source-gated CMS and intelligence workspace served
+   locally from `cms/`. It is not a public page or a second reader site.
+
+The Newsroom powers Florida Signal and is designed to support additional market sites without
+mixing their public feeds. **Live Desk is the Newsroom home**, not a third product.
 
 It is a focused, clean-room port of the useful Michigan Intel Desk patterns:
 
@@ -29,10 +37,34 @@ export FLORIDA_SIGNAL_CMS_CITY='fort-lauderdale'
 python3 server.py --port 4173
 ```
 
-Open `http://127.0.0.1:8788/` for the **Live Desk** home. The shared header links to Explore,
-Review and Write, and the production-timer strip shows what is scheduled next. The schedule is
+Open `http://127.0.0.1:8788/` for the **Live Desk** home. The shared Newsroom shell links to:
+
+- **Live Desk** — what needs attention now;
+- **Agenda Watch** — public decisions, packets, attachments and early clues;
+- **Brief** — build and clear a sourced newsletter edition;
+- **Data Explorer** — exact record search and investigation;
+- **Triage** — examine a Candidate's evidence and record the human decision.
+
+The production-timer strip shows what is scheduled next. The schedule is
 read-only and comes from the production host; a scheduled timer is never presented as proof that
 the source advanced. Use Feed health for source-event, collection and row-count clocks.
+
+The interface is a production translation of the reviewed Claude Design direction. Claude's
+illustrative records, scores, model labels and clocks were not copied. The real Newsroom reads the
+existing private endpoints, preserves every human publication gate and uses the canonical emblem
+from `assets/mark-full-color.png` without an arrow, crop or distortion.
+
+The shared shell and Live Desk include three responsive states: full workstation, sidebar-width
+workstation and mobile. The middle state is required because a visible 248-pixel sidebar reduces
+the content width before the mobile navigation breakpoint. Source-stage labels, descriptions and
+independent clocks must reflow at that state; the browser regression suite checks the 1,110-pixel
+viewport where those columns previously collided.
+
+Data Explorer opens with a plain-English source catalog before any record table. It groups the
+available sources by decisions, organizations, ownership/capital, regulatory filings and execution;
+permits are one source, not the page's default identity. Each catalog option performs a real read
+check and reports `Connected`, `Connected · empty` or `Unavailable`. The default record view is the
+same-day preliminary Clerk lane, clearly separated from verified Clerk records.
 
 The browser stores the admin token only in the local session. Do not put it in public JavaScript,
 a screenshot or a committed file.
@@ -95,11 +127,13 @@ source, taxonomy and named-publication-role checks below.
 
 Each reviewable Candidate also has an **Investigation Kit**. It derives Street View, satellite,
 Maps and internal parcel links from the exact permit coordinates returned by the server. News and
-Sunbiz links, and the copied Grok research brief, are reporting aids only. They do not modify the
+External Sunbiz links and the copied Grok research brief are reporting aids only. They do not modify the
 sealed evidence packet. Grok is instructed to separate confirmed records, reported claims,
 possible connections and unknowns; every useful result must still be opened, checked and attached
-with provenance before it can support publication. The interface explicitly reports the current
-Sunbiz production gap instead of implying that an entity join exists.
+with provenance before it can support publication. The private Newsroom now reads the resolver's
+exact-match Sunbiz rows through `/api/admin/sunbiz-entities`; the service-role key never enters the
+browser and fuzzy identity writes remain prohibited. Public anonymous reads remain intentionally
+blocked even though the resolver table contains rows.
 
 Data Explorer search is exact and indexed. Use prefixes such as `permit:`, `folio:`, `instrument:`,
 `addr:`, `license:` and `asn:`. Broad leading-wildcard search is intentionally excluded because it

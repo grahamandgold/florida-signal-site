@@ -21,10 +21,18 @@ previous_app="$stage_dir/previous.app"
 trap '/bin/rm -rf "$stage_dir"' EXIT
 
 /usr/bin/ditto --norsrc "$app_path" "$staged_app"
-/bin/cp "$repo_dir/cms/server.py" "$repo_dir/cms/home.html" "$repo_dir/cms/index.html" \
+/bin/cp "$repo_dir/cms/server.py" "$repo_dir/cms/home.html" "$repo_dir/cms/agenda.html" \
+  "$repo_dir/cms/index.html" \
   "$repo_dir/cms/data.html" "$repo_dir/cms/review.html" "$repo_dir/cms/desk-shell.css" \
   "$repo_dir/cms/desk-shell.js" "$staged_app/Contents/Resources/cms/"
 /bin/cp -L "$repo_dir/cms/mark-full-color.png" "$staged_app/Contents/Resources/cms/mark-full-color.png"
+
+for required_page in home.html agenda.html index.html data.html review.html; do
+  if [[ ! -s "$staged_app/Contents/Resources/cms/$required_page" ]]; then
+    echo "Staged desktop app is missing required Newsroom page: $required_page" >&2
+    exit 1
+  fi
+done
 /bin/cp "$repo_dir/ops/datawire-app-launcher.zsh" "$staged_app/Contents/MacOS/Florida Signal Data Wire"
 /bin/chmod 755 "$staged_app/Contents/MacOS/Florida Signal Data Wire"
 /usr/bin/xattr -cr "$staged_app"
@@ -39,6 +47,18 @@ if /bin/mv "$staged_app" "$app_path"; then
 fi
 if [[ -d "$app_path" ]] && /usr/bin/codesign --verify --deep "$app_path"; then
   echo "Florida Signal Data Wire desktop app updated and verified."
+  # Python loads server.py into memory. Replacing the bundle updates static pages immediately,
+  # but an already-running process would keep the old route map until restart. Restart only this
+  # app's loopback server when it was already open; never kill another service on the port.
+  app_was_running=0
+  while IFS= read -r process_id; do
+    [[ -n "$process_id" ]] || continue
+    app_was_running=1
+    /bin/kill "$process_id" 2>/dev/null || true
+  done < <(/usr/bin/pgrep -f 'Florida Signal Data Wire\.app/.*/cms/server\.py --port 8788' || true)
+  if [[ "$app_was_running" == 1 ]]; then
+    /usr/bin/open "$app_path"
+  fi
 else
   [[ -d "$app_path" ]] && /bin/mv "$app_path" "$stage_dir/failed-new.app"
   /bin/mv "$previous_app" "$app_path"

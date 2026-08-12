@@ -115,6 +115,24 @@ class DataWireServerTests(unittest.TestCase):
         self.assertIn("who benefits", payload["items"][0]["stakeholder_test"])
         self.assertEqual(payload["items"][0]["attachments"][0]["url"], "https://example.test/memo.pdf")
 
+    def test_sunbiz_private_proxy_is_exact_bounded_and_service_role_only(self):
+        rows = [
+            {"search_name": "EXAMPLE OWNER LLC", "matched_name": "EXAMPLE OWNER LLC", "source": "sunbiz-sftp-corpus"},
+            {"search_name": "EXTRA ROW", "matched_name": "EXTRA ROW", "source": "sunbiz-sftp-corpus"},
+        ]
+        with mock.patch.object(cms_server, "supabase_request", return_value=(200, rows)) as request:
+            code, payload = cms_server.sunbiz_entities_payload({
+                "limit": ["1"], "offset": ["0"], "search": ["Example Owner, LLC"],
+            })
+        query = request.call_args.args[0]
+        self.assertEqual(code, 200)
+        self.assertIn("source=eq.sunbiz-sftp-corpus", query)
+        self.assertIn("search_name_norm=eq.EXAMPLEOWNERLLC", query)
+        self.assertIn("limit=2", query)
+        self.assertEqual(len(payload["items"]), 1)
+        self.assertTrue(payload["has_more"])
+        self.assertIn("no fuzzy identity claim", payload["contract"])
+
 
 if __name__ == "__main__":
     unittest.main()

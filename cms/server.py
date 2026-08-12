@@ -166,6 +166,16 @@ def early_intel_payload() -> dict[str, Any]:
     preliminary = sources.get("clerk-preliminary", {})
     official_clerk = sources.get("broward", {})
     sunbiz = sources.get("sunbiz", {})
+    private_sunbiz_code, private_sunbiz_rows = supabase_request(
+        "sunbiz_entities?select=fetched_at,date_filed,source,match_type"
+        "&source=eq.sunbiz-sftp-corpus&order=fetched_at.desc.nullslast&limit=1"
+    )
+    if private_sunbiz_code < 400 and isinstance(private_sunbiz_rows, list) and private_sunbiz_rows:
+        latest_sunbiz = private_sunbiz_rows[0]
+        sunbiz = {
+            "status": "current", "system_time": latest_sunbiz.get("fetched_at"),
+            "event_through": latest_sunbiz.get("date_filed"), "private": True,
+        }
     fdep = sources.get("fdep", {})
     faa = sources.get("faa", {})
     permits = sources.get("permits", {})
@@ -184,10 +194,11 @@ def early_intel_payload() -> dict[str, Any]:
             "phase": "02 · Formation", "label": "Companies + principals",
             "status": "available" if sunbiz.get("status") == "current" else "blocked",
             "event_through": sunbiz.get("event_through"), "system_time": sunbiz.get("system_time"),
-            "headline": ("Sunbiz exact-match lane is current" if sunbiz.get("status") == "current"
+            "headline": ("Sunbiz exact-match resolver has private rows" if sunbiz.get("private")
+                         else "Sunbiz exact-match lane is current" if sunbiz.get("status") == "current"
                          else "Sunbiz has no usable public event clock"),
-            "note": "Only exact entity matches may connect a company, officer or registered agent. Public exposure and detector coverage remain incomplete.",
-            "href": "https://search.sunbiz.org/Inquiry/CorporationSearch/ByName",
+            "note": "Only exact entity matches may connect a company, officer or registered agent. Resolver rows remain private and source-linked.",
+            "href": "/data.html",
         },
         {
             "phase": "03 · Capital", "label": "Ownership, deeds, debt + liens",
@@ -301,6 +312,35 @@ def agenda_watch_payload() -> tuple[int, dict[str, Any]]:
         "event_through": event_dates[-1] if event_dates else None,
         "item_index_observed_through": observed_times[-1] if observed_times else None,
         "contract": "Watch terms nominate leads. They do not establish impact, ideology, support, opposition or outcome.",
+    }
+
+
+def sunbiz_entities_payload(params: dict[str, list[str]]) -> tuple[int, dict[str, Any]]:
+    """Read private resolved Sunbiz rows without exposing the service key or bypassing the desk."""
+    limit = bounded_int(params.get("limit", [25])[0], 25, 1, 100)
+    offset = bounded_int(params.get("offset", [0])[0], 0, 0, 1_000_000)
+    search = re.sub(r"[^A-Za-z0-9]", "", str(params.get("search", [""])[0])).upper()[:160]
+    select = (
+        "search_name,matched_name,doc_number,status,filing_type,date_filed,principal_address,"
+        "registered_agent,officers,match_type,notes,fetched_at,source"
+    )
+    query = (
+        "sunbiz_entities?select=" + quote(select, safe=",")
+        + "&source=eq.sunbiz-sftp-corpus"
+        + "&order=fetched_at.desc.nullslast"
+        + f"&limit={limit + 1}&offset={offset}"
+    )
+    if search:
+        query += "&search_name_norm=eq." + quote(search, safe="")
+    code, rows = supabase_request(query)
+    if code >= 400 or not isinstance(rows, list):
+        payload = rows if isinstance(rows, dict) else {"error": "Sunbiz resolver rows unavailable"}
+        return 502, payload
+    has_more = len(rows) > limit
+    return 200, {
+        "items": rows[:limit], "limit": limit, "offset": offset, "has_more": has_more,
+        "search": search or None, "generated_at": now_iso(),
+        "contract": "Private exact-match resolver output from the local Sunbiz SFTP corpus; no fuzzy identity claim is added.",
     }
 
 
@@ -792,6 +832,12 @@ class Handler(SimpleHTTPRequestHandler):
             if not self.require_admin():
                 return
             code, payload = agenda_watch_payload()
+            self.reply(payload, HTTPStatus.OK if code == 200 else HTTPStatus.BAD_GATEWAY)
+            return
+        if route == "/api/admin/sunbiz-entities":
+            if not self.require_admin():
+                return
+            code, payload = sunbiz_entities_payload(parse_qs(urlparse(self.path).query))
             self.reply(payload, HTTPStatus.OK if code == 200 else HTTPStatus.BAD_GATEWAY)
             return
         if route == "/api/admin/review-queue":

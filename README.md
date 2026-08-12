@@ -8,7 +8,11 @@ public exposure, local-only site work and remaining launch blockers.
 Earlier dated checkpoints are preserved as historical evidence.
 **The scorer and collectors are not in this repository** — they live in `grahamandgold/florida-signal`.
 
-Florida Signal is Broward-wide, source-first development intelligence launching city by city. Fort Lauderdale is the first live desk. Every public content URL is scoped under `/fort-lauderdale/`; other Broward municipality paths use one shared “coming soon” template without dates or coverage promises.
+Florida Signal is Broward-wide, source-first development intelligence launching city by city. Fort Lauderdale is the first live public desk. Every public content URL is scoped under `/fort-lauderdale/`; other Broward municipality paths use one shared “coming soon” template without dates or coverage promises.
+
+There are **two sites, with two different jobs**: the public Florida Signal reader/newsletter site
+and the private Florida Signal Newsroom CMS. Live Desk, Agenda Watch, Brief, Data Explorer and
+Triage are sections inside the private Newsroom; they are not additional public websites.
 
 ## Run locally
 
@@ -35,9 +39,10 @@ export FLORIDA_SIGNAL_CMS_MARKET='broward'
 python3 server.py --bind 127.0.0.1 --port 4173
 ```
 
-Open the public site at `http://127.0.0.1:4173/fort-lauderdale/` and The Data Wire at `http://127.0.0.1:8788/`.
+Open the public site at `http://127.0.0.1:4173/fort-lauderdale/` and the private Florida Signal
+Newsroom at `http://127.0.0.1:8788/`.
 
-### Unlock The Data Wire
+### Unlock the private Florida Signal Newsroom
 
 1. Start `cms/server.py` with `DATA_WIRE_ADMIN_TOKEN` as shown above.
 2. Open `http://127.0.0.1:8788/`.
