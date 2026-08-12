@@ -1,7 +1,8 @@
 # Florida Signal
 
-**New here, human or agent? Read [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md)
-and [`EDITORIAL_LOOP_RUNBOOK.md`](EDITORIAL_LOOP_RUNBOOK.md) first.**
+**New here, human or agent? Read [`NIGHT_HANDOFF_2026-08-11.md`](NIGHT_HANDOFF_2026-08-11.md),
+[`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md) and
+[`EDITORIAL_LOOP_RUNBOOK.md`](EDITORIAL_LOOP_RUNBOOK.md) first.**
 They are the verified front door for production health, the live Record → Candidate loop,
 public exposure, local-only site work and remaining launch blockers.
 Earlier dated checkpoints are preserved as historical evidence.
@@ -49,6 +50,10 @@ The local server provides same-origin meeting, storm, CMS, agenda-recon and subs
 
 ## Operating handoff
 
+- [`NIGHT_HANDOFF_2026-08-11.md`](NIGHT_HANDOFF_2026-08-11.md) — tonight's implementation,
+  scheduled-task audit, same-day Broward ownership, tests and exact next work.
+- [`AUTOMATION_AND_AGENT_INVENTORY_2026-08-11.md`](AUTOMATION_AND_AGENT_INVENTORY_2026-08-11.md) —
+  what actually runs, what is paused, unverified Grok/Claude surfaces and the safe loop/graph design.
 - [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md) — current operational, data, editorial, Mailchimp, analytics and launch truth.
 - [`EDITORIAL_LOOP_RUNBOOK.md`](EDITORIAL_LOOP_RUNBOOK.md) — live Candidate schedules, evidence contract, human gate and recovery.
 - [`SITE_MAINTENANCE_RUNBOOK.md`](SITE_MAINTENANCE_RUNBOOK.md) — release checks, hourly browser monitor and incident response.

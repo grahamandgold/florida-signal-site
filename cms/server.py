@@ -9,12 +9,13 @@ import json
 import os
 import re
 import sqlite3
+import subprocess
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 
 ROOT = Path(__file__).resolve().parent
@@ -23,7 +24,7 @@ ADMIN_TOKEN = os.getenv("DATA_WIRE_ADMIN_TOKEN", "").strip()
 MAX_BODY = 1_000_000
 
 # Signal review queue lives in Supabase, not the local SQLite store. The service-role key is read
-# from the environment only (Andy keeps it in ~/.florida_signal_supabase_env) and is NEVER sent to
+# from the environment only and is NEVER sent to
 # the browser: every queue read and write is proxied through this loopback server.
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://jrjewmzkyluxdywyusrw.supabase.co").rstrip("/")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
@@ -31,6 +32,313 @@ REVIEW_STATUSES = {"NEW", "REVIEWING", "HOLD", "APPROVED", "REJECTED", "NEEDS_MO
 REVIEW_DESTINATIONS = {
     "live_signals_map", "signals_page", "daily_intel_brief", "neighborhood_page", "broward_record",
 }
+MAX_REVIEW_PAGE = 20
+PIPELINE_LABELS = {
+    "florida-dataroom.timer": "Refresh Data Room",
+    "florida-health.timer": "Check source health",
+    "florida-gisowner.timer": "Parcel + owner join",
+    "florida-enrich.timer": "Enrich permits",
+    "florida-intake.timer": "Permit intake",
+    "florida-sunbiz.timer": "Sunbiz corpus",
+    "florida-sunbiz-deeds.timer": "Entity exact-match pass",
+    "florida-backup.timer": "Production backup",
+    "florida-offsite-backup.timer": "Offsite backup",
+    "florida-signals-shadow.timer": "Candidate shadow run",
+    "florida-parity-audit.timer": "Data parity audit",
+    "florida-legistar.timer": "Meetings + agendas",
+    "florida-freshness-alert.timer": "Freshness alert",
+    "florida-healthreport.timer": "Health report",
+    "florida-broward.timer": "Broward verified pull",
+    "florida-clerk-catchup.timer": "Broward catch-up",
+    "florida-gisrefresh.timer": "County GIS refresh",
+    "florida-sunbiz-quarterly.timer": "Sunbiz full refresh",
+}
+
+
+def bounded_int(value: Any, default: int, low: int, high: int) -> int:
+    try:
+        parsed = int(str(value))
+    except (TypeError, ValueError):
+        return default
+    return max(low, min(high, parsed))
+
+
+def review_queue_path(params: dict[str, list[str]]) -> tuple[str, int, int, str]:
+    """Build the bounded, indexed review-queue query used by the local desk."""
+    status = (params.get("status", ["NEW"])[0] or "NEW").upper()
+    if status not in REVIEW_STATUSES and status != "ALL":
+        status = "NEW"
+    readiness = (params.get("readiness", ["ready"])[0] or "ready").lower()
+    if readiness not in {"ready", "blocked", "all"}:
+        readiness = "ready"
+    limit = bounded_int(params.get("limit", [1])[0], 1, 1, MAX_REVIEW_PAGE)
+    offset = bounded_int(params.get("offset", [0])[0], 0, 0, 1_000_000)
+    query = [
+        "signal_review_queue?select=*",
+        "order=source_record_date.desc,amount.desc.nullslast",
+        f"limit={limit}",
+        f"offset={offset}",
+    ]
+    if status != "ALL":
+        query.append(f"review_status=eq.{quote(status)}")
+    if readiness == "ready":
+        query.append("evidence_ready=eq.true")
+    elif readiness == "blocked":
+        query.append("evidence_ready=eq.false")
+    return "&".join(query), limit, offset, readiness
+
+
+def attach_investigation_context(item: dict[str, Any]) -> dict[str, Any]:
+    """Attach navigation context for any source family without changing evidence."""
+    packet = item.get("evidence_packet")
+    records = packet.get("records", []) if isinstance(packet, dict) else []
+    permit = next((record for record in records if isinstance(record, dict)
+                   and record.get("source_table") in {"permits", "accela_details"}
+                   and record.get("source_record_id")), None)
+    if not permit:
+        source = next((record for record in records if isinstance(record, dict)), {})
+        lat = source.get("lat") if isinstance(source, dict) else None
+        lon = source.get("lon") if isinstance(source, dict) else None
+        join = packet.get("join", {}) if isinstance(packet, dict) else {}
+        item["investigation"] = {
+            "status": "located" if lat is not None and lon is not None else "partial",
+            "address": source.get("address") if isinstance(source, dict) else None,
+            "folio": (source.get("folio") or source.get("parcel_id") if isinstance(source, dict) else None)
+                     or join.get("canonical_folio") or item.get("verified_parcel_id"),
+            "lat": lat, "lon": lon,
+            "note": "Source context only; this does not add evidence to the packet",
+        }
+        return item
+    permit_number = str(permit.get("source_record_id"))[:120]
+    code, rows = supabase_request(
+        "permits?select=permit_number,address,lat,lon,parcel_id_verified"
+        f"&permit_number=eq.{quote(permit_number, safe='')}&limit=1"
+    )
+    source = (rows or [None])[0] if code < 400 and isinstance(rows, list) else None
+    if not source:
+        item["investigation"] = {
+            "status": "partial", "permit_number": permit_number,
+            "address": permit.get("address"), "note": "Coordinates unavailable",
+        }
+        return item
+    item["investigation"] = {
+        "status": "located" if source.get("lat") is not None and source.get("lon") is not None else "partial",
+        "permit_number": permit_number,
+        "address": source.get("address") or permit.get("address"),
+        "folio": source.get("parcel_id_verified") or item.get("verified_parcel_id"),
+        "lat": source.get("lat"), "lon": source.get("lon"),
+        "note": "Navigation context only; these links do not add evidence to the packet",
+    }
+    return item
+
+
+def public_json(url: str) -> dict[str, Any]:
+    """Read a Florida Signal public API document with an explicit timeout."""
+    import urllib.request
+
+    request = urllib.request.Request(url, headers={"User-Agent": "FloridaSignalDataWire/1.0"})
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            payload = json.loads(response.read().decode())
+            return payload if isinstance(payload, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def early_intel_payload() -> dict[str, Any]:
+    """Show the whole intelligence funnel; do not imply that every lane has a detector yet."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        meeting_future = pool.submit(public_json, "https://api.thefloridasignal.com/api/meetings")
+        health_future = pool.submit(public_json, "https://api.thefloridasignal.com/api/data-health")
+        meetings = meeting_future.result()
+        health = health_future.result()
+
+    meeting_rows = meetings.get("meetings", []) if isinstance(meetings, dict) else []
+    government = [row for row in meeting_rows if isinstance(row, dict) and row.get("category") == "government"]
+    agendas = [row for row in government if row.get("agenda_available") is True]
+    next_meeting = government[0] if government else {}
+    sources = {
+        str(source.get("id")): source for source in health.get("sources", [])
+        if isinstance(source, dict) and source.get("id")
+    }
+    preliminary = sources.get("clerk-preliminary", {})
+    official_clerk = sources.get("broward", {})
+    sunbiz = sources.get("sunbiz", {})
+    fdep = sources.get("fdep", {})
+    faa = sources.get("faa", {})
+    permits = sources.get("permits", {})
+
+    lanes = [
+        {
+            "phase": "01 · Decisions", "label": "Zoning, planning + agenda packets",
+            "status": "watching" if next_meeting else "unavailable",
+            "event_through": next_meeting.get("date"), "system_time": meetings.get("updated_at"),
+            "headline": (f"{len(agendas)} posted agenda(s) among {len(government)} upcoming government meetings"
+                         if government else "Meeting calendar unavailable"),
+            "note": "Earliest lane. Packet text, attachments and renderings still need a durable extraction queue; calendar coverage alone is not packet intelligence.",
+            "href": "https://thefloridasignal.com/fort-lauderdale/meetings/",
+        },
+        {
+            "phase": "02 · Formation", "label": "Companies + principals",
+            "status": "available" if sunbiz.get("status") == "current" else "blocked",
+            "event_through": sunbiz.get("event_through"), "system_time": sunbiz.get("system_time"),
+            "headline": ("Sunbiz exact-match lane is current" if sunbiz.get("status") == "current"
+                         else "Sunbiz has no usable public event clock"),
+            "note": "Only exact entity matches may connect a company, officer or registered agent. Public exposure and detector coverage remain incomplete.",
+            "href": "https://search.sunbiz.org/Inquiry/CorporationSearch/ByName",
+        },
+        {
+            "phase": "03 · Capital", "label": "Ownership, deeds, debt + liens",
+            "status": "preliminary-ahead" if preliminary else "verified",
+            "event_through": preliminary.get("event_through") or official_clerk.get("event_through"),
+            "system_time": preliminary.get("system_time"),
+            "headline": ("Preliminary Clerk reaches " + str(preliminary.get("event_through"))
+                         if preliminary else "Verified Clerk reaches " + str(official_clerk.get("event_through") or "unknown")),
+            "note": "Same-day preliminary records are clues only. Verified Clerk, party, legal and parcel records are the evidence lane.",
+            "href": "/data.html?search=instrument:",
+        },
+        {
+            "phase": "04 · Regulatory", "label": "Environmental + airspace",
+            "status": "available" if (fdep or faa) else "unavailable",
+            "event_through": max(str(fdep.get("event_through") or ""), str(faa.get("event_through") or "")) or None,
+            "system_time": max(str(fdep.get("system_time") or ""), str(faa.get("system_time") or "")) or None,
+            "headline": f"FDEP through {fdep.get('event_through') or 'unknown'} · FAA through {faa.get('event_through') or 'unknown'}",
+            "note": "Wetland, stormwater, environmental and obstruction/crane filings can surface work before a municipal building permit.",
+            "href": "/data.html",
+        },
+        {
+            "phase": "05 · Execution", "label": "Applications, permits + inspections",
+            "status": "available" if permits else "unavailable",
+            "event_through": permits.get("event_through"), "system_time": permits.get("system_time"),
+            "headline": "Permit applications through " + str(permits.get("event_through") or "unknown"),
+            "note": "Later-stage confirmation and workflow detail—not the definition of a Signal and not the only candidate source.",
+            "href": "/data.html?search=permit:",
+        },
+    ]
+    return {
+        "lanes": lanes, "generated_at": now_iso(),
+        "contract": "These are monitored source lanes, not five complete candidate detectors. Evidence and event clocks remain source-specific.",
+    }
+
+
+def agenda_relevance(item: dict[str, Any]) -> str:
+    """Describe the reporting value of an agenda item without asserting an impact."""
+    terms = {str(term).lower() for term in (item.get("watch_terms") or [])}
+    title = str(item.get("title") or "").lower()
+    if "development" in terms or any(word in title for word in ("rezoning", "site plan", "land use", "flex unit")):
+        return "May change entitlement, density, design, allowed use or the approval path for a site."
+    if "infrastructure" in terms or any(word in title for word in ("water", "sewer", "airport", "transit", "road")):
+        return "May unlock, constrain or redirect development through public infrastructure and capital spending."
+    if "cra" in terms:
+        return "May direct redevelopment policy, planning work or public investment within a CRA."
+    if "property" in terms or any(word in title for word in ("lease", "sale", "acquisition", "easement")):
+        return "May change control, use or financing of land or public property."
+    return "Matched the desk's development watch terms and needs a source-level significance check."
+
+
+def agenda_watch_payload() -> tuple[int, dict[str, Any]]:
+    """Return actionable Legistar items and attachment links for private reporting review."""
+    select = (
+        "item_id,event_id,agenda_number,title,matter_file,matter_type,matter_status,"
+        "action_name,action_text,passed_flag_name,attachments,watch_terms,source_url,"
+        "first_seen_at,last_seen_at,legistar_events(event_date,body_name,agenda_url)"
+    )
+    code, rows = supabase_request(
+        "legistar_event_items?select=" + quote(select, safe=",()")
+        + "&watch_match=eq.true&order=first_seen_at.desc&limit=500"
+    )
+    if code >= 400 or not isinstance(rows, list):
+        return 502, rows if isinstance(rows, dict) else {"error": "Agenda watch unavailable"}
+    useful = []
+    attachment_total = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        title = re.sub(r"\s+", " ", str(row.get("title") or "")).strip()
+        attachments = row.get("attachments") if isinstance(row.get("attachments"), list) else []
+        if (not row.get("matter_file") and not attachments) or title.upper().startswith("NOTICES:"):
+            continue
+        public_attachments = []
+        for attachment in attachments:
+            if not isinstance(attachment, dict):
+                continue
+            url = attachment.get("MatterAttachmentHyperlink")
+            if not public_url(url) or attachment.get("MatterAttachmentShowOnInternetPage") is False:
+                continue
+            public_attachments.append({
+                "name": str(attachment.get("MatterAttachmentName") or attachment.get("MatterAttachmentFileName") or "Attachment")[:240],
+                "url": str(url),
+                "filename": str(attachment.get("MatterAttachmentFileName") or "")[:240],
+                "modified_at": attachment.get("MatterAttachmentLastModifiedUtc"),
+            })
+        event = row.get("legistar_events") if isinstance(row.get("legistar_events"), dict) else {}
+        attachment_total += len(public_attachments)
+        useful.append({
+            "item_id": row.get("item_id"), "event_id": row.get("event_id"),
+            "agenda_number": row.get("agenda_number"), "title": title,
+            "matter_file": row.get("matter_file"), "matter_type": row.get("matter_type"),
+            "matter_status": row.get("matter_status"), "action_name": row.get("action_name"),
+            "action_text": row.get("action_text"), "passed_flag_name": row.get("passed_flag_name"),
+            "watch_terms": row.get("watch_terms") or [], "source_url": row.get("source_url"),
+            "first_seen_at": row.get("first_seen_at"), "last_seen_at": row.get("last_seen_at"),
+            "event_date": event.get("event_date"), "body_name": event.get("body_name"),
+            "agenda_url": event.get("agenda_url"), "attachments": public_attachments,
+            "why_developers_care": agenda_relevance(row),
+            "what_next": (str(row.get("action_text") or row.get("action_name") or "")[:500]
+                          or "Open the staff memo and attachments; identify the site, parties, recommendation, conditions and next hearing."),
+            "stakeholder_test": "Identify who benefits, who bears costs or risk, staff's stated basis, supporters, opponents, public comments, alternatives and enforceable conditions.",
+            "verification": "private reporting lead — cite the exact item and attachment before making a claim",
+        })
+    useful.sort(key=lambda item: (str(item.get("event_date") or ""), str(item.get("first_seen_at") or "")), reverse=True)
+    event_dates = sorted(str(item.get("event_date")) for item in useful if item.get("event_date"))
+    observed_times = sorted(str(item.get("last_seen_at")) for item in useful if item.get("last_seen_at"))
+    return 200, {
+        "items": useful, "matched_rows": len(rows), "actionable_rows": len(useful),
+        "public_attachments": attachment_total, "generated_at": now_iso(),
+        "event_start": event_dates[0] if event_dates else None,
+        "event_through": event_dates[-1] if event_dates else None,
+        "item_index_observed_through": observed_times[-1] if observed_times else None,
+        "contract": "Watch terms nominate leads. They do not establish impact, ideology, support, opposition or outcome.",
+    }
+
+
+def pipeline_schedule() -> tuple[int, dict[str, Any]]:
+    """Read the production host's timer schedule without running or changing a job."""
+    command = [
+        "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "florida",
+        "systemctl list-timers --all --no-pager --output=json",
+    ]
+    try:
+        result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=8)
+        raw = json.loads(result.stdout)
+    except (subprocess.SubprocessError, OSError, json.JSONDecodeError) as error:
+        return 502, {
+            "error": "Production schedule is temporarily unreachable",
+            "detail": type(error).__name__,
+            "contract": "No timer status was inferred from a failed connection",
+        }
+    jobs = []
+    for row in raw if isinstance(raw, list) else []:
+        unit = str(row.get("unit") or "")
+        next_us = int(row.get("next") or 0)
+        last_us = int(row.get("last") or 0)
+        if not unit.startswith("florida-") or next_us <= 0:
+            continue
+        jobs.append({
+            "unit": unit,
+            "label": PIPELINE_LABELS.get(unit, unit.removeprefix("florida-").removesuffix(".timer").replace("-", " ").title()),
+            "next_at": datetime.fromtimestamp(next_us / 1_000_000, timezone.utc).isoformat(),
+            "last_at": datetime.fromtimestamp(last_us / 1_000_000, timezone.utc).isoformat() if last_us > 0 else None,
+        })
+    jobs.sort(key=lambda job: job["next_at"])
+    return 200, {
+        "jobs": jobs,
+        "generated_at": now_iso(),
+        "timezone": "Times render in this device's local time",
+        "contract": "A timer proves scheduling only. Source health and event coverage prove usable data.",
+    }
 
 
 def supabase_request(path: str, method: str = "GET", body: Any = None, prefer: str = "") -> tuple[int, Any]:
@@ -436,25 +744,74 @@ class Handler(SimpleHTTPRequestHandler):
                 rows = db.execute("select * from stories where market=? order by updated_at desc", (market,)).fetchall()
             self.reply({"market": market, "stories": [story_json(row) for row in rows]})
             return
+        if route == "/api/admin/review-summary":
+            if not self.require_admin():
+                return
+            code, data = supabase_request(
+                "signal_review_queue?select=queue_id,review_status,evidence_ready,source_record_date,amount"
+                "&order=source_record_date.desc&limit=1000"
+            )
+            if code >= 400:
+                self.reply(data if isinstance(data, dict) else {"error": "queue summary unavailable"},
+                           HTTPStatus.BAD_GATEWAY)
+                return
+            items = data or []
+            status_counts = {status: 0 for status in sorted(REVIEW_STATUSES)}
+            ready = 0
+            blocked = 0
+            for item in items:
+                status = str(item.get("review_status") or "").upper()
+                if status in status_counts:
+                    status_counts[status] += 1
+                if item.get("evidence_ready") is True:
+                    ready += 1
+                else:
+                    blocked += 1
+            self.reply({
+                "total": len(items),
+                "ready": ready,
+                "blocked": blocked,
+                "status_counts": status_counts,
+                "newest_event": (items[0].get("source_record_date") if items else None),
+                "generated_at": now_iso(),
+                "contract": "ready means a non-empty evidence packet exists; blocked candidates cannot be approved",
+            })
+            return
+        if route == "/api/admin/pipeline-schedule":
+            if not self.require_admin():
+                return
+            code, payload = pipeline_schedule()
+            self.reply(payload, HTTPStatus.OK if code == 200 else HTTPStatus.BAD_GATEWAY)
+            return
+        if route == "/api/admin/early-intel":
+            if not self.require_admin():
+                return
+            self.reply(early_intel_payload())
+            return
+        if route == "/api/admin/agenda-watch":
+            if not self.require_admin():
+                return
+            code, payload = agenda_watch_payload()
+            self.reply(payload, HTTPStatus.OK if code == 200 else HTTPStatus.BAD_GATEWAY)
+            return
         if route == "/api/admin/review-queue":
             if not self.require_admin():
                 return
             params = parse_qs(urlparse(self.path).query)
-            status = (params.get("status", [""])[0] or "").upper()
-            query = ("signal_review_queue?select=*"
-                     "&order=source_record_date.desc,amount.desc.nullslast&limit=200")
-            if status in REVIEW_STATUSES:
-                query += f"&review_status=eq.{status}"
+            query, limit, offset, readiness = review_queue_path(params)
             code, data = supabase_request(query)
             if code >= 400:
                 self.reply(data if isinstance(data, dict) else {"error": "queue unavailable"},
                            HTTPStatus.BAD_GATEWAY)
                 return
-            self.reply({"items": data or [], "generated_at": now_iso(),
-                        "gate": "editorial queue — approval records a decision and publishes nothing"})
+            items = [attach_investigation_context(dict(item)) for item in (data or [])]
+            self.reply({"items": items, "limit": limit, "offset": offset,
+                        "has_more": len(items) == limit, "readiness": readiness,
+                        "generated_at": now_iso(),
+                        "gate": "editorial queue — approval requires evidence and records a decision; it publishes nothing"})
             return
         if route == "/":
-            self.path = "/index.html"
+            self.path = "/home.html"
         super().do_GET()
 
     def do_POST(self) -> None:  # noqa: N802
@@ -472,6 +829,20 @@ class Handler(SimpleHTTPRequestHandler):
                 if status not in REVIEW_STATUSES:
                     self.reply({"error": f"Unknown review status: {status}"}, HTTPStatus.BAD_REQUEST)
                     return
+                if status in {"APPROVED", "REJECTED"} and payload.get("confirmation") != "reviewed-evidence":
+                    self.reply({"error": "Confirm that you reviewed the evidence before recording this decision"},
+                               HTTPStatus.CONFLICT)
+                    return
+                if status == "APPROVED":
+                    check_code, check_data = supabase_request(
+                        "signal_review_queue?select=queue_id,evidence_ready,evidence_hash,receipt_status"
+                        f"&queue_id=eq.{review_action.group('qid')}&limit=1"
+                    )
+                    item = (check_data or [None])[0] if check_code < 400 else None
+                    if not item or item.get("evidence_ready") is not True or not item.get("evidence_hash"):
+                        self.reply({"error": "Approval blocked: this candidate does not have a complete evidence receipt"},
+                                   HTTPStatus.CONFLICT)
+                        return
                 patch["review_status"] = status
                 # A decision is stamped; it is not a publish action.
                 if status in {"APPROVED", "REJECTED", "HOLD", "NEEDS_MORE_REPORTING"}:

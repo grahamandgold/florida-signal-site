@@ -1,8 +1,8 @@
 # ADR-001: The Data Wire information architecture
 
-**Status:** Accepted
+**Status:** Superseded by ADR-002
 **Date:** 2026-07-19
-**Deciders:** Andy (Florida Signal / Graham & Gold LLC)
+**Deciders:** Florida Signal product and editorial desk
 
 ## Context
 

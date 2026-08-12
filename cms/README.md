@@ -29,13 +29,24 @@ export FLORIDA_SIGNAL_CMS_CITY='fort-lauderdale'
 python3 server.py --port 4173
 ```
 
-Open `http://127.0.0.1:8788/` for the local editorial desk. The browser stores the admin token only in the local session. Do not put it in public JavaScript, a screenshot or a committed file.
+Open `http://127.0.0.1:8788/` for the **Live Desk** home. The shared header links to Explore,
+Review and Write, and the production-timer strip shows what is scheduled next. The schedule is
+read-only and comes from the production host; a scheduled timer is never presented as proof that
+the source advanced. Use Feed health for source-event, collection and row-count clocks.
+
+The browser stores the admin token only in the local session. Do not put it in public JavaScript,
+a screenshot or a committed file.
 
 Do not open `cms/review.html` as a `file://` URL. Direct file pages cannot call the
 loopback-only `/api/local-session` endpoint and will prompt for a token. For the normal local
 workflow, run `bash ops/launch_local.sh`, then open
 `http://127.0.0.1:8788/review.html`; the launcher enables auto-unlock only for requests arriving
 from `127.0.0.1` and never prints the token.
+
+The Finder app is refreshed from the tracked source with
+`bash ops/update_datawire_desktop_app.sh`. The updater validates the bundle identifier, stages and
+signs a complete copy, and restores the prior app if verification fails. Its local editorial
+SQLite data remains in Application Support and is not replaced with the app bundle.
 
 ### If the desk says Locked
 
@@ -59,6 +70,13 @@ Send `Authorization: Bearer $DATA_WIRE_ADMIN_TOKEN`.
 
 - `GET /api/admin/stories?market=broward`
 - `GET /api/admin/review-queue?status=NEW`
+- `GET /api/admin/review-summary`
+- `GET /api/admin/pipeline-schedule` — read-only upcoming production timers; it never starts a job
+- `GET /api/admin/early-intel` — source-specific clocks across decisions, companies, capital,
+  regulatory filings and execution; monitored lanes are not misrepresented as completed detectors
+- `GET /api/admin/agenda-watch` — private, filtered Legistar item/attachment leads with source links,
+  neutral relevance language, an explicit stakeholder reporting checklist, and separate event-span
+  and item-index-observation clocks so historical packets cannot look current
 - `POST /api/admin/review-queue/{queue_id}` — records APPROVE/HOLD/REJECT/NEEDS_MORE_REPORTING;
   it never publishes
 - `POST /api/admin/stories`
@@ -74,6 +92,18 @@ Permit packets show the exact canonical-folio receipt, the deed and grouped perm
 records, the facts those records support, and explicit unknowns. A Candidate is not a Signal.
 `APPROVED` records Gate 1 only; a separate complete Story Packet still has to pass the claims,
 source, taxonomy and named-publication-role checks below.
+
+Each reviewable Candidate also has an **Investigation Kit**. It derives Street View, satellite,
+Maps and internal parcel links from the exact permit coordinates returned by the server. News and
+Sunbiz links, and the copied Grok research brief, are reporting aids only. They do not modify the
+sealed evidence packet. Grok is instructed to separate confirmed records, reported claims,
+possible connections and unknowns; every useful result must still be opened, checked and attached
+with provenance before it can support publication. The interface explicitly reports the current
+Sunbiz production gap instead of implying that an entity join exists.
+
+Data Explorer search is exact and indexed. Use prefixes such as `permit:`, `folio:`, `instrument:`,
+`addr:`, `license:` and `asn:`. Broad leading-wildcard search is intentionally excluded because it
+previously caused database timeouts.
 
 A brief cannot publish until it is a complete **VERIFIED Story Packet**: required city, headline, dek, body, event date, dated current trigger, defensible project identity, public source URL/title, at least one source-bound claim slot, topic and geography tags, `claims_status: passed`, `validator_status: passed`, `tags_status: passed`, and a named human editor. Needs-verification packets remain private. The CMS computes a source hash and records approval history.
 

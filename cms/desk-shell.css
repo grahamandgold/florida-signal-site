@@ -1,0 +1,126 @@
+:root {
+  --dw-navy: #061b33;
+  --dw-navy-2: #0b2a4a;
+  --dw-blue: #1767ff;
+  --dw-teal: #12a88f;
+  --dw-ink: #10243b;
+  --dw-muted: #64748b;
+  --dw-line: #d9e2ee;
+  --dw-wash: #f4f7fb;
+  --dw-paper: #fff;
+  --dw-amber: #b56b00;
+  --dw-red: #b42332;
+  --dw-green: #087f68;
+  --dw-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.dw-skip {
+  position: fixed;
+  z-index: 1000;
+  top: 8px;
+  left: 8px;
+  transform: translateY(-160%);
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--dw-navy);
+  color: white;
+  font: 700 14px/1 var(--dw-font);
+}
+
+.dw-skip:focus { transform: none; }
+
+.dw-shell {
+  position: sticky;
+  top: 0;
+  z-index: 80;
+  color: var(--dw-ink);
+  background: rgba(255, 255, 255, .97);
+  border-bottom: 1px solid var(--dw-line);
+  backdrop-filter: blur(14px);
+  font-family: var(--dw-font);
+}
+
+.dw-shell__top {
+  min-height: 68px;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 10px clamp(16px, 3vw, 36px);
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.dw-brand {
+  min-width: 235px;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 8px 5px 4px;
+  border-radius: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.dw-brand:hover { background: #edf3ff; }
+.dw-brand:focus-visible,
+.dw-nav a:focus-visible { outline: 3px solid var(--dw-blue); outline-offset: 2px; }
+.dw-brand img { width: 35px; height: 35px; object-fit: contain; flex: 0 0 auto; }
+.dw-brand__words { display: grid; line-height: 1; }
+.dw-brand__name { font-weight: 850; font-size: 15px; letter-spacing: .06em; }
+.dw-brand__desk { margin-top: 5px; color: var(--dw-blue); font-size: 11px; font-weight: 800; letter-spacing: .17em; text-transform: uppercase; }
+
+.dw-nav { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.dw-nav a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 9px 12px;
+  border-radius: 9px;
+  color: var(--dw-muted);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 750;
+}
+.dw-nav a:hover { color: var(--dw-navy); background: var(--dw-wash); }
+.dw-nav a[aria-current="page"] { color: var(--dw-navy); background: #e9f0ff; }
+
+.dw-connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--dw-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.dw-connection::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--dw-green); box-shadow: 0 0 0 4px #dff5ef; }
+
+.dw-pipeline { color: #d8e5f5; background: var(--dw-navy); font-family: var(--dw-font); }
+.dw-pipeline__inner { min-height: 39px; max-width: 1440px; margin: 0 auto; padding: 6px clamp(16px, 3vw, 36px); display: flex; align-items: center; gap: 14px; }
+.dw-pipeline__title { flex: 0 0 auto; color: #6fe0cb; font-size: 11px; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
+.dw-pipeline__jobs { min-width: 0; display: flex; align-items: center; gap: 7px; overflow-x: auto; scrollbar-width: thin; }
+.dw-pipeline__job { flex: 0 0 auto; padding: 4px 8px; border: 1px solid rgba(255,255,255,.16); border-radius: 999px; font-size: 11px; white-space: nowrap; }
+.dw-pipeline__job b { color: #fff; }
+.dw-pipeline__job.is-next { color: #fff; border-color: #46ccb3; background: rgba(18,168,143,.18); }
+.dw-pipeline__loading { font-size: 11px; white-space: nowrap; }
+.dw-pipeline__inner > a { flex: 0 0 auto; margin-left: auto; color: #fff; font-size: 11px; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
+
+@media (max-width: 860px) {
+  .dw-shell { position: static; }
+  .dw-shell__top { align-items: flex-start; flex-wrap: wrap; gap: 6px 12px; }
+  .dw-brand { min-width: 0; flex: 1; }
+  .dw-connection { margin-top: 14px; }
+  .dw-nav { order: 3; width: 100%; margin: 2px 0 0; overflow-x: auto; padding-bottom: 3px; }
+  .dw-nav a { flex: 1 0 auto; justify-content: center; }
+  .dw-pipeline__inner { align-items: flex-start; }
+  .dw-pipeline__title { padding-top: 5px; }
+  .dw-pipeline__inner > a { display: none; }
+}
+
+@media (max-width: 480px) {
+  .dw-shell__top { padding-inline: 12px; }
+  .dw-brand__name { font-size: 13px; }
+  .dw-brand__desk { font-size: 10px; }
+  .dw-connection { font-size: 11px; }
+  .dw-nav a { padding-inline: 10px; font-size: 12px; }
+}

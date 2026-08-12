@@ -6,6 +6,10 @@ Older handoffs remain historical evidence. This document is the current starting
 pipeline, site, editorial, newsletter and automation work. Keep the public event clock
 separate from every pull, sync, enrichment and publication clock.
 
+**Night implementation addendum:** read `NIGHT_HANDOFF_2026-08-11.md` first for the local Data Wire
+work, Claude scheduled-task audit, current-day Acclaim refresh fix, test evidence and exact next
+steps completed after this production snapshot.
+
 ## Executive state
 
 - The production API resolves to `142.93.253.188`. `GET /api/health` is HTTP 200 with

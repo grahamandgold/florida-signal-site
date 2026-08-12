@@ -2,15 +2,17 @@
 
 Last verified: August 11, 2026
 
-> ## ⇢ START HERE FIRST: `SYSTEM_STATE_2026-08-11.md`
-> It is the current verified authority for production health, the data estate, deployed database
+> ## START HERE FIRST: `NIGHT_HANDOFF_2026-08-11.md`
+> It records the August 11–12 implementation, scheduled-task dispositions, same-day Broward
+> ownership, tests and next exact work. Then read `SYSTEM_STATE_2026-08-11.md`; it is the current
+> verified authority for production health, the data estate, deployed database
 > changes, local-only site corrections, Mailchimp, analytics and remaining work. Use
 > `EDITORIAL_LOOP_RUNBOOK.md` for the live Candidate schedules and recovery steps. The July
 > checkpoint remains historical evidence, not current operational state.
 >
 > Two facts it exists to prevent you getting wrong:
 > 1. The scorer and collectors are **not in this repository** — they are in `grahamandgold/florida-signal`.
-> 2. Andy's Mac runs **one** loaded agent (Acclaim). The 19 other plists on disk do **not** run.
+> 2. The operator Mac runs **one** loaded collector LaunchAgent (Acclaim). The other plists on disk do **not** run.
 >    Check with `launchctl list`, never `ls`.
 
 ## Product contract
