@@ -64,6 +64,50 @@ class PublicApiTests(unittest.TestCase):
         self.assertEqual((parsed.hour, parsed.minute, parsed.second), (23, 40, 15))
         self.assertEqual(parsed.microsecond, 618190)
 
+    def test_data_health_keeps_preliminary_and_verified_clerk_clocks_separate(self):
+        def rows(path):
+            if path.startswith("_meta_sync_runs"):
+                return [{"completed_at": "2026-08-11T04:30:00Z", "rows_synced": 10, "errors": 0}]
+            if path.startswith("permits?"):
+                return [{"applied_date": "2026-08-10", "last_seen_at": "2026-08-11T03:00:00Z"}]
+            if path.startswith("dashboard_cache"):
+                return [{"updated_at": "2026-08-11T03:00:00Z", "payload": {"stats": {"permits_fresh": "2026-08-10", "broward_fresh": "2026-08-05"}}}]
+            if path.startswith("broward_clerk_records_run"):
+                return [{"business_date": "2026-08-05", "pulled_at_utc": "2026-08-10T18:11:44Z", "parse_status": "ok", "observed_doc_count": 2446}]
+            if path.startswith("broward_clerk_records_doc"):
+                return [{"recording_date_iso": "2026-08-05"}]
+            if path.startswith("broward_clerk_preliminary"):
+                return [{"record_date": "2026-08-10", "preliminary_first_seen_at": "2026-08-11T00:56:06Z", "verification_status": "preliminary", "source": "acclaimweb-public-search"}]
+            if path.startswith("fdep_erp?select=received_date"):
+                return [{"received_date": "2026-08-10"}]
+            if path.startswith("fdep_erp?select=last_fetched_at"):
+                return [{"last_fetched_at": "2026-08-11T03:10:00Z"}]
+            if path.startswith("faa_oeaaa?select=date_entered"):
+                return [{"date_entered": "2026-08-10"}]
+            if path.startswith("faa_oeaaa?select=last_fetched_at"):
+                return [{"last_fetched_at": "2026-08-11T03:20:00Z"}]
+            if path.startswith("sunbiz_entities"):
+                return []
+            if path.startswith("broward_property_transfer_freshness"):
+                return [{"snapshot_is_current": True, "snapshot_event_through": "2026-08-05", "snapshot_lag_business_days": 0, "source_age_business_days": 3}]
+            if path.startswith("editorial_pipeline_health"):
+                return []
+            raise AssertionError(path)
+
+        with mock.patch.object(server_module, "supabase_public_rows", side_effect=rows), mock.patch.object(
+            server_module, "meeting_payload", return_value={"updated_at": "2026-08-11T04:45:00Z", "meetings": []}
+        ):
+            server_module._health_cache.update({"at": 0.0, "payload": None})
+            payload = server_module.data_health_payload()
+
+        sources = {source["id"]: source for source in payload["sources"]}
+        self.assertEqual(sources["broward"]["event_through"], "2026-08-05")
+        self.assertEqual(sources["broward"]["verification"], "verified")
+        self.assertEqual(sources["clerk-preliminary"]["event_through"], "2026-08-10")
+        self.assertEqual(sources["clerk-preliminary"]["verification"], "preliminary")
+        self.assertIn("never presented as verified early", sources["clerk-preliminary"]["detail"])
+        self.assertEqual(payload["errors"], [])
+
     def test_signup_persists_and_repeats_idempotently(self):
         body = {
             "email": "launch-check@example.com",

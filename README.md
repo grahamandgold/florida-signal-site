@@ -51,6 +51,8 @@ The local server provides same-origin meeting, storm, CMS, agenda-recon and subs
 
 - [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md) — current operational, data, editorial, Mailchimp, analytics and launch truth.
 - [`EDITORIAL_LOOP_RUNBOOK.md`](EDITORIAL_LOOP_RUNBOOK.md) — live Candidate schedules, evidence contract, human gate and recovery.
+- [`SITE_MAINTENANCE_RUNBOOK.md`](SITE_MAINTENANCE_RUNBOOK.md) — release checks, hourly browser monitor and incident response.
+- [`ops/droplet/README_PUBLIC_API.md`](ops/droplet/README_PUBLIC_API.md) — production API, DNS/TLS, secrets, durable data, update and rollback procedure.
 - [`SYSTEM_STATE_2026-07-28.md`](SYSTEM_STATE_2026-07-28.md) — historical July checkpoint.
 - [`REMAINING_WORK_REGISTER_2026-07-28.md`](REMAINING_WORK_REGISTER_2026-07-28.md) — unresolved decisions and launch blockers.
 - [`FLORIDA_SIGNAL_BUILD_REPORT.md`](FLORIDA_SIGNAL_BUILD_REPORT.md) — source cadence, live versus scheduled updates, date methodology, CMS/Mailchimp state and production runbook.

@@ -29,7 +29,7 @@ is off, the job reports an action-required degraded state instead of a generic c
   collector exits zero. Technical automation failures still exit nonzero.
   Logs → `~/Library/Logs/florida-acclaim.log`.
 - `com.floridasignal.acclaim.plist` — LaunchAgent at **00:30, 12:00, 19:00, and 22:30** local,
-  plus `RunAtLoad` catch-up, absolute paths, logs outside repo. Installed at
+  plus an hourly retry and `RunAtLoad` catch-up, absolute paths, logs outside repo. Installed at
   `~/Library/LaunchAgents/`.
 
 The target selector does not query the still-forming current day before noon. An `EMPTY`

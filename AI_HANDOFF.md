@@ -125,3 +125,21 @@ As of the verification date, the local health endpoint reports that CMS and Mail
 ## 2026-07-19 addendum (Drive offsite snapshot cleanup — verified)
 
 Authorized permanent cleanup of eight obsolete full-size Google Shared Drive snapshot directories under `gdrive:08_Backups_and_Recovery/FL_Signal/01_DATABASE/snapshots/` (2026-07-10..16 and 2026-07-19). **Retained:** `latest/`, `snapshots/2026-07-18/`, `snapshots/2026-07-17/`, and archive `permits.sqlite.daily-20260703.gz`. Released **90,867,600,278** bytes. Jul 18 restore validation: SHA match + `PRAGMA quick_check=ok` (127,912 permits). **`RETENTION_MODE` remains `dry-run`** — permanent compressed retention policy still TODO. Droplet record: `/srv/grahamandgold/florida-signal/restore-tests/DRIVE_SNAPSHOT_CLEANUP_2026-07-19.md` and `START_HERE.md` (Drive mirror of START_HERE not claimed current). No timer/service/script/production-DB change for this cleanup.
+
+## 2026-08-11 recovery and permanent automation
+
+- Verified SFTP is through August 6; the newest run inserted 2,293 documents, 5,954 parties, 268
+  legal rows and 1,049 links. Acclaim preliminary is through August 11 with 2,056 rows for that day.
+- The Mac safely retained state while Wi-Fi was off. A periodic Broward disclaimer required human
+  acceptance; after acceptance the retry completed with no backlog. The LaunchAgent now retries
+  hourly in addition to its four calendar fires and `RunAtLoad`.
+- `clerk_catchup.py` now runs `reconcile_clerk_preliminary()` after every authoritative run,
+  including no-op runs. Daily pg_cron remains the fallback. Exact matches become verified;
+  conflicts remain quarantined and source text is preserved. The first live RPC exposed the old
+  function's full-scan timeout; migration 009 added normalized instrument/date indexes and a fixed
+  search path. The service rerun succeeded with 0 conflicts and 0 aged unmatched rows.
+- The public mirror outage was permissions drift on the shared secrets directory, not source data
+  loss. Durable contract: directory `root:andy` `0710`, pipeline `.env` `andy:andy` `0600`, and
+  `public-site.env` root-only `0600`. A tmpfiles rule restores the directory contract.
+- The forced mirror completed with 27 tables, 10,872 rows and 0 errors. The hourly GitHub monitor
+  now fails if `supabase-sync` is stale or unavailable.

@@ -19,7 +19,21 @@
 **Publisher:** Graham & Gold LLC  
 **Last local verification:** July 19, 2026 (see `CLAUDETTE_HANDOFF_2026-07-19.md`)
 
-This document is the operational truth for the public site. It separates the date an event happened from the time Florida Signal collected, synchronized, enriched or published it.
+This document records the July 17 operating snapshot and the durable data rules. It is not the current health report. Read [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md) for current deployment, data-clock and automation truth. The rules below continue to separate the date an event happened from the time Florida Signal collected, synchronized, enriched or published it.
+
+## August 11 Clerk operating state
+
+The Broward Clerk feed has two intentionally separate lanes:
+
+| Lane | Evidence level | Event through | System observation | Operating meaning |
+|---|---|---:|---:|---|
+| AcclaimWeb public search | Preliminary | Aug 11 | Aug 11, 3:10 p.m. ET | 2,056 same-day rows and source text. Keep the `PRELIMINARY` label until reconciliation. |
+| Clerk SFTP | Verified | Aug 6 | Aug 11, 2:11 p.m. ET | 2,293 authoritative documents in the newest run. Source publication is several days behind AcclaimWeb. |
+
+The August 5 preliminary interruption was recovered from preserved source files: 2,446 unique
+rows now reconcile to SFTP with 0 conflicts and 0 aged unmatched rows. The database preserved all
+available direct/indirect names, document type, book/page and legal text; it did not discard fields
+just because the current site does not render them.
 
 ## The non-negotiable date rule
 
@@ -96,6 +110,22 @@ Every diagram names its application or recording window, links to the underlying
 4. Confirm Broward Record and Data Room carry the new span and system observation separately.
 5. If the job fails, leave the previous total stamped stale and alert the operator.
 
+### AcclaimWeb same-day recordings
+
+1. `com.floridasignal.acclaim` runs at 12:30 a.m., noon, 7 p.m. and 10:30 p.m. local, hourly and at login.
+2. Before noon, the still-forming current day is not a target and must not appear in backlog state.
+3. After noon, collect the current date plus any missing dates after the verified SFTP floor, oldest first.
+4. A date is complete only when every page was read and the harvested count reaches the source total; a same-day empty result is not completion.
+5. Upsert by `(record_date, instrument_number)`; never overwrite the authoritative SFTP tables.
+6. Reconcile by normalized instrument number plus exact record date. The verified SFTP service does
+   this immediately after every run, including a no-op run; daily pg_cron is the fallback. Flag date
+   conflicts instead of merging them. Migration 009 indexes both normalized join keys and limits
+   the preliminary index to still-unverified rows so archive growth does not exceed the API timeout.
+7. Confirm `/api/data-health` exposes both `clerk-preliminary` and `broward`, with `preliminary` and `verified` evidence labels respectively.
+8. Wi-Fi or power loss does not discard dates: state advances only on a complete source count, then
+   the next hourly/login run recomputes gaps from the verified floor. A Broward disclaimer redirect
+   requires one human acceptance in Chrome; the following retry resumes automatically.
+
 ### Meetings and agendas
 
 1. Poll the Fort Lauderdale Legistar source every 15 minutes.
@@ -140,6 +170,15 @@ curl -s http://127.0.0.1:4173/api/site-mode
 curl -s http://127.0.0.1:8788/api/health
 ```
 
+The Clerk contract check is:
+
+```sh
+curl -fsS https://api.thefloridasignal.com/api/data-health | jq -e '
+  any(.sources[]; .id == "broward" and .verification == "verified") and
+  any(.sources[]; .id == "clerk-preliminary" and .verification == "preliminary")
+'
+```
+
 Regenerate the ten social graphics and their canonical share pages after a successful verified refresh:
 
 ```sh
@@ -156,7 +195,12 @@ FLORIDA_SIGNAL_EXPORT_SLUGS='application-pulse,trades-pulse' node social/export_
 
 Start from `.env.example`. Keep CMS admin tokens, Mailchimp API keys and any service-role database key server-side. The browser uses only a publishable Supabase key protected by RLS.
 
-Mailchimp is **not currently configured** in the local server. The audience/list metadata exists, but `/api/health` reports `mailchimp_configured: false`. Until a scoped API key and optional city/topic merge fields are configured, consented signups remain in the private local queue and must not be described as synced to Mailchimp.
+The production public API reports `mailchimp_configured: true`, and a read-only authenticated check
+confirmed the configured Broward audience on August 11. The private Data Wire remains unconfigured
+on the public host by design. Do not create a fake live subscriber to test the write path: isolated
+tests prove persistence and idempotency, and the first real consented signup should provide the final
+production write-path confirmation. Optional city/topic merge fields remain best-effort and must not
+block durable local acceptance.
 
 ## Stop-the-line conditions
 
@@ -171,14 +215,14 @@ Do not silently publish or refresh a number when any of these is true:
 - a Storm Watch statement could be mistaken for official safety guidance; or
 - a source-health timestamp is absent but the label says live/current.
 
-## Production work still required
+## Production work still required after the August 11 API deployment
 
-- Restore/monitor the stale aggregate and Broward collectors.
+- Continue monitoring the delayed verified SFTP clock and the separate same-day Acclaim clock; do not treat source release lag as proof that the collector failed. Treat a stale `supabase-sync` heartbeat as a real mirror incident.
 - Expose Sunbiz health and event-span metadata.
-- Deploy the Python APIs (or serverless equivalents); static hosting alone cannot run signup, analytics or the CMS adapter.
 - Deploy the Data Wire behind real user authentication with persistent Postgres/Supabase, backups and retained audit logs.
-- Configure Mailchimp server-side and replay only explicit-consent rows with retry/alerting.
-- Add persistent analytics storage and a retention policy.
+- Confirm the first real consented signup is both durable locally and accepted by Mailchimp; replay only explicit-consent rows if retry is needed.
+- Define and document the retention policy for the persistent public API analytics SQLite database.
+- Resolve the NHC host-level 403 with an official, server-supported NOAA delivery path; until then keep the client fallback and source-check state.
 
 
 ## 2026-07-19 additions (Claudette)
@@ -189,8 +233,8 @@ New feeds and their clocks:
 |---|---|---|---|
 | FDEP ERP (`fdep_erp`) | `received_date` | pg_cron daily 09:20 UTC via `fdep-erp-sync` | Broward bbox, layers 0+1; leading indicator ~5–6 weeks. |
 | FAA OE/AAA (`faa_oeaaa`) | `date_entered` | pg_cron daily 09:40 UTC via `faa-oeaaa-sync` | state=FL stored, `in_broward` generated; cranes = `structure_type LIKE 'CRANE%'`. |
-| Preliminary recordings (`broward_clerk_preliminary`) | `record_date` | Claude task weekdays 12:00 + 19:00 ET | From Clerk's public AcclaimWeb search ("Released through" runs ~3 days ahead of SFTP). PRELIMINARY: superseded row-for-row when the verified SFTP business date arrives. Label accordingly anywhere surfaced. |
+| Preliminary recordings (`broward_clerk_preliminary`) | `record_date` | Native Mac LaunchAgent at 00:30, 12:00, 19:00 and 22:30 local plus login catch-up | From Clerk's public AcclaimWeb search, usually days ahead of SFTP. PRELIMINARY until exact row-level reconciliation; preserve extra source text and label accordingly anywhere surfaced. |
 
-Automation inventory (full table in `CLAUDETTE_HANDOFF_2026-07-19.md`): dashboard cache rebuild every 30 min (pg_cron), Clerk SFTP catch-up 2:15pm weekdays (Claude), social PNG re-export 9:40pm gated on `/api/data-health` (Claude), shadow scorer 05:45 + morning review 08:20 (droplet + Claude; five-run gate ends 2026-07-20).
+Historical automation inventory is in `CLAUDETTE_HANDOFF_2026-07-19.md`. Current truth supersedes it: the same-day Clerk owner is the native Mac LaunchAgent, and the verified SFTP owner is the droplet schedule/catch-up. Do not enable the historical Claude same-day writer in parallel.
 
 Local ops: `ops/launch_local.sh` (or the Florida Signal Desk / The Data Wire apps) starts both servers with desk token, Mailchimp env, and local auto-unlock. Mailchimp is configured as of 2026-07-19 (`mailchimp_configured: true`).

@@ -4,6 +4,7 @@ import datetime as dt
 import importlib.util
 import json
 import pathlib
+import plistlib
 import tempfile
 import unittest
 import urllib.error
@@ -82,6 +83,14 @@ class TargetTests(unittest.TestCase):
                 ),
                 [dt.date(2026, 7, 23)],
             )
+
+
+class LaunchAgentTests(unittest.TestCase):
+    def test_hourly_and_login_recovery_are_enabled(self):
+        with (HERE / "com.floridasignal.acclaim.plist").open("rb") as handle:
+            config = plistlib.load(handle)
+        self.assertEqual(config.get("StartInterval"), 3600)
+        self.assertIs(config.get("RunAtLoad"), True)
 
 
 if __name__ == "__main__":
