@@ -31,6 +31,12 @@ python3 server.py --port 4173
 
 Open `http://127.0.0.1:8788/` for the local editorial desk. The browser stores the admin token only in the local session. Do not put it in public JavaScript, a screenshot or a committed file.
 
+Do not open `cms/review.html` as a `file://` URL. Direct file pages cannot call the
+loopback-only `/api/local-session` endpoint and will prompt for a token. For the normal local
+workflow, run `bash ops/launch_local.sh`, then open
+`http://127.0.0.1:8788/review.html`; the launcher enables auto-unlock only for requests arriving
+from `127.0.0.1` and never prints the token.
+
 ### If the desk says Locked
 
 The lock is deliberate. Use the exact value you supplied as `DATA_WIRE_ADMIN_TOKEN` when starting the server:

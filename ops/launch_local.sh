@@ -38,7 +38,8 @@ nohup python3 server.py --bind 127.0.0.1 --port 4173 >/tmp/flsignal.log 2>&1 &
 sleep 3
 echo "CMS health: $(curl -s --max-time 5 http://127.0.0.1:8788/api/health || echo FAILED)"
 echo "Site http:  $(curl -s --max-time 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:4173/fort-lauderdale/ || echo FAILED)"
-echo "TOKEN:$TOKEN"
+echo "Review desk: http://127.0.0.1:8788/review.html"
+echo "Auto-unlock: enabled for loopback requests only; the token is not printed"
 echo "--- last log lines ---"
 tail -n 3 /tmp/datawire.log 2>/dev/null
 tail -n 3 /tmp/flsignal.log 2>/dev/null

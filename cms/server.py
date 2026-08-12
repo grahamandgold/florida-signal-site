@@ -399,7 +399,7 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         route = urlparse(self.path).path
         if route == "/api/local-session":
-            # Convenience for Andy's local desk only: requires explicit env opt-in
+            # Convenience for the local editorial desk only: requires explicit env opt-in
             # and a loopback client. Never enabled in production deployments.
             if os.getenv("DATA_WIRE_LOCAL_AUTOUNLOCK") == "1" and ADMIN_TOKEN and self.client_address[0] == "127.0.0.1":
                 self.reply({"token": ADMIN_TOKEN, "market": "broward"})
