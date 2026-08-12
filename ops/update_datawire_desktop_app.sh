@@ -21,10 +21,18 @@ previous_app="$stage_dir/previous.app"
 trap '/bin/rm -rf "$stage_dir"' EXIT
 
 /usr/bin/ditto --norsrc "$app_path" "$staged_app"
-/bin/cp "$repo_dir/cms/server.py" "$repo_dir/cms/home.html" "$repo_dir/cms/index.html" \
+/bin/cp "$repo_dir/cms/server.py" "$repo_dir/cms/home.html" "$repo_dir/cms/agenda.html" \
+  "$repo_dir/cms/index.html" \
   "$repo_dir/cms/data.html" "$repo_dir/cms/review.html" "$repo_dir/cms/desk-shell.css" \
   "$repo_dir/cms/desk-shell.js" "$staged_app/Contents/Resources/cms/"
 /bin/cp -L "$repo_dir/cms/mark-full-color.png" "$staged_app/Contents/Resources/cms/mark-full-color.png"
+
+for required_page in home.html agenda.html index.html data.html review.html; do
+  if [[ ! -s "$staged_app/Contents/Resources/cms/$required_page" ]]; then
+    echo "Staged desktop app is missing required Newsroom page: $required_page" >&2
+    exit 1
+  fi
+done
 /bin/cp "$repo_dir/ops/datawire-app-launcher.zsh" "$staged_app/Contents/MacOS/Florida Signal Data Wire"
 /bin/chmod 755 "$staged_app/Contents/MacOS/Florida Signal Data Wire"
 /usr/bin/xattr -cr "$staged_app"

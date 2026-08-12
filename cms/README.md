@@ -1,6 +1,14 @@
-# The Data Wire — Florida Desk CMS
+# Florida Signal Newsroom — private CMS
 
-The Data Wire is the source-gated editorial CMS that powers Florida Signal and is designed to support additional market sites without mixing their public feeds.
+Florida Signal is intentionally two separate sites:
+
+1. **Public Florida Signal** is the reader product: reporting, diagrams, live public tools and the
+   newsletter journey at `thefloridasignal.com`.
+2. **Florida Signal Newsroom** is the private source-gated CMS and intelligence workspace served
+   locally from `cms/`. It is not a public page or a second reader site.
+
+The Newsroom powers Florida Signal and is designed to support additional market sites without
+mixing their public feeds. **Live Desk is the Newsroom home**, not a third product.
 
 It is a focused, clean-room port of the useful Michigan Intel Desk patterns:
 
@@ -29,10 +37,22 @@ export FLORIDA_SIGNAL_CMS_CITY='fort-lauderdale'
 python3 server.py --port 4173
 ```
 
-Open `http://127.0.0.1:8788/` for the **Live Desk** home. The shared header links to Explore,
-Review and Write, and the production-timer strip shows what is scheduled next. The schedule is
+Open `http://127.0.0.1:8788/` for the **Live Desk** home. The shared Newsroom shell links to:
+
+- **Live Desk** — what needs attention now;
+- **Agenda Watch** — public decisions, packets, attachments and early clues;
+- **Brief** — build and clear a sourced newsletter edition;
+- **Data Explorer** — exact record search and investigation;
+- **Triage** — examine a Candidate's evidence and record the human decision.
+
+The production-timer strip shows what is scheduled next. The schedule is
 read-only and comes from the production host; a scheduled timer is never presented as proof that
 the source advanced. Use Feed health for source-event, collection and row-count clocks.
+
+The interface is a production translation of the reviewed Claude Design direction. Claude's
+illustrative records, scores, model labels and clocks were not copied. The real Newsroom reads the
+existing private endpoints, preserves every human publication gate and uses the canonical emblem
+from `assets/mark-full-color.png` without an arrow, crop or distortion.
 
 The browser stores the admin token only in the local session. Do not put it in public JavaScript,
 a screenshot or a committed file.

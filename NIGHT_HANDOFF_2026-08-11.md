@@ -16,10 +16,13 @@ instructions.
   It is loaded, last exit is `0`, runs hourly, at login, and at 00:30, 12:00, 19:00 and 22:30 local.
   It inserted 2,056 August 11 rows at 15:10 local. The Claude duplicate is paused and retained only
   as a reversible emergency fallback.
-- The private Data Wire has a new local Live Desk, real production-timer strip, exact Data Explorer
-  search, an evidence-first Candidate review, a reporting Investigation Kit, an early-intelligence
-  radar and a Legistar Agenda Watch. These are local branch changes and are not a claim that every
-  source has a completed detector.
+- The product boundary is now explicit: **public Florida Signal** is the reader/newsletter site;
+  **Florida Signal Newsroom** is the private CMS and intelligence workspace. Live Desk is the
+  Newsroom home, not a separate site.
+- The private Newsroom now has a shared high-end shell, real production-timer strip, exact Data
+  Explorer search, evidence-first Triage, a reporting Investigation Kit, an early-intelligence
+  sequence, Legistar Agenda Watch and the gated Brief builder. These are real local pages backed by
+  private endpoints, not a claim that every source has a completed detector.
 - Eight Transfer → Permit Candidates are evidence-ready in the private queue; 150 older queue rows
   remain blocked by the evidence gate. Approval records an editorial decision only; it does not
   publish.
@@ -100,6 +103,29 @@ Implemented through merged PR 10 from branch `codex/local-desk-auto-unlock`:
 - Its updater strict-verifies the staged bundle, removes transient Finder metadata on placement and
   verifies the final Desktop signature without treating Finder's empty xattr as app corruption.
 
+### Newsroom implementation from the reviewed Claude Design
+
+The reviewed concept has now been translated into the real private CMS on branch
+`codex/newsroom-claude-design`. This is an implementation, not a visual mock:
+
+- one `FLORIDA SIGNAL / NEWSROOM` shell and exact canonical emblem link every section back to Live
+  Desk;
+- Live Desk leads with real queue/source counts, the strongest evidence-ready Candidate and the
+  actual S1–S5 early-intelligence lanes;
+- Agenda Watch is a dedicated page for real Legistar items, attachments, coverage windows and
+  balanced reporting prompts;
+- Brief, Data Explorer and Triage retain their existing APIs, security boundary and editorial
+  gates while adopting the same navigation and responsive visual system;
+- the source-status panel rejects null, zero and pre-2000 timestamps rather than manufacturing a
+  1969 clock;
+- all five Newsroom views fit a 390-pixel page viewport; the dense Explorer table remains an
+  intentional internal horizontal scroller;
+- no Claude sample record, score, model identity or live-looking illustrative timestamp entered
+  production code.
+
+The public site was deliberately not reskinned in this branch. Its mobile simplification,
+newsletter journey and field-tool redesign are the next separate product phase.
+
 ### Accuracy, schema and database gate
 
 - The working content model is **Record → Candidate → Signal → Story/Brief**. Raw permits and machine
@@ -150,8 +176,8 @@ Implemented through merged PR 10 from branch `codex/local-desk-auto-unlock`:
 
 - `python3 -m unittest ops/mac/test_acclaim_resilience.py` — 7 passing.
 - `python3 -m unittest tests/test_cms_server.py` — 6 passing in the latest CMS run.
-- Playwright `tests/browser/data-wire.spec.js` — 2 passing at desktop and 390-pixel checks in the
-  latest browser run.
+- Playwright `tests/browser/data-wire.spec.js` now covers all five Newsroom views, the canonical
+  home link, the mobile decision restriction, source-clock sanity and 390-pixel page width.
 - Desktop app bundle identifier, code signature and Live Desk launch were verified after refresh.
 - Production LaunchAgent check: `com.floridasignal.acclaim`, last exit `0`; August 11 insertion and
   subsequent hourly runs are present in `~/Library/Logs/florida-acclaim.log`.
@@ -163,9 +189,9 @@ loopback-only Data Wire runtime.
 
 ## Known gaps / next exact work
 
-1. Translate the reviewed Claude Design concepts into production code deliberately; never copy its
-   illustrative records, scores or clocks into the real desk.
-2. Refresh the Desktop Data Wire app and rerun the Python/browser suite after production UI changes.
+1. Finish review/publishing of the private Newsroom implementation and refresh the signed Desktop
+   app from the tracked CMS source.
+2. Keep the public site and private Newsroom separate in navigation, deployment and documentation.
 3. Review every future diff; stage only intended tracked work. Do **not** stage raw/untracked Broward text
    dumps, `FABLE_ANALYSIS_2026-07-20/`, `mailchimp/`, `output/` or `chunk_*.txt`.
 4. Do not stage the ten social PNGs touched by the stopped 21:40 Claude run without a separate

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta name="referrer" content="no-referrer">
-  <title>The Data Wire — Internal Editorial Desk</title>
+  <title>Brief — Florida Signal Newsroom</title>
   <meta name="description" content="Private, source-gated editorial desk for Florida Signal.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -490,6 +490,14 @@
     .intro h2 { letter-spacing: -.03em !important; font-weight: 700 !important; }
     .intro h2 span, .brand h1 span, .section-label h3, .drawer__head h4 { font-style: normal !important; }
     .masthead__inner { justify-content: flex-end; min-height: auto; }
+    .brief-stage { display: grid; grid-template-columns: repeat(4,1fr); margin: 0 0 24px; border: 1px solid var(--line); background: var(--paper); box-shadow: var(--shadow); }
+    .brief-stage__step { min-width: 0; padding: 13px 15px; border-left: 1px solid var(--line); }
+    .brief-stage__step:first-child { border-left: 0; }
+    .brief-stage__step b { display: block; font-size: .78rem; }
+    .brief-stage__step span { color: var(--muted); font-size: .68rem; }
+    .brief-stage__step.is-active { color: white; background: var(--ink); }
+    .brief-stage__step.is-active span { color: #b7c7d8; }
+    @media (max-width: 620px) { .brief-stage { grid-template-columns: repeat(2,1fr); } .brief-stage__step:nth-child(3) { border-left: 0; border-top: 1px solid var(--line); } .brief-stage__step:nth-child(4) { border-top: 1px solid var(--line); } }
   </style>
 </head>
 <body>
@@ -527,10 +535,17 @@
   <main id="main-content">
     <section class="intro" aria-labelledby="page-title">
       <div>
-        <div class="eyebrow">Human editor required</div>
-        <h2 id="page-title">Build the record.<br><span>Clear the signal.</span></h2>
+        <div class="eyebrow">Brief · human editor required</div>
+        <h2 id="page-title">Build the Brief.<br><span>Clear every claim.</span></h2>
       </div>
-      <p class="intro__copy"><strong>Nothing publishes from here by accident.</strong> Every packet needs a public source, a defensible taxonomy, passed claims checks, and the name of the editor who cleared it.</p>
+      <p class="intro__copy"><strong>Nothing publishes from here by accident.</strong> Draft throughout the day or overnight; review, scheduling and sending remain separate human decisions.</p>
+    </section>
+
+    <section class="brief-stage" aria-label="Brief production stages">
+      <div class="brief-stage__step is-active"><b>Draft</b><span>Build sourced modules</span></div>
+      <div class="brief-stage__step"><b>Review</b><span>Verify every claim</span></div>
+      <div class="brief-stage__step"><b>Schedule</b><span>Choose the edition time</span></div>
+      <div class="brief-stage__step"><b>Sent</b><span>Immutable edition receipt</span></div>
     </section>
 
     <div class="workspace">
@@ -539,8 +554,8 @@
         <header class="panel__header">
           <div>
             <div class="eyebrow">Private workspace</div>
-            <h3 id="compose-title">Create a draft story</h3>
-            <p>Required fields are marked. Saving creates a private draft only.</p>
+            <h3 id="compose-title">Create a sourced Brief module</h3>
+            <p>Required fields are marked. Saving creates a private draft only; it does not send.</p>
           </div>
           <span class="badge">Draft gate</span>
         </header>

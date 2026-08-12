@@ -3,164 +3,147 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="robots" content="noindex,nofollow">
-  <title>Live Desk — Florida Signal Data Wire</title>
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Live Desk — Florida Signal Newsroom</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/desk-shell.css">
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; color: var(--dw-ink); background: var(--dw-wash); font-family: var(--dw-font); }
+    body { margin: 0; color: var(--dw-ink); background: var(--dw-wash); font: 15px/1.55 var(--dw-font); }
     button, input { font: inherit; }
-    main { width: min(1380px, calc(100% - 32px)); margin: 0 auto; padding: 34px 0 72px; }
-    .eyebrow { color: var(--dw-blue); font-size: 12px; font-weight: 850; letter-spacing: .14em; text-transform: uppercase; }
-    .hero { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr); gap: 22px; align-items: stretch; }
-    .hero__lead, .panel { border: 1px solid var(--dw-line); background: var(--dw-paper); box-shadow: 0 18px 48px rgba(6, 27, 51, .06); }
-    .hero__lead { padding: clamp(26px, 4vw, 54px); background: radial-gradient(circle at 92% 12%, rgba(23,103,255,.12), transparent 30%), #fff; }
-    h1 { max-width: 850px; margin: 12px 0 14px; font-size: clamp(35px, 5vw, 66px); line-height: .98; letter-spacing: -.052em; }
-    .lede { max-width: 730px; margin: 0; color: var(--dw-muted); font-size: clamp(17px, 2vw, 21px); line-height: 1.55; }
-    .since { margin: 25px 0 0; color: var(--dw-muted); font-size: 13px; }
-    .hero__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
-    .button { min-height: 46px; display: inline-flex; align-items: center; justify-content: center; padding: 11px 17px; border: 1px solid var(--dw-navy); border-radius: 9px; color: var(--dw-navy); background: #fff; text-decoration: none; font-weight: 800; cursor: pointer; }
-    .button--primary { color: #fff; background: var(--dw-navy); }
-    .button:hover { border-color: var(--dw-blue); color: var(--dw-blue); }
-    .button--primary:hover { color: #fff; background: var(--dw-blue); }
-    .pulse { padding: 28px; color: #fff; background: var(--dw-navy); }
-    .pulse h2 { margin: 7px 0 0; font-size: 50px; line-height: 1; }
-    .pulse p { margin: 8px 0 24px; color: #c5d4e5; line-height: 1.5; }
-    .funnel { display: grid; gap: 9px; }
-    .funnel__row { display: grid; grid-template-columns: 92px 1fr 38px; gap: 9px; align-items: center; font-size: 12px; }
-    .funnel__track { height: 9px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.14); }
-    .funnel__fill { height: 100%; min-width: 3px; border-radius: inherit; background: var(--dw-teal); }
-    .funnel__row--blocked .funnel__fill { background: #f4ad48; }
-    .grid { margin-top: 22px; display: grid; grid-template-columns: 1.15fr .85fr .85fr; gap: 22px; }
-    .radar { margin-top: 22px; }
-    .radar__head { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 16px; }
-    .radar__head h2 { margin: 4px 0 0; font-size: 28px; }
-    .radar__head p { max-width: 600px; margin: 0; color: var(--dw-muted); font-size: 13px; }
-    .radar__lanes { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); border: 1px solid var(--dw-line); background: #fff; box-shadow: 0 18px 48px rgba(6,27,51,.06); }
-    .radar__lane { min-width: 0; padding: 18px; border-left: 1px solid var(--dw-line); color: inherit; text-decoration: none; }
-    .radar__lane:first-child { border-left: 0; }
-    .radar__lane:hover { background: #f6f9ff; }
-    .radar__phase { color: var(--dw-blue); font-size: 10px; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
-    .radar__lane h3 { margin: 8px 0 10px; font-size: 16px; line-height: 1.2; }
-    .radar__lane b { display: block; margin-bottom: 7px; font-size: 13px; line-height: 1.35; }
-    .radar__lane p { margin: 0; color: var(--dw-muted); font-size: 11px; line-height: 1.45; }
-    .radar__clock { display: block; margin-top: 10px; color: var(--dw-muted); font: 10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
-    .agenda-watch { margin-top: 22px; padding: 24px; border: 1px solid var(--dw-line); background: #fff; box-shadow: 0 18px 48px rgba(6,27,51,.06); }
-    .agenda-watch__head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
-    .agenda-watch__head h2 { margin: 4px 0 0; font-size: 27px; }
-    .agenda-watch__summary { color: var(--dw-muted); font-size: 12px; text-align: right; }
-    .agenda-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
-    .agenda-item { min-width: 0; padding: 18px; border: 1px solid var(--dw-line); border-radius: 11px; background: #fbfdff; }
-    .agenda-item__meta { color: var(--dw-blue); font-size: 10px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
-    .agenda-item h3 { margin: 7px 0 10px; font-size: 16px; line-height: 1.28; }
-    .agenda-item__why { margin: 0 0 11px; color: var(--dw-ink); font-size: 13px; line-height: 1.45; }
-    .agenda-item details { border-top: 1px solid var(--dw-line); }
-    .agenda-item summary { min-height: 42px; display: flex; align-items: center; color: var(--dw-blue); cursor: pointer; font-size: 12px; font-weight: 800; }
-    .agenda-item details p { margin: 0 0 10px; color: var(--dw-muted); font-size: 12px; line-height: 1.5; }
-    .attachment-list { display: grid; gap: 6px; margin-bottom: 10px; }
-    .attachment-list a, .agenda-item__source { overflow-wrap: anywhere; color: var(--dw-blue); font-size: 12px; font-weight: 750; }
-    .panel { padding: 24px; }
-    .panel__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
-    .panel h2 { margin: 4px 0 0; font-size: 22px; letter-spacing: -.025em; }
-    .tag { display: inline-flex; align-items: center; min-height: 30px; padding: 5px 9px; border-radius: 999px; color: var(--dw-green); background: #e4f5ef; font-size: 11px; font-weight: 850; }
-    .search { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
-    .search input { min-width: 0; min-height: 48px; border: 1px solid var(--dw-line); border-radius: 8px; padding: 10px 13px; color: var(--dw-ink); background: #fff; }
-    .search input:focus { outline: 3px solid rgba(23,103,255,.24); border-color: var(--dw-blue); }
-    .syntax { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 13px; }
-    .syntax code { padding: 5px 7px; border-radius: 6px; color: var(--dw-muted); background: var(--dw-wash); font-size: 12px; }
-    .queue-list { display: grid; gap: 10px; }
-    .queue-item { display: grid; grid-template-columns: 12px 1fr auto; gap: 10px; align-items: start; padding: 13px 0; border-top: 1px solid var(--dw-line); }
-    .queue-item:first-child { border-top: 0; }
-    .dot { width: 10px; height: 10px; margin-top: 5px; border-radius: 50%; background: var(--dw-teal); }
-    .dot--amber { background: #e59a2d; }
-    .queue-item b { display: block; }
-    .queue-item small { color: var(--dw-muted); }
-    .queue-item strong { font-size: 20px; }
-    .module { margin-top: 16px; padding: 15px; border: 1px dashed #b8c8dc; border-radius: 10px; background: #f8faff; }
-    .module b { display: block; margin-bottom: 5px; }
-    .module p { margin: 0; color: var(--dw-muted); font-size: 13px; line-height: 1.5; }
-    .product-list { display: grid; gap: 10px; margin-top: 4px; }
-    .product-item { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--dw-line); }
-    .product-item:first-child { border-top: 0; }
-    .check { color: var(--dw-teal); font-weight: 900; }
-    .product-item span:last-child { color: var(--dw-muted); font-size: 13px; line-height: 1.4; }
-    .error { color: var(--dw-red); }
-    @media (max-width: 1100px) { .radar__lanes { grid-template-columns: repeat(2,1fr); } .radar__lane { border-top: 1px solid var(--dw-line); } .radar__lane:nth-child(odd) { border-left: 0; } .radar__lane:first-child, .radar__lane:nth-child(2) { border-top: 0; } }
-    @media (max-width: 1040px) { .grid { grid-template-columns: 1fr 1fr; } .grid .panel:first-child { grid-column: 1 / -1; } }
-    @media (max-width: 740px) { main { width: min(100% - 24px, 680px); padding-top: 18px; } .hero, .grid { grid-template-columns: 1fr; } .grid .panel:first-child { grid-column: auto; } .hero__lead, .panel, .pulse { padding: 21px; } h1 { font-size: clamp(36px, 12vw, 52px); } }
-    @media (max-width: 740px) { .agenda-list { grid-template-columns: 1fr; } .agenda-watch__head { align-items: flex-start; flex-direction: column; } .agenda-watch__summary { text-align: left; } }
-    @media (max-width: 600px) { .radar__head { align-items: flex-start; flex-direction: column; } .radar__lanes { grid-template-columns: 1fr; } .radar__lane, .radar__lane:nth-child(2) { border-top: 1px solid var(--dw-line); border-left: 0; } .radar__lane:first-child { border-top: 0; } }
-    @media (max-width: 460px) { .search { grid-template-columns: 1fr; } .hero__actions .button { flex: 1 1 100%; } }
+    main { padding-top: 28px !important; padding-bottom: 80px !important; }
+    .view-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin: 0 0 22px; }
+    .view-head h1 { margin: 0; font-size: clamp(26px, 3.2vw, 42px); line-height: 1; letter-spacing: -.035em; }
+    .view-head p { margin: 7px 0 0; color: var(--dw-muted); font-size: 13px; }
+    .view-head__state { color: var(--dw-muted); font: 11px/1.45 var(--dw-mono); text-align: right; }
+    .eyebrow { color: var(--dw-teal); font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .stage-rail { display: grid; grid-template-columns: repeat(4,1fr); margin-bottom: 24px; border: 1px solid var(--dw-line); background: var(--dw-paper); box-shadow: var(--dw-shadow); }
+    .stage-step { position: relative; min-width: 0; padding: 13px 15px; border-left: 1px solid var(--dw-line); }
+    .stage-step:first-child { border-left: 0; }
+    .stage-step b { display: block; margin-bottom: 2px; font-size: 12px; }
+    .stage-step span { color: var(--dw-muted); font-size: 11px; }
+    .stage-step.is-active { color: #fff; background: var(--dw-navy); }
+    .stage-step.is-active span { color: #b8c7d8; }
+    .changes { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; margin-bottom: 18px; }
+    .change-card { min-width: 0; padding: 15px 16px; border: 1px solid var(--dw-line); border-radius: 9px; background: var(--dw-paper); }
+    .change-card strong { display: block; color: var(--dw-teal); font-size: 25px; line-height: 1; }
+    .change-card b { display: block; margin-top: 7px; font-size: 12px; }
+    .change-card span { display: block; margin-top: 3px; color: var(--dw-muted); font-size: 10px; }
+    .lead { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 24px; align-items: end; padding: clamp(24px,3.5vw,44px); border: 1px solid var(--dw-line); border-radius: 12px; background: var(--dw-paper); box-shadow: var(--dw-shadow); }
+    .lead h2 { max-width: 980px; margin: 9px 0 12px; font: 600 clamp(28px,4vw,52px)/1.08 var(--dw-serif); letter-spacing: -.025em; }
+    .lead p { max-width: 78ch; margin: 0; color: var(--dw-muted); font-size: 15px; }
+    .lead__proof { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 21px; padding-top: 17px; border-top: 1px solid var(--dw-line); color: var(--dw-muted); font-size: 12px; }
+    .lead__proof b { color: var(--dw-ink); }
+    .primary-link { min-height: 46px; display: inline-flex; align-items: center; justify-content: center; padding: 11px 16px; border-radius: 8px; color: #fff; background: var(--dw-navy); text-decoration: none; font-weight: 800; white-space: nowrap; }
+    .primary-link:hover { background: var(--dw-blue); }
+    .section { margin-top: 30px; }
+    .section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 12px; }
+    .section-head h2 { margin: 4px 0 0; font-size: 20px; letter-spacing: -.02em; }
+    .section-head p { max-width: 620px; margin: 0; color: var(--dw-muted); font-size: 12px; text-align: right; }
+    .sequence { display: grid; border: 1px solid var(--dw-line); border-radius: 10px; background: var(--dw-paper); overflow: hidden; box-shadow: var(--dw-shadow); }
+    .sequence-row { min-width: 0; display: grid; grid-template-columns: 48px minmax(170px,.7fr) minmax(200px,1.3fr) minmax(150px,.7fr); gap: 14px; align-items: center; padding: 15px 18px; border-top: 1px solid var(--dw-line); color: inherit; text-decoration: none; }
+    .sequence-row:first-child { border-top: 0; }
+    .sequence-row:hover { background: #f8fafc; }
+    .sequence-row__stage { color: var(--dw-teal); font: 800 11px/1 var(--dw-mono); }
+    .sequence-row h3 { margin: 0; font-size: 14px; }
+    .sequence-row p { margin: 0; color: var(--dw-muted); font-size: 12px; }
+    .sequence-row__clock { color: var(--dw-muted); text-align: right; font: 10px/1.45 var(--dw-mono); }
+    .work-grid { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(280px,.6fr); gap: 18px; }
+    .lead-list { display: grid; gap: 10px; }
+    .candidate-card { display: grid; grid-template-columns: 42px minmax(0,1fr) auto; gap: 15px; align-items: start; padding: 18px; border: 1px solid var(--dw-line); border-radius: 10px; color: inherit; background: var(--dw-paper); text-decoration: none; }
+    .candidate-card:hover { border-color: #91a8c5; box-shadow: 0 10px 30px rgba(7,28,52,.07); }
+    .candidate-card__number { color: var(--dw-teal); font: 800 12px/1.3 var(--dw-mono); }
+    .candidate-card h3 { margin: 2px 0 7px; font-size: 17px; line-height: 1.3; }
+    .candidate-card p { margin: 0; color: var(--dw-muted); font-size: 12px; }
+    .candidate-card__meta { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 11px; color: var(--dw-muted); font-size: 11px; }
+    .candidate-card__meta b { color: var(--dw-ink); }
+    .candidate-card__action { min-height: 40px; display: inline-flex; align-items: center; color: var(--dw-blue); font-size: 12px; font-weight: 800; }
+    .action-panel { padding: 20px; border: 1px solid var(--dw-line); border-radius: 10px; background: var(--dw-navy); color: #fff; box-shadow: var(--dw-shadow); }
+    .action-panel h2 { margin: 5px 0 14px; font-size: 21px; }
+    .action-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 13px 0; border-top: 1px solid rgba(255,255,255,.12); }
+    .action-row:first-of-type { border-top: 0; }
+    .action-row b { display: block; font-size: 12px; }
+    .action-row span { display: block; color: #9fb2c7; font-size: 10px; }
+    .action-row strong { color: #70d9c5; font-size: 22px; }
+    .action-panel .primary-link { width: 100%; margin-top: 15px; color: var(--dw-navy); background: #fff; }
+    .empty { padding: 25px; border: 1px dashed #aebdcd; color: var(--dw-muted); background: var(--dw-paper); }
+    .error { color: var(--dw-red) !important; }
+    @media (max-width: 1050px) { .changes { grid-template-columns: repeat(2,1fr); } .work-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 760px) {
+      main { padding-top: 18px !important; }
+      .view-head { align-items: flex-start; flex-direction: column; }
+      .view-head__state { text-align: left; }
+      .stage-rail { grid-template-columns: repeat(2,1fr); }
+      .stage-step:nth-child(3) { border-left: 0; border-top: 1px solid var(--dw-line); }
+      .stage-step:nth-child(4) { border-top: 1px solid var(--dw-line); }
+      .lead { grid-template-columns: 1fr; }
+      .lead__action { justify-self: start; }
+      .section-head { align-items: flex-start; flex-direction: column; }
+      .section-head p { text-align: left; }
+      .sequence-row { grid-template-columns: 42px 1fr; }
+      .sequence-row p, .sequence-row__clock { grid-column: 2; text-align: left; }
+    }
+    @media (max-width: 480px) {
+      .changes { grid-template-columns: 1fr 1fr; }
+      .change-card { padding: 13px; }
+      .change-card strong { font-size: 21px; }
+      .stage-step { padding: 12px; }
+      .stage-step span { font-size: 10px; }
+      .lead { padding: 21px 18px; }
+      .lead h2 { font-size: 30px; }
+      .candidate-card { grid-template-columns: 32px minmax(0,1fr); padding: 15px; }
+      .candidate-card__action { grid-column: 2; }
+    }
   </style>
 </head>
 <body>
   <div id="desk-shell" data-current="home"></div>
   <main id="main-content">
-    <section class="hero" aria-labelledby="live-title">
-      <div class="hero__lead">
-        <div class="eyebrow">Continuous intelligence · Broward</div>
-        <h1 id="live-title">What changed since you last looked.</h1>
-        <p class="lede" id="lead-line">Checking the decision queue and evidence gate now…</p>
-        <p class="since" id="since-line"></p>
-        <div class="hero__actions">
-          <a class="button button--primary" href="/review.html">Review evidence-ready leads</a>
-          <a class="button" href="/data.html">Explore the records</a>
-          <a class="button" href="/index.html">Build a sourced brief</a>
-        </div>
+    <header class="view-head">
+      <div><h1>Live Desk</h1><p>Continuous newsroom intelligence · Broward · public records only</p></div>
+      <div class="view-head__state" id="since-line">Opening the current shift…</div>
+    </header>
+
+    <section class="stage-rail" aria-label="Editorial stages">
+      <div class="stage-step"><b>Record</b><span>Immutable source item</span></div>
+      <div class="stage-step is-active"><b>Candidate</b><span>Machine-nominated lead</span></div>
+      <div class="stage-step"><b>Signal</b><span>Editor-verified change</span></div>
+      <div class="stage-step"><b>Story</b><span>Context and impact</span></div>
+    </section>
+
+    <section aria-labelledby="changes-title">
+      <div class="section-head"><div><div class="eyebrow">Since you last looked</div><h2 id="changes-title">What needs attention now</h2></div><p id="shift-note">Counts come from the private decision queue and source indexes.</p></div>
+      <div class="changes">
+        <article class="change-card"><strong id="ready-count">—</strong><b>Ready for human review</b><span>Complete evidence packet</span></article>
+        <article class="change-card"><strong id="blocked-count">—</strong><b>Need evidence</b><span>Quarantined from approval</span></article>
+        <article class="change-card"><strong id="agenda-count">—</strong><b>Agenda leads indexed</b><span id="agenda-window">Historical window loading</span></article>
+        <article class="change-card"><strong id="source-count">—</strong><b>Source lanes reporting</b><span>Event and system clocks kept separate</span></article>
       </div>
-      <aside class="pulse" aria-labelledby="queue-title">
-        <div class="eyebrow" style="color:#6de1d0">Decision readiness</div>
-        <h2 id="ready-total">—</h2>
-        <p id="queue-title">leads ready for human review</p>
-        <div class="funnel" aria-label="Candidate readiness funnel">
-          <div class="funnel__row"><span>Ready</span><div class="funnel__track"><div class="funnel__fill" id="ready-bar"></div></div><b id="ready-count">—</b></div>
-          <div class="funnel__row funnel__row--blocked"><span>Need evidence</span><div class="funnel__track"><div class="funnel__fill" id="blocked-bar"></div></div><b id="blocked-count">—</b></div>
-        </div>
+    </section>
+
+    <article class="lead" id="lead-story" aria-live="polite">
+      <div><div class="eyebrow">Top evidence-ready Candidate</div><h2>Opening the strongest current lead…</h2><p>No claim will be shown here until its evidence packet passes the server gate.</p></div>
+    </article>
+
+    <section class="section" aria-labelledby="sequence-title">
+      <div class="section-head"><div><div class="eyebrow">Early-intelligence sequence</div><h2 id="sequence-title">Follow the project before the permit</h2></div><p>Agenda and entity clues can reveal intent. Permits are later evidence of execution—not the beginning of every story.</p></div>
+      <div class="sequence" id="sequence"><div class="empty">Checking each monitored source lane…</div></div>
+    </section>
+
+    <section class="section work-grid" aria-label="Current newsroom work">
+      <div>
+        <div class="section-head"><div><div class="eyebrow">Highest-value leads</div><h2>Evidence-ready Candidates</h2></div><p><a href="/review.html">Open full triage queue →</a></p></div>
+        <div class="lead-list" id="lead-list"><div class="empty">Loading source-gated Candidates…</div></div>
+      </div>
+      <aside class="action-panel">
+        <div class="eyebrow" style="color:#70d9c5">Action queue</div><h2>One next step</h2>
+        <div class="action-row"><span><b>Review Candidates</b><span>Evidence ready</span></span><strong id="action-ready">—</strong></div>
+        <div class="action-row"><span><b>Repair evidence</b><span>Approval blocked</span></span><strong id="action-blocked">—</strong></div>
+        <div class="action-row"><span><b>Build Brief</b><span>Human-cleared only</span></span><strong>0</strong></div>
+        <a class="primary-link" href="/review.html">Start triage</a>
       </aside>
-    </section>
-
-    <section class="radar" aria-labelledby="radar-title">
-      <div class="radar__head"><div><div class="eyebrow">Early-intel radar</div><h2 id="radar-title">Follow the project before the permit.</h2></div><p>Meetings and agenda packets can reveal intent first; entities, land, financing and regulatory filings harden the trail; permits and inspections confirm execution.</p></div>
-      <div class="radar__lanes" id="radar-lanes"><div class="radar__lane"><b>Checking every monitored source lane…</b><p>No source status will be inferred until its own clock responds.</p></div></div>
-    </section>
-
-    <section class="agenda-watch" aria-labelledby="agenda-watch-title">
-      <div class="agenda-watch__head"><div><div class="eyebrow">Legistar Agenda Watch</div><h2 id="agenda-watch-title">What developers should read before the permit.</h2></div><div class="agenda-watch__summary" id="agenda-watch-summary">Opening the private item and attachment index…</div></div>
-      <div class="agenda-list" id="agenda-list"><div class="agenda-item"><b>Checking source-sealed agenda items…</b></div></div>
-    </section>
-
-    <section class="grid" aria-label="Live desk modules">
-      <article class="panel">
-        <div class="panel__head"><div><div class="eyebrow">Universal record lookup</div><h2>Find the exact receipt first.</h2></div><span class="tag">Indexed</span></div>
-        <form class="search" id="quick-search">
-          <label style="position:absolute;left:-9999px" for="quick-search-input">Search records</label>
-          <input id="quick-search-input" placeholder="permit:BLD-GEN-… or folio:504210…" autocomplete="off" required>
-          <button class="button button--primary" type="submit">Search records</button>
-        </form>
-        <div class="syntax" aria-label="Supported exact search fields">
-          <code>permit:</code><code>folio:</code><code>instrument:</code><code>addr:</code><code>license:</code><code>asn:</code>
-        </div>
-        <div class="module"><b>Why exact first?</b><p>It is fast, reproducible and does not turn a similar address or name into a false identity. Broader research belongs in a separate, clearly labelled step.</p></div>
-      </article>
-
-      <article class="panel">
-        <div class="panel__head"><div><div class="eyebrow">Action queue</div><h2>One next step.</h2></div></div>
-        <div class="queue-list">
-          <div class="queue-item"><span class="dot"></span><span><b>Ready to decide</b><small>Evidence packet and receipt present</small></span><strong id="ready-action">—</strong></div>
-          <div class="queue-item"><span class="dot dot--amber"></span><span><b>Evidence work</b><small>Quarantined from approval</small></span><strong id="blocked-action">—</strong></div>
-          <div class="queue-item"><span class="dot" style="background:var(--dw-blue)"></span><span><b>Daily Brief</b><small>Human-cleared module, not auto-published</small></span><strong>0</strong></div>
-        </div>
-      </article>
-
-      <article class="panel">
-        <div class="panel__head"><div><div class="eyebrow">Product path</div><h2>What becomes paid.</h2></div></div>
-        <div class="product-list">
-          <div class="product-item"><span class="check">✓</span><span>Watched addresses, parcels, companies and ZIPs</span></div>
-          <div class="product-item"><span class="check">✓</span><span>Instant alerts and “what changed” history</span></div>
-          <div class="product-item"><span class="check">✓</span><span>Comparisons, exports and team research spaces</span></div>
-        </div>
-        <div class="module"><b>Trust stays public.</b><p>Source proof, corrections, basic lookup and public-safety records are not the paywall. The paid product is speed, monitoring and synthesis.</p></div>
-      </article>
     </section>
   </main>
 
@@ -168,66 +151,18 @@
   <script>
   (function () {
     "use strict";
-    var token = "";
-    function setText(id, value) { document.getElementById(id).textContent = value; }
-    async function getToken() {
-      if (token) return token;
-      var response = await fetch("/api/local-session");
-      if (response.ok) token = (await response.json()).token || "";
-      if (!token) token = window.prompt("Desk token") || "";
-      return token;
-    }
-    async function loadSummary() {
-      try {
-        var response = await fetch("/api/admin/review-summary", { headers: { Authorization: "Bearer " + await getToken() } });
-        var data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Summary unavailable");
-        var total = Math.max(1, Number(data.total || 0));
-        var ready = Number(data.ready || 0);
-        var blocked = Number(data.blocked || 0);
-        setText("ready-total", ready);
-        setText("ready-count", ready);
-        setText("blocked-count", blocked);
-        setText("ready-action", ready);
-        setText("blocked-action", blocked);
-        document.getElementById("ready-bar").style.width = Math.max(2, ready / total * 100) + "%";
-        document.getElementById("blocked-bar").style.width = Math.max(2, blocked / total * 100) + "%";
-        setText("lead-line", ready + " evidence-ready lead" + (ready === 1 ? " is" : "s are") + " available. " + blocked + " more candidate" + (blocked === 1 ? " is" : "s are") + " held outside the decision path until the receipts are complete.");
-      } catch (error) {
-        document.getElementById("lead-line").classList.add("error");
-        setText("lead-line", "Live queue unavailable: " + error.message);
-      }
-    }
+    var newsroom = window.FloridaSignalNewsroom;
     function esc(value) { return String(value == null ? "" : value).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
-    function formatClock(value) { if(!value)return "Clock unavailable";var date=new Date(value);return Number.isNaN(date.getTime())?String(value):date.toLocaleString(); }
-    async function loadRadar() {
-      var target=document.getElementById("radar-lanes");
-      try {
-        var response=await fetch("/api/admin/early-intel",{headers:{Authorization:"Bearer "+await getToken()}});var data=await response.json();if(!response.ok||!Array.isArray(data.lanes))throw new Error(data.error||"Radar unavailable");
-        target.innerHTML=data.lanes.map(function(lane){return '<a class="radar__lane" href="'+esc(lane.href||"/data.html")+'"'+(/^https?:/.test(lane.href||"")?' target="_blank" rel="noopener"':'')+'><span class="radar__phase">'+esc(lane.phase)+'</span><h3>'+esc(lane.label)+'</h3><b>'+esc(lane.headline)+'</b><p>'+esc(lane.note)+'</p><span class="radar__clock">Event: '+esc(lane.event_through||"not exposed")+'<br>System: '+esc(formatClock(lane.system_time))+'</span></a>';}).join("");
-        target.title=data.contract||"Monitored source lanes";
-      } catch(error) { target.innerHTML='<div class="radar__lane"><b class="error">Early-intel radar unavailable</b><p>'+esc(error.message)+'. No source status was inferred.</p></div>'; }
-    }
-    async function loadAgendaWatch() {
-      var list=document.getElementById("agenda-list"),summary=document.getElementById("agenda-watch-summary");
-      try {
-        var response=await fetch("/api/admin/agenda-watch",{headers:{Authorization:"Bearer "+await getToken()}});var data=await response.json();if(!response.ok||!Array.isArray(data.items))throw new Error(data.error||"Agenda watch unavailable");
-        summary.textContent=data.actionable_rows+" actionable items · "+data.public_attachments+" public attachments · events "+(data.event_start||"unknown")+"–"+(data.event_through||"unknown")+" · item index last observed "+formatClock(data.item_index_observed_through);
-        var items=data.items.slice(0,6);list.innerHTML=items.length?items.map(function(item){var attachments=(item.attachments||[]).slice(0,8);return '<article class="agenda-item"><div class="agenda-item__meta">'+esc([item.event_date,item.body_name,item.agenda_number||item.matter_file].filter(Boolean).join(" · "))+'</div><h3>'+esc(item.title)+'</h3><p class="agenda-item__why"><b>Why developers may care:</b> '+esc(item.why_developers_care)+'</p><details><summary>What next + balanced reporting check</summary><p><b>Recorded next/action:</b> '+esc(item.what_next)+'</p><p><b>Test every side:</b> '+esc(item.stakeholder_test)+'</p><p><b>Status:</b> '+esc(item.verification)+'</p>'+(attachments.length?'<div class="attachment-list">'+attachments.map(function(a){return '<a href="'+esc(a.url)+'" target="_blank" rel="noopener">'+esc(a.name)+'</a>';}).join("")+'</div>':'<p>No public attachment link in this item.</p>')+(item.source_url?'<a class="agenda-item__source" href="'+esc(item.source_url)+'" target="_blank" rel="noopener">Open exact Legistar item</a>':'')+'</details></article>';}).join(""):'<div class="agenda-item"><b>No actionable agenda item passed the private watch filter.</b></div>';
-        list.title=data.contract||"Agenda watch";
-      } catch(error) { summary.textContent="Agenda watch unavailable";list.innerHTML='<div class="agenda-item"><b class="error">Could not open agenda items</b><p>'+esc(error.message)+'</p></div>'; }
-    }
-    var prior = localStorage.getItem("dw:last_visit");
-    setText("since-line", prior ? "Last opened on this device " + new Date(prior).toLocaleString() + "." : "First visit recorded on this device. The queue remains continuous across the day and overnight.");
-    localStorage.setItem("dw:last_visit", new Date().toISOString());
-    document.getElementById("quick-search").addEventListener("submit", function (event) {
-      event.preventDefault();
-      var search = document.getElementById("quick-search-input").value.trim();
-      if (search) location.href = "/data.html?search=" + encodeURIComponent(search);
-    });
-    loadSummary();
-    loadRadar();
-    loadAgendaWatch();
+    function human(value) { return String(value || "Candidate").toLowerCase().replace(/_/g," ").replace(/\b\w/g,function(c){return c.toUpperCase();}); }
+    function formatDate(value) { if(value==null||value===""||value===0||value==="0")return "not exposed";var d=new Date(value);return Number.isNaN(d.getTime())||d.getFullYear()<2000?"not exposed":d.toLocaleDateString(); }
+    function packet(item) { return item && item.evidence_packet && Array.isArray(item.evidence_packet.records) ? item.evidence_packet : {records:[],supported_claims:[],unknowns:[]}; }
+    function itemHtml(item,index) { var p=packet(item);var claims=Array.isArray(p.supported_claims)?p.supported_claims:[];var unknowns=Array.isArray(p.unknowns)?p.unknowns:[];return '<a class="candidate-card" href="/review.html"><span class="candidate-card__number">'+String(index+1).padStart(2,"0")+'</span><div><div class="eyebrow">'+esc(human(item.candidate_type||item.signal_type))+'</div><h3>'+esc(item.editor_headline||item.generated_headline||item.signal_id||"Untitled Candidate")+'</h3><p>'+esc(item.editor_summary||item.generated_summary||"Open the evidence packet for the supported facts and unknowns.")+'</p><div class="candidate-card__meta"><span><b>'+p.records.length+'</b> source records</span><span><b>'+claims.length+'</b> supported facts</span><span><b>'+unknowns.length+'</b> unknowns</span><span>latest event '+esc(formatDate(item.source_record_date))+'</span></div></div><span class="candidate-card__action">Read evidence →</span></a>'; }
+    async function loadSummary() { try { var data=await newsroom.admin("/api/admin/review-summary");["ready-count","action-ready"].forEach(function(id){document.getElementById(id).textContent=data.ready;});["blocked-count","action-blocked"].forEach(function(id){document.getElementById(id).textContent=data.blocked;}); } catch(error) { document.getElementById("shift-note").textContent="Decision queue unavailable. No count was inferred.";document.getElementById("shift-note").classList.add("error"); } }
+    async function loadAgenda() { try { var data=await newsroom.admin("/api/admin/agenda-watch");document.getElementById("agenda-count").textContent=data.actionable_rows;document.getElementById("agenda-window").textContent="Events "+(data.event_start||"unknown")+"–"+(data.event_through||"unknown"); } catch(error) { document.getElementById("agenda-count").textContent="—";document.getElementById("agenda-window").textContent="Agenda index unavailable"; } }
+    async function loadSequence() { var target=document.getElementById("sequence");try { var data=await newsroom.admin("/api/admin/early-intel");var lanes=Array.isArray(data.lanes)?data.lanes:[];document.getElementById("source-count").textContent=lanes.length;target.innerHTML=lanes.length?lanes.map(function(lane){return '<a class="sequence-row" href="'+esc(lane.href||"/data.html")+'"><span class="sequence-row__stage">'+esc(lane.phase)+'</span><h3>'+esc(lane.label)+'</h3><p><b>'+esc(lane.headline)+'</b><br>'+esc(lane.note)+'</p><span class="sequence-row__clock">Event '+esc(lane.event_through||"not exposed")+'<br>System '+esc(formatDate(lane.system_time))+'</span></a>';}).join(""):'<div class="empty">No monitored source lane responded.</div>'; } catch(error) { target.innerHTML='<div class="empty error">Source sequence unavailable. No state was inferred.</div>'; } }
+    async function loadLeads() { var target=document.getElementById("lead-list"),hero=document.getElementById("lead-story");try { var data=await newsroom.admin("/api/admin/review-queue?status=ALL&readiness=ready&limit=3&offset=0");var items=Array.isArray(data.items)?data.items:[];target.innerHTML=items.length?items.map(itemHtml).join(""):'<div class="empty">No Candidate currently has a complete evidence packet.</div>';if(!items.length){hero.innerHTML='<div><div class="eyebrow">Top evidence-ready Candidate</div><h2>No Candidate has cleared the evidence gate.</h2><p>Raw records remain available in Data Explorer. Nothing is being promoted merely to fill this space.</p></div><a class="primary-link lead__action" href="/data.html">Explore records</a>';return;}var item=items[0],p=packet(item),claims=Array.isArray(p.supported_claims)?p.supported_claims:[],unknowns=Array.isArray(p.unknowns)?p.unknowns:[];hero.innerHTML='<div><div class="eyebrow">Top evidence-ready Candidate</div><h2>'+esc(item.editor_headline||item.generated_headline||item.signal_id)+'</h2><p>'+esc(item.editor_summary||item.generated_summary||"Open the source packet before deciding whether this change matters.")+'</p><div class="lead__proof"><span><b>'+p.records.length+'</b> source records</span><span><b>'+claims.length+'</b> supported facts</span><span><b>'+unknowns.length+'</b> open questions</span><span>Candidate—not yet a Signal</span></div></div><a class="primary-link lead__action" href="/review.html">Open the evidence →</a>'; } catch(error) { target.innerHTML='<div class="empty error">Candidate queue unavailable.</div>';hero.innerHTML='<div><div class="eyebrow">Top evidence-ready Candidate</div><h2>Decision queue unavailable.</h2><p>No lead was inferred from missing data.</p></div>'; } }
+    var prior=localStorage.getItem("fs-newsroom:last-visit");document.getElementById("since-line").textContent=prior?"Last opened "+new Date(prior).toLocaleString():"First visit recorded on this device";localStorage.setItem("fs-newsroom:last-visit",new Date().toISOString());
+    Promise.all([loadSummary(),loadAgenda(),loadSequence(),loadLeads()]);
   })();
   </script>
 </body>

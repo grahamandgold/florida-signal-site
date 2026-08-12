@@ -11,7 +11,7 @@
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Data Desk — Florida Signal Internal Viewer</title>
+  <title>Data Explorer — Florida Signal Newsroom</title>
   <meta name="description" content="Private read-only viewer over the Florida Signal intelligence store.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -210,6 +210,10 @@
     .pager { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-top: 1px solid var(--line); background: #fbfdfd; }
     .pager .spacer { flex: 1; }
     .foot-note { margin-top: 26px; color: var(--muted); font-size: .8rem; max-width: 860px; }
+    .health-details { margin-top: 28px; border: 1px solid var(--line); background: var(--paper); }
+    .health-details > summary { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 16px; color: var(--ink); cursor: pointer; font-weight: 800; }
+    .health-details > summary span { color: var(--muted); font-size: .75rem; font-weight: 500; }
+    .health-details__body { padding: 0 16px 18px; border-top: 1px solid var(--line); }
 
     .drawer-veil { position: fixed; inset: 0; background: rgba(6,27,51,.42); z-index: 40; display: none; }
     .drawer {
@@ -253,18 +257,11 @@
   <main id="main-content">
     <section class="intro">
       <div>
-        <div class="eyebrow">Every table · every source · one desk</div>
-        <h2>See the record.<br><span>Then work the signal.</span></h2>
+        <div class="eyebrow">Data Explorer · exact receipts first</div>
+        <h2>Search the record.<br><span>Then work the lead.</span></h2>
       </div>
-      <p><strong>Nothing here is public output.</strong> This desk reads the raw store under row-level security. Analysis uses public event dates; fetch stamps are freshness metadata only.</p>
+      <p><strong>Nothing here is public output.</strong> Search preserves the original record, raw text, source identity and independent clocks. A record is not automatically a Signal.</p>
     </section>
-
-    <div class="section-label" id="source-health"><h3>Feed health</h3><span class="hint">three clocks per feed: latest source event · last successful collection · row count</span></div>
-    <div class="health-actions" id="health-actions"></div>
-    <div class="health-grid" id="health-grid" role="status" aria-live="polite"></div>
-
-    <div class="section-label"><h3>Field views</h3><span class="hint">one tap · preset queries over the store</span></div>
-    <div class="preset-row" id="preset-row"></div>
 
     <div class="explorer" id="explorer">
       <div class="explorer__controls">
@@ -292,7 +289,18 @@
       </div>
     </div>
 
-    <p class="foot-note">Data Desk is an internal viewer over the Florida Signal Supabase store (public-record tables only; subscriber and product tables stay locked). Row clicks open a case drawer that weaves permits, ownership, GIS enrichment, signals and Clerk parties for the selected record. Nothing viewed here publishes anywhere.</p>
+    <div class="section-label"><h3>Quick views</h3><span class="hint">one tap · preset queries over the store</span></div>
+    <div class="preset-row" id="preset-row"></div>
+
+    <details class="health-details" id="source-health">
+      <summary>Full feed health <span>latest source event · last successful collection · row count</span></summary>
+      <div class="health-details__body">
+        <div class="health-actions" id="health-actions"></div>
+        <div class="health-grid" id="health-grid" role="status" aria-live="polite"></div>
+      </div>
+    </details>
+
+    <p class="foot-note">Data Explorer is a private viewer over public-record tables; subscriber and product tables remain locked. Row clicks open a case file joining permits, ownership, geographic enrichment, Candidates and Clerk parties. Nothing viewed here publishes anywhere.</p>
   </main>
 
   <div class="drawer-veil" id="drawer-veil"></div>
