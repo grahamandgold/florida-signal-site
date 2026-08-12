@@ -42,7 +42,7 @@ python3 server.py --bind 127.0.0.1 --port 4173
 Open the public site at `http://127.0.0.1:4173/fort-lauderdale/` and the private Florida Signal
 Newsroom at `http://127.0.0.1:8788/`.
 
-### Unlock The Data Wire
+### Unlock the private Florida Signal Newsroom
 
 1. Start `cms/server.py` with `DATA_WIRE_ADMIN_TOKEN` as shown above.
 2. Open `http://127.0.0.1:8788/`.

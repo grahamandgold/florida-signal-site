@@ -176,8 +176,9 @@ newsletter journey and field-tool redesign are the next separate product phase.
 
 - `python3 -m unittest ops/mac/test_acclaim_resilience.py` — 7 passing.
 - `python3 -m unittest tests/test_cms_server.py` — 6 passing in the latest CMS run.
-- Playwright `tests/browser/data-wire.spec.js` now covers all five Newsroom views, the canonical
-  home link, the mobile decision restriction, source-clock sanity and 390-pixel page width.
+- Playwright `tests/browser/data-wire.spec.js` — 3 passing against the signed Desktop app; it now
+  covers all five Newsroom views, the canonical home link, the mobile decision restriction,
+  source-clock sanity and 390-pixel page width.
 - Desktop app bundle identifier, code signature and Live Desk launch were verified after refresh.
 - Production LaunchAgent check: `com.floridasignal.acclaim`, last exit `0`; August 11 insertion and
   subsequent hourly runs are present in `~/Library/Logs/florida-acclaim.log`.
@@ -189,8 +190,8 @@ loopback-only Data Wire runtime.
 
 ## Known gaps / next exact work
 
-1. Finish review/publishing of the private Newsroom implementation and refresh the signed Desktop
-   app from the tracked CMS source.
+1. Review and merge draft PR 13. Its repository `verify` check passed; the signed Desktop app has
+   already been refreshed from the same tracked CMS source.
 2. Keep the public site and private Newsroom separate in navigation, deployment and documentation.
 3. Review every future diff; stage only intended tracked work. Do **not** stage raw/untracked Broward text
    dumps, `FABLE_ANALYSIS_2026-07-20/`, `mailchimp/`, `output/` or `chunk_*.txt`.
