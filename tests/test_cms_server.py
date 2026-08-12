@@ -94,7 +94,11 @@ class DataWireServerTests(unittest.TestCase):
                 "matter_file": "26-0592", "matter_type": "ORDINANCE SECOND READING",
                 "watch_terms": ["development"], "source_url": "https://example.test/item",
                 "first_seen_at": "2026-07-22T00:00:00Z", "last_seen_at": "2026-07-23T00:00:00Z",
-                "legistar_events": {"event_date": "2026-07-02", "body_name": "City Commission"},
+                "legistar_events": {
+                    "event_date": "2026-07-02", "event_time": "6:00 PM",
+                    "location": "City Hall", "body_name": "City Commission",
+                    "agenda_url": "https://example.test/agenda.pdf",
+                },
                 "attachments": [{
                     "MatterAttachmentName": "Staff memo", "MatterAttachmentFileName": "memo.pdf",
                     "MatterAttachmentHyperlink": "https://example.test/memo.pdf",
@@ -102,7 +106,18 @@ class DataWireServerTests(unittest.TestCase):
                 }],
             },
         ]
-        with mock.patch.object(cms_server, "supabase_request", return_value=(200, rows)):
+        meetings = {
+            "updated_at": "2026-08-11T23:00:00Z", "calendar_url": "https://example.test/calendar",
+            "meetings": [{
+                "title": "City Commission Regular Meeting", "date": "2026-08-18",
+                "time": "6:00 PM", "location": "Police Community Room",
+                "category": "government", "agenda_available": False,
+                "agenda_url": "https://example.test/calendar", "details_url": "https://example.test/meeting",
+                "source": "Fort Lauderdale Legistar",
+            }],
+        }
+        with mock.patch.object(cms_server, "supabase_request", return_value=(200, rows)), \
+                mock.patch.object(cms_server, "public_json", return_value=meetings):
             code, payload = cms_server.agenda_watch_payload()
         self.assertEqual(code, 200)
         self.assertEqual(payload["matched_rows"], 2)
@@ -111,6 +126,12 @@ class DataWireServerTests(unittest.TestCase):
         self.assertEqual(payload["event_start"], "2026-07-02")
         self.assertEqual(payload["event_through"], "2026-07-02")
         self.assertEqual(payload["item_index_observed_through"], "2026-07-23T00:00:00Z")
+        self.assertEqual(payload["government_entities"], ["City of Fort Lauderdale"])
+        self.assertEqual(payload["public_bodies"], ["City Commission"])
+        self.assertEqual(payload["upcoming_meetings"][0]["event_time"], "6:00 PM")
+        self.assertFalse(payload["upcoming_meetings"][0]["agenda_available"])
+        self.assertEqual(payload["items"][0]["event_time"], "6:00 PM")
+        self.assertEqual(payload["items"][0]["agenda_url"], "https://example.test/agenda.pdf")
         self.assertIn("entitlement", payload["items"][0]["why_developers_care"])
         self.assertIn("who benefits", payload["items"][0]["stakeholder_test"])
         self.assertEqual(payload["items"][0]["attachments"][0]["url"], "https://example.test/memo.pdf")

@@ -54,6 +54,10 @@ illustrative records, scores, model labels and clocks were not copied. The real 
 existing private endpoints, preserves every human publication gate and uses the canonical emblem
 from `assets/mark-full-color.png` without an arrow, crop or distortion.
 
+On the navy Newsroom header, that full-color emblem sits on its own light contrast field. This is a
+presentation treatment only: the emblem pixels, proportions and colors are unchanged, and the
+header never substitutes an arrow or a newly drawn mark.
+
 The shared shell and Live Desk include three responsive states: full workstation, sidebar-width
 workstation and mobile. The middle state is required because a visible 248-pixel sidebar reduces
 the content width before the mobile navigation breakpoint. Source-stage labels, descriptions and
@@ -108,7 +112,10 @@ Send `Authorization: Bearer $DATA_WIRE_ADMIN_TOKEN`.
   regulatory filings and execution; monitored lanes are not misrepresented as completed detectors
 - `GET /api/admin/agenda-watch` — private, filtered Legistar item/attachment leads with source links,
   neutral relevance language, an explicit stakeholder reporting checklist, and separate event-span
-  and item-index-observation clocks so historical packets cannot look current
+  and item-index-observation clocks so historical packets cannot look current. Its coverage is
+  explicitly **City of Fort Lauderdale only**. It also carries the official upcoming city calendar
+  with date, time, place and agenda-posted state; historical packet items expose the government
+  body, official agenda PDF, exact meeting item and attachment list before the reporting notes.
 - `POST /api/admin/review-queue/{queue_id}` — records APPROVE/HOLD/REJECT/NEEDS_MORE_REPORTING;
   it never publishes
 - `POST /api/admin/stories`
@@ -149,5 +156,8 @@ An agenda-property item cannot publish until it has a required city, official pa
 - move SQLite to private persistent Postgres/Supabase;
 - configure backups and audit-log retention;
 - connect the official agenda/record collectors to the private draft API;
+- connect the separate Florida Legislature/LegiScan API lane after its credential and source
+  contract are located and verified. State-capitol bills are not Fort Lauderdale Legistar records
+  and must never be implied by the local Agenda Watch coverage;
 - add a user/role provider instead of a shared admin token;
 - keep all AI output in draft status until a human passes the source and claims gates.

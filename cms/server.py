@@ -251,10 +251,32 @@ def agenda_relevance(item: dict[str, Any]) -> str:
 
 def agenda_watch_payload() -> tuple[int, dict[str, Any]]:
     """Return actionable Legistar items and attachment links for private reporting review."""
+    meetings = public_json("https://api.thefloridasignal.com/api/meetings")
+    meeting_rows = meetings.get("meetings", []) if isinstance(meetings, dict) else []
+    upcoming = []
+    for meeting in meeting_rows:
+        if not isinstance(meeting, dict) or meeting.get("category") != "government":
+            continue
+        details_url = meeting.get("details_url") if public_url(meeting.get("details_url")) else None
+        agenda_url = meeting.get("agenda_url") if public_url(meeting.get("agenda_url")) else None
+        upcoming.append({
+            "government_name": "City of Fort Lauderdale",
+            "body_name": str(meeting.get("title") or "Government meeting")[:240],
+            "event_date": meeting.get("date"), "event_time": meeting.get("time"),
+            "starts_at": meeting.get("starts_at"), "location": meeting.get("location"),
+            "agenda_available": meeting.get("agenda_available") is True,
+            "agenda_url": agenda_url, "details_url": details_url,
+            "watch_url": meeting.get("watch_url") if public_url(meeting.get("watch_url")) else None,
+            "ical_url": meeting.get("ical_url") if public_url(meeting.get("ical_url")) else None,
+            "source": str(meeting.get("source") or "Official government calendar")[:160],
+        })
+        if len(upcoming) >= 8:
+            break
     select = (
         "item_id,event_id,agenda_number,title,matter_file,matter_type,matter_status,"
         "action_name,action_text,passed_flag_name,attachments,watch_terms,source_url,"
-        "first_seen_at,last_seen_at,legistar_events(event_date,body_name,agenda_url)"
+        "first_seen_at,last_seen_at,"
+        "legistar_events(event_date,event_time,location,body_name,agenda_url)"
     )
     code, rows = supabase_request(
         "legistar_event_items?select=" + quote(select, safe=",()")
@@ -288,13 +310,15 @@ def agenda_watch_payload() -> tuple[int, dict[str, Any]]:
         attachment_total += len(public_attachments)
         useful.append({
             "item_id": row.get("item_id"), "event_id": row.get("event_id"),
+            "government_name": "City of Fort Lauderdale",
             "agenda_number": row.get("agenda_number"), "title": title,
             "matter_file": row.get("matter_file"), "matter_type": row.get("matter_type"),
             "matter_status": row.get("matter_status"), "action_name": row.get("action_name"),
             "action_text": row.get("action_text"), "passed_flag_name": row.get("passed_flag_name"),
             "watch_terms": row.get("watch_terms") or [], "source_url": row.get("source_url"),
             "first_seen_at": row.get("first_seen_at"), "last_seen_at": row.get("last_seen_at"),
-            "event_date": event.get("event_date"), "body_name": event.get("body_name"),
+            "event_date": event.get("event_date"), "event_time": event.get("event_time"),
+            "location": event.get("location"), "body_name": event.get("body_name"),
             "agenda_url": event.get("agenda_url"), "attachments": public_attachments,
             "why_developers_care": agenda_relevance(row),
             "what_next": (str(row.get("action_text") or row.get("action_name") or "")[:500]
@@ -305,9 +329,13 @@ def agenda_watch_payload() -> tuple[int, dict[str, Any]]:
     useful.sort(key=lambda item: (str(item.get("event_date") or ""), str(item.get("first_seen_at") or "")), reverse=True)
     event_dates = sorted(str(item.get("event_date")) for item in useful if item.get("event_date"))
     observed_times = sorted(str(item.get("last_seen_at")) for item in useful if item.get("last_seen_at"))
+    public_bodies = sorted({str(item.get("body_name")) for item in useful if item.get("body_name")})
     return 200, {
         "items": useful, "matched_rows": len(rows), "actionable_rows": len(useful),
         "public_attachments": attachment_total, "generated_at": now_iso(),
+        "government_entities": ["City of Fort Lauderdale"], "public_bodies": public_bodies,
+        "upcoming_meetings": upcoming, "calendar_url": meetings.get("calendar_url"),
+        "calendar_observed_through": meetings.get("updated_at"),
         "event_start": event_dates[0] if event_dates else None,
         "event_through": event_dates[-1] if event_dates else None,
         "item_index_observed_through": observed_times[-1] if observed_times else None,

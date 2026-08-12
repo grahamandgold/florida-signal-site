@@ -35,7 +35,7 @@
     '<header class="dw-shell">' +
       '<div class="dw-shell__top">' +
         '<a class="dw-brand" href="/" aria-label="Florida Signal Newsroom — Live Desk home">' +
-          '<img src="/mark-full-color.png" alt="" width="38" height="38">' +
+          '<img src="/mark-full-color.png" alt="" width="44" height="44">' +
           '<span class="dw-brand__words"><span class="dw-brand__name">FLORIDA SIGNAL</span>' +
           '<span class="dw-brand__desk">Newsroom</span></span>' +
         '</a>' +
