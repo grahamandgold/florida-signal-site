@@ -203,8 +203,9 @@ loopback-only Data Wire runtime.
 
 ## Known gaps / next exact work
 
-1. Review and merge draft PR 13. Its repository `verify` check passed; the signed Desktop app has
-   already been refreshed from the same tracked CMS source.
+1. PR 13 was squash-merged into `main` as `e541a19d14e0c6403c46422c8a425eff37c522da`
+   after its repository `verify` check passed. The signed Desktop app was refreshed from the same
+   tracked CMS source.
 2. Keep the public site and private Newsroom separate in navigation, deployment and documentation.
 3. Review every future diff; stage only intended tracked work. Do **not** stage raw/untracked Broward text
    dumps, `FABLE_ANALYSIS_2026-07-20/`, `mailchimp/`, `output/` or `chunk_*.txt`.
