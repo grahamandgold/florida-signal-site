@@ -91,6 +91,13 @@ Implemented through merged PR 10 from branch `codex/local-desk-auto-unlock`:
 - Agenda Watch reads exact Legistar item records and public attachment links, removes boilerplate,
   supplies neutral “why developers may care” language and requires stakeholder/both-sides follow-up.
   An item is a verification lead, not a Signal.
+- Agenda Watch now says its entity scope plainly: **City of Fort Lauderdale only**. The first section
+  shows upcoming official-calendar rooms with date, time, location and whether an agenda is actually
+  posted. Historical cards name the government body and expose the official agenda PDF, exact
+  Legistar meeting item and packet-attachment count before the collapsed reporting checklist.
+- The state-capitol/Florida Legislature lane is separate. No LegiScan connector or credential was
+  found in this repository during the August 11 audit; locate and verify the existing API setup
+  before adding bills, committees or Tallahassee actions to the Newsroom.
 - `cms/review.html` shows one Candidate at a time, keeps the sealed evidence packet visible, separates
   supported facts from unknowns and hides final approve/reject controls in mobile field mode.
 - Its Investigation Kit derives Street View, satellite, Maps and parcel links from the actual record.
@@ -121,6 +128,8 @@ The reviewed concept has now been translated into the real private CMS on branch
   Desk;
 - the full-color emblem now has a compact light contrast field in the navy header, keeping the
   dark Florida silhouette legible without redrawing, recoloring or adding anything to the mark;
+- the desktop Newsroom header is fixed to the viewport instead of relying on a sticky child trapped
+  by the short shell container, so it remains coherent while long agenda/data views scroll;
 - Live Desk leads with real queue/source counts, the strongest evidence-ready Candidate and the
   actual S1–S5 early-intelligence lanes;
 - Agenda Watch is a dedicated page for real Legistar items, attachments, coverage windows and
@@ -191,9 +200,10 @@ newsletter journey and field-tool redesign are the next separate product phase.
 
 - `python3 -m unittest ops/mac/test_acclaim_resilience.py` — 7 passing.
 - `python3 -m unittest tests/test_cms_server.py` — 7 passing in the latest CMS run.
-- Playwright `tests/browser/data-wire.spec.js` — 4 passing against the signed Desktop app; it now
+- Playwright `tests/browser/data-wire.spec.js` — 5 passing against the signed Desktop app; it now
   covers all five Newsroom views, the canonical home link, the mobile decision restriction,
-  source-clock sanity, 390-pixel page width and non-overlap at the 1,110-pixel sidebar viewport.
+  source-clock sanity, 390-pixel page width, non-overlap at the 1,110-pixel sidebar viewport,
+  persistent desktop-header behavior and the Agenda Watch entity/time/packet controls.
 - Desktop app bundle identifier, code signature and Live Desk launch were verified after refresh.
 - Production LaunchAgent check: `com.floridasignal.acclaim`, last exit `0`; August 11 insertion and
   subsequent hourly runs are present in `~/Library/Logs/florida-acclaim.log`.

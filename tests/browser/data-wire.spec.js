@@ -88,6 +88,9 @@ test.describe("private Florida Signal Newsroom", () => {
     expect(treatment.background).not.toBe("rgba(0, 0, 0, 0)");
     expect(treatment.width).toBeGreaterThanOrEqual(44);
     expect(treatment.height).toBeGreaterThanOrEqual(44);
+    await page.evaluate(() => window.scrollTo(0, 900));
+    await expect(page.locator(".dw-shell")).toBeVisible();
+    expect(await page.locator(".dw-shell").evaluate(node => Math.round(node.getBoundingClientRect().top))).toBe(0);
   });
 
   test("Newsroom pages keep distinct jobs and fit a 390px field viewport", async ({ page }) => {
@@ -115,6 +118,16 @@ test.describe("private Florida Signal Newsroom", () => {
         const libraryTop = await page.locator(".library").evaluate(node => node.getBoundingClientRect().top);
         const tableTop = await page.locator("#explorer").evaluate(node => node.getBoundingClientRect().top);
         expect(libraryTop).toBeLessThan(tableTop);
+      }
+      if (path === "/agenda.html") {
+        await expect(page.getByRole("heading", { name: "What’s coming up" })).toBeVisible();
+        await expect(page.locator(".meeting-card").first()).toContainText("City of Fort Lauderdale", { timeout: 15_000 });
+        await expect(page.locator(".meeting-card").first()).toContainText(/\d{1,2}:\d{2}\s*(AM|PM)/i);
+        await expect(page.getByRole("heading", { name: "Past meeting decisions and packet evidence" })).toBeVisible();
+        await expect(page.locator(".agenda-item").first()).toContainText("City of Fort Lauderdale");
+        await expect(page.locator(".agenda-item").first().getByRole("link", { name: /official agenda PDF/i })).toBeVisible();
+        await expect(page.getByLabel("Government body")).toBeVisible();
+        await expect(page.getByLabel("Search agenda items")).toBeVisible();
       }
       expect(await page.evaluate(() => document.body.scrollWidth), `${path} page width`).toBe(390);
     }

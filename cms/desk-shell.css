@@ -34,8 +34,10 @@
 .dw-skip:focus { transform: none; }
 
 .dw-shell {
-  position: sticky;
+  position: fixed;
   top: 0;
+  right: 0;
+  left: 0;
   z-index: 90;
   min-height: 72px;
   color: #f8fbff;
@@ -44,6 +46,8 @@
   font-family: var(--dw-font);
   backdrop-filter: blur(16px);
 }
+
+#desk-shell { padding-top: 72px; }
 
 .dw-shell__top {
   min-height: 72px;
@@ -354,6 +358,7 @@ body.dw-newsroom-ready > .status-strip { display: none !important; }
 
 @media (max-width: 820px) {
   .dw-shell { position: relative; }
+  #desk-shell { padding-top: 0; }
   .dw-shell__top {
     padding: 12px;
     grid-template-columns: 1fr auto;
