@@ -75,7 +75,7 @@ approves them.
 
 ### Data Wire / Live Desk
 
-Implemented on branch `codex/local-desk-auto-unlock` in draft PR 10:
+Implemented through merged PR 10 from branch `codex/local-desk-auto-unlock`:
 
 - `cms/home.html` is the Live Desk front door; the emblem/wordmark links home.
 - `cms/desk-shell.js` and `cms/desk-shell.css` provide one shared navigation and a real “Next in
@@ -137,10 +137,10 @@ Implemented on branch `codex/local-desk-auto-unlock` in draft PR 10:
 - `CLAUDE_DESIGN_VISUAL_AUDIT_2026-08-11.md` records the completed Cowork/Chrome visual audit. Cowork
   used Claude Design's `design-critique`, `accessibility-review` and `ux-copy` plugin skills across
   all seven product views at desktop and narrow widths. It changed nothing during the audit.
-- The resulting cleanup brief was sent to the existing Claude Design project as a new turn. It is
-  allowed to edit the Design prototype only; it may not publish, export, schedule, add automation or
-  touch production code. Its required first proof is the exact canonical emblem plus the 390-pixel
-  layout.
+- The resulting cleanup brief was completed in the existing Claude Design project. It edited the
+  Design prototype only; it did not publish, export, schedule, add automation or touch production
+  code. The exact canonical emblem was loaded from the repository asset and verified in the masthead
+  and Field header. The final narrow-canvas proof exercised the mobile breakpoint.
 - Audit P0s: broken emblem asset, colliding Candidate timeline, model identities exposed while Lab
   blind mode is on, illustrative data presented with live-looking clocks, and broken narrow layouts.
 - Chrome was left narrow by the audit extension; that browser-window size is not a product change.
@@ -156,20 +156,22 @@ Implemented on branch `codex/local-desk-auto-unlock` in draft PR 10:
 - Production LaunchAgent check: `com.floridasignal.acclaim`, last exit `0`; August 11 insertion and
   subsequent hourly runs are present in `~/Library/Logs/florida-acclaim.log`.
 
-Rerun all relevant checks before publishing or merging because this branch contains active local
-work after those checkpoints.
+PR 10 was squash-merged into `main` as `6ef7d39e1f8431a829f1a0332ddc631788ad37f1` after the local
+checks. GitHub's **Public site health** workflow then passed its unit and browser jobs. That workflow
+name describes the repository safety check; it did not publish the Claude prototype or expose the
+loopback-only Data Wire runtime.
 
 ## Known gaps / next exact work
 
-1. Let the current Claude Design cleanup turn finish, then visually verify its emblem and mobile
-   proof before translating any concept changes into production code.
-2. Run the full Python/browser suite and refresh the Desktop Data Wire app after final CMS changes.
-3. Review the full diff; stage only intended tracked work. Do **not** stage raw/untracked Broward text
+1. Translate the reviewed Claude Design concepts into production code deliberately; never copy its
+   illustrative records, scores or clocks into the real desk.
+2. Refresh the Desktop Data Wire app and rerun the Python/browser suite after production UI changes.
+3. Review every future diff; stage only intended tracked work. Do **not** stage raw/untracked Broward text
    dumps, `FABLE_ANALYSIS_2026-07-20/`, `mailchimp/`, `output/` or `chunk_*.txt`.
 4. Do not stage the ten social PNGs touched by the stopped 21:40 Claude run without a separate
    visual/data approval.
-5. Commit/push PR 10 only after checks pass. Do not merge merely because the local prototype looks
-   good; verify CI and review the security surface.
+5. Treat the Claude Design file as a reviewed concept, not as a deployable artifact. Recheck security,
+   responsive behavior and editorial gates in the real CMS implementation.
 6. Then implement the public mobile/content-model P0: remove the 10-second signup modal, fix clipping
    and NHC visual failure, unify navigation, simplify repeated actions and relabel raw “signals.”
 7. Add public privacy/correction routes and a real editor-cleared sample brief before paywall work.
