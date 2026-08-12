@@ -4,13 +4,14 @@ Last verified: July 17, 2026
 
 ## Brand files
 
-- Primary horizontal logo: `assets/logo-final.png`
+- Primary horizontal logo: `assets/lockup-horizontal-transparent.png`
 - Full-color Florida emblem: `assets/mark-full-color.png`
-- Transparent emblem variants: `assets/mark.png` and `assets/logo-mark-transparent.png`
+- Square/social emblem: `assets/mark-square.png`
+- Reverse and one-color emblems: `assets/mark-white.png` and `assets/mark-navy-mono.png`
 - Complete visual rules: `BRAND_KIT.md`
 - Licensed photo inventory and required labels: `assets/photos/README.md`
 
-Use the horizontal logo when the words must be readable. Use the full-color emblem as a centered watermark/crest inside maps and diagrams. Never stretch, crop or recolor the logo, and never use the report-builder document icon as branding.
+Use the horizontal logo when the words must be readable. Use the full-color emblem as a centered signature/crest inside maps and diagrams. Keep it readable with clear space and the correct full-color or reverse treatment. Never add an arrow, stretch, crop or recolor the emblem, and never use a CTA arrow or the report-builder document icon as branding.
 
 ## Channel masters
 

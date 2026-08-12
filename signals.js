@@ -178,7 +178,9 @@
   // Routine minor permits are intentionally excluded (documented in exclusion_reasons).
   function fromPermit(r) {
     var lat = num(r.lat), lon = num(r.lon);
-    var value = num(r.valuation_usd_clean);
+    // Only the permit's own valuation may drive a public "declared value"
+    // claim. valuation_usd_clean can include downstream property context.
+    var value = num(r.valuation);
     var text = [r.permit_type, r.description, r.work_type].join(" ");
     var isDemo = DEMO_RE.test(text);
     var isStorm = STORM_RE.test(text);
@@ -550,7 +552,7 @@
   // Complete-data support = every eligible record is DISCOVERABLE through bounded, filterable
   // queries. It never means loading whole tables into the browser. Each request is capped,
   // deterministically ordered, geographically bounded, and cancellable.
-  var PERMIT_ELIGIBLE_OR = "(valuation_usd_clean.gte.500000,description.ilike.*demol*,permit_type.ilike.*demol*," +
+  var PERMIT_ELIGIBLE_OR = "(valuation.gte.500000,description.ilike.*demol*,permit_type.ilike.*demol*," +
     "description.ilike.*roof*,permit_type.ilike.*roof*,description.ilike.*seawall*,description.ilike.*shutter*," +
     "description.ilike.*window*,description.ilike.*generator*,description.ilike.*drainage*,description.ilike.*storm*)";
 
@@ -563,7 +565,7 @@
     var SOURCES = {
       permits: {
         table: "permits", latCol: "lat", lonCol: "lon", dateCol: "applied_date", kind: "permit",
-        select: "permit_number,address,permit_type,description,valuation_usd_clean,applied_date,last_seen_at,lat,lon,region,contractor_name,applicant_name,owner_name,work_type",
+        select: "permit_number,address,permit_type,description,valuation,valuation_usd_clean,applied_date,last_seen_at,lat,lon,region,contractor_name,applicant_name,owner_name,work_type",
         order: "applied_date.desc.nullslast", extra: { or: PERMIT_ELIGIBLE_OR }
       },
       faa: {
@@ -576,16 +578,16 @@
         select: "permit_id,objectid,project_name,applicant_company,applicant_name,permit_type,permit_status,agency_action,received_date,street_address,city,lat,lon,documents_url,first_fetched_at,last_fetched_at",
         order: "received_date.desc.nullslast", extra: {}
       },
-      // Only map_eligible rows are ever requested: the view marks an instrument eligible solely when
-      // its canonical folio resolves to exactly one official county parcel.
+      // Only freshness-gated, map_eligible rows are ever requested. The current view returns zero
+      // rows if its materialized snapshot trails the ingested Clerk source by >2 business days.
       deeds: {
-        table: "broward_property_transfer_map", latCol: "latitude", lonCol: "longitude",
+        table: "broward_property_transfer_current", latCol: "latitude", lonCol: "longitude",
         dateCol: "recording_date", amountCol: "consideration_amount", cityCol: "situs_city", kind: "transfer",
         select: "instrument_number,doc_type_code,instrument_kind,recording_date,consideration_amount,verified_flag,folio_canonical,source_object_id,latitude,longitude,address,situs_city,property_type,matched_parcel_count,verification_state,linkage_method",
         order: "recording_date.desc.nullslast", extra: { map_eligible: "is.true", doc_type_code: "eq.D" }
       },
       easements: {
-        table: "broward_property_transfer_map", latCol: "latitude", lonCol: "longitude",
+        table: "broward_property_transfer_current", latCol: "latitude", lonCol: "longitude",
         dateCol: "recording_date", amountCol: "consideration_amount", cityCol: "situs_city", kind: "transfer",
         select: "instrument_number,doc_type_code,instrument_kind,recording_date,consideration_amount,verified_flag,folio_canonical,source_object_id,latitude,longitude,address,situs_city,property_type,matched_parcel_count,verification_state,linkage_method",
         order: "recording_date.desc.nullslast", extra: { map_eligible: "is.true", doc_type_code: "eq.EAS" }
@@ -619,7 +621,7 @@
       }
       if (o.startDate) q.append(src.dateCol, "gte." + o.startDate);
       if (o.endDate) q.append(src.dateCol, "lte." + o.endDate);
-      if (o.minValuation && src.kind === "permit") q.append("valuation_usd_clean", "gte." + o.minValuation);
+      if (o.minValuation && src.kind === "permit") q.append("valuation", "gte." + o.minValuation);
       if (o.minAmount && src.amountCol) q.append(src.amountCol, "gte." + o.minAmount);
       if (o.municipality && src.cityCol) q.append(src.cityCol, "eq." + o.municipality);
       if (o.instrument && src.kind === "transfer") q.append("instrument_number", "eq." + o.instrument);

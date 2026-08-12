@@ -402,6 +402,13 @@ def parse_source_time(value: Any) -> datetime | None:
     if not value:
         return None
     text = str(value).strip().replace("Z", "+00:00")
+    # PostgreSQL may omit trailing microsecond zeroes (for example `.61819+00:00`). Some Python
+    # runtimes reject that otherwise valid timestamp, and the old date-only fallback then made a
+    # minutes-old feed look almost a day stale. Normalize fractions to six digits first.
+    fractional = re.match(r"^(?P<prefix>.*\.)(?P<digits>\d+)(?P<offset>[+-]\d{2}:\d{2})$", text)
+    if fractional:
+        digits = fractional.group("digits")[:6].ljust(6, "0")
+        text = fractional.group("prefix") + digits + fractional.group("offset")
     try:
         parsed = datetime.fromisoformat(text)
     except ValueError:
@@ -448,10 +455,18 @@ def data_health_payload() -> dict[str, Any]:
         sync: dict[str, Any] = {}
         latest_application: dict[str, Any] = {}
         latest_seen: dict[str, Any] = {}
+        latest_enriched: dict[str, Any] = {}
         cache_row: dict[str, Any] = {}
         verified_clerk_run: dict[str, Any] = {}
         verified_clerk_record: dict[str, Any] = {}
         preliminary_clerk_record: dict[str, Any] = {}
+        fdep_event: dict[str, Any] = {}
+        fdep_fetch: dict[str, Any] = {}
+        faa_event: dict[str, Any] = {}
+        faa_fetch: dict[str, Any] = {}
+        sunbiz_fetch: dict[str, Any] = {}
+        transfer_freshness: dict[str, Any] = {}
+        editorial_health: list[dict[str, Any]] = []
         try:
             rows = supabase_public_rows("_meta_sync_runs?select=id,completed_at,rows_synced,tables_touched,errors&order=completed_at.desc&limit=1")
             sync = rows[0] if rows else {}
@@ -462,6 +477,8 @@ def data_health_payload() -> dict[str, Any]:
             latest_application = rows[0] if rows else {}
             rows = supabase_public_rows("permits?select=applied_date,last_seen_at&last_seen_at=not.is.null&order=last_seen_at.desc.nullslast&limit=1")
             latest_seen = rows[0] if rows else {}
+            rows = supabase_public_rows("permits?select=last_enriched_at,parcel_checked_at&order=last_enriched_at.desc&limit=1")
+            latest_enriched = rows[0] if rows else {}
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
             errors.append("permits:" + type(error).__name__)
         try:
@@ -490,6 +507,34 @@ def data_health_payload() -> dict[str, Any]:
             preliminary_clerk_record = rows[0] if rows else {}
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
             errors.append("clerk-preliminary:" + type(error).__name__)
+        try:
+            rows = supabase_public_rows("fdep_erp?select=received_date&received_date=not.is.null&order=received_date.desc.nullslast&limit=1")
+            fdep_event = rows[0] if rows else {}
+            rows = supabase_public_rows("fdep_erp?select=last_fetched_at&order=last_fetched_at.desc&limit=1")
+            fdep_fetch = rows[0] if rows else {}
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
+            errors.append("fdep:" + type(error).__name__)
+        try:
+            rows = supabase_public_rows("faa_oeaaa?select=date_entered&date_entered=not.is.null&order=date_entered.desc.nullslast&limit=1")
+            faa_event = rows[0] if rows else {}
+            rows = supabase_public_rows("faa_oeaaa?select=last_fetched_at&last_fetched_at=not.is.null&order=last_fetched_at.desc.nullslast&limit=1")
+            faa_fetch = rows[0] if rows else {}
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
+            errors.append("faa:" + type(error).__name__)
+        try:
+            rows = supabase_public_rows("sunbiz_entities?select=date_filed,fetched_at&fetched_at=not.is.null&order=fetched_at.desc.nullslast&limit=1")
+            sunbiz_fetch = rows[0] if rows else {}
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
+            errors.append("sunbiz:" + type(error).__name__)
+        try:
+            rows = supabase_public_rows("broward_property_transfer_freshness?select=*")
+            transfer_freshness = rows[0] if rows else {}
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
+            errors.append("property-transfer-freshness:" + type(error).__name__)
+        try:
+            editorial_health = supabase_public_rows("editorial_pipeline_health?select=component,status,event_through,source_through,system_time,detail,metrics&order=component.asc")
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
+            errors.append("editorial-pipeline:" + type(error).__name__)
         stats = cache_row.get("payload", {}).get("stats", {}) if isinstance(cache_row.get("payload"), dict) else {}
         meetings = meeting_payload()
         verified_event_time = verified_clerk_record.get("recording_date_iso") or stats.get("broward_fresh")
@@ -506,15 +551,34 @@ def data_health_payload() -> dict[str, Any]:
             preliminary_clerk_record.get("preliminary_first_seen_at")
             or preliminary_clerk_record.get("fetched_at")
         )
+        transfer_snapshot_status = "unavailable"
+        if transfer_freshness:
+            transfer_snapshot_status = "current" if transfer_freshness.get("snapshot_is_current") else "stale"
         source_rows = [
             {"id": "supabase-sync", "label": "Public mirror", "status": health_status(sync.get("completed_at"), 1.25, 3), "system_time": sync.get("completed_at"), "event_through": None, "cadence": "every 30 minutes", "detail": f"{sync.get('rows_synced', 0)} rows in latest run · {sync.get('errors', 0)} errors" if sync else "No sync run visible"},
             {"id": "permits", "label": "Permit applications", "status": health_status(latest_seen.get("last_seen_at"), 30, 54), "system_time": latest_seen.get("last_seen_at"), "event_through": latest_application.get("applied_date"), "cadence": "source intake nightly; mirror every 30 minutes", "detail": "Analysis uses applied_date; last_seen_at is freshness metadata"},
             {"id": "aggregate-snapshot", "label": "Aggregate dashboard", "status": health_status(cache_row.get("updated_at"), 26, 54), "system_time": cache_row.get("updated_at"), "event_through": stats.get("permits_fresh"), "cadence": "refresh after successful aggregate build", "detail": "Counts retain their visible update time when this snapshot is delayed"},
             {"id": "broward", "label": "Broward verified instruments", "status": verified_clerk_status(verified_event_time, verified_system_time), "verification": "verified", "system_time": verified_system_time, "event_through": verified_event_time, "cadence": "SFTP check daily at 9:30 AM plus weekday catch-up", "detail": verified_detail},
             {"id": "clerk-preliminary", "label": "Broward preliminary recordings", "status": health_status(preliminary_event_time, 48, 96), "verification": "preliminary", "system_time": preliminary_system_time, "event_through": preliminary_event_time, "cadence": "AcclaimWeb at 12:30 AM, noon, 7 PM and 10:30 PM", "detail": "Same-day public-search text; reconciled against the authoritative SFTP feed and never presented as verified early"},
+            {"id": "permit-enrichment", "label": "Permit enrichment", "status": health_status(latest_enriched.get("last_enriched_at"), 30, 54), "system_time": latest_enriched.get("last_enriched_at"), "event_through": None, "cadence": "continuous queue after permit intake", "detail": "This is a processing clock, not an event-coverage claim; parcel and application clocks remain separate"},
+            {"id": "property-transfer-snapshot", "label": "Deed / parcel snapshot", "status": transfer_snapshot_status, "system_time": next((row.get("system_time") for row in editorial_health if row.get("component") == "property-transfer-snapshot"), None), "event_through": transfer_freshness.get("snapshot_event_through"), "cadence": "weekdays after verified Clerk catch-up", "detail": (f"snapshot lag {transfer_freshness.get('snapshot_lag_business_days')} business day(s) · verified source age {transfer_freshness.get('source_age_business_days')}" if transfer_freshness else "Freshness view unavailable; current deed modules stay suppressed")},
+            {"id": "fdep", "label": "FDEP environmental permits", "status": health_status(fdep_fetch.get("last_fetched_at"), 30, 54), "system_time": fdep_fetch.get("last_fetched_at"), "event_through": fdep_event.get("received_date"), "cadence": "daily at 9:20 UTC", "detail": "State ERP record date and fetch time remain separate"},
+            {"id": "faa", "label": "FAA obstruction cases", "status": health_status(faa_fetch.get("last_fetched_at"), 30, 54), "system_time": faa_fetch.get("last_fetched_at"), "event_through": faa_event.get("date_entered"), "cadence": "daily at 9:40 UTC", "detail": "Federal filing date and fetch time remain separate"},
             {"id": "meetings", "label": "Meeting watch", "status": health_status(meetings.get("updated_at"), .5, 2), "system_time": meetings.get("updated_at"), "event_through": None, "cadence": "Legistar every 15 minutes; DRC and industry editorially checked", "detail": f"{len(meetings.get('meetings', []))} upcoming rooms · every row links to its public source"},
-            {"id": "sunbiz", "label": "Sunbiz", "status": "unverified", "system_time": None, "event_through": None, "cadence": "raw ingest nightly at 11:30 PM; exact matching in enrichment", "detail": "Public health timestamp is not yet exposed; fuzzy writes remain off"},
+            {"id": "sunbiz", "label": "Sunbiz", "status": health_status(sunbiz_fetch.get("fetched_at"), 30, 54) if sunbiz_fetch else "unavailable", "system_time": sunbiz_fetch.get("fetched_at"), "event_through": sunbiz_fetch.get("date_filed"), "cadence": "raw ingest nightly at 11:30 PM; exact matching in enrichment", "detail": "No public entity rows are available" if not sunbiz_fetch else "Exact entity rows available; fuzzy identity writes remain off"},
         ]
+        source_rows.extend(
+            {
+                "id": "editorial-" + str(row.get("component") or "unknown"),
+                "label": "Editorial · " + str(row.get("component") or "unknown"),
+                "status": row.get("status") or "unavailable",
+                "system_time": row.get("system_time"),
+                "event_through": row.get("event_through"),
+                "cadence": "durable database schedule",
+                "detail": row.get("detail") or "No run detail",
+            }
+            for row in editorial_health
+        )
         payload = {"generated_at": datetime.now(timezone.utc).isoformat(), "sources": source_rows, "errors": errors, "contract": "Event date drives analysis; pull, sync and system update times only describe freshness."}
         _health_cache.update({"at": now, "payload": payload})
         return payload

@@ -1,9 +1,10 @@
 # Florida Signal
 
-**New here, human or agent? Read [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md) first.**
-It is the current verified front door: what is publicly deployed, what is healthy or broken,
-which automations actually run, and what remains blocked. The July checkpoint remains historical
-evidence, not current production truth.
+**New here, human or agent? Read [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md)
+and [`EDITORIAL_LOOP_RUNBOOK.md`](EDITORIAL_LOOP_RUNBOOK.md) first.**
+They are the verified front door for production health, the live Record → Candidate loop,
+public exposure, local-only site work and remaining launch blockers.
+Earlier dated checkpoints are preserved as historical evidence.
 **The scorer and collectors are not in this repository** — they live in `grahamandgold/florida-signal`.
 
 Florida Signal is Broward-wide, source-first development intelligence launching city by city. Fort Lauderdale is the first live desk. Every public content URL is scoped under `/fort-lauderdale/`; other Broward municipality paths use one shared “coming soon” template without dates or coverage promises.
@@ -48,9 +49,12 @@ The local server provides same-origin meeting, storm, CMS, agenda-recon and subs
 
 ## Operating handoff
 
-- [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md) — current deployment, data clocks, automation truth and known incidents.
+- [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md) — current operational, data, editorial, Mailchimp, analytics and launch truth.
+- [`EDITORIAL_LOOP_RUNBOOK.md`](EDITORIAL_LOOP_RUNBOOK.md) — live Candidate schedules, evidence contract, human gate and recovery.
 - [`SITE_MAINTENANCE_RUNBOOK.md`](SITE_MAINTENANCE_RUNBOOK.md) — release checks, hourly browser monitor and incident response.
 - [`ops/droplet/README_PUBLIC_API.md`](ops/droplet/README_PUBLIC_API.md) — production API, DNS/TLS, secrets, durable data, update and rollback procedure.
+- [`SYSTEM_STATE_2026-07-28.md`](SYSTEM_STATE_2026-07-28.md) — historical July checkpoint.
+- [`REMAINING_WORK_REGISTER_2026-07-28.md`](REMAINING_WORK_REGISTER_2026-07-28.md) — unresolved decisions and launch blockers.
 - [`FLORIDA_SIGNAL_BUILD_REPORT.md`](FLORIDA_SIGNAL_BUILD_REPORT.md) — source cadence, live versus scheduled updates, date methodology, CMS/Mailchimp state and production runbook.
 - [`LIVE_DATA_OPERATIONS_HANDOFF.md`](LIVE_DATA_OPERATIONS_HANDOFF.md) — exact live-stat definitions, observed source health, update/recovery procedures and daily operating sequence.
 - [`AI_HANDOFF.md`](AI_HANDOFF.md) — data, editorial, multi-city, Storm Watch and implementation rules for the next AI or developer.

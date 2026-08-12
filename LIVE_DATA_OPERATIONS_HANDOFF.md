@@ -1,5 +1,19 @@
 # Florida Signal live data operations handoff
 
+> **HISTORICAL OPERATIONS SNAPSHOT.** The health table and runtime claims below record the
+> July 17–19 state. For current production, backup, parcel, Sunbiz, branch, and launch truth,
+> use [`SYSTEM_STATE_2026-07-28.md`](SYSTEM_STATE_2026-07-28.md) and
+> [`REMAINING_WORK_REGISTER_2026-07-28.md`](REMAINING_WORK_REGISTER_2026-07-28.md). For the
+> current August state, use [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md).
+> The live durable Candidate schedules, freshness gate and recovery procedure are in
+> [`EDITORIAL_LOOP_RUNBOOK.md`](EDITORIAL_LOOP_RUNBOOK.md). They supersede the July reminder-chain
+> automation descriptions below.
+
+> **August corrections:** public permit-declared value now means native `permits.valuation` only;
+> `valuation_usd_clean` may carry enriched context and must not be labeled applicant-declared.
+> The public API and Mailchimp signup integration are live. The Data Wire CMS remains disconnected
+> from the public runtime, and no Candidate can publish or send automatically.
+
 **Market:** Broward County  
 **Live city:** Fort Lauderdale  
 **Publisher:** Graham & Gold LLC  

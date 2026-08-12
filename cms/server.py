@@ -442,7 +442,7 @@ class Handler(SimpleHTTPRequestHandler):
             params = parse_qs(urlparse(self.path).query)
             status = (params.get("status", [""])[0] or "").upper()
             query = ("signal_review_queue?select=*"
-                     "&order=amount.desc.nullslast,source_record_date.desc&limit=200")
+                     "&order=source_record_date.desc,amount.desc.nullslast&limit=200")
             if status in REVIEW_STATUSES:
                 query += f"&review_status=eq.{status}"
             code, data = supabase_request(query)

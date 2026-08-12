@@ -6,8 +6,26 @@ Tracked, idempotent SQL mirroring live production. No secrets in this directory.
 |---|---|---|
 | `20260719_001_broward_clerk_preliminary.sql` | table `broward_clerk_preliminary`, indexes `clerk_prelim_uniq` (partial, `instrument_number <> ''`), `clerk_prelim_date_idx`, `clerk_prelim_type_idx`; RLS on; policy `clerk_prelim_public_read` (SELECT, public) | 2026-07-19 |
 | `20260719_002_clerk_preliminary_reconciliation.sql` | columns `verification_status`, `preliminary_first_seen_at`, `verified_business_date`, `verified_doc_type`, `reconciled_at`, `conflict_flag`, `conflict_note`; index `clerk_prelim_status_idx`; function `reconcile_clerk_preliminary()`; pg_cron `clerk-preliminary-reconcile` (`0 10 * * *`) | 2026-07-19 |
+| `20260811235116_restore_editorial_loop.sql` | freshness-gated transfer view, aggregate pipeline health, sealed evidence fields, exact Transfer → Permit detector, refresh + Candidate pg_cron jobs | 2026-08-11 |
+| `20260811235949_label_source_delay_without_blocking_verified_candidates.sql` | separates snapshot lag from the external Clerk release delay; hardens legacy transfer view and queue trigger search path | 2026-08-11 |
+| `20260812000230_index_health_event_clocks.sql` | partial FDEP event/fetch indexes for bounded public health probes | 2026-08-11 |
 
 **Not tracked here (pre-existing / other work):** `fdep_erp`, `faa_oeaaa` tables + their edge functions and pg_cron jobs; `refresh_dashboard_cache`. Those remain as originally applied.
+
+## 2026-08-11 — durable editorial loop
+
+- `property-transfer-refresh`: `20 19 * * 1-5` UTC; refreshes the deed/parcel snapshot and
+  records its source-relative event lag.
+- `transfer-permit-candidates-v1`: `30 3 * * *` UTC; adds no more than eight unqueued,
+  exact-folio Candidate packets per run.
+- `broward_property_transfer_current` returns no rows when the materialized snapshot trails
+  the ingested verified Clerk table by more than two business days.
+- External Clerk publication delay is disclosed separately. It does not turn older verified
+  rows into false rows.
+- Candidate packets are private, hash-sealed and idempotent by stable Candidate ID. No database
+  job publishes a story or sends a newsletter.
+
+See `EDITORIAL_LOOP_RUNBOOK.md` at the repository root for operation and recovery.
 
 **Authority guarantees**
 - `reconcile_clerk_preliminary()` UPDATEs only `broward_clerk_preliminary`; the authoritative

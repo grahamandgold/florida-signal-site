@@ -58,6 +58,12 @@ class PublicApiTests(unittest.TestCase):
             "https://thefloridasignal.com",
         )
 
+    def test_postgres_fractional_timestamp_keeps_its_time_of_day(self):
+        parsed = server_module.parse_source_time("2026-08-11T23:40:15.61819+00:00")
+        self.assertIsNotNone(parsed)
+        self.assertEqual((parsed.hour, parsed.minute, parsed.second), (23, 40, 15))
+        self.assertEqual(parsed.microsecond, 618190)
+
     def test_data_health_keeps_preliminary_and_verified_clerk_clocks_separate(self):
         def rows(path):
             if path.startswith("_meta_sync_runs"):
@@ -72,6 +78,20 @@ class PublicApiTests(unittest.TestCase):
                 return [{"recording_date_iso": "2026-08-05"}]
             if path.startswith("broward_clerk_preliminary"):
                 return [{"record_date": "2026-08-10", "preliminary_first_seen_at": "2026-08-11T00:56:06Z", "verification_status": "preliminary", "source": "acclaimweb-public-search"}]
+            if path.startswith("fdep_erp?select=received_date"):
+                return [{"received_date": "2026-08-10"}]
+            if path.startswith("fdep_erp?select=last_fetched_at"):
+                return [{"last_fetched_at": "2026-08-11T03:10:00Z"}]
+            if path.startswith("faa_oeaaa?select=date_entered"):
+                return [{"date_entered": "2026-08-10"}]
+            if path.startswith("faa_oeaaa?select=last_fetched_at"):
+                return [{"last_fetched_at": "2026-08-11T03:20:00Z"}]
+            if path.startswith("sunbiz_entities"):
+                return []
+            if path.startswith("broward_property_transfer_freshness"):
+                return [{"snapshot_is_current": True, "snapshot_event_through": "2026-08-05", "snapshot_lag_business_days": 0, "source_age_business_days": 3}]
+            if path.startswith("editorial_pipeline_health"):
+                return []
             raise AssertionError(path)
 
         with mock.patch.object(server_module, "supabase_public_rows", side_effect=rows), mock.patch.object(

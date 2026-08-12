@@ -54,6 +54,14 @@
   .status{margin:10px 0 0;font-size:11.5px;color:var(--muted)}
   .status.err{color:var(--danger)}
   .empty{padding:26px;text-align:center;color:var(--muted);background:#fff;border:1px solid var(--line)}
+  .evidence{margin:0 0 14px;border:1px solid var(--line);background:var(--wash)}
+  .evidence summary{cursor:pointer;padding:10px 12px;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--teal-dark)}
+  .evidence__body{padding:0 12px 12px;display:grid;gap:12px}
+  .evidence__body h3{margin:0 0 4px;font-family:var(--serif);font-size:12px}
+  .evidence__body ul{margin:0;padding-left:18px;font-size:12px}
+  .evidence__records{display:grid;gap:6px}
+  .evidence__record{padding:8px;background:#fff;border:1px solid var(--line);font-size:11.5px}
+  .evidence__record b{display:block;color:var(--ink)}
 
   .stage-nav { background: var(--ink); }
   .stage-nav__inner { max-width:1600px; margin:0 auto; display:grid; grid-template-columns:repeat(3,1fr); }
@@ -143,6 +151,31 @@
     return "$" + v.toLocaleString("en-US", { maximumFractionDigits: 0 });
   }
 
+  function evidenceHtml(item) {
+    var packet = item.evidence_packet && typeof item.evidence_packet === "object" ? item.evidence_packet : {};
+    var records = Array.isArray(packet.records) ? packet.records : [];
+    var claims = Array.isArray(packet.supported_claims) ? packet.supported_claims : [];
+    var unknowns = Array.isArray(packet.unknowns) ? packet.unknowns : [];
+    if (!records.length && !claims.length && !unknowns.length) return "";
+    var join = packet.join || {};
+    return '<details class="evidence"><summary>Open sealed evidence packet · ' + esc(item.receipt_status || "PENDING") + '</summary>' +
+      '<div class="evidence__body">' +
+        '<div><h3>Join receipt</h3><p class="meta">' + esc(join.method || "Not stated") +
+          (join.canonical_folio ? " · " + esc(join.canonical_folio) : "") +
+          (item.evidence_hash ? " · SHA-256 " + esc(item.evidence_hash.slice(0, 16)) + "…" : "") + '</p></div>' +
+        '<div><h3>Source records</h3><div class="evidence__records">' + records.map(function (record) {
+          var value = record.native_declared_value != null ? money(record.native_declared_value) :
+            (record.stated_consideration != null ? money(record.stated_consideration) : null);
+          return '<div class="evidence__record"><b>' + esc(record.source_table || "source") + ' · ' +
+            esc(record.source_record_id || "missing ID") + '</b>' +
+            esc([record.event_date, record.address, record.permit_type, value].filter(Boolean).join(" · ")) +
+            (record.description ? '<br>' + esc(record.description) : '') + '</div>';
+        }).join("") + '</div></div>' +
+        (claims.length ? '<div><h3>Facts this packet supports</h3><ul>' + claims.map(function (claim) { return '<li>' + esc(claim) + '</li>'; }).join("") + '</ul></div>' : '') +
+        (unknowns.length ? '<div><h3>What remains unknown</h3><ul>' + unknowns.map(function (unknown) { return '<li>' + esc(unknown) + '</li>'; }).join("") + '</ul></div>' : '') +
+      '</div></details>';
+  }
+
   async function getToken() {
     if (token) return token;
     try {
@@ -165,11 +198,12 @@
 
   function cardHtml(item) {
     var facts = [
-      ["Clerk instrument", item.source_record_id],
+      ["Candidate type", item.candidate_type || item.signal_type],
+      ["Source record IDs", item.source_record_id],
       ["County parcel (folio)", item.verified_parcel_id],
-      ["Recorded", item.source_record_date],
-      ["Stated amount", money(item.amount)],
-      ["Signal type", item.signal_type],
+      ["Latest event", item.source_record_date],
+      ["Largest native permit value", money(item.amount)],
+      ["Detector", item.detector_version],
       ["Located by", item.verified_parcel_id ? "Exact county folio match" : "—"],
       ["Assigned to", item.assigned_reviewer]
     ].filter(function (row) { return row[1]; });
@@ -181,6 +215,7 @@
       '<dl class="facts">' + facts.map(function (row) {
         return "<dt>" + esc(row[0]) + "</dt><dd>" + esc(row[1]) + "</dd>";
       }).join("") + '</dl>' +
+      evidenceHtml(item) +
       '<div class="edit">' +
         '<label class="f"><span>Headline</span><input data-field="editor_headline" value="' +
           esc(item.editor_headline || item.generated_headline || "") + '"></label>' +
@@ -253,7 +288,7 @@
     try {
       var data = await api("/api/admin/review-queue" + (status ? "?status=" + encodeURIComponent(status) : ""));
       if (!data.items.length) {
-        listEl.innerHTML = '<p class="empty">No Signals with this status. Nothing is waiting on you.</p>';
+        listEl.innerHTML = '<p class="empty">No Candidates with this status. Nothing is waiting on you.</p>';
         return;
       }
       listEl.innerHTML = data.items.map(cardHtml).join("");

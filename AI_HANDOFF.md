@@ -1,11 +1,12 @@
 # Florida Signal — AI Handoff
 
-Last verified: August 11, 2026. Start with `SYSTEM_STATE_2026-08-11.md`; the July checkpoint and Claudette handoff are historical evidence.
+Last verified: August 11, 2026
 
 > ## ⇢ START HERE FIRST: `SYSTEM_STATE_2026-08-11.md`
-> It tells you what is actually deployed, which public routes work, which automations actually
-> run, and what remains blocked. Read the July checkpoint only when historical configuration
-> evidence is needed.
+> It is the current verified authority for production health, the data estate, deployed database
+> changes, local-only site corrections, Mailchimp, analytics and remaining work. Use
+> `EDITORIAL_LOOP_RUNBOOK.md` for the live Candidate schedules and recovery steps. The July
+> checkpoint remains historical evidence, not current operational state.
 >
 > Two facts it exists to prevent you getting wrong:
 > 1. The scorer and collectors are **not in this repository** — they are in `grahamandgold/florida-signal`.
@@ -21,11 +22,12 @@ The public site is not a raw database dump and The Data Wire is not an autonomou
 ## Read these first
 
 1. `README.md` — local start, CMS access and operating links.
-2. `LIVE_DATA_OPERATIONS_HANDOFF.md` — sources, schedules, exact stat definitions and recovery steps.
-3. `FLORIDA_SIGNAL_TAGGING_SYSTEM.md` — required city, county, neighborhood and topic fields.
-4. `cms/README.md` — Data Wire schema, source gates and API contract.
-5. `BRAND_KIT.md` and `SOCIAL_MEDIA_ASSET_GUIDE.md` — public visual and distribution rules.
-6. `FLORIDA_SIGNAL_BUILD_REPORT.md` — implementation inventory and launch blockers.
+2. `EDITORIAL_LOOP_RUNBOOK.md` — current Candidate schedules, human gates and recovery steps.
+3. `LIVE_DATA_OPERATIONS_HANDOFF.md` — historical source definitions and date rules.
+4. `FLORIDA_SIGNAL_TAGGING_SYSTEM.md` — required city, county, neighborhood and topic fields.
+5. `cms/README.md` — Data Wire schema, source gates and API contract.
+6. `BRAND_KIT.md` and `SOCIAL_MEDIA_ASSET_GUIDE.md` — public visual and distribution rules.
+7. `FLORIDA_SIGNAL_BUILD_REPORT.md` — implementation inventory and launch blockers.
 
 ## Non-negotiable data rules
 
@@ -66,7 +68,7 @@ Public sources
   -> newsletter/social distribution with the same source window
 ```
 
-The public API runs from `server.py` on loopback port 4173 behind nginx at `https://api.thefloridasignal.com`. The private Data Wire runs locally from `cms/server.py` on port 8788 and is intentionally not connected to the public host. The Data Wire token belongs only in server environment/session storage. Never commit it or place it in public JavaScript. Use `ops/droplet/README_PUBLIC_API.md` for deployment, TLS, verification and rollback.
+The public site runs from `server.py` on port 4173. The private Data Wire runs from `cms/server.py` on port 8788. The Data Wire token belongs only in server environment/session storage. Never commit it or place it in public JavaScript.
 
 ## Data Room contract
 
@@ -107,27 +109,22 @@ Before publishing any AI-assisted change:
 
 ## Current production caveats
 
-As of the verification date, the public API and HTTPS boundary are live. `/api/health` reports
-`mailchimp_configured: true` and `cms_configured: false`; the latter is intentional because the
-shared-token Data Wire starter must remain private. Broward instruments are stale at an August 5
-recording-date clock, and Sunbiz still lacks enough public source-health metadata to claim current.
-The NHC JSON origin blocks the DigitalOcean host with HTTP 403, so the storm client must retain its
-official-source fallback and visibly fail open to the NHC link rather than infer zero storms. See
-`SYSTEM_STATE_2026-08-11.md` for the exact current state.
+As of the verification date, the local health endpoint reports that CMS and Mailchimp production integrations are not configured. Some aggregate and Broward clocks are stale and Sunbiz does not expose enough source-health metadata to claim live status. See `LIVE_DATA_OPERATIONS_HANDOFF.md` for the exact snapshot and remediation sequence.
 
 
 
 ## 2026-07-19 addendum (Claudette)
 
 - New Supabase sources: `fdep_erp`, `faa_oeaaa` (edge functions + pg_cron daily), `broward_clerk_preliminary` (AcclaimWeb same-day, PRELIMINARY until the verified SFTP business date lands — never present as verified).
-- Clerk health is a two-clock contract: `clerk-preliminary` is the early AcclaimWeb event span and `broward` is the authoritative SFTP span. Never combine the dates or remove the evidence labels.
-- The native Mac owner is `com.floridasignal.acclaim` at 00:30, 12:00, 19:00 and 22:30 local plus login catch-up. It preserves extra direct/indirect name, book/page and legal text for later fields; do not narrow the stored payload to the current UI.
-- August 5 recovery is complete: 2,446 preliminary rows matched SFTP, with 0 conflicts and 0 aged unmatched rows. See `SYSTEM_STATE_2026-08-11.md` for evidence.
 - Internal Data Desk viewer at `cms/data.html`; Data Wire local auto-unlock via `/api/local-session` (loopback + `DATA_WIRE_LOCAL_AUTOUNLOCK=1` only — keep OFF in production).
 - Brand: Atlantic palette + Montserrat/Figtree + `assets/lockup-2026-v2.png` / `assets/datawire-lockup.png`. Header lockup is live text; do not reintroduce the old PNG-only header.
 - CTA copy is "Get Daily Intel Brief" site-wide. Diagram of the day rotates daily by date.
 - `dashboard_cache` pg_cron re-armed at 30-minute cadence. Clerk SFTP verified-vs-source parity confirmed 2026-07-19.
 - Full task/automation inventory and open work: `CLAUDETTE_HANDOFF_2026-07-19.md`.
+
+## 2026-07-19 addendum (Drive offsite snapshot cleanup — verified)
+
+Authorized permanent cleanup of eight obsolete full-size Google Shared Drive snapshot directories under `gdrive:08_Backups_and_Recovery/FL_Signal/01_DATABASE/snapshots/` (2026-07-10..16 and 2026-07-19). **Retained:** `latest/`, `snapshots/2026-07-18/`, `snapshots/2026-07-17/`, and archive `permits.sqlite.daily-20260703.gz`. Released **90,867,600,278** bytes. Jul 18 restore validation: SHA match + `PRAGMA quick_check=ok` (127,912 permits). **`RETENTION_MODE` remains `dry-run`** — permanent compressed retention policy still TODO. Droplet record: `/srv/grahamandgold/florida-signal/restore-tests/DRIVE_SNAPSHOT_CLEANUP_2026-07-19.md` and `START_HERE.md` (Drive mirror of START_HERE not claimed current). No timer/service/script/production-DB change for this cleanup.
 
 ## 2026-08-11 recovery and permanent automation
 
