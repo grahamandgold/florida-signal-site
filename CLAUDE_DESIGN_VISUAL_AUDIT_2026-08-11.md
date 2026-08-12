@@ -101,3 +101,23 @@ automation, publishing, exporting or schedules.
 The exact prompt remains in the Claude Design project history and in the Claude Cowork audit session
 named **Florida Signal Data Wire audit**. This file records the durable requirements without copying
 Claude's full multi-page prompt verbatim.
+
+## Cleanup outcome
+
+Claude Design completed the cleanup pass after the audit. The illustrative prototype now has:
+
+- a persistent example-data warning and a non-pulsing `Live (example)` state;
+- a reduced Live Desk, on-demand source-status panel and independently reachable Refine controls;
+- a rebuilt ownership timeline with ordinal spacing, staggered labels and a narrow stacked form;
+- blind model identities, plain-language detector labels and a labelled disagreement scale;
+- consistent S1-S5 language, Record → Candidate → Signal → Story rails and a dedicated Brief view;
+- larger type and touch targets, simpler action hierarchy, labelled coverage meters and network nodes;
+- responsive masthead, view subtitles, one-column narrow layouts and an overflow affordance for the
+  seven workspace tabs.
+
+The exact approved emblem is loaded from the repository's public `assets/mark-full-color.png` source.
+Claude visually verified the masthead and Field header use the native 791 × 783 ratio with
+`object-fit: contain`, visible overflow and no crop, recolor, distortion, clipping or added arrow.
+A final narrow-canvas proof at roughly 422 logical pixels showed the responsive masthead and tab
+overflow behavior working. This is still a Design prototype; none of its illustrative records,
+scores, clocks or interface changes are production data or production code.
