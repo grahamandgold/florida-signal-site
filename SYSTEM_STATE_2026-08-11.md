@@ -24,8 +24,9 @@ steps completed after this production snapshot.
 - The deed-to-parcel materialized view was refreshed from July 10 through August 6 and now exactly
   matches the ingested verified Clerk event window. A hard public view suppresses current modules
   whenever snapshot lag exceeds two business days.
-- `sunbiz_entities` exists but has zero public rows. Exact entity/officer reporting is blocked;
-  fuzzy identity writes remain prohibited.
+- `sunbiz_entities` contains 505 private resolver rows from the authoritative local SFTP corpus.
+  Anonymous reads correctly return zero under RLS; the authenticated Newsroom now exposes those
+  exact receipts through a service-role proxy. Fuzzy identity writes remain prohibited.
 - The public site remains too dense on mobile. Immediate local corrections are complete but
   are not deployed as of this document.
 
@@ -218,20 +219,26 @@ Not deployed as of this document:
   A timestamp parser defect that turned five-digit PostgreSQL fractions into midnight was fixed
   and regression-tested.
 - Current live status: verified Clerk delayed through August 6; preliminary Clerk current through
-  August 11; transfer snapshot current against the verified table; Sunbiz still unavailable.
+  August 11; transfer snapshot current against the verified table; Sunbiz exact resolver rows are
+  available privately, while the public health endpoint still has no public Sunbiz event clock.
 - No Candidate was approved, no Story or Brief was published, and no Mailchimp send occurred.
+- The private Newsroom responsive regression suite now covers the desktop-sidebar squeeze point at
+  1,110 pixels as well as the 390-pixel field view. Source-status and early-intelligence stage
+  labels no longer collide with titles, descriptions or independent source clocks.
 
 Operating and recovery steps: `EDITORIAL_LOOP_RUNBOOK.md`.
 
 ## P0 — restore truth and restart the editorial loop
 
 1. **Completed:** refresh and hard suppression gate for `broward_property_transfer_map`.
-2. **Completed except Sunbiz rows:** FAA, FDEP, enrichment, snapshot and editorial clocks are on
-   the live health board; Sunbiz is explicitly unavailable.
+2. **Completed:** FAA, FDEP, enrichment, snapshot and editorial clocks are on the live health board;
+   private Sunbiz resolver rows are now connected to the Newsroom without weakening RLS.
 3. Observe enrichment for a full 24 hours; alert if ingest advances while enrichment/geocode/
    parcel lanes remain at zero.
 4. Confirm Acclaim catch-up state and add a durable backlog alarm. Keep preliminary separate.
-5. Populate `sunbiz_entities` from the authoritative corpus using exact matches only.
+5. **Completed for current bounded resolver coverage:** `sunbiz_entities` has 505 exact-match rows.
+   Continue the scheduled bounded resolver and add a true `date_filed` event clock before claiming
+   full Sunbiz corpus coverage.
 6. **First slice completed:** Transfer → Permit is capped at eight per run with grouped evidence
    packets and receipt checks. Do not publish from the queue automatically.
 7. Connect the CMS and publish one real reviewed Brief before promising a mature daily product.

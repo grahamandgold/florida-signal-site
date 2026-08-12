@@ -38,6 +38,43 @@ test.describe("private Florida Signal Newsroom", () => {
     expect(await page.evaluate(() => document.body.scrollWidth)).toBe(390);
   });
 
+  test("source labels and early-intelligence rows do not collide at a sidebar-width viewport", async ({ page }) => {
+    await page.setViewportSize({ width: 1110, height: 900 });
+    await page.goto(`${dataWireBase}/`);
+    await expect(page.locator(".sequence-row")).toHaveCount(5, { timeout: 15_000 });
+
+    const sequenceLayout = await page.locator(".sequence-row").evaluateAll(rows => rows.map(row => {
+      const bounds = row.getBoundingClientRect();
+      const stage = row.querySelector(".sequence-row__stage").getBoundingClientRect();
+      const title = row.querySelector("h3").getBoundingClientRect();
+      return {
+        inside: [...row.children].every(child => {
+          const rect = child.getBoundingClientRect();
+          return rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1;
+        }),
+        columnsClear: stage.right <= title.left + 1,
+      };
+    }));
+    expect(sequenceLayout.every(row => row.inside && row.columnsClear)).toBe(true);
+    expect(await page.evaluate(() => document.body.scrollWidth)).toBe(1110);
+
+    await page.getByRole("button", { name: /source lane/i }).click();
+    const dialog = page.getByRole("dialog", { name: "Newsroom source status" });
+    await expect(dialog).toBeVisible();
+    const sourceLayout = await dialog.locator(".dw-source-row").evaluateAll(rows => rows.map(row => {
+      const bounds = row.getBoundingClientRect();
+      const stage = row.querySelector(".dw-source-stage").getBoundingClientRect();
+      const copy = row.querySelector("div").getBoundingClientRect();
+      const clock = row.querySelector(".dw-source-clock").getBoundingClientRect();
+      return {
+        inside: [stage, copy, clock].every(rect => rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1),
+        stageClear: stage.right <= copy.left + 1,
+        clockClear: copy.right <= clock.left + 1,
+      };
+    }));
+    expect(sourceLayout.every(row => row.inside && row.stageClear && row.clockClear)).toBe(true);
+  });
+
   test("Newsroom pages keep distinct jobs and fit a 390px field viewport", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     const pages = [
@@ -51,6 +88,19 @@ test.describe("private Florida Signal Newsroom", () => {
       await page.goto(`${dataWireBase}${path}`);
       await expect(page.getByRole("heading", { name: heading }).first()).toBeVisible();
       await expect(page.getByLabel("Florida Signal Newsroom — Live Desk home")).toHaveAttribute("href", "/");
+      if (path === "/data.html") {
+        await expect(page.getByRole("heading", { name: "Choose what you want to investigate" })).toBeVisible();
+        await expect(page.locator('.source-option[data-source-table="broward_clerk_preliminary"]')).toBeVisible();
+        await expect(page.locator('.source-option[data-source-table="permits"]')).toBeVisible();
+        await expect(page.locator("#library-summary")).toContainText(/connected · .*empty · .*unavailable/i, { timeout: 15_000 });
+        await expect(page.locator('.source-option[data-source-table="sunbiz_entities"] .source-option__status')).toHaveText("Connected", { timeout: 15_000 });
+        await page.locator('.source-option[data-source-table="sunbiz_entities"]').click();
+        await expect(page.locator("#count-note")).toContainText("private resolver row", { timeout: 15_000 });
+        await expect(page.locator("#data-table tbody tr[data-i]").first()).toBeVisible();
+        const libraryTop = await page.locator(".library").evaluate(node => node.getBoundingClientRect().top);
+        const tableTop = await page.locator("#explorer").evaluate(node => node.getBoundingClientRect().top);
+        expect(libraryTop).toBeLessThan(tableTop);
+      }
       expect(await page.evaluate(() => document.body.scrollWidth), `${path} page width`).toBe(390);
     }
   });

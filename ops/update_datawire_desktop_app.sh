@@ -47,6 +47,18 @@ if /bin/mv "$staged_app" "$app_path"; then
 fi
 if [[ -d "$app_path" ]] && /usr/bin/codesign --verify --deep "$app_path"; then
   echo "Florida Signal Data Wire desktop app updated and verified."
+  # Python loads server.py into memory. Replacing the bundle updates static pages immediately,
+  # but an already-running process would keep the old route map until restart. Restart only this
+  # app's loopback server when it was already open; never kill another service on the port.
+  app_was_running=0
+  while IFS= read -r process_id; do
+    [[ -n "$process_id" ]] || continue
+    app_was_running=1
+    /bin/kill "$process_id" 2>/dev/null || true
+  done < <(/usr/bin/pgrep -f 'Florida Signal Data Wire\.app/.*/cms/server\.py --port 8788' || true)
+  if [[ "$app_was_running" == 1 ]]; then
+    /usr/bin/open "$app_path"
+  fi
 else
   [[ -d "$app_path" ]] && /bin/mv "$app_path" "$stage_dir/failed-new.app"
   /bin/mv "$previous_app" "$app_path"

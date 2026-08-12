@@ -54,6 +54,18 @@ illustrative records, scores, model labels and clocks were not copied. The real 
 existing private endpoints, preserves every human publication gate and uses the canonical emblem
 from `assets/mark-full-color.png` without an arrow, crop or distortion.
 
+The shared shell and Live Desk include three responsive states: full workstation, sidebar-width
+workstation and mobile. The middle state is required because a visible 248-pixel sidebar reduces
+the content width before the mobile navigation breakpoint. Source-stage labels, descriptions and
+independent clocks must reflow at that state; the browser regression suite checks the 1,110-pixel
+viewport where those columns previously collided.
+
+Data Explorer opens with a plain-English source catalog before any record table. It groups the
+available sources by decisions, organizations, ownership/capital, regulatory filings and execution;
+permits are one source, not the page's default identity. Each catalog option performs a real read
+check and reports `Connected`, `Connected · empty` or `Unavailable`. The default record view is the
+same-day preliminary Clerk lane, clearly separated from verified Clerk records.
+
 The browser stores the admin token only in the local session. Do not put it in public JavaScript,
 a screenshot or a committed file.
 
@@ -115,11 +127,13 @@ source, taxonomy and named-publication-role checks below.
 
 Each reviewable Candidate also has an **Investigation Kit**. It derives Street View, satellite,
 Maps and internal parcel links from the exact permit coordinates returned by the server. News and
-Sunbiz links, and the copied Grok research brief, are reporting aids only. They do not modify the
+External Sunbiz links and the copied Grok research brief are reporting aids only. They do not modify the
 sealed evidence packet. Grok is instructed to separate confirmed records, reported claims,
 possible connections and unknowns; every useful result must still be opened, checked and attached
-with provenance before it can support publication. The interface explicitly reports the current
-Sunbiz production gap instead of implying that an entity join exists.
+with provenance before it can support publication. The private Newsroom now reads the resolver's
+exact-match Sunbiz rows through `/api/admin/sunbiz-entities`; the service-role key never enters the
+browser and fuzzy identity writes remain prohibited. Public anonymous reads remain intentionally
+blocked even though the resolver table contains rows.
 
 Data Explorer search is exact and indexed. Use prefixes such as `permit:`, `folio:`, `instrument:`,
 `addr:`, `license:` and `asn:`. Broad leading-wildcard search is intentionally excluded because it

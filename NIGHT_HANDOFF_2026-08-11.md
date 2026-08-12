@@ -98,10 +98,19 @@ Implemented through merged PR 10 from branch `codex/local-desk-auto-unlock`:
   verified and attached with provenance.
 - `cms/data.html` now uses exact indexed prefixes (`permit:`, `folio:`, `instrument:`, `addr:`,
   `license:`, `asn:`), avoiding the broad wildcard queries that caused timeouts.
+- Data Explorer now starts with the complete source catalog above its table. The live connection
+  audit reports 15 readable private datasets, zero empty and zero unavailable. The default table is
+  same-day preliminary Clerk—not permits—and the catalog visibly separates decisions, companies,
+  property/capital, environmental/airspace and execution sources.
+- The Sunbiz resolver was not empty: service-role verification found 505 exact-match rows hidden by
+  the intended anonymous RLS boundary. `/api/admin/sunbiz-entities` now proxies those rows only to
+  the authenticated local Newsroom; the service key is never exposed and no fuzzy match is added.
 - The Finder app at `/Users/gillfillan/Desktop/Florida Signal Data Wire.app` is generated from tracked
   source, code-signed, opens the Live Desk and uses the canonical Florida Signal emblem.
 - Its updater strict-verifies the staged bundle, removes transient Finder metadata on placement and
-  verifies the final Desktop signature without treating Finder's empty xattr as app corruption.
+  verifies the final Desktop signature without treating Finder's empty xattr as app corruption. It
+  now also restarts an already-running Newsroom process after a bundle refresh so new backend routes
+  cannot be paired with stale code held in memory.
 
 ### Newsroom implementation from the reviewed Claude Design
 
@@ -120,6 +129,9 @@ The reviewed concept has now been translated into the real private CMS on branch
   1969 clock;
 - all five Newsroom views fit a 390-pixel page viewport; the dense Explorer table remains an
   intentional internal horizontal scroller;
+- the Live Desk sequence and source-status dialog also use an intermediate-width layout while the
+  desktop sidebar is present. Stage names have reserved columns and source clocks reflow before
+  they can overlap titles or descriptions;
 - no Claude sample record, score, model identity or live-looking illustrative timestamp entered
   production code.
 
@@ -143,8 +155,9 @@ newsletter journey and field-tool redesign are the next separate product phase.
 - Agenda Watch now prints its own coverage: the actionable item events currently span May 5–July 2,
   and the item index was last observed July 23. Its 267 public attachment links are therefore useful
   historical reporting material, not a claim of current upcoming-agenda coverage.
-- Sunbiz currently lacks a dependable public event/system clock. Never label it current or claim an
-  entity match without exact evidence.
+- Sunbiz has private exact-match resolver rows and a dependable resolver system clock. It still
+  lacks a dependable public event clock because `date_filed` is not populated in those rows. Never
+  infer that event clock or claim an entity connection beyond the exact private receipt.
 
 ### Product and design direction
 
@@ -175,10 +188,10 @@ newsletter journey and field-tool redesign are the next separate product phase.
 ## Verification completed
 
 - `python3 -m unittest ops/mac/test_acclaim_resilience.py` — 7 passing.
-- `python3 -m unittest tests/test_cms_server.py` — 6 passing in the latest CMS run.
-- Playwright `tests/browser/data-wire.spec.js` — 3 passing against the signed Desktop app; it now
+- `python3 -m unittest tests/test_cms_server.py` — 7 passing in the latest CMS run.
+- Playwright `tests/browser/data-wire.spec.js` — 4 passing against the signed Desktop app; it now
   covers all five Newsroom views, the canonical home link, the mobile decision restriction,
-  source-clock sanity and 390-pixel page width.
+  source-clock sanity, 390-pixel page width and non-overlap at the 1,110-pixel sidebar viewport.
 - Desktop app bundle identifier, code signature and Live Desk launch were verified after refresh.
 - Production LaunchAgent check: `com.floridasignal.acclaim`, last exit `0`; August 11 insertion and
   subsequent hourly runs are present in `~/Library/Logs/florida-acclaim.log`.

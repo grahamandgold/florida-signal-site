@@ -132,6 +132,34 @@
     .section-label h3 { margin: 0; font: 600 1.25rem/1.2 var(--serif); }
     .section-label .hint { color: var(--muted); font-size: .85rem; }
 
+    .library { margin: 8px 0 24px; }
+    .library__head { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 12px; }
+    .library__head h3 { margin: 0; font: 700 clamp(1.35rem,2.2vw,1.8rem)/1.1 var(--serif); letter-spacing: -.025em; }
+    .library__head p { margin: 5px 0 0; color: var(--muted); font-size: .85rem; }
+    .library__summary { flex: 0 0 auto; padding: 7px 10px; border: 1px solid var(--line); background: var(--paper); color: var(--muted); font: 700 .7rem/1.2 var(--mono); }
+    .library-grid { display: grid; gap: 8px; }
+    .source-group { min-width: 0; display: grid; grid-template-columns: minmax(220px,.55fr) minmax(0,2.45fr); border: 1px solid var(--line); background: var(--paper); box-shadow: var(--shadow); }
+    .source-group__head { min-height: 76px; padding: 14px 15px 12px; border-right: 1px solid var(--line); background: #f8fafc; }
+    .source-group__head span { color: var(--teal-dark); font-size: .65rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .source-group__head h4 { margin: 4px 0 0; font-size: .98rem; line-height: 1.2; }
+    .source-list { min-width: 0; display: grid; grid-template-columns: repeat(auto-fit,minmax(205px,1fr)); }
+    .source-option { width: 100%; min-height: 76px; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: center; padding: 10px 13px; border: 0; border-left: 1px solid #e8edf4; border-top: 1px solid #e8edf4; color: var(--ink); background: var(--paper); text-align: left; text-decoration: none; }
+    .source-option:hover, .source-option:focus-visible { background: var(--teal-pale); }
+    .source-option[data-active="true"] { box-shadow: inset 4px 0 0 var(--teal); background: #f2f7ff; }
+    .source-option__copy { min-width: 0; }
+    .source-option__copy b { display: block; font-size: .82rem; line-height: 1.2; }
+    .source-option__copy small { display: block; margin-top: 3px; color: var(--muted); font-size: .69rem; line-height: 1.35; }
+    .source-option__status { max-width: 88px; color: var(--muted); font: 700 .61rem/1.25 var(--mono); text-align: right; text-transform: uppercase; }
+    .source-option__status[data-state="connected"] { color: #08765f; }
+    .source-option__status[data-state="empty"], .source-option__status[data-state="blocked"] { color: #9a4a32; }
+    .source-option--blocked { cursor: default; background: #fbf8f5; }
+    .source-option--blocked:hover { background: #fbf8f5; }
+
+    .popular { margin: 0 0 18px; padding: 14px 16px; border: 1px solid var(--line); background: var(--paper); }
+    .popular__head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+    .popular__head b { font-size: .88rem; }
+    .popular__head span { color: var(--muted); font-size: .72rem; }
+
     .health-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
     .health-actions .hint { font-size: .72rem; color: var(--muted); max-width: 60ch; line-height: 1.45; }
     .health-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 14px; }
@@ -243,7 +271,14 @@
       .explorer__controls label { width: 100%; }
       .count-note { margin-left: 0; }
       table { font-size: .8rem; }
+      .library__head { align-items: flex-start; flex-direction: column; }
+      .source-group { grid-template-columns: 1fr; }
+      .source-group__head { min-height: 0; border-right: 0; border-bottom: 1px solid var(--line); }
+      .source-list { grid-template-columns: 1fr; }
+      .source-option { min-height: 62px; border-left: 0; }
     }
+
+    @media (min-width: 721px) and (max-width: 1050px) { .source-group { grid-template-columns: minmax(190px,.7fr) minmax(0,2.3fr); } .source-list { grid-template-columns: repeat(2,minmax(180px,1fr)); } }
 
     /* Data Wire logo harmony: block-modern headlines, no italics */
     h1, h2, h3, h4 { font-style: normal; }
@@ -263,6 +298,19 @@
       <p><strong>Nothing here is public output.</strong> Search preserves the original record, raw text, source identity and independent clocks. A record is not automatically a Signal.</p>
     </section>
 
+    <section class="library" aria-labelledby="library-title">
+      <div class="library__head">
+        <div><div class="eyebrow">Every connected source</div><h3 id="library-title">Choose what you want to investigate</h3><p>Start with the question—not with permits. Every option below opens its real records or its dedicated newsroom view.</p></div>
+        <span class="library__summary" id="library-summary">Checking connections…</span>
+      </div>
+      <div class="library-grid" id="library-grid"></div>
+    </section>
+
+    <section class="popular" aria-labelledby="popular-title">
+      <div class="popular__head"><b id="popular-title">Popular questions</b><span>one tap · preset views across the store</span></div>
+      <div class="preset-row" id="preset-row"></div>
+    </section>
+
     <div class="explorer" id="explorer">
       <div class="explorer__controls">
         <label>Table
@@ -274,7 +322,7 @@
         <button class="button button--teal" id="refresh-btn" type="button">Search records</button>
         <span class="count-note" id="count-note">—</span>
       </div>
-      <p class="foot-note" id="search-help" style="margin:0 0 12px">Exact, indexed lookup only: <code>permit:</code> <code>folio:</code> <code>instrument:</code> <code>addr:</code> <code>license:</code> <code>asn:</code>. Broad text research will be a separate, explicitly slower tool.</p>
+      <p class="foot-note" id="search-help" style="margin:0 18px 12px">Choose a source above or use an exact, indexed lookup: <code>permit:</code> <code>folio:</code> <code>instrument:</code> <code>addr:</code> <code>license:</code> <code>asn:</code>. Broad text research will be a separate, explicitly slower tool.</p>
       <div class="table-wrap">
         <table id="data-table">
           <thead></thead>
@@ -288,9 +336,6 @@
         <span class="count-note" id="page-note"></span>
       </div>
     </div>
-
-    <div class="section-label"><h3>Quick views</h3><span class="hint">one tap · preset queries over the store</span></div>
-    <div class="preset-row" id="preset-row"></div>
 
     <details class="health-details" id="source-health">
       <summary>Full feed health <span>latest source event · last successful collection · row count</span></summary>
@@ -329,11 +374,13 @@
     // field that already has a stable identity meaning; no multi-column wildcard OR scans.
     const EXACT_FIELDS = {
       permits: { permit: "permit_number", folio: "parcel_id_verified", addr: "address" },
+      broward_clerk_preliminary: { instrument: "instrument_number", type: "doc_type" },
       broward_clerk_records_doc: { instrument: "instrument_number", type: "doc_type_code" },
       fdep_erp: { project: "project_name", addr: "street_address" },
       faa_oeaaa: { asn: "asn" },
       signals_v2_context: { permit: "permit_number", addr: "address" },
       gis_enrichment: { permit: "permit_number", folio: "folio" },
+      broward_parcel_geography: { folio: "parcel_id_normalized", addr: "address" },
       bcpa_property_card: { folio: "folio", addr: "site_address_1" },
       accela_details: { permit: "permit_number", license: "contractor_license", addr: "site_address" },
       lp_licenses: { license: "license_number" },
@@ -342,9 +389,9 @@
       owner_resolution: { permit: "permit_number", folio: "folio" }
     };
     const DEFAULT_EXACT_FIELD = {
-      permits: "permit", broward_clerk_records_doc: "instrument", fdep_erp: "project",
+      permits: "permit", broward_clerk_preliminary: "instrument", broward_clerk_records_doc: "instrument", fdep_erp: "project",
       faa_oeaaa: "asn", signals_v2_context: "permit", gis_enrichment: "permit",
-      bcpa_property_card: "folio", accela_details: "permit", lp_licenses: "license",
+      broward_parcel_geography: "folio", bcpa_property_card: "folio", accela_details: "permit", lp_licenses: "license",
       foia_workflow_events: "permit", broward_property_transfer_map: "instrument",
       owner_resolution: "permit"
     };
@@ -621,6 +668,39 @@
 
     // ---------- explorer config ----------
     const TABLES = {
+      sunbiz_entities: {
+        label: "Sunbiz entity matches · private",
+        privatePath: "/api/admin/sunbiz-entities",
+        select: "search_name,matched_name,doc_number,status,filing_type,date_filed,principal_address,registered_agent,match_type,fetched_at",
+        order: "fetched_at.desc.nullslast",
+        cols: [
+          ["search_name", "Searched party"],
+          ["matched_name", "Matched entity"],
+          ["doc_number", "Document #", v => `<span class="pill">${esc(v)}</span>`],
+          ["status", "Status"],
+          ["filing_type", "Filing type"],
+          ["date_filed", "Filed", dateish],
+          ["principal_address", "Principal address"],
+          ["match_type", "Match receipt"]
+        ],
+        drawer: "generic"
+      },
+      broward_clerk_preliminary: {
+        label: "Same-day Clerk recordings · preliminary",
+        select: "record_date,instrument_number,doc_type,first_direct_name,first_indirect_name,book_type,book_page,legal_snippet,verification_status,conflict_flag,fetched_at",
+        order: "record_date.desc.nullslast",
+        cols: [
+          ["record_date", "Recorded", dateish],
+          ["instrument_number", "Instrument #", v => `<span class="pill">${esc(v)}</span>`],
+          ["doc_type", "Type"],
+          ["first_direct_name", "Direct party"],
+          ["first_indirect_name", "Indirect party"],
+          ["verification_status", "Verification"],
+          ["conflict_flag", "Conflict?"]
+        ],
+        search: t => `(instrument_number.ilike.*${t}*,doc_type.ilike.*${t}*)`,
+        drawer: "generic"
+      },
       permits: {
         label: "Permits (Accela)",
         select: "permit_number,applied_date,permit_type,work_type,status,address,valuation,valuation_usd_clean,contractor_name,owner_name",
@@ -656,7 +736,7 @@
       fdep_erp: {
         label: "FDEP environmental (ERP)",
         select: "received_date,permitting_program,permit_type,project_name,applicant_company,applicant_name,city,permit_status,documents_url,street_address",
-        order: "received_date.desc.nullslast",
+        order: null,
         cols: [
           ["received_date", "Received", dateish],
           ["project_name", "Project"],
@@ -707,7 +787,7 @@
       gis_enrichment: {
         label: "GIS parcel enrichment",
         select: "permit_number,folio,gis_owner,gis_property_value,gis_last_sale_date,gis_last_sale_amount,flip_flag,owner_changed_since_permit,enriched_at",
-        order: "enriched_at.desc.nullslast",
+        order: "permit_number.desc",
         cols: [
           ["permit_number", "Permit #", v => `<span class="pill">${esc(v)}</span>`],
           ["gis_owner", "GIS owner"],
@@ -735,6 +815,23 @@
           ["mailing_is_same_as_situs", "Owner-occ?"]
         ],
         search: t => `(folio.ilike.*${t}*,owner_name_1.ilike.*${t}*,site_address_1.ilike.*${t}*)`,
+        drawer: "generic"
+      },
+      broward_parcel_geography: {
+        label: "Countywide parcel map authority",
+        select: "parcel_id_normalized,address,situs_city,situs_zip,property_type,latitude,longitude,sale_1_date,sale_1_cin,sale_1_deed_type,sale_1_stamp_amount,fetched_at",
+        order: "parcel_id_normalized.asc",
+        cols: [
+          ["parcel_id_normalized", "Folio", v => `<span class="pill">${esc(v)}</span>`],
+          ["address", "Address"],
+          ["situs_city", "City code"],
+          ["situs_zip", "ZIP"],
+          ["property_type", "Property type"],
+          ["sale_1_date", "Last sale", dateish],
+          ["sale_1_cin", "Sale instrument"],
+          ["sale_1_stamp_amount", "Stamp amount", money, "num"]
+        ],
+        search: t => `(parcel_id_normalized.ilike.*${t}*,address.ilike.*${t}*)`,
         drawer: "generic"
       },
       accela_details: {
@@ -836,8 +933,7 @@
     };
 
     const PRESETS = [
-      { label: "Latest permits", table: "permits", extra: {} },
-      { label: "Permit value $100K+", table: "permits", extra: { valuation: "gte.100000" } },
+      { label: "Same-day recordings", table: "broward_clerk_preliminary", extra: {} },
       { label: "Latest recordings", table: "broward_clerk_records_doc", extra: {} },
       { label: "Deeds", table: "broward_clerk_records_doc", extra: { doc_type_code: "eq.D" } },
       { label: "Deeds · mapped to parcels", table: "broward_property_transfer_map", extra: { doc_type_code: "eq.D", map_eligible: "is.true" } },
@@ -847,14 +943,104 @@
       { label: "NOCs", table: "broward_clerk_records_doc", extra: { doc_type_code: "eq.NOC" } },
       { label: "Liens", table: "broward_clerk_records_doc", extra: { doc_type_code: "eq.LIE" } },
       { label: "Judgments", table: "broward_clerk_records_doc", extra: { doc_type_code: "eq.FJ" } },
-      { label: "FDEP latest", table: "fdep_erp", extra: {} },
+      { label: "FDEP records", table: "fdep_erp", extra: {} },
       { label: "Cranes (FAA)", table: "faa_oeaaa", extra: { structure_type: "like.CRANE*", in_broward: "eq.true" } },
-      { label: "Top signals (Apr 2026 pilot — historical)", table: "signals_v2_context", extra: {} },
       { label: "Owner flips", table: "gis_enrichment", extra: { flip_flag: "eq.true" } },
-      { label: "Licenses", table: "lp_licenses", extra: {} }
+      { label: "Licenses", table: "lp_licenses", extra: {} },
+      { label: "Latest permits", table: "permits", extra: {} },
+      { label: "Permit value $100K+", table: "permits", extra: { valuation: "gte.100000" } }
     ];
 
-    const state = { table: "permits", offset: 0, extra: {}, search: "", rows: [] };
+    const SOURCE_GROUPS = [
+      { eyebrow: "S1 · Earliest clues", title: "Decisions, meetings + agendas", items: [
+        { label: "Agenda Watch", note: "Legistar items, staff reports and attachments", href: "/agenda.html", state: "private" }
+      ]},
+      { eyebrow: "S2 · Organizations", title: "Companies, people + licenses", items: [
+        { label: "Sunbiz entity matches", note: "Private exact matches from the state SFTP corpus", table: "sunbiz_entities" },
+        { label: "Contractor licenses", note: "Businesses, qualifiers and expiration", table: "lp_licenses" },
+        { label: "Owner resolution", note: "Owner identities joined to permits", table: "owner_resolution" }
+      ]},
+      { eyebrow: "S3 · Ownership + capital", title: "Property, deeds + financing", items: [
+        { label: "Same-day recordings", note: "Preliminary Acclaim records; later reconciled", table: "broward_clerk_preliminary" },
+        { label: "Verified Clerk recordings", note: "Deeds, mortgages, liens, NOCs and judgments", table: "broward_clerk_records_doc" },
+        { label: "Mapped transfers", note: "Deeds and easements linked to parcels", table: "broward_property_transfer_map" },
+        { label: "BCPA property cards", note: "Owners, values and property facts", table: "bcpa_property_card" },
+        { label: "Countywide parcel map", note: "Official parcel centroids and latest sale cross-check", table: "broward_parcel_geography" },
+        { label: "GIS permit enrichment", note: "Permit-to-parcel ownership and sale context", table: "gis_enrichment" }
+      ]},
+      { eyebrow: "S4 · Regulatory", title: "Environment + infrastructure", items: [
+        { label: "FDEP environmental", note: "ERP projects, applicants and status", table: "fdep_erp" },
+        { label: "FAA obstruction cases", note: "Cranes, height cases and sponsors", table: "faa_oeaaa" }
+      ]},
+      { eyebrow: "S5 · Execution", title: "Applications, permits + inspections", items: [
+        { label: "Permit applications", note: "Fort Lauderdale Accela filings", table: "permits" },
+        { label: "Accela detail", note: "Applicants, contractors, documents and inspections", table: "accela_details" },
+        { label: "Permit workflow events", note: "FOIA task and status history", table: "foia_workflow_events" }
+      ]},
+      { eyebrow: "Context · use carefully", title: "Derived and historical layers", items: [
+        { label: "Signals v2 context", note: "Historical April 2026 scoring pilot", table: "signals_v2_context", state: "historical" }
+      ]}
+    ];
+
+    const state = { table: "broward_clerk_preliminary", offset: 0, extra: {}, search: "", rows: [] };
+
+    function sourceOption(item) {
+      const active = item.table && item.table === state.table ? "true" : "false";
+      const tag = item.table ? "button" : "a";
+      const attrs = item.table ? `type="button" data-source-table="${esc(item.table)}"` : `href="${esc(item.href)}"${/^https?:/.test(item.href || "") ? ' target="_blank" rel="noopener"' : ""}`;
+      const status = item.state === "empty" ? "Unavailable" : item.state === "historical" ? "Historical" : item.table ? "Checking…" : "Open view";
+      const klass = item.state === "empty" ? " source-option--blocked" : "";
+      return `<${tag} class="source-option${klass}" ${attrs} data-active="${active}"><span class="source-option__copy"><b>${esc(item.label)}</b><small>${esc(item.reason || item.note)}</small></span><span class="source-option__status" data-source-status="${esc(item.table || item.state || "view")}" data-state="${esc(item.state || "checking")}">${esc(status)}</span></${tag}>`;
+    }
+
+    function buildLibrary() {
+      q("#library-grid").innerHTML = SOURCE_GROUPS.map(group => `<article class="source-group"><header class="source-group__head"><span>${esc(group.eyebrow)}</span><h4>${esc(group.title)}</h4></header><div class="source-list">${group.items.map(sourceOption).join("")}</div></article>`).join("");
+      q("#library-grid").addEventListener("click", event => {
+        const button = event.target.closest("[data-source-table]");
+        if (!button) return;
+        state.table = button.dataset.sourceTable; state.extra = {}; state.offset = 0; state.search = "";
+        q("#table-select").value = state.table; q("#search-input").value = ""; clearChips(); markActiveSource(); loadTable();
+        q("#explorer").scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      checkLibraryConnections();
+    }
+
+    function markActiveSource() {
+      document.querySelectorAll("[data-source-table]").forEach(button => { button.dataset.active = button.dataset.sourceTable === state.table ? "true" : "false"; });
+    }
+
+    async function checkLibraryConnections() {
+      const tables = Array.from(new Set(SOURCE_GROUPS.flatMap(group => group.items.map(item => item.table).filter(Boolean))));
+      let connected = 0, empty = 0, blocked = 0, completed = 0, cursor = 0;
+      const updateSummary = () => {
+        q("#library-summary").textContent = completed < tables.length
+          ? `${completed}/${tables.length} sources checked…`
+          : `${connected} connected · ${empty} empty · ${blocked} unavailable`;
+      };
+      async function checkNext() {
+        const current = cursor++;
+        if (current >= tables.length) return;
+        const table = tables[current];
+        const labels = document.querySelectorAll(`[data-source-status="${table}"]`);
+        try {
+          const cfg = TABLES[table];
+          const data = cfg && cfg.privatePath
+            ? (await window.FloridaSignalNewsroom.admin(cfg.privatePath + "?limit=1&offset=0")).items
+            : await (await sbFetch(table, Object.assign({ select: cfg.select, limit: "1" }, cfg.order ? { order: cfg.order } : {}))).json();
+          const hasRows = Array.isArray(data) && data.length > 0;
+          labels.forEach(label => { label.textContent = hasRows ? "Connected" : "Connected · empty"; label.dataset.state = hasRows ? "connected" : "empty"; });
+          if (hasRows) connected += 1; else empty += 1;
+        } catch (error) {
+          labels.forEach(label => { label.textContent = "Unavailable"; label.dataset.state = "blocked"; label.title = error.message; });
+          blocked += 1;
+        }
+        completed += 1;
+        updateSummary();
+        await checkNext();
+      }
+      updateSummary();
+      await Promise.all([checkNext(), checkNext(), checkNext()]);
+    }
 
     function commitSearch() {
       const value = q("#search-input").value.trim();
@@ -864,6 +1050,7 @@
         state.extra = {};
         q("#table-select").value = state.table;
         clearChips();
+        markActiveSource();
       }
       state.search = value;
       state.offset = 0;
@@ -880,9 +1067,11 @@
         state.table = p.table; state.extra = Object.assign({}, p.extra); state.offset = 0; state.search = "";
         q("#table-select").value = p.table; q("#search-input").value = "";
         document.querySelectorAll(".chip").forEach(c => c.dataset.active = c === b ? "true" : "false");
+        markActiveSource();
         loadTable();
       });
-      q("#table-select").addEventListener("change", () => { state.table = q("#table-select").value; state.extra = {}; state.offset = 0; clearChips(); loadTable(); });
+      q("#table-select").value = state.table;
+      q("#table-select").addEventListener("change", () => { state.table = q("#table-select").value; state.extra = {}; state.offset = 0; clearChips(); markActiveSource(); loadTable(); });
       q("#search-input").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); commitSearch(); } });
       q("#refresh-btn").addEventListener("click", commitSearch);
       q("#prev-btn").addEventListener("click", () => { state.offset = Math.max(0, state.offset - PAGE); loadTable(); });
@@ -900,6 +1089,7 @@
         }
         state.search = initialSearch;
       }
+      markActiveSource();
     }
     function clearChips() { document.querySelectorAll(".chip").forEach(c => c.dataset.active = "false"); }
 
@@ -909,12 +1099,21 @@
       const tbody = q("#data-table tbody");
       thead.innerHTML = "<tr>" + cfg.cols.map(c => `<th>${esc(c[1])}</th>`).join("") + "</tr>";
       tbody.innerHTML = `<tr class="empty-row"><td colspan="${cfg.cols.length}">Loading…</td></tr>`;
-      const params = { select: cfg.select, order: cfg.order, limit: String(PAGE), offset: String(state.offset) };
+      const params = { select: cfg.select, limit: String(PAGE), offset: String(state.offset) };
+      if (cfg.order) params.order = cfg.order;
       Object.assign(params, state.extra);
       const term = cleanSearch(state.search);
       try {
-        if (term) Object.assign(params, exactSearch(term, state.table).params);
-        const data = await rows(state.table, params);
+        let data, privateResult = null;
+        if (cfg.privatePath) {
+          const privateParams = new URLSearchParams({ limit: String(PAGE), offset: String(state.offset) });
+          if (term) privateParams.set("search", term.replace(/^[a-z]+\s*:/i, ""));
+          privateResult = await window.FloridaSignalNewsroom.admin(cfg.privatePath + "?" + privateParams.toString());
+          data = Array.isArray(privateResult.items) ? privateResult.items : [];
+        } else {
+          if (term) Object.assign(params, exactSearch(term, state.table).params);
+          data = await rows(state.table, params);
+        }
         state.rows = data;
         if (!data.length) {
           tbody.innerHTML = `<tr class="empty-row"><td colspan="${cfg.cols.length}">No rows for this view.</td></tr>`;
@@ -928,9 +1127,11 @@
         }
         q("#page-note").textContent = "rows " + (state.offset + 1) + "–" + (state.offset + data.length);
         q("#prev-btn").disabled = state.offset === 0;
-        q("#next-btn").disabled = data.length < PAGE;
+        q("#next-btn").disabled = cfg.privatePath ? !privateResult.has_more : data.length < PAGE;
         if (term) {
           q("#count-note").textContent = data.length + (data.length === PAGE ? "+" : "") + " exact match" + (data.length === 1 ? "" : "es") + " shown";
+        } else if (cfg.privatePath) {
+          q("#count-note").textContent = data.length + (privateResult.has_more ? "+" : "") + " private resolver row" + (data.length === 1 ? "" : "s") + " shown";
         } else {
           const countCol = cfg.select.split(",")[0];
           tableCount(state.table, countCol).then(c => { q("#count-note").textContent = rowsLabel(c); }).catch(() => { q("#count-note").textContent = "—"; });
@@ -1000,7 +1201,10 @@
     }
 
     buildControls();
-    paintHealth();
+    buildLibrary();
+    q("#source-health").addEventListener("toggle", function () {
+      if (this.open && !this.dataset.loaded) { this.dataset.loaded = "1"; paintHealth(); }
+    });
     loadTable();
   </script>
 </body>
