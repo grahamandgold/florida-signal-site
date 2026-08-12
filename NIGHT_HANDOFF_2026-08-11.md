@@ -119,6 +119,8 @@ The reviewed concept has now been translated into the real private CMS on branch
 
 - one `FLORIDA SIGNAL / NEWSROOM` shell and exact canonical emblem link every section back to Live
   Desk;
+- the full-color emblem now has a compact light contrast field in the navy header, keeping the
+  dark Florida silhouette legible without redrawing, recoloring or adding anything to the mark;
 - Live Desk leads with real queue/source counts, the strongest evidence-ready Candidate and the
   actual S1–S5 early-intelligence lanes;
 - Agenda Watch is a dedicated page for real Legistar items, attachments, coverage windows and

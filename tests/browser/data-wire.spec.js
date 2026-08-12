@@ -75,6 +75,21 @@ test.describe("private Florida Signal Newsroom", () => {
     expect(sourceLayout.every(row => row.inside && row.stageClear && row.clockClear)).toBe(true);
   });
 
+  test("the canonical full-color emblem has a contrasting header field", async ({ page }) => {
+    await page.setViewportSize({ width: 1110, height: 900 });
+    await page.goto(`${dataWireBase}/`);
+    const mark = page.locator('.dw-brand img[src="/mark-full-color.png"]');
+    await expect(mark).toBeVisible();
+    const treatment = await mark.evaluate(node => {
+      const style = getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return { background: style.backgroundColor, width: rect.width, height: rect.height };
+    });
+    expect(treatment.background).not.toBe("rgba(0, 0, 0, 0)");
+    expect(treatment.width).toBeGreaterThanOrEqual(44);
+    expect(treatment.height).toBeGreaterThanOrEqual(44);
+  });
+
   test("Newsroom pages keep distinct jobs and fit a 390px field viewport", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     const pages = [

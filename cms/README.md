@@ -54,6 +54,10 @@ illustrative records, scores, model labels and clocks were not copied. The real 
 existing private endpoints, preserves every human publication gate and uses the canonical emblem
 from `assets/mark-full-color.png` without an arrow, crop or distortion.
 
+On the navy Newsroom header, that full-color emblem sits on its own light contrast field. This is a
+presentation treatment only: the emblem pixels, proportions and colors are unchanged, and the
+header never substitutes an arrow or a newly drawn mark.
+
 The shared shell and Live Desk include three responsive states: full workstation, sidebar-width
 workstation and mobile. The middle state is required because a visible 248-pixel sidebar reduces
 the content width before the mobile navigation breakpoint. Source-stage labels, descriptions and
