@@ -21,7 +21,9 @@ is off, the job reports an action-required degraded state instead of a generic c
 - `acclaim_state.py` — persists per-date progress + backlog to
   `~/Library/Application Support/FloridaSignal/acclaim_state.json`.
 - `acclaim_pull.sh` — orchestrator/ExecStart. Computes missing dates AFTER the verified SFTP max,
-  oldest-first, capped by `ACCLAIM_MAX_DATES` (8) and `ACCLAIM_MAX_PAGES` (40). Per-date state; resumes
+  oldest-first, capped by `ACCLAIM_MAX_DATES` (8) and `ACCLAIM_MAX_PAGES` (40). After noon it also
+  rechecks the current date on every run and reserves one target slot for it; exact-key upsert makes
+  the forming-day refresh idempotent. Per-date state; resumes
   after gaps, prevents overlapping runs, and bounds hung browser automation. Transient Supabase
   reads retain the cached verified floor instead of rewinding. A Broward disclaimer redirect is
   reported as `source_wait`; so is Chrome's operator-controlled “Allow JavaScript from Apple
@@ -34,7 +36,8 @@ is off, the job reports an action-required degraded state instead of a generic c
 
 The target selector does not query the still-forming current day before noon. An `EMPTY`
 current-day grid is never marked done; only an empty date strictly before today is final. This
-prevents a pre-release visit from suppressing the later retry.
+prevents a pre-release visit from suppressing the later retry. A successful current-day pass also
+does not suppress later hourly refreshes because recordings can be added throughout the day.
 
 ## Reconciliation (server-side, Supabase — off the Mac)
 `public.reconcile_clerk_preliminary()` matches preliminary rows to `broward_clerk_records_doc` by
@@ -50,8 +53,8 @@ runs daily 10:00 UTC. Proven 2026-07-19: 1 match verified, 1 conflict flagged, v
 
 ## Rollback
 `launchctl bootout gui/$(id -u)/com.floridasignal.acclaim` then re-enable the Claude task
-`broward-sameday-recordings` (Scheduled sidebar). The Claude task stays ENABLED as fallback until
-THREE independent successful LaunchAgent runs, then becomes disabled/rollback-only (not deleted).
+`broward-sameday-recordings` (Scheduled sidebar). The Claude task is disabled/rollback-only after
+multiple independent successful LaunchAgent runs; do not enable both writers during normal service.
 
 ## Requirements / limits
 Needs Andy's Mac powered on + logged in, a usable Chrome profile, and the residential connection.

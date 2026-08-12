@@ -75,9 +75,10 @@ if [ $? -ne 0 ] || [ -z "$VERIFIED_MAX" ]; then
 fi
 log "verified SFTP through: $VERIFIED_MAX"
 
-# 2) Candidate dates = (verified_max, today], oldest first, capped. Dates already fully present
-#    in the preliminary table (and marked done in state) are skipped; the per-row upsert filter
-#    is the final idempotency guard, so a Mac-was-off gap is always backfilled, never skipped.
+# 2) Candidate dates = (verified_max, today], oldest first, capped. Completed past dates are
+#    skipped. After noon, today is deliberately re-harvested every run because the public grid
+#    can grow during the day; the per-row upsert filter inserts only new instrument numbers.
+#    One target slot is reserved for today so an offline backlog cannot starve same-day intel.
 TARGETS=$(/usr/bin/python3 "$DIR/acclaim_targets.py" "$VERIFIED_MAX" "$MAXDATES" "$STATE")
 
 if [ -z "$TARGETS" ]; then

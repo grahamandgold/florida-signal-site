@@ -15,6 +15,7 @@ def collection_end_date(now=None):
 
 def candidate_dates(base, cap, state_file, now=None):
     end = collection_end_date(now)
+    today = (now or dt.datetime.now()).date()
     done = set()
     if os.path.exists(state_file):
         try:
@@ -29,11 +30,22 @@ def candidate_dates(base, cap, state_file, now=None):
             pass
     output = []
     cursor = base + dt.timedelta(days=1)
-    while cursor <= end and len(output) < cap:
-        if cursor.isoformat() not in done:
+    while cursor <= end:
+        # A completed past date is immutable enough to skip. The current day's
+        # public grid is still forming, so recheck it on every post-noon run;
+        # acclaim_upsert.py makes those refreshes idempotent.
+        if cursor.isoformat() not in done or cursor == today:
             output.append(cursor)
         cursor += dt.timedelta(days=1)
-    return output
+
+    if len(output) <= cap:
+        return output
+
+    # Keep oldest-first catch-up, but reserve one slot for today's refresh so a
+    # long offline backlog cannot delay same-day intelligence by another day.
+    if end == today and today in output and cap > 0:
+        return output[: max(0, cap - 1)] + [today]
+    return output[:cap]
 
 
 def main():

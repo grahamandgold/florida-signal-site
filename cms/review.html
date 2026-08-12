@@ -1,308 +1,193 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex, nofollow">
-<title>Signal Review — The Data Wire</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-  :root{
-    color-scheme: light;
-    --ink:#061b33; --ink-soft:#183b58;
-    --teal:#1767ff; --teal-dark:#0d47c4; --teal-pale:#e9f0fd;
-    --paper:#ffffff; --wash:#f5f8fd; --line:#d7e0ee; --muted:#62708a;
-    --danger:#a52828; --danger-pale:#fff0ee; --success:#12a07e; --gold:#8a6d1a;
-    --serif:"Montserrat","Newsreader",Georgia,serif;
-    --sans:"Figtree","DM Sans",ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55}
-  header{background:#fff;border-bottom:1px solid var(--line);padding:18px 24px;display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between}
-  .brand{display:flex;align-items:baseline;gap:10px}
-  .brand b{font-family:"Montserrat",var(--sans);font-size:17px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
-  .brand span{font-size:9.5px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
-  .gate{margin:0;padding:8px 24px;background:#fff7e2;border-bottom:1px solid #f0e0b4;font-size:12px;color:var(--gold)}
-  main{padding:22px 24px 60px;max-width:1180px;margin:0 auto}
-  .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:18px}
-  label.f{display:flex;flex-direction:column;gap:3px;font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
-  select,input,textarea{font-family:var(--sans);font-size:13px;color:var(--ink);background:#fff;border:1px solid var(--line);padding:7px 9px;min-height:34px}
-  textarea{min-height:64px;resize:vertical;width:100%}
-  button{font-family:"Montserrat",var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:8px 13px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;min-height:34px}
-  button:hover{border-color:var(--teal);color:var(--teal)}
-  button.primary{background:var(--ink);border-color:var(--ink);color:#fff}
-  button.primary:hover{background:var(--teal);border-color:var(--teal);color:#fff}
-  .card{background:var(--paper);border:1px solid var(--line);padding:16px 18px;margin-bottom:14px}
-  .card h2{margin:0 0 4px;font-family:"Montserrat",var(--sans);font-size:16px;font-weight:700;line-height:1.3}
-  .meta{margin:0 0 10px;font-size:11px;color:var(--muted)}
-  .facts{display:grid;grid-template-columns:auto 1fr;gap:2px 14px;margin:0 0 12px;font-size:12px}
-  .facts dt{color:var(--muted);font-weight:700}
-  .facts dd{margin:0}
-  .pill{display:inline-block;padding:3px 9px;font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
-  .pill.NEW{background:#e8effc;color:var(--teal)}
-  .pill.REVIEWING{background:#e8effc;color:var(--ink)}
-  .pill.APPROVED{background:#e2f5ec;color:var(--success)}
-  .pill.REJECTED{background:#fbe9e9;color:var(--danger)}
-  .pill.HOLD{background:#fdf3d7;color:var(--gold)}
-  .pill.NEEDS_MORE_REPORTING{background:#fdf3d7;color:var(--gold)}
-  .edit{display:grid;gap:8px;margin-bottom:12px}
-  .dests{display:flex;flex-wrap:wrap;gap:8px 16px;margin:0 0 12px}
-  .dests label{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-soft);min-height:30px;cursor:pointer}
-  .actions{display:flex;flex-wrap:wrap;gap:8px}
-  .status{margin:10px 0 0;font-size:11.5px;color:var(--muted)}
-  .status.err{color:var(--danger)}
-  .empty{padding:26px;text-align:center;color:var(--muted);background:#fff;border:1px solid var(--line)}
-  .evidence{margin:0 0 14px;border:1px solid var(--line);background:var(--wash)}
-  .evidence summary{cursor:pointer;padding:10px 12px;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--teal-dark)}
-  .evidence__body{padding:0 12px 12px;display:grid;gap:12px}
-  .evidence__body h3{margin:0 0 4px;font-family:var(--serif);font-size:12px}
-  .evidence__body ul{margin:0;padding-left:18px;font-size:12px}
-  .evidence__records{display:grid;gap:6px}
-  .evidence__record{padding:8px;background:#fff;border:1px solid var(--line);font-size:11.5px}
-  .evidence__record b{display:block;color:var(--ink)}
-
-  .stage-nav { background: var(--ink); }
-  .stage-nav__inner { max-width:1600px; margin:0 auto; display:grid; grid-template-columns:repeat(3,1fr); }
-  .stage-nav__stage { display:block; padding:13px clamp(14px,2.4vw,28px); border-right:1px solid rgba(255,255,255,.14); color:rgba(255,255,255,.66); text-decoration:none; }
-  .stage-nav__stage:last-child { border-right:0; }
-  .stage-nav__stage b { display:block; font-family:var(--serif); font-size:12px; font-weight:700; letter-spacing:.04em; color:rgba(255,255,255,.9); }
-  .stage-nav__stage small { display:block; margin-top:2px; font-size:10.5px; line-height:1.4; }
-  .stage-nav__stage:hover { background:rgba(255,255,255,.07); color:#fff; }
-  .stage-nav__stage:hover b { color:#fff; }
-  .stage-nav__stage[aria-current="page"] { background:var(--teal); color:rgba(255,255,255,.86); }
-  .stage-nav__stage[aria-current="page"] b { color:#fff; }
-  @media(max-width:720px){
-    .stage-nav__inner { grid-template-columns:1fr; }
-    .stage-nav__stage { border-right:0; border-bottom:1px solid rgba(255,255,255,.14); padding:11px 14px; }
-    .stage-nav__stage small { display:inline; margin-left:6px; }
-  }
-  @media(max-width:620px){
-    header,main{padding-left:14px;padding-right:14px}
-    .facts{grid-template-columns:1fr;gap:1px}
-    .facts dt{margin-top:6px}
-    .bar label.f,.bar select{width:100%}
-    .actions button{flex:1 1 132px}
-  }
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Signal Review — Florida Signal Data Wire</title>
+  <link rel="stylesheet" href="/desk-shell.css">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--dw-ink); background: var(--dw-wash); font-family: var(--dw-font); font-size: 15px; line-height: 1.55; }
+    button, input, select, textarea { font: inherit; }
+    .gate { margin: 0; padding: 9px 18px; text-align: center; color: #76510b; background: #fff5d9; border-bottom: 1px solid #efdca7; font-size: 13px; }
+    main { width: min(1360px, calc(100% - 32px)); margin: 0 auto; padding: 26px 0 72px; }
+    .toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; padding: 15px; border: 1px solid var(--dw-line); background: #fff; }
+    .field { display: grid; gap: 5px; color: var(--dw-muted); font-size: 12px; font-weight: 800; }
+    select, input, textarea { min-height: 42px; padding: 9px 11px; border: 1px solid var(--dw-line); border-radius: 7px; color: var(--dw-ink); background: #fff; }
+    textarea { min-height: 84px; resize: vertical; }
+    select:focus, input:focus, textarea:focus { outline: 3px solid rgba(23,103,255,.2); border-color: var(--dw-blue); }
+    .button { min-height: 42px; padding: 9px 14px; border: 1px solid var(--dw-navy); border-radius: 8px; color: var(--dw-navy); background: #fff; font-weight: 800; cursor: pointer; }
+    .button:hover { color: var(--dw-blue); border-color: var(--dw-blue); }
+    .button--primary { color: #fff; background: var(--dw-navy); }
+    .button--primary:hover { color: #fff; background: var(--dw-blue); }
+    .button--danger { color: var(--dw-red); border-color: #e7b7be; }
+    .button:disabled { cursor: not-allowed; opacity: .45; }
+    .progress { margin: 18px 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; color: var(--dw-muted); font-size: 13px; }
+    .progress strong { color: var(--dw-ink); }
+    .progress__bar { flex: 1; max-width: 440px; height: 7px; overflow: hidden; border-radius: 999px; background: #dce5f1; }
+    .progress__bar span { display: block; height: 100%; border-radius: inherit; background: var(--dw-blue); }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(310px, .65fr); gap: 20px; align-items: start; }
+    .candidate, .decision { border: 1px solid var(--dw-line); background: #fff; box-shadow: 0 18px 50px rgba(6,27,51,.06); }
+    .candidate { min-width: 0; }
+    .candidate__head { padding: 25px 27px 21px; border-bottom: 1px solid var(--dw-line); }
+    .kicker { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--dw-blue); font-size: 12px; font-weight: 850; letter-spacing: .09em; text-transform: uppercase; }
+    .pill { display: inline-flex; min-height: 28px; align-items: center; padding: 4px 9px; border-radius: 999px; color: var(--dw-green); background: #e1f4ed; font-size: 11px; font-weight: 850; letter-spacing: .05em; text-transform: uppercase; }
+    .pill.blocked { color: #8b5c08; background: #fff0cd; }
+    h1 { margin: 12px 0 8px; font-size: clamp(27px, 4vw, 45px); line-height: 1.08; letter-spacing: -.042em; }
+    .summary { max-width: 850px; margin: 0; color: var(--dw-muted); font-size: 16px; }
+    .evidence { padding: 26px 27px; border-bottom: 1px solid var(--dw-line); background: linear-gradient(180deg,#f7faff,#fff); }
+    .section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
+    .section-head h2 { margin: 2px 0 0; font-size: 20px; }
+    .receipt { color: var(--dw-muted); text-align: right; font: 12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .timeline { position: relative; display: grid; gap: 10px; margin: 12px 0 22px; }
+    .record { position: relative; display: grid; grid-template-columns: 105px 1fr auto; gap: 15px; align-items: start; padding: 16px; border: 1px solid var(--dw-line); border-radius: 10px; background: #fff; }
+    .record__date { color: var(--dw-blue); font-weight: 850; }
+    .record b { display: block; margin-bottom: 2px; }
+    .record p { margin: 0; color: var(--dw-muted); font-size: 13px; }
+    .record a { min-height: 40px; display: inline-flex; align-items: center; padding: 7px 10px; border-radius: 7px; color: var(--dw-blue); background: #edf3ff; text-decoration: none; font-size: 12px; font-weight: 800; }
+    .record a:hover { text-decoration: underline; }
+    .claims { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .claim-box { padding: 17px; border-radius: 10px; background: #eff9f5; }
+    .claim-box--unknown { background: #fff6e5; }
+    .claim-box h3 { margin: 0 0 8px; font-size: 14px; }
+    .claim-box ul { margin: 0; padding-left: 19px; }
+    .claim-box li + li { margin-top: 6px; }
+    .details { padding: 20px 27px 27px; }
+    details { border-top: 1px solid var(--dw-line); }
+    details:first-child { border-top: 0; }
+    summary { min-height: 46px; display: flex; align-items: center; cursor: pointer; font-weight: 800; }
+    .facts { display: grid; grid-template-columns: minmax(130px,auto) 1fr; gap: 6px 18px; margin: 0 0 18px; }
+    .facts dt { color: var(--dw-muted); font-weight: 750; }
+    .facts dd { margin: 0; overflow-wrap: anywhere; }
+    .edit-grid { display: grid; gap: 12px; padding-bottom: 18px; }
+    .destinations { display: flex; flex-wrap: wrap; gap: 9px 16px; padding-bottom: 18px; }
+    .destinations label { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; }
+    .decision { position: sticky; top: 92px; padding: 23px; }
+    .decision h2 { margin: 5px 0 9px; font-size: 23px; }
+    .decision p { margin: 0 0 18px; color: var(--dw-muted); }
+    .decision__stats { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 18px; }
+    .stat { padding: 12px; border-radius: 8px; background: var(--dw-wash); }
+    .stat b { display: block; font-size: 24px; }
+    .stat span { color: var(--dw-muted); font-size: 12px; }
+    .decision__buttons { display: grid; gap: 8px; }
+    .decision__buttons .button { width: 100%; }
+    .decision__split { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .status-line { min-height: 22px; margin: 14px 0 0; color: var(--dw-muted); font-size: 13px; }
+    .status-line.error { color: var(--dw-red); }
+    .blocked-note { padding: 14px; border-radius: 8px; color: #77500a; background: #fff2d5; font-size: 13px; }
+    .investigation { margin: 0 0 20px; padding: 18px; border: 1px solid #cddcf0; border-radius: 11px; background: #f5f9ff; }
+    .investigation h3 { margin: 4px 0 5px; font-size: 18px; }
+    .investigation > p { margin: 0 0 13px; color: var(--dw-muted); font-size: 13px; }
+    .investigation__tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .investigation__tools a, .investigation__tools button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 9px 10px; border: 1px solid var(--dw-line); border-radius: 8px; color: var(--dw-navy); background: #fff; text-align: center; text-decoration: none; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; }
+    .investigation__tools a:hover, .investigation__tools button:hover { color: var(--dw-blue); border-color: var(--dw-blue); }
+    .investigation__tools .research { color: #fff; background: var(--dw-navy); border-color: var(--dw-navy); }
+    .investigation__tools .research:hover { color: #fff; background: var(--dw-blue); }
+    .research-status { min-height: 19px; margin: 10px 0 0 !important; font-size: 12px !important; }
+    .source-warning { margin-top: 12px; padding-top: 11px; border-top: 1px solid #cddcf0; color: #76510b; font-size: 12px; }
+    .mobile-rule { display: none; margin-top: 10px; color: var(--dw-muted); font-size: 12px; }
+    .empty { padding: 42px; border: 1px solid var(--dw-line); background: #fff; text-align: center; color: var(--dw-muted); }
+    dialog { width: min(520px, calc(100% - 28px)); padding: 0; border: 0; border-radius: 12px; box-shadow: 0 30px 100px rgba(6,27,51,.3); }
+    dialog::backdrop { background: rgba(6,27,51,.68); }
+    .dialog__body { padding: 25px; }
+    .dialog__body h2 { margin: 5px 0 8px; }
+    .dialog__body p { color: var(--dw-muted); }
+    .dialog__actions { display: flex; justify-content: flex-end; gap: 8px; padding: 15px 25px; border-top: 1px solid var(--dw-line); background: var(--dw-wash); }
+    @media (max-width: 900px) { .workspace { grid-template-columns: 1fr; } .decision { position: static; } }
+    @media (max-width: 620px) {
+      main { width: min(100% - 24px, 620px); padding-top: 16px; }
+      .toolbar { align-items: stretch; }
+      .toolbar .field { flex: 1 1 100%; }
+      .progress { align-items: flex-start; flex-wrap: wrap; }
+      .progress__bar { order: 3; flex-basis: 100%; max-width: none; }
+      .candidate__head, .evidence, .details, .decision { padding: 19px; }
+      .record { grid-template-columns: 1fr; gap: 5px; }
+      .record a { justify-self: start; }
+      .claims { grid-template-columns: 1fr; }
+      .investigation__tools { grid-template-columns: 1fr; }
+      .decision__buttons [data-status="APPROVED"], .decision__buttons [data-status="REJECTED"] { display: none; }
+      .mobile-rule { display: block; }
+    }
+  </style>
 </head>
 <body>
-<header>
-  <div class="brand"><b>THE DATA WIRE</b><span>Signal review</span></div>
-  <div class="bar" style="margin:0">
-    <label class="f"><span>Status</span>
-      <select id="filter-status">
-        <option value="NEW" selected>New</option>
-        <option value="REVIEWING">Reviewing</option>
-        <option value="HOLD">Hold</option>
-        <option value="NEEDS_MORE_REPORTING">Needs more reporting</option>
-        <option value="APPROVED">Approved</option>
-        <option value="REJECTED">Rejected</option>
-        <option value="">All</option>
-      </select>
-    </label>
-    <button id="reload">Reload</button>
-  </div>
-</header>
-  <!-- Shared desk navigation. See cms/ADR-001-data-wire-information-architecture.md.
-       Keep this block identical in index.html, data.html and review.html. -->
-  <nav class="stage-nav" aria-label="Data Wire stages">
-    <div class="stage-nav__inner">
-      <a class="stage-nav__stage" href="/data.html">
-        <b>1 &middot; Data Desk</b><small>Look. Every source, raw and read-only.</small></a>
-      <a class="stage-nav__stage" href="/review.html" aria-current="page">
-        <b>2 &middot; Signal Review</b><small>Decide. Approve, hold or reject candidates.</small></a>
-      <a class="stage-nav__stage" href="/index.html">
-        <b>3 &middot; Editorial Desk</b><small>Write. Source-gated packets, cleared by a human.</small></a>
+  <div id="desk-shell" data-current="review"></div>
+  <p class="gate">A decision is not publication. Evidence is required; approval and rejection require an explicit confirmation.</p>
+  <main id="main-content">
+    <div class="toolbar">
+      <label class="field">Readiness<select id="readiness"><option value="ready">Ready to decide</option><option value="blocked">Needs evidence</option><option value="all">All candidates</option></select></label>
+      <label class="field">Status<select id="status"><option value="NEW">New</option><option value="REVIEWING">Reviewing</option><option value="HOLD">Hold</option><option value="NEEDS_MORE_REPORTING">Needs more reporting</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option><option value="ALL">All statuses</option></select></label>
+      <button class="button" id="reload" type="button">Reload live queue</button>
+      <button class="button" id="prev" type="button">Previous</button>
+      <button class="button" id="next" type="button">Skip · Next</button>
     </div>
-  </nav>
-<p class="gate">Approving a Signal records an editorial decision. It does not publish anything, anywhere. This queue is isolated from the shadow scorer registries.</p>
-<main>
-  <div id="list"><p class="empty">Loading queue…</p></div>
-</main>
-<script>
-(function () {
-  "use strict";
-  var DESTINATIONS = [
-    ["live_signals_map", "Live Signals Map"],
-    ["signals_page", "Signals page"],
-    ["daily_intel_brief", "Daily Intel Brief"],
-    ["neighborhood_page", "Neighborhood page"],
-    ["broward_record", "Broward Record"]
-  ];
-  var ACTIONS = [
-    ["APPROVED", "Approve", "primary"],
-    ["HOLD", "Hold", ""],
-    ["NEEDS_MORE_REPORTING", "Needs more reporting", ""],
-    ["REJECTED", "Reject", ""]
-  ];
-  var token = "";
-  var listEl = document.getElementById("list");
+    <div class="progress"><strong id="position">Loading decision queue…</strong><div class="progress__bar" aria-hidden="true"><span id="progress-fill" style="width:0"></span></div><span id="gap-count">—</span></div>
+    <div id="workspace"><p class="empty">Loading one candidate and its evidence…</p></div>
+  </main>
 
-  function esc(v) {
-    return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-    });
-  }
-  function money(n) {
-    var v = Number(n);
-    if (!isFinite(v) || v <= 0) return null;
-    return "$" + v.toLocaleString("en-US", { maximumFractionDigits: 0 });
-  }
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title">
+    <div class="dialog__body"><div class="kicker">Human decision gate</div><h2 id="confirm-title">Confirm decision</h2><p id="confirm-copy"></p><label style="display:flex;gap:9px;align-items:flex-start"><input id="confirm-check" type="checkbox" style="min-height:auto;margin-top:5px"><span>I reviewed the source records, supported facts and unknowns shown in this evidence packet.</span></label></div>
+    <div class="dialog__actions"><button class="button" id="confirm-cancel" type="button">Cancel</button><button class="button button--primary" id="confirm-submit" type="button" disabled>Record decision</button></div>
+  </dialog>
 
-  function evidenceHtml(item) {
-    var packet = item.evidence_packet && typeof item.evidence_packet === "object" ? item.evidence_packet : {};
-    var records = Array.isArray(packet.records) ? packet.records : [];
-    var claims = Array.isArray(packet.supported_claims) ? packet.supported_claims : [];
-    var unknowns = Array.isArray(packet.unknowns) ? packet.unknowns : [];
-    if (!records.length && !claims.length && !unknowns.length) return "";
-    var join = packet.join || {};
-    return '<details class="evidence"><summary>Open sealed evidence packet · ' + esc(item.receipt_status || "PENDING") + '</summary>' +
-      '<div class="evidence__body">' +
-        '<div><h3>Join receipt</h3><p class="meta">' + esc(join.method || "Not stated") +
-          (join.canonical_folio ? " · " + esc(join.canonical_folio) : "") +
-          (item.evidence_hash ? " · SHA-256 " + esc(item.evidence_hash.slice(0, 16)) + "…" : "") + '</p></div>' +
-        '<div><h3>Source records</h3><div class="evidence__records">' + records.map(function (record) {
-          var value = record.native_declared_value != null ? money(record.native_declared_value) :
-            (record.stated_consideration != null ? money(record.stated_consideration) : null);
-          return '<div class="evidence__record"><b>' + esc(record.source_table || "source") + ' · ' +
-            esc(record.source_record_id || "missing ID") + '</b>' +
-            esc([record.event_date, record.address, record.permit_type, value].filter(Boolean).join(" · ")) +
-            (record.description ? '<br>' + esc(record.description) : '') + '</div>';
-        }).join("") + '</div></div>' +
-        (claims.length ? '<div><h3>Facts this packet supports</h3><ul>' + claims.map(function (claim) { return '<li>' + esc(claim) + '</li>'; }).join("") + '</ul></div>' : '') +
-        (unknowns.length ? '<div><h3>What remains unknown</h3><ul>' + unknowns.map(function (unknown) { return '<li>' + esc(unknown) + '</li>'; }).join("") + '</ul></div>' : '') +
-      '</div></details>';
-  }
-
-  async function getToken() {
-    if (token) return token;
-    try {
-      var r = await fetch("/api/local-session");
-      if (r.ok) { token = (await r.json()).token || ""; }
-    } catch (e) { /* fall through to prompt */ }
-    if (!token) token = window.prompt("Desk token") || "";
-    return token;
-  }
-
-  async function api(path, options) {
-    var t = await getToken();
-    var opts = options || {};
-    opts.headers = Object.assign({ "Content-Type": "application/json", "Authorization": "Bearer " + t }, opts.headers || {});
-    var r = await fetch(path, opts);
-    var body = await r.json().catch(function () { return {}; });
-    if (!r.ok) throw new Error(body.error || ("HTTP " + r.status));
-    return body;
-  }
-
-  function cardHtml(item) {
-    var facts = [
-      ["Candidate type", item.candidate_type || item.signal_type],
-      ["Source record IDs", item.source_record_id],
-      ["County parcel (folio)", item.verified_parcel_id],
-      ["Latest event", item.source_record_date],
-      ["Largest native permit value", money(item.amount)],
-      ["Detector", item.detector_version],
-      ["Located by", item.verified_parcel_id ? "Exact county folio match" : "—"],
-      ["Assigned to", item.assigned_reviewer]
-    ].filter(function (row) { return row[1]; });
-
-    return '<article class="card" data-qid="' + esc(item.queue_id) + '">' +
-      '<span class="pill ' + esc(item.review_status) + '">' + esc(item.review_status.replace(/_/g, " ")) + '</span>' +
-      '<h2>' + esc(item.editor_headline || item.generated_headline || item.signal_id) + '</h2>' +
-      '<p class="meta">' + esc(item.generated_summary || "") + '</p>' +
-      '<dl class="facts">' + facts.map(function (row) {
-        return "<dt>" + esc(row[0]) + "</dt><dd>" + esc(row[1]) + "</dd>";
-      }).join("") + '</dl>' +
-      evidenceHtml(item) +
-      '<div class="edit">' +
-        '<label class="f"><span>Headline</span><input data-field="editor_headline" value="' +
-          esc(item.editor_headline || item.generated_headline || "") + '"></label>' +
-        '<label class="f"><span>Summary</span><textarea data-field="editor_summary">' +
-          esc(item.editor_summary || item.generated_summary || "") + '</textarea></label>' +
-        '<label class="f"><span>Editor notes</span><textarea data-field="editor_notes">' +
-          esc(item.editor_notes || "") + '</textarea></label>' +
-        '<label class="f"><span>Assign reviewer</span><input data-field="assigned_reviewer" value="' +
-          esc(item.assigned_reviewer || "") + '"></label>' +
-      '</div>' +
-      '<div class="dests">' + DESTINATIONS.map(function (d) {
-        var on = (item.destinations || []).indexOf(d[0]) > -1;
-        return '<label><input type="checkbox" data-dest="' + d[0] + '"' + (on ? " checked" : "") + '>' + esc(d[1]) + "</label>";
-      }).join("") + "</div>" +
-      '<div class="actions">' +
-        '<button data-save>Save edits</button>' +
-        ACTIONS.map(function (a) {
-          return '<button data-status="' + a[0] + '"' + (a[2] ? ' class="' + a[2] + '"' : "") + ">" + esc(a[1]) + "</button>";
-        }).join("") +
-      "</div>" +
-      '<p class="status" data-status-line></p>' +
-    "</article>";
-  }
-
-  function collect(card) {
-    var body = {};
-    card.querySelectorAll("[data-field]").forEach(function (input) {
-      body[input.dataset.field] = input.value;
-    });
-    body.destinations = Array.prototype.slice
-      .call(card.querySelectorAll("[data-dest]"))
-      .filter(function (box) { return box.checked; })
-      .map(function (box) { return box.dataset.dest; });
-    return body;
-  }
-
-  async function send(card, extra) {
-    var line = card.querySelector("[data-status-line]");
-    line.className = "status";
-    line.textContent = "Saving…";
-    try {
-      var body = Object.assign(collect(card), extra || {});
-      var res = await api("/api/admin/review-queue/" + card.dataset.qid, {
-        method: "POST", body: JSON.stringify(body)
-      });
-      line.textContent = res.note || "Saved.";
-      if (extra && extra.review_status) {
-        var pill = card.querySelector(".pill");
-        pill.className = "pill " + extra.review_status;
-        pill.textContent = extra.review_status.replace(/_/g, " ");
-      }
-    } catch (error) {
-      line.className = "status err";
-      line.textContent = "Not saved: " + error.message;
+  <script src="/desk-shell.js"></script>
+  <script>
+  (function () {
+    "use strict";
+    var token = "";
+    var state = { offset: 0, item: null, summary: null, pendingStatus: null };
+    var destinations = [["live_signals_map","Live Signals Map"],["signals_page","Signals page"],["daily_intel_brief","Daily Intel Brief"],["neighborhood_page","Neighborhood page"],["broward_record","Broward Record"]];
+    function esc(value) { return String(value == null ? "" : value).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+    function money(value) { var n=Number(value); return Number.isFinite(n)&&n>0?"$"+n.toLocaleString("en-US",{maximumFractionDigits:0}):"—"; }
+    function humanEnum(value) { return String(value||"Not stated").toLowerCase().replace(/_/g," ").replace(/\b\w/g,function(c){return c.toUpperCase();}); }
+    function packetReady(item) { var p=item&&item.evidence_packet; return item&&item.evidence_ready===true&&p&&Array.isArray(p.records)&&p.records.length>0; }
+    function recordSearch(record) {
+      var table=String(record.source_table||""); var id=String(record.source_record_id||""); var query="";
+      if (table==="permits"||table==="accela_details") query="permit:"+id;
+      else if (table.indexOf("clerk")>-1) query="instrument:"+id;
+      else query=id;
+      return "/data.html?search="+encodeURIComponent(query);
     }
-  }
-
-  function wire(card) {
-    card.querySelector("[data-save]").addEventListener("click", function () { send(card); });
-    card.querySelectorAll("[data-status]").forEach(function (button) {
-      button.addEventListener("click", function () {
-        send(card, { review_status: button.dataset.status, decided_by: "desk" });
-      });
-    });
-  }
-
-  async function load() {
-    listEl.innerHTML = '<p class="empty">Loading queue…</p>';
-    var status = document.getElementById("filter-status").value;
-    try {
-      var data = await api("/api/admin/review-queue" + (status ? "?status=" + encodeURIComponent(status) : ""));
-      if (!data.items.length) {
-        listEl.innerHTML = '<p class="empty">No Candidates with this status. Nothing is waiting on you.</p>';
-        return;
-      }
-      listEl.innerHTML = data.items.map(cardHtml).join("");
-      listEl.querySelectorAll(".card").forEach(wire);
-    } catch (error) {
-      listEl.innerHTML = '<p class="empty">Queue unavailable: ' + esc(error.message) +
-        '<br><small>If this says the service-role key is not set, start the desk with SUPABASE_SERVICE_ROLE_KEY exported.</small></p>';
+    function investigationPrompt(item) {
+      var x=item.investigation||{};var p=item.evidence_packet||{};var records=Array.isArray(p.records)?p.records:[];
+      var ids=records.map(function(r){return [r.source_table,r.source_record_id].filter(Boolean).join(": ");}).filter(Boolean).join("\n- ");
+      return [
+        "Research this Florida development lead as an open-web reporting assistant. Treat every result as a lead, not verified evidence.",
+        "Address: "+(x.address||"not established"),
+        "Permit: "+(x.permit_number||"not established"),
+        "Parcel/folio: "+(x.folio||item.verified_parcel_id||"not established"),
+        "Candidate: "+(item.editor_headline||item.generated_headline||item.signal_id||"untitled"),
+        "Source IDs:\n- "+(ids||"none supplied"),
+        "Find: (1) news coverage from the last 24 months, with publication dates and direct links; (2) exact-name Sunbiz entities, status, filing date, registered agent and principals; (3) Broward Clerk/BCPA records and ownership or financing changes; (4) city agendas, hearings or votes; (5) prior permits, code cases or nearby related projects; (6) names, addresses or entities recurring across records; (7) what appears new enough that Florida Signal may be first.",
+        "Separate confirmed public-record facts, reported claims, plausible connections, and unresolved questions. Do not infer identity from similar names or addresses. Quote minimally and cite every factual claim with its direct source URL and date. End with: Possible scoop, What would prove it, and Who to call."
+      ].join("\n\n");
     }
-  }
-
-  document.getElementById("reload").addEventListener("click", load);
-  document.getElementById("filter-status").addEventListener("change", load);
-  load();
-})();
-</script>
+    function investigationHtml(item){var x=item.investigation||{};var address=x.address||"";var folio=x.folio||item.verified_parcel_id||"";var permit=x.permit_number||"";var lat=Number(x.lat),lon=Number(x.lon);var located=Number.isFinite(lat)&&Number.isFinite(lon);var query=[address,permit,item.editor_headline||item.generated_headline||""].filter(Boolean).join(" ");var tools=[];
+      if(located){var point=lat+","+lon;tools.push('<a target="_blank" rel="noopener" href="https://www.google.com/maps/@?api=1&amp;map_action=pano&amp;viewpoint='+encodeURIComponent(point)+'">Street View</a>');tools.push('<a target="_blank" rel="noopener" href="https://www.google.com/maps/@?api=1&amp;map_action=map&amp;center='+encodeURIComponent(point)+'&amp;zoom=19&amp;basemap=satellite">Satellite / aerial</a>');}
+      if(address)tools.push('<a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&amp;query='+encodeURIComponent(address)+'">Open in Maps</a>');
+      if(folio)tools.push('<a href="/data.html?search='+encodeURIComponent("folio:"+folio)+'">Parcel + connected records</a>');
+      if(query){tools.push('<a target="_blank" rel="noopener" href="https://news.google.com/search?q='+encodeURIComponent(query)+'">Latest news coverage</a>');tools.push('<a target="_blank" rel="noopener" href="https://www.google.com/search?q='+encodeURIComponent(query)+'">Search the open web</a>');}
+      tools.push('<a target="_blank" rel="noopener" href="https://search.sunbiz.org/Inquiry/CorporationSearch/ByName">Search Sunbiz</a>');
+      tools.push('<button class="research" type="button" data-grok>Copy brief + open Grok</button>');
+      return '<section class="investigation" aria-labelledby="investigation-title"><div class="kicker">Investigation kit · leads, not evidence</div><h3 id="investigation-title">Could this be a story?</h3><p>Check the place, prior coverage and connected public records. Anything found here must be rechecked and added to the evidence packet before publication.</p><div class="investigation__tools">'+tools.join("")+'</div><p class="research-status" data-research-status></p><div class="source-warning"><b>Known gap:</b> the production Sunbiz table currently has no verified public rows. The direct Sunbiz search is available, but no company connection should be claimed until an exact match is saved with provenance.</div></section>';
+    }
+    async function getToken(){ if(token)return token; try{var r=await fetch("/api/local-session");if(r.ok)token=(await r.json()).token||"";}catch(e){} if(!token)token=window.prompt("Desk token")||"";return token; }
+    async function api(path,options){var opts=options||{};opts.headers=Object.assign({"Content-Type":"application/json","Authorization":"Bearer "+await getToken()},opts.headers||{});var r=await fetch(path,opts);var body=await r.json().catch(function(){return{};});if(!r.ok)throw new Error(body.error||"HTTP "+r.status);return body;}
+    function factsHtml(item){var rows=[["Candidate",humanEnum(item.candidate_type||item.signal_type)],["Source IDs",item.source_record_id],["Verified parcel",item.verified_parcel_id],["Latest source event",item.source_record_date],["Largest native permit value",money(item.amount)],["Detector version",item.detector_version],["Assigned to",item.assigned_reviewer]];return '<dl class="facts">'+rows.filter(function(r){return r[1]&&r[1]!=="—";}).map(function(r){return'<dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd>';}).join("")+'</dl>';}
+    function evidenceHtml(item){var p=item.evidence_packet||{};var records=Array.isArray(p.records)?p.records:[];var claims=Array.isArray(p.supported_claims)?p.supported_claims:[];var unknowns=Array.isArray(p.unknowns)?p.unknowns:[];var join=p.join||{};if(!packetReady(item))return '<section class="evidence"><div class="blocked-note"><b>Not ready for a decision.</b><br>This candidate has no complete evidence packet. Approval is blocked in the database and server until source records and a receipt exist.</div></section>';
+      return '<section class="evidence" aria-labelledby="evidence-title"><div class="section-head"><div><div class="kicker">Evidence · open by default</div><h2 id="evidence-title">What the records establish</h2></div><div class="receipt">'+esc(humanEnum(join.method))+(join.canonical_folio?'<br>folio '+esc(join.canonical_folio):'')+(item.evidence_hash?'<br>SHA-256 '+esc(item.evidence_hash.slice(0,16))+'…':'')+'</div></div><div class="timeline">'+records.map(function(record){var value=record.native_declared_value!=null?money(record.native_declared_value):money(record.stated_consideration);return '<article class="record"><div class="record__date">'+esc(record.event_date||"Date unknown")+'</div><div><b>'+esc(humanEnum(record.source_table))+' · '+esc(record.source_record_id||"Missing ID")+'</b><p>'+esc([record.address,record.permit_type,value!=="—"?value:null].filter(Boolean).join(" · "))+(record.description?'<br>'+esc(record.description):'')+'</p></div><a href="'+recordSearch(record)+'">Open record</a></article>';}).join("")+'</div><div class="claims"><div class="claim-box"><h3>Supported facts · '+claims.length+'</h3><ul>'+claims.map(function(x){return'<li>'+esc(x)+'</li>';}).join("")+'</ul></div><div class="claim-box claim-box--unknown"><h3>Not established · '+unknowns.length+'</h3><ul>'+unknowns.map(function(x){return'<li>'+esc(x)+'</li>';}).join("")+'</ul></div></div></section>';}
+    function render(item){state.item=item;var ready=packetReady(item);var p=item.evidence_packet||{};var claims=Array.isArray(p.supported_claims)?p.supported_claims:[];var unknowns=Array.isArray(p.unknowns)?p.unknowns:[];document.getElementById("workspace").innerHTML='<div class="workspace"><article class="candidate" data-qid="'+esc(item.queue_id)+'"><header class="candidate__head"><div class="kicker"><span class="pill '+(ready?'':'blocked')+'">'+(ready?'Evidence ready':'Needs evidence')+'</span>'+esc(humanEnum(item.candidate_type||item.signal_type))+'</div><h1>'+esc(item.editor_headline||item.generated_headline||item.signal_id)+'</h1><p class="summary">'+esc(item.editor_summary||item.generated_summary||"")+'</p></header>'+evidenceHtml(item)+'<div class="details">'+investigationHtml(item)+'<details><summary>Editorial fields</summary><div class="edit-grid"><label class="field">Headline<input data-field="editor_headline" value="'+esc(item.editor_headline||item.generated_headline||"")+'"></label><label class="field">Summary<textarea data-field="editor_summary">'+esc(item.editor_summary||item.generated_summary||"")+'</textarea></label><label class="field">Editor notes<textarea data-field="editor_notes">'+esc(item.editor_notes||"")+'</textarea></label><label class="field">Assign reviewer<input data-field="assigned_reviewer" value="'+esc(item.assigned_reviewer||"")+'"></label></div><div class="destinations">'+destinations.map(function(d){return'<label><input type="checkbox" data-dest="'+d[0]+'"'+((item.destinations||[]).indexOf(d[0])>-1?' checked':'')+'>'+esc(d[1])+'</label>';}).join("")+'</div><button class="button" data-save type="button">Save editorial fields</button></details><details><summary>Machine metadata</summary>'+factsHtml(item)+'</details></div></article><aside class="decision"><div class="kicker">Human gate</div><h2>'+ (ready?'Decide this lead':'Evidence work first') +'</h2><p>'+(ready?'This packet claims only that the listed records share the verified parcel. Decide whether that change is meaningful enough to become a Signal.':'This is still a Candidate, not a Signal. Add or repair its source packet before making a decision.')+'</p><div class="decision__stats"><div class="stat"><b>'+claims.length+'</b><span>supported facts</span></div><div class="stat"><b>'+unknowns.length+'</b><span>open questions</span></div></div>'+(ready?'<div class="decision__buttons"><button class="button button--primary" data-status="APPROVED" type="button">Approve as Signal</button><div class="decision__split"><button class="button" data-status="HOLD" type="button">Hold</button><button class="button" data-status="NEEDS_MORE_REPORTING" type="button">More reporting</button></div><button class="button button--danger" data-status="REJECTED" type="button">Reject candidate</button><button class="button" data-skip type="button">Skip · decide later</button></div>':'<div class="blocked-note">Approval controls are unavailable by design. Use <b>Needs evidence</b> as a work queue, not a decision queue.</div>')+'<p class="mobile-rule">Approval and rejection are desktop-only. Mobile supports reading, flagging and skipping.</p><p class="status-line" data-status-line></p></aside></div>';wire();}
+    function collect(){var body={};document.querySelectorAll("[data-field]").forEach(function(input){body[input.dataset.field]=input.value;});body.destinations=Array.from(document.querySelectorAll("[data-dest]")).filter(function(x){return x.checked;}).map(function(x){return x.dataset.dest;});return body;}
+    async function send(extra){var line=document.querySelector("[data-status-line]");line.className="status-line";line.textContent="Recording…";try{var body=Object.assign(collect(),extra||{});var result=await api("/api/admin/review-queue/"+state.item.queue_id,{method:"POST",body:JSON.stringify(body)});line.textContent=result.note||"Saved.";if(extra&&extra.review_status){await loadSummary();load();}}catch(error){line.className="status-line error";line.textContent="Not saved: "+error.message;}}
+    function openConfirm(status){state.pendingStatus=status;document.getElementById("confirm-title").textContent=status==="APPROVED"?"Approve this Candidate as a Signal?":"Reject this Candidate?";document.getElementById("confirm-copy").textContent=status==="APPROVED"?"This records a desk decision but publishes nothing. Approval is available only because the evidence receipt passed the server gate.":"This removes the candidate from the active decision queue. It does not delete the underlying records.";document.getElementById("confirm-check").checked=false;document.getElementById("confirm-submit").disabled=true;document.getElementById("confirm-dialog").showModal();}
+    function wire(){var save=document.querySelector("[data-save]");if(save)save.addEventListener("click",function(){send();});document.querySelectorAll("[data-status]").forEach(function(button){button.addEventListener("click",function(){var s=button.dataset.status;if(s==="APPROVED"||s==="REJECTED")openConfirm(s);else send({review_status:s,decided_by:"desk"});});});var skip=document.querySelector("[data-skip]");if(skip)skip.addEventListener("click",next);var grok=document.querySelector("[data-grok]");if(grok)grok.addEventListener("click",async function(){var status=document.querySelector("[data-research-status]");var prompt=investigationPrompt(state.item);try{await navigator.clipboard.writeText(prompt);status.textContent="Research brief copied. Opening Grok — paste it there, then verify every result against its source.";}catch(e){window.prompt("Copy this research brief, then paste it into Grok:",prompt);status.textContent="Opening Grok. Treat its results as reporting leads only.";}window.open("https://grok.com/","_blank","noopener");});}
+    async function loadSummary(){try{state.summary=await api("/api/admin/review-summary");document.getElementById("gap-count").textContent=state.summary.blocked+" candidates need evidence";}catch(e){document.getElementById("gap-count").textContent="Summary unavailable";}}
+    async function load(){var readiness=document.getElementById("readiness").value;var status=document.getElementById("status").value;document.getElementById("workspace").innerHTML='<p class="empty">Loading one candidate and its evidence…</p>';try{var data=await api("/api/admin/review-queue?status="+encodeURIComponent(status)+"&readiness="+encodeURIComponent(readiness)+"&limit=1&offset="+state.offset);if(!data.items.length){document.getElementById("workspace").innerHTML='<p class="empty">No candidate at this position. Return to the start or change the queue.</p>';document.getElementById("position").textContent="End of this queue";return;}render(data.items[0]);var total=readiness==="ready"?(state.summary?state.summary.ready:null):readiness==="blocked"?(state.summary?state.summary.blocked:null):state.summary?state.summary.total:null;document.getElementById("position").textContent="Candidate "+(state.offset+1)+(total?" of "+total:"");document.getElementById("progress-fill").style.width=total?Math.min(100,(state.offset+1)/total*100)+"%":"0";document.getElementById("prev").disabled=state.offset===0;document.getElementById("next").disabled=!data.has_more;}catch(error){document.getElementById("workspace").innerHTML='<p class="empty">Queue unavailable: '+esc(error.message)+'</p>';}}
+    function next(){state.offset+=1;load();} function prev(){state.offset=Math.max(0,state.offset-1);load();}
+    document.getElementById("reload").addEventListener("click",function(){loadSummary().then(load);});document.getElementById("readiness").addEventListener("change",function(){state.offset=0;load();});document.getElementById("status").addEventListener("change",function(){state.offset=0;load();});document.getElementById("next").addEventListener("click",next);document.getElementById("prev").addEventListener("click",prev);document.getElementById("confirm-check").addEventListener("change",function(){document.getElementById("confirm-submit").disabled=!this.checked;});document.getElementById("confirm-cancel").addEventListener("click",function(){document.getElementById("confirm-dialog").close();});document.getElementById("confirm-submit").addEventListener("click",function(){document.getElementById("confirm-dialog").close();send({review_status:state.pendingStatus,decided_by:"desk",confirmation:"reviewed-evidence"});});
+    loadSummary().then(load);
+  })();
+  </script>
 </body>
 </html>

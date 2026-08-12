@@ -114,15 +114,18 @@ Every diagram names its application or recording window, links to the underlying
 
 1. `com.floridasignal.acclaim` runs at 12:30 a.m., noon, 7 p.m. and 10:30 p.m. local, hourly and at login.
 2. Before noon, the still-forming current day is not a target and must not appear in backlog state.
-3. After noon, collect the current date plus any missing dates after the verified SFTP floor, oldest first.
-4. A date is complete only when every page was read and the harvested count reaches the source total; a same-day empty result is not completion.
-5. Upsert by `(record_date, instrument_number)`; never overwrite the authoritative SFTP tables.
-6. Reconcile by normalized instrument number plus exact record date. The verified SFTP service does
+3. After noon, re-harvest the current date on every run even when an earlier pass completed; the
+   source grid can grow during the day and the exact-key upsert inserts only new instruments.
+4. Collect missing dates after the verified SFTP floor oldest-first, while reserving one target slot
+   for the current day so an offline backlog cannot starve same-day intelligence.
+5. A date is complete only when every page was read and the harvested count reaches the source total; a same-day empty result is not completion.
+6. Upsert by `(record_date, instrument_number)`; never overwrite the authoritative SFTP tables.
+7. Reconcile by normalized instrument number plus exact record date. The verified SFTP service does
    this immediately after every run, including a no-op run; daily pg_cron is the fallback. Flag date
    conflicts instead of merging them. Migration 009 indexes both normalized join keys and limits
    the preliminary index to still-unverified rows so archive growth does not exceed the API timeout.
-7. Confirm `/api/data-health` exposes both `clerk-preliminary` and `broward`, with `preliminary` and `verified` evidence labels respectively.
-8. Wi-Fi or power loss does not discard dates: state advances only on a complete source count, then
+8. Confirm `/api/data-health` exposes both `clerk-preliminary` and `broward`, with `preliminary` and `verified` evidence labels respectively.
+9. Wi-Fi or power loss does not discard dates: state advances only on a complete source count, then
    the next hourly/login run recomputes gaps from the verified floor. A Broward disclaimer redirect
    requires one human acceptance in Chrome; the following retry resumes automatically.
 
@@ -236,5 +239,8 @@ New feeds and their clocks:
 | Preliminary recordings (`broward_clerk_preliminary`) | `record_date` | Native Mac LaunchAgent at 00:30, 12:00, 19:00 and 22:30 local plus login catch-up | From Clerk's public AcclaimWeb search, usually days ahead of SFTP. PRELIMINARY until exact row-level reconciliation; preserve extra source text and label accordingly anywhere surfaced. |
 
 Historical automation inventory is in `CLAUDETTE_HANDOFF_2026-07-19.md`. Current truth supersedes it: the same-day Clerk owner is the native Mac LaunchAgent, and the verified SFTP owner is the droplet schedule/catch-up. Do not enable the historical Claude same-day writer in parallel.
+
+As of the August 11 night audit, `broward-sameday-recordings` is paused and retained only for
+emergency rollback. The native LaunchAgent remains loaded and is the sole same-day writer.
 
 Local ops: `ops/launch_local.sh` (or the Florida Signal Desk / The Data Wire apps) starts both servers with desk token, Mailchimp env, and local auto-unlock. Mailchimp is configured as of 2026-07-19 (`mailchimp_configured: true`).

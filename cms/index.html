@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Figtree:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/desk-shell.css">
   <style>
     :root {
       color-scheme: light;
@@ -488,21 +489,14 @@
     h1, h2, h3, h4 { font-style: normal; }
     .intro h2 { letter-spacing: -.03em !important; font-weight: 700 !important; }
     .intro h2 span, .brand h1 span, .section-label h3, .drawer__head h4 { font-style: normal !important; }
+    .masthead__inner { justify-content: flex-end; min-height: auto; }
   </style>
 </head>
 <body>
-  <a class="skip-link" href="#workspace">Skip to editorial workspace</a>
+  <div id="desk-shell" data-current="editorial"></div>
 
   <header class="masthead">
     <div class="masthead__inner">
-      <div class="brand" aria-label="The Data Wire internal editorial desk">
-        <div>
-          <div class="eyebrow">Internal · Graham &amp; Gold LLC</div>
-          <img src="/datawire-lockup.png" alt="The Data Wire" style="display:block;width:min(238px,52vw);height:auto;margin:6px 0 2px;">
-          <p class="brand__sub">Source-gated editorial desk</p>
-        </div>
-      </div>
-
       <form class="connection" id="connection-form">
         <label class="field--compact">
           <span class="label">Market key</span>
@@ -530,20 +524,7 @@
     </div>
   </div>
 
-  <!-- Shared desk navigation. See cms/ADR-001-data-wire-information-architecture.md.
-       Keep this block identical in index.html, data.html and review.html. -->
-  <nav class="stage-nav" aria-label="Data Wire stages">
-    <div class="stage-nav__inner">
-      <a class="stage-nav__stage" href="/data.html">
-        <b>1 · Data Desk</b><small>Look. Every source, raw and read-only.</small></a>
-      <a class="stage-nav__stage" href="/review.html">
-        <b>2 · Signal Review</b><small>Decide. Approve, hold or reject candidates.</small></a>
-      <a class="stage-nav__stage" href="/index.html" aria-current="page">
-        <b>3 · Editorial Desk</b><small>Write. Source-gated packets, cleared by a human.</small></a>
-    </div>
-  </nav>
-
-  <main id="workspace">
+  <main id="main-content">
     <section class="intro" aria-labelledby="page-title">
       <div>
         <div class="eyebrow">Human editor required</div>
@@ -845,6 +826,7 @@
 
   <div class="alert" id="alert" role="status" aria-live="polite" hidden></div>
 
+  <script src="/desk-shell.js"></script>
   <script>
     (() => {
       'use strict';

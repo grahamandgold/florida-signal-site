@@ -16,6 +16,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Figtree:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/desk-shell.css">
   <style>
     :root {
       color-scheme: light;
@@ -247,35 +248,9 @@
   </style>
 </head>
 <body>
-  <header class="masthead">
-    <div class="masthead__inner">
-      <div class="brand" aria-label="Florida Signal internal data desk">
-        <div>
-          <div class="eyebrow">Internal · Graham &amp; Gold LLC</div>
-          <h1>Data <span>Desk</span></h1>
-          <p class="brand__sub">Read-only intelligence viewer · Broward store</p>
-        </div>
-      </div>
-      <nav class="masthead-links" aria-label="External links">
-        <a class="button button--teal" href="http://127.0.0.1:4173/fort-lauderdale/" target="_blank" rel="noopener">Public site ↗</a>
-      </nav>
-    </div>
-  </header>
+  <div id="desk-shell" data-current="data"></div>
 
-  <!-- Shared desk navigation. See cms/ADR-001-data-wire-information-architecture.md.
-       Keep this block identical in index.html, data.html and review.html. -->
-  <nav class="stage-nav" aria-label="Data Wire stages">
-    <div class="stage-nav__inner">
-      <a class="stage-nav__stage" href="/data.html" aria-current="page">
-        <b>1 · Data Desk</b><small>Look. Every source, raw and read-only.</small></a>
-      <a class="stage-nav__stage" href="/review.html">
-        <b>2 · Signal Review</b><small>Decide. Approve, hold or reject candidates.</small></a>
-      <a class="stage-nav__stage" href="/index.html">
-        <b>3 · Editorial Desk</b><small>Write. Source-gated packets, cleared by a human.</small></a>
-    </div>
-  </nav>
-
-  <main>
+  <main id="main-content">
     <section class="intro">
       <div>
         <div class="eyebrow">Every table · every source · one desk</div>
@@ -284,7 +259,7 @@
       <p><strong>Nothing here is public output.</strong> This desk reads the raw store under row-level security. Analysis uses public event dates; fetch stamps are freshness metadata only.</p>
     </section>
 
-    <div class="section-label"><h3>Feed health</h3><span class="hint">three clocks per feed: latest source event · last successful collection · row count</span></div>
+    <div class="section-label" id="source-health"><h3>Feed health</h3><span class="hint">three clocks per feed: latest source event · last successful collection · row count</span></div>
     <div class="health-actions" id="health-actions"></div>
     <div class="health-grid" id="health-grid" role="status" aria-live="polite"></div>
 
@@ -296,12 +271,13 @@
         <label>Table
           <select id="table-select"></select>
         </label>
-        <label>Search
-          <input id="search-input" type="search" placeholder="address, name, permit #…" autocomplete="off">
+        <label>Exact search
+          <input id="search-input" type="search" placeholder="permit:, folio:, instrument:, addr:…" autocomplete="off" aria-describedby="search-help">
         </label>
-        <button class="button button--ghost" id="refresh-btn" type="button">Refresh</button>
+        <button class="button button--teal" id="refresh-btn" type="button">Search records</button>
         <span class="count-note" id="count-note">—</span>
       </div>
+      <p class="foot-note" id="search-help" style="margin:0 0 12px">Exact, indexed lookup only: <code>permit:</code> <code>folio:</code> <code>instrument:</code> <code>addr:</code> <code>license:</code> <code>asn:</code>. Broad text research will be a separate, explicitly slower tool.</p>
       <div class="table-wrap">
         <table id="data-table">
           <thead></thead>
@@ -328,6 +304,7 @@
     <div class="drawer__body" id="drawer-body"></div>
   </aside>
 
+  <script src="/desk-shell.js"></script>
   <script>
     "use strict";
     const SB = "https://jrjewmzkyluxdywyusrw.supabase.co/rest/v1/";
@@ -339,6 +316,46 @@
     function money(v) { const n = Number(v); return Number.isFinite(n) && v !== null && v !== "" ? "$" + n.toLocaleString() : ""; }
     function dateish(v) { return v == null ? "" : String(v).slice(0, 10); }
     function cleanSearch(v) { return String(v || "").replace(/[,()"'\\]/g, " ").trim(); }
+
+    // Exact lookup is deliberately separate from broad research. Each route maps to one
+    // field that already has a stable identity meaning; no multi-column wildcard OR scans.
+    const EXACT_FIELDS = {
+      permits: { permit: "permit_number", folio: "parcel_id_verified", addr: "address" },
+      broward_clerk_records_doc: { instrument: "instrument_number", type: "doc_type_code" },
+      fdep_erp: { project: "project_name", addr: "street_address" },
+      faa_oeaaa: { asn: "asn" },
+      signals_v2_context: { permit: "permit_number", addr: "address" },
+      gis_enrichment: { permit: "permit_number", folio: "folio" },
+      bcpa_property_card: { folio: "folio", addr: "site_address_1" },
+      accela_details: { permit: "permit_number", license: "contractor_license", addr: "site_address" },
+      lp_licenses: { license: "license_number" },
+      foia_workflow_events: { permit: "permit_number" },
+      broward_property_transfer_map: { instrument: "instrument_number", folio: "folio_canonical", addr: "address" },
+      owner_resolution: { permit: "permit_number", folio: "folio" }
+    };
+    const DEFAULT_EXACT_FIELD = {
+      permits: "permit", broward_clerk_records_doc: "instrument", fdep_erp: "project",
+      faa_oeaaa: "asn", signals_v2_context: "permit", gis_enrichment: "permit",
+      bcpa_property_card: "folio", accela_details: "permit", lp_licenses: "license",
+      foia_workflow_events: "permit", broward_property_transfer_map: "instrument",
+      owner_resolution: "permit"
+    };
+    const PREFIX_TABLE = { permit: "permits", folio: "bcpa_property_card", instrument: "broward_clerk_records_doc", addr: "permits", license: "lp_licenses", asn: "faa_oeaaa", project: "fdep_erp" };
+
+    function exactSearch(value, table) {
+      const cleaned = cleanSearch(value);
+      if (!cleaned) return null;
+      const match = cleaned.match(/^([a-z]+)\s*:\s*(.+)$/i);
+      const prefix = (match ? match[1] : DEFAULT_EXACT_FIELD[table] || "").toLowerCase();
+      let term = (match ? match[2] : cleaned).replace(/\s+/g, " ").trim().slice(0, 180);
+      const column = EXACT_FIELDS[table] && EXACT_FIELDS[table][prefix];
+      if (!column) throw new Error("Use one supported exact field for this table: " + Object.keys(EXACT_FIELDS[table] || {}).map(k => k + ":").join(" "));
+      if (prefix === "folio") term = term.replace(/[^a-z0-9]/gi, "").toUpperCase();
+      else if (["permit", "instrument", "license", "asn", "type"].includes(prefix)) term = term.toUpperCase();
+      else if (prefix === "addr") term = term.toUpperCase();
+      if (!term) throw new Error("Enter a value after " + prefix + ":");
+      return { prefix, params: { [column]: "eq." + term } };
+    }
 
     async function sbFetch(path, params, opts) {
       const url = new URL(SB + path);
@@ -831,6 +848,20 @@
 
     const state = { table: "permits", offset: 0, extra: {}, search: "", rows: [] };
 
+    function commitSearch() {
+      const value = q("#search-input").value.trim();
+      const match = value.match(/^([a-z]+)\s*:/i);
+      if (match && PREFIX_TABLE[match[1].toLowerCase()]) {
+        state.table = PREFIX_TABLE[match[1].toLowerCase()];
+        state.extra = {};
+        q("#table-select").value = state.table;
+        clearChips();
+      }
+      state.search = value;
+      state.offset = 0;
+      loadTable();
+    }
+
     function buildControls() {
       q("#table-select").innerHTML = Object.entries(TABLES).map(([k, c]) => `<option value="${k}">${esc(c.label)}</option>`).join("");
       q("#preset-row").innerHTML = PRESETS.map((p, i) => `<button class="chip" type="button" data-preset="${i}">${esc(p.label)}</button>`).join("");
@@ -844,13 +875,23 @@
         loadTable();
       });
       q("#table-select").addEventListener("change", () => { state.table = q("#table-select").value; state.extra = {}; state.offset = 0; clearChips(); loadTable(); });
-      q("#search-input").addEventListener("keydown", e => { if (e.key === "Enter") { state.search = e.target.value; state.offset = 0; loadTable(); } });
-      q("#refresh-btn").addEventListener("click", () => { state.search = q("#search-input").value; loadTable(); });
+      q("#search-input").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); commitSearch(); } });
+      q("#refresh-btn").addEventListener("click", commitSearch);
       q("#prev-btn").addEventListener("click", () => { state.offset = Math.max(0, state.offset - PAGE); loadTable(); });
       q("#next-btn").addEventListener("click", () => { state.offset += PAGE; loadTable(); });
       q("#drawer-close").addEventListener("click", closeDrawer);
       q("#drawer-veil").addEventListener("click", closeDrawer);
       document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+      const initialSearch = new URLSearchParams(location.search).get("search") || "";
+      if (initialSearch) {
+        q("#search-input").value = initialSearch;
+        const match = initialSearch.match(/^([a-z]+)\s*:/i);
+        if (match && PREFIX_TABLE[match[1].toLowerCase()]) {
+          state.table = PREFIX_TABLE[match[1].toLowerCase()];
+          q("#table-select").value = state.table;
+        }
+        state.search = initialSearch;
+      }
     }
     function clearChips() { document.querySelectorAll(".chip").forEach(c => c.dataset.active = "false"); }
 
@@ -863,8 +904,8 @@
       const params = { select: cfg.select, order: cfg.order, limit: String(PAGE), offset: String(state.offset) };
       Object.assign(params, state.extra);
       const term = cleanSearch(state.search);
-      if (term) params.or = cfg.search(term);
       try {
+        if (term) Object.assign(params, exactSearch(term, state.table).params);
         const data = await rows(state.table, params);
         state.rows = data;
         if (!data.length) {
@@ -880,9 +921,12 @@
         q("#page-note").textContent = "rows " + (state.offset + 1) + "–" + (state.offset + data.length);
         q("#prev-btn").disabled = state.offset === 0;
         q("#next-btn").disabled = data.length < PAGE;
-        tableCount(state.table, Object.assign({}, state.extra, term ? { or: cfg.search(term) } : {})).then(n => {
-          q("#count-note").textContent = n != null ? n.toLocaleString() + " matching rows" : "";
-        }).catch(() => {});
+        if (term) {
+          q("#count-note").textContent = data.length + (data.length === PAGE ? "+" : "") + " exact match" + (data.length === 1 ? "" : "es") + " shown";
+        } else {
+          const countCol = cfg.select.split(",")[0];
+          tableCount(state.table, countCol).then(c => { q("#count-note").textContent = rowsLabel(c); }).catch(() => { q("#count-note").textContent = "—"; });
+        }
         tbody.querySelectorAll("tr[data-i]").forEach(tr => tr.addEventListener("click", () => openDrawer(state.rows[Number(tr.dataset.i)], cfg)));
       } catch (e) {
         tbody.innerHTML = `<tr class="empty-row"><td colspan="${cfg.cols.length}">Could not load: ${esc(e.message)}</td></tr>`;

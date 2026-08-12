@@ -84,6 +84,58 @@ class TargetTests(unittest.TestCase):
                 [dt.date(2026, 7, 23)],
             )
 
+    def test_completed_current_day_is_rechecked_after_noon(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = pathlib.Path(directory) / "state.json"
+            state.write_text(
+                json.dumps(
+                    {
+                        "dates": {
+                            "2026-07-23": {"status": "done"},
+                            "2026-07-24": {"status": "done"},
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            now = dt.datetime(2026, 7, 24, 15, 0)
+            self.assertEqual(
+                targets.candidate_dates(
+                    dt.date(2026, 7, 22), 8, str(state), now=now
+                ),
+                [dt.date(2026, 7, 24)],
+            )
+
+    def test_current_day_keeps_a_slot_during_long_catchup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = pathlib.Path(directory) / "state.json"
+            now = dt.datetime(2026, 7, 24, 15, 0)
+            self.assertEqual(
+                targets.candidate_dates(
+                    dt.date(2026, 7, 15), 3, str(state), now=now
+                ),
+                [
+                    dt.date(2026, 7, 16),
+                    dt.date(2026, 7, 17),
+                    dt.date(2026, 7, 24),
+                ],
+            )
+
+    def test_completed_past_dates_remain_skipped(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = pathlib.Path(directory) / "state.json"
+            state.write_text(
+                json.dumps({"dates": {"2026-07-23": {"status": "done"}}}),
+                encoding="utf-8",
+            )
+            now = dt.datetime(2026, 7, 24, 15, 0)
+            self.assertEqual(
+                targets.candidate_dates(
+                    dt.date(2026, 7, 22), 8, str(state), now=now
+                ),
+                [dt.date(2026, 7, 24)],
+            )
+
 
 class LaunchAgentTests(unittest.TestCase):
     def test_hourly_and_login_recovery_are_enabled(self):
