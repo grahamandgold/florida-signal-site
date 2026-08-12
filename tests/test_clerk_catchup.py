@@ -12,7 +12,11 @@ SPEC = importlib.util.spec_from_file_location(
     "clerk_catchup", ROOT / "ops" / "droplet" / "clerk_catchup.py"
 )
 clerk_catchup = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(clerk_catchup)
+# Paramiko is a production-only transport dependency on the droplet. These unit
+# tests exercise ledger pagination and capacity, so a clean static-site CI runner
+# must not need an SSH client merely to import the deterministic helpers.
+with mock.patch.dict("sys.modules", {"paramiko": mock.MagicMock()}):
+    SPEC.loader.exec_module(clerk_catchup)
 
 
 class ClerkCatchupLedgerTests(unittest.TestCase):
