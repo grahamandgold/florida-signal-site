@@ -18,6 +18,20 @@ Florida Signal is a live development-intelligence newsroom for Fort Lauderdale a
 
 Keep clear space around the emblem equal to roughly one quarter of its width. Do not stretch, rotate, outline or place the mark in an unrelated circle. Use the square mark for avatars and the horizontal lockup for headers and partner placements.
 
+The Florida emblem is a protected signature element, especially on diagrams. Use the exact approved artwork at a readable size with clear space and the correct full-color or reverse treatment. Never add an arrow, merge the emblem with a CTA or report-builder icon, stretch it or fade it into illegibility. `assets/emblem-2026.png` and `assets/emblem-2026-white.png` are withdrawn variants and must not be used.
+
+### Emblem system rules
+
+- The approved motif is the Florida silhouette with three tower forms. It has no arrow, chevron, caret or directional cutout.
+- Use the full-color mark on white, mint and other light flat backgrounds. Use the white mark on navy, dark colors and photographs.
+- Identity uses render at full opacity. Do not place a faint emblem behind text, maps, charts, photographs or data.
+- Minimum emblem size is 24 pixels on either axis; diagram, map, share-card and exported-report signatures use at least 32 pixels.
+- Lock the aspect ratio and use `object-fit: contain`. Never rotate, skew, apply perspective, recolor or add filters, glow or drop shadows.
+- Keep interface arrows, share controls and report-builder icons outside the emblem's clear space and never combine them in one badge.
+- Each diagram uses one signature block below the finding: approved emblem, `FLORIDA SIGNAL`, source name and event date. A signature replaces decorative watermarks; it does not compete with the data.
+
+In the live header lockup, `DEVELOPMENT INTELLIGENCE` must remain clearly legible and track across the full visual width of `FLORIDA SIGNAL` beneath it. This relationship is part of the lockup; do not substitute a shorter, loosely centered tagline.
+
 ## Core palette
 
 | Token | Hex | Role |

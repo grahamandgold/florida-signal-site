@@ -1,6 +1,9 @@
 # Florida Signal — remaining work register
 
-**Current July 28, 2026 · not launch approval**
+**Historical July 28, 2026 register · not current launch authority**
+
+Current authority: [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md). Completed live
+editorial-loop work and recovery steps: [`EDITORIAL_LOOP_RUNBOOK.md`](EDITORIAL_LOOP_RUNBOOK.md).
 
 This register contains unresolved work only. Completed history belongs in dated incident
 notes and pull requests.

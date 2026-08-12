@@ -52,6 +52,9 @@ If the token is rejected, stop the CMS process, export a new long private token,
 Send `Authorization: Bearer $DATA_WIRE_ADMIN_TOKEN`.
 
 - `GET /api/admin/stories?market=broward`
+- `GET /api/admin/review-queue?status=NEW`
+- `POST /api/admin/review-queue/{queue_id}` — records APPROVE/HOLD/REJECT/NEEDS_MORE_REPORTING;
+  it never publishes
 - `POST /api/admin/stories`
 - `POST /api/admin/stories/{id}/approve`
 - `POST /api/admin/stories/{id}/hold`
@@ -59,6 +62,12 @@ Send `Authorization: Bearer $DATA_WIRE_ADMIN_TOKEN`.
 - `POST /api/admin/agenda-recon/{id}/clear`
 
 ## Approval contract
+
+The Signal Review page opens a hash-sealed evidence packet for each Candidate. Transfer →
+Permit packets show the exact canonical-folio receipt, the deed and grouped permit source
+records, the facts those records support, and explicit unknowns. A Candidate is not a Signal.
+`APPROVED` records Gate 1 only; a separate complete Story Packet still has to pass the claims,
+source, taxonomy and named-publication-role checks below.
 
 A brief cannot publish until it is a complete **VERIFIED Story Packet**: required city, headline, dek, body, event date, dated current trigger, defensible project identity, public source URL/title, at least one source-bound claim slot, topic and geography tags, `claims_status: passed`, `validator_status: passed`, `tags_status: passed`, and a named human editor. Needs-verification packets remain private. The CMS computes a source hash and records approval history.
 

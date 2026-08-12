@@ -1,12 +1,12 @@
 # Florida Signal — AI Handoff
 
-Last verified: July 19, 2026 (Claudette session — see `CLAUDETTE_HANDOFF_2026-07-19.md` for the full launch-day changelog)
+Last verified: August 11, 2026
 
-> ## ⇢ START HERE FIRST: `FLORIDA_SIGNAL_VERIFIED_CHECKPOINT_2026-07-19.md`
-> Every claim in that document was verified directly against GitHub, Supabase, the DigitalOcean
-> runtime, this Mac and Google Drive. It tells you which authority owns what, the current branch
-> and PR, what is deployed, what is database-applied, what is scheduled, what is local-only, and
-> what requires Andy's approval. **Read it before acting on anything below.**
+> ## ⇢ START HERE FIRST: `SYSTEM_STATE_2026-08-11.md`
+> It is the current verified authority for production health, the data estate, deployed database
+> changes, local-only site corrections, Mailchimp, analytics and remaining work. Use
+> `EDITORIAL_LOOP_RUNBOOK.md` for the live Candidate schedules and recovery steps. The July
+> checkpoint remains historical evidence, not current operational state.
 >
 > Two facts it exists to prevent you getting wrong:
 > 1. The scorer and collectors are **not in this repository** — they are in `grahamandgold/florida-signal`.
@@ -22,11 +22,12 @@ The public site is not a raw database dump and The Data Wire is not an autonomou
 ## Read these first
 
 1. `README.md` — local start, CMS access and operating links.
-2. `LIVE_DATA_OPERATIONS_HANDOFF.md` — sources, schedules, exact stat definitions and recovery steps.
-3. `FLORIDA_SIGNAL_TAGGING_SYSTEM.md` — required city, county, neighborhood and topic fields.
-4. `cms/README.md` — Data Wire schema, source gates and API contract.
-5. `BRAND_KIT.md` and `SOCIAL_MEDIA_ASSET_GUIDE.md` — public visual and distribution rules.
-6. `FLORIDA_SIGNAL_BUILD_REPORT.md` — implementation inventory and launch blockers.
+2. `EDITORIAL_LOOP_RUNBOOK.md` — current Candidate schedules, human gates and recovery steps.
+3. `LIVE_DATA_OPERATIONS_HANDOFF.md` — historical source definitions and date rules.
+4. `FLORIDA_SIGNAL_TAGGING_SYSTEM.md` — required city, county, neighborhood and topic fields.
+5. `cms/README.md` — Data Wire schema, source gates and API contract.
+6. `BRAND_KIT.md` and `SOCIAL_MEDIA_ASSET_GUIDE.md` — public visual and distribution rules.
+7. `FLORIDA_SIGNAL_BUILD_REPORT.md` — implementation inventory and launch blockers.
 
 ## Non-negotiable data rules
 
@@ -120,3 +121,7 @@ As of the verification date, the local health endpoint reports that CMS and Mail
 - CTA copy is "Get Daily Intel Brief" site-wide. Diagram of the day rotates daily by date.
 - `dashboard_cache` pg_cron re-armed at 30-minute cadence. Clerk SFTP verified-vs-source parity confirmed 2026-07-19.
 - Full task/automation inventory and open work: `CLAUDETTE_HANDOFF_2026-07-19.md`.
+
+## 2026-07-19 addendum (Drive offsite snapshot cleanup — verified)
+
+Authorized permanent cleanup of eight obsolete full-size Google Shared Drive snapshot directories under `gdrive:08_Backups_and_Recovery/FL_Signal/01_DATABASE/snapshots/` (2026-07-10..16 and 2026-07-19). **Retained:** `latest/`, `snapshots/2026-07-18/`, `snapshots/2026-07-17/`, and archive `permits.sqlite.daily-20260703.gz`. Released **90,867,600,278** bytes. Jul 18 restore validation: SHA match + `PRAGMA quick_check=ok` (127,912 permits). **`RETENTION_MODE` remains `dry-run`** — permanent compressed retention policy still TODO. Droplet record: `/srv/grahamandgold/florida-signal/restore-tests/DRIVE_SNAPSHOT_CLEANUP_2026-07-19.md` and `START_HERE.md` (Drive mirror of START_HERE not claimed current). No timer/service/script/production-DB change for this cleanup.

@@ -58,6 +58,12 @@ class PublicApiTests(unittest.TestCase):
             "https://thefloridasignal.com",
         )
 
+    def test_postgres_fractional_timestamp_keeps_its_time_of_day(self):
+        parsed = server_module.parse_source_time("2026-08-11T23:40:15.61819+00:00")
+        self.assertIsNotNone(parsed)
+        self.assertEqual((parsed.hour, parsed.minute, parsed.second), (23, 40, 15))
+        self.assertEqual(parsed.microsecond, 618190)
+
     def test_signup_persists_and_repeats_idempotently(self):
         body = {
             "email": "launch-check@example.com",

@@ -19,11 +19,11 @@ function ok(name, cond, detail) {
 function section(t) { console.log("\n" + t); }
 
 // ---------- fixtures (shapes mirror the live tables) ----------
-const permitHighValue = { permit_number: "BLD-GEN-26070372", address: "501 NW 7 AVE", permit_type: "Commercial", description: "Interior buildout of Sola Salons", valuation_usd_clean: 1111117, applied_date: "2026-07-17", last_seen_at: "2026-07-18", lat: 26.1298, lon: -80.1571, contractor_name: "Banyan Construction Services LLC", owner_name: "Stranahan House Inc", region: "Historical Dorsey-Riverbend" };
-const permitDemo = { permit_number: "BLD-DEM-26070001", address: "1200 SE 2 ST", permit_type: "Demolition", description: "Demolition of commercial structure", valuation_usd_clean: 90000, applied_date: "2026-07-16", lat: 26.1201, lon: -80.1330 };
-const permitStorm = { permit_number: "BLD-ROOF-26070099", address: "900 N BIRCH RD", permit_type: "Roofing", description: "Reroof with impact windows and shutters", valuation_usd_clean: 60000, applied_date: "2026-07-15", lat: 26.1401, lon: -80.1050 };
-const permitRoutine = { permit_number: "BLD-MIN-26070500", address: "10 SW 1 AVE", permit_type: "Plumbing", description: "Water heater replacement", valuation_usd_clean: 3200, applied_date: "2026-07-15", lat: 26.1180, lon: -80.1440 };
-const permitNoGeo = { permit_number: "BLD-NOGEO-1", address: "UNKNOWN", permit_type: "Commercial", description: "Major renovation", valuation_usd_clean: 900000, applied_date: "2026-07-14", lat: null, lon: null };
+const permitHighValue = { permit_number: "BLD-GEN-26070372", address: "501 NW 7 AVE", permit_type: "Commercial", description: "Interior buildout of Sola Salons", valuation: 1111117, valuation_usd_clean: 1111117, applied_date: "2026-07-17", last_seen_at: "2026-07-18", lat: 26.1298, lon: -80.1571, contractor_name: "Banyan Construction Services LLC", owner_name: "Stranahan House Inc", region: "Historical Dorsey-Riverbend" };
+const permitDemo = { permit_number: "BLD-DEM-26070001", address: "1200 SE 2 ST", permit_type: "Demolition", description: "Demolition of commercial structure", valuation: 90000, valuation_usd_clean: 90000, applied_date: "2026-07-16", lat: 26.1201, lon: -80.1330 };
+const permitStorm = { permit_number: "BLD-ROOF-26070099", address: "900 N BIRCH RD", permit_type: "Roofing", description: "Reroof with impact windows and shutters", valuation: 60000, valuation_usd_clean: 60000, applied_date: "2026-07-15", lat: 26.1401, lon: -80.1050 };
+const permitRoutine = { permit_number: "BLD-MIN-26070500", address: "10 SW 1 AVE", permit_type: "Plumbing", description: "Water heater replacement", valuation: 3200, valuation_usd_clean: 3200, applied_date: "2026-07-15", lat: 26.1180, lon: -80.1440 };
+const permitNoGeo = { permit_number: "BLD-NOGEO-1", address: "UNKNOWN", permit_type: "Commercial", description: "Major renovation", valuation: 900000, valuation_usd_clean: 900000, applied_date: "2026-07-14", lat: null, lon: null };
 const faaCrane = { asn: "2026-ASO-12345-OE", date_entered: "2026-07-17", structure_type: "CRANE$TOWER", structure_description: "Tower Crane", agl_height: 240, status_code: "EVL-Pending", sponsor: "Coastal Development LLC", nearest_city: "Fort Lauderdale", lat: 26.0161, lon: -80.2139, in_broward: true };
 const faaOutside = Object.assign({}, faaCrane, { asn: "2026-ASO-99999-OE", lat: 28.5, lon: -81.4 });
 const fdepRec = { permit_id: "0123456-001-ERP", project_name: "Marina Seawall Repair", applicant_company: "Harbor Works Inc", permit_type: "Individual Environmental Resource Permit", permit_status: "Issued", agency_action: "Permit Issued", received_date: "2026-07-15", street_address: "1500 SE 17 ST", city: "FORT LAUDERDALE", lat: 26.0826, lon: -80.1163, documents_url: "https://depnexus.example/doc/1" };
@@ -56,6 +56,18 @@ ok("routine exclusion reason recorded", routine.exclusion_reasons.some(r => /rou
 const nogeo = V.build(permitNoGeo, "permit");
 ok("no coordinates → excluded", nogeo.public_eligibility === false);
 ok("no-location reason recorded", nogeo.exclusion_reasons.some(r => /no reliable location/i.test(r)), JSON.stringify(nogeo.exclusion_reasons));
+
+const enrichedValueOnly = V.build(Object.assign({}, permitRoutine, {
+  permit_number: "BLD-ENRICHED-VALUE-ONLY",
+  valuation: null,
+  valuation_usd_clean: 900000
+}), "permit");
+ok("enriched property value cannot create a high-value permit signal",
+   enrichedValueOnly.layer !== V.LAYER.HIGH_VALUE && enrichedValueOnly.public_eligibility === false,
+   JSON.stringify({ layer: enrichedValueOnly.layer, eligible: enrichedValueOnly.public_eligibility }));
+ok("enriched property value is not exposed as permit-declared amount",
+   enrichedValueOnly.valuation_or_amount === null,
+   String(enrichedValueOnly.valuation_or_amount));
 
 section("FAA ADAPTER");
 const crane = V.build(faaCrane, "faa");
@@ -163,6 +175,11 @@ section("EDITORIAL / PUBLICATION SAFETY");
 ok("new signals start review_status NEW", hv.review_status === "NEW");
 ok("no signal carries a published flag", [hv, crane, fdep].every(s => !("published" in s) && !("publish" in s)));
 ok("versioned model", hv.signal_version === "SignalV1" && V.VERSION === "SignalV1");
+const signalServiceSource = fs.readFileSync(path.join(__dirname, "..", "signals.js"), "utf8");
+ok("public deed layers read the freshness-gated view",
+   (signalServiceSource.match(/table: "broward_property_transfer_current"/g) || []).length === 2);
+ok("public deed layers never read the ungated materialized snapshot",
+   !/table: "broward_property_transfer_map"/.test(signalServiceSource));
 
 section("LAYERS / LEGEND");
 ok("8 product layers defined", Object.keys(V.LAYER_LABEL).length === 8, JSON.stringify(Object.keys(V.LAYER_LABEL)));
@@ -171,6 +188,34 @@ ok("every live family maps to defined layers",
    V.SOURCE_FAMILIES.filter(f => f.status === "live").every(f => f.layers.length > 0 && f.layers.every(l => !!V.LAYER_LABEL[l])));
 ok("every planned family is empty and explained",
    V.SOURCE_FAMILIES.filter(f => f.status === "planned").every(f => f.layers.length === 0 && !!f.note));
+
+section("BRAND ASSET SAFETY");
+const productionExtensions = new Set([".css", ".html", ".js", ".py", ".sh"]);
+const ignoredProductionDirs = new Set([".git", "FABLE_ANALYSIS_2026-07-20", "mailchimp", "output"]);
+function productionFiles(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap(function (entry) {
+    if (entry.name === "tests" || ignoredProductionDirs.has(entry.name)) return [];
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) return productionFiles(fullPath);
+    return productionExtensions.has(path.extname(entry.name).toLowerCase()) ? [fullPath] : [];
+  });
+}
+const withdrawnEmblemReferences = productionFiles(path.join(__dirname, ".."))
+  .filter(function (file) { return fs.readFileSync(file, "utf8").includes("emblem-2026"); })
+  .map(function (file) { return path.relative(path.join(__dirname, ".."), file); });
+ok("withdrawn arrow-emblem assets are not referenced by production code",
+   withdrawnEmblemReferences.length === 0,
+   withdrawnEmblemReferences.join(", "));
+const stylesheetSource = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
+ok("canonical emblem is not used as a decorative CSS background",
+   !/mark-(?:full-color|white)\.png/.test(stylesheetSource));
+
+section("NEWSLETTER INTERRUPTION SAFETY");
+const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
+ok("brief modal is restricted to the explicit preview URL",
+   /const forcePreview[^;]+;\s*\/\/[^\n]*\n[^\n]*\/\/[^\n]*\n\s*if \(!forcePreview\) return;/.test(appSource));
+ok("retired ten-second prompt source cannot reappear",
+   !appSource.includes("ten-second-prompt"));
 
 console.log("\n================ RESULT ================");
 console.log("  passed: " + pass + "   failed: " + fail);

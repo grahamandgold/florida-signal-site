@@ -49,7 +49,7 @@
     ["meetings", "Meetings + agendas"], ["property", "Property + ownership"],
     ["liens", "Liens + courthouse"], ["storm", "Storm readiness"]
   ];
-  const recordSelect = "permit_number,address,permit_type,permit_category,description,valuation_usd_clean,applied_date,issued_date,last_seen_at,lat,lon,region,contractor_name,applicant_name,owner_name,status,work_type,is_commercial";
+  const recordSelect = "permit_number,address,permit_type,permit_category,description,valuation,valuation_usd_clean,applied_date,issued_date,last_seen_at,lat,lon,region,contractor_name,applicant_name,owner_name,status,work_type,is_commercial";
   const numberFormat = new Intl.NumberFormat("en-US");
   const compactFormat = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
   const moneyFormat = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -85,6 +85,10 @@
     els('[data-stat="' + name + '"]').forEach(function (node) { node.textContent = value; });
   }
   function recordDate(record) { return record.applied_date || record.issued_date || record.last_seen_at; }
+  function permitDeclaredValue(record) {
+    const value = Number(record && record.valuation);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
   function recordHeadline(record) {
     const address = titleCase(String(record.address || "an address").replace(/\s+/g, " ").trim());
     const description = String(record.description || "").replace(/\s+/g, " ").trim();
@@ -127,7 +131,7 @@
     if (/(roof|reroof|re-roof)/.test(text)) tags.push("topic:roofing");
     if (/(new construction|new building|addition|development)/.test(text)) tags.push("topic:development");
     if (record.is_commercial === true || /commercial/.test(text)) tags.push("asset:commercial");
-    if (Number(record.valuation_usd_clean || 0) >= 250000) tags.push("urgency:high-value");
+    if (Number(permitDeclaredValue(record) || 0) >= 250000) tags.push("urgency:high-value");
     if (!String(record.contractor_name || "").trim()) tags.push("qualification:operator-unlisted");
     return uniqueTags(tags);
   }
@@ -273,13 +277,13 @@
       fastCount("permits", { lat: "not.is.null", lon: "not.is.null" }),
       fastCount("permits", { source_sunbiz: "not.is.null" }),
       supabase("permits", { select: recordSelect, applied_date: "gte." + CURRENT_MONTH_START, lat: "not.is.null", lon: "not.is.null", order: "applied_date.desc.nullslast,last_seen_at.desc.nullslast", limit: "700" }).then(function (r) { return r.json(); }),
-      supabase("permits", { select: recordSelect, applied_date: "gte." + CURRENT_MONTH_START, valuation_usd_clean: "gte.100000", order: "applied_date.desc.nullslast,valuation_usd_clean.desc.nullslast", limit: "40" }).then(function (r) { return r.json(); }),
+      supabase("permits", { select: recordSelect, applied_date: "gte." + CURRENT_MONTH_START, valuation: "gte.100000", order: "applied_date.desc.nullslast,valuation.desc.nullslast", limit: "40" }).then(function (r) { return r.json(); }),
       fetchApplicationDates()
     ]);
 
     if (results[0].status === "fulfilled" && results[0].value[0]) state.dashboard = results[0].value[0];
     state.records = results[4].status === "fulfilled" ? results[4].value.sort(function (a, b) { return String(b.applied_date || "").localeCompare(String(a.applied_date || "")) || String(b.last_seen_at || "").localeCompare(String(a.last_seen_at || "")); }) : [];
-    state.featured = results[5].status === "fulfilled" ? results[5].value.sort(function (a, b) { return String(b.applied_date || "").localeCompare(String(a.applied_date || "")) || Number(b.valuation_usd_clean || 0) - Number(a.valuation_usd_clean || 0); }) : [];
+    state.featured = results[5].status === "fulfilled" ? results[5].value.sort(function (a, b) { return String(b.applied_date || "").localeCompare(String(a.applied_date || "")) || Number(permitDeclaredValue(b) || 0) - Number(permitDeclaredValue(a) || 0); }) : [];
     state.applicationDates = results[6].status === "fulfilled" ? results[6].value : [];
 
     const stats = state.dashboard && state.dashboard.payload ? state.dashboard.payload.stats || {} : {};
@@ -321,7 +325,7 @@
         return n >= 1000000 ? "$" + (n / 1000000).toFixed(1).replace(/\.0$/, "") + "M" : "$" + Math.round(n / 1000) + "K";
       };
       const railItems = state.featured.slice(0, 8).map(function (r) {
-        const money = railMoney(r.valuation_usd_clean);
+        const money = railMoney(permitDeclaredValue(r));
         const place = r.address || r.permit_number || "Fort Lauderdale";
         const kind = r.work_type || r.permit_type || "application";
         return (money ? money + " " : "") + String(kind).toLowerCase() + " filed · " + place;
@@ -415,7 +419,7 @@
     grid.innerHTML = stories.map(function (story, index) {
       const tags = Array.isArray(story.tags) ? story.tags : [];
       return '<article class="story-card ' + (index === 0 ? "story-card--lead" : "") + '">' +
-        (story.hero_image ? '<a class="story-card__image" href="' + publicStoryUrl(story) + '"><img src="' + escapeHtml(story.hero_image) + '" alt=""></a>' : '<a class="story-card__mark" href="' + publicStoryUrl(story) + '" aria-label="Open ' + escapeHtml(story.title) + '"><img src="/assets/emblem-2026.png" alt=""></a>') +
+        (story.hero_image ? '<a class="story-card__image" href="' + publicStoryUrl(story) + '"><img src="' + escapeHtml(story.hero_image) + '" alt=""></a>' : '<a class="story-card__mark" href="' + publicStoryUrl(story) + '" aria-label="Open ' + escapeHtml(story.title) + '"><img src="/assets/mark-full-color.png" alt=""></a>') +
         '<div>' + taxonomyLine(tags, "Filed under") + '<p class="story-card__date">' + escapeHtml(formatDate(story.event_date || story.published_at, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '</p><h2><a href="' + publicStoryUrl(story) + '">' + escapeHtml(story.title) + '</a></h2><p>' + escapeHtml(story.summary || "Approved Florida Desk report") + '</p><footer><span>' + escapeHtml(story.byline || "Florida Signal Desk") + '</span><a href="' + publicStoryUrl(story) + '">Read + sources →</a><button type="button" data-report-add data-report-id="story:' + escapeHtml(story.slug || story.id || publicStoryUrl(story)) + '" data-report-title="' + escapeHtml(story.title) + '" data-report-meta="Approved Florida Signal brief · ' + escapeHtml(formatDate(story.event_date || story.published_at, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '" data-report-url="' + escapeHtml(publicStoryUrl(story)) + '" data-report-tags="' + taxonomyAttribute(tags) + '">＋ Add to report</button></footer></div></article>';
     }).join("");
   }
@@ -451,12 +455,14 @@
       return;
     }
     list.innerHTML = candidates.map(function (record) {
-      const value = Number(record.valuation_usd_clean);
+      const value = permitDeclaredValue(record);
       const contractor = record.contractor_name ? titleCase(record.contractor_name) : "Contractor not yet listed";
       const tags = recordTaxonomy(record);
+      const address = titleCase(String(record.address || "Address pending").replace(/\s+/g, " ").trim());
+      const scope = titleCase(record.permit_type || record.permit_category || record.description || "Permit application");
       return '<div class="signal-row-wrap" data-signal-tags="' + taxonomyAttribute(tags) + '"><a class="signal-row" href="' + recordUrl(record) + '">' +
         '<div class="signal-row__date">' + escapeHtml(formatDate(recordDate(record), { month: "short", day: "numeric", timeZone: "America/New_York" })) + '</div>' +
-        '<div>' + placeSignature(record) + taxonomyLine(tags) + '<h3>' + escapeHtml(recordHeadline(record)) + '</h3><p class="signal-row__meta">' + escapeHtml(record.permit_number || "Record ID pending") + ' · ' + escapeHtml(contractor) + '</p></div>' +
+        '<div>' + placeSignature(record) + taxonomyLine(tags, "Record lens") + '<h3>' + escapeHtml(address) + '</h3><p class="signal-row__meta"><strong>Raw filing</strong> · ' + escapeHtml(scope) + ' · ' + escapeHtml(record.permit_number || "Record ID pending") + ' · ' + escapeHtml(contractor) + '</p></div>' +
         '<div class="signal-row__value"><strong>' + (Number.isFinite(value) && value > 0 ? escapeHtml(moneyFormat.format(value)) : "Filed") + '</strong><span>' + (Number.isFinite(value) && value > 0 ? "declared value" : "public record") + '</span></div>' +
         '<span class="signal-row__arrow" aria-hidden="true">→</span></a>' + recordShareMarkup(record) + '</div>';
     }).join("");
@@ -603,7 +609,7 @@
   }
 
   function mapPopup(record) {
-    const value = Number(record.valuation_usd_clean);
+    const value = permitDeclaredValue(record);
     const investigate = recordInvestigationUrls(record);
     const title = "Florida Signal · " + recordPlace(record) + " · " + titleCase(String(record.address || record.permit_number || "development record").replace(/\s+/g, " "));
     const tags = recordTaxonomy(record);
@@ -624,7 +630,7 @@
     const text = [record.permit_type, record.description].join(" ");
     if (/(demo|demolition)/i.test(text)) return "#ff6d3a";
     if (isStormRecord(record)) return "#1767ff";
-    if (Number(record.valuation_usd_clean) >= 500000) return "#071b32";
+    if (Number(permitDeclaredValue(record) || 0) >= 500000) return "#071b32";
     return "#00b8dc";
   }
 
@@ -634,7 +640,7 @@
     records.forEach(function (record) {
       if (!Number.isFinite(Number(record.lat)) || !Number.isFinite(Number(record.lon))) return;
       const marker = L.circleMarker([Number(record.lat), Number(record.lon)], {
-        radius: Number(record.valuation_usd_clean) >= 500000 ? 7 : 5,
+        radius: Number(permitDeclaredValue(record) || 0) >= 500000 ? 7 : 5,
         color: "#ffffff",
         weight: 1.5,
         fillColor: markerColor(record),
@@ -811,7 +817,7 @@
       return '<div class="neighborhood-profile__map" aria-hidden="true"><svg viewBox="0 0 520 360" preserveAspectRatio="xMidYMid slice"><g class="neighborhood-profile__grid">' + grid + '</g><path class="neighborhood-profile__boundary" d="' + paths + '"></path><g>' + dots + '</g></svg><span class="neighborhood-profile__map-label"><i></i> Official boundary · live filings</span><strong class="neighborhood-profile__map-count">' + formatNumber(item.count) + '</strong></div>';
     }
     profiles.innerHTML = items.slice(0, 6).map(function (item, index) {
-      const declared = item.records.reduce(function (sum, record) { return sum + Number(record.valuation_usd_clean || 0); }, 0);
+      const declared = item.records.reduce(function (sum, record) { return sum + Number(permitDeclaredValue(record) || 0); }, 0);
       const operators = new Set(item.records.map(function (record) { return String(record.contractor_name || "").trim().toLowerCase(); }).filter(Boolean)).size;
       const storm = item.records.filter(isStormRecord).length;
       const dates = item.records.map(function (record) { return record.applied_date; }).filter(Boolean).sort();
@@ -849,12 +855,18 @@
       tag.style.letterSpacing = "normal";
       tag.style.textIndent = "0px";
       const target = name.getBoundingClientRect().width;
-      const natural = tag.getBoundingClientRect().width;
+      // The tag is a full-width block, so its element box is already as wide as the
+      // wordmark. Measure the rendered glyphs instead; measuring the box made the
+      // computed tracking zero and left the tagline visibly short.
+      const range = document.createRange();
+      range.selectNodeContents(tag);
+      const natural = range.getBoundingClientRect().width;
+      range.detach();
       const chars = text.length;
       if (!target || !natural || chars < 2) return;
-      const ls = Math.max(0, (target - natural) / chars);
+      const ls = Math.max(0, (target - natural) / (chars - 1));
       tag.style.letterSpacing = ls.toFixed(3) + "px";
-      tag.style.textIndent = ls.toFixed(3) + "px";   // offset the trailing space so it stays centred
+      tag.style.textIndent = "0px";
     });
   }
 
@@ -901,13 +913,14 @@
     L.DomEvent.disableClickPropagation(badge);
     container.appendChild(badge);
     if (!container.querySelector(".map-key")) {
-      const key = document.createElement("div");
+      const key = document.createElement("details");
       key.className = "map-key";
-      key.innerHTML = '<b>Key · permit applications</b>' +
+      key.open = !window.matchMedia("(max-width: 900px)").matches;
+      key.innerHTML = '<summary>Key · permit applications</summary><div class="map-key__body">' +
         '<span><i style="background:#00b8dc"></i>Application</span>' +
         '<span><i style="background:#071b32"></i>$500K+ declared</span>' +
         '<span><i style="background:#1767ff"></i>Storm-related</span>' +
-        '<span><i style="background:#ff6d3a"></i>Demolition</span>';
+        '<span><i style="background:#ff6d3a"></i>Demolition</span></div>';
       L.DomEvent.disableClickPropagation(key);
       container.appendChild(key);
     }
@@ -958,15 +971,17 @@
 
   function recordSpotlightItem(record) {
     const tags = recordTaxonomy(record);
+    const address = titleCase(String(record.address || "Address pending").replace(/\s+/g, " ").trim());
+    const scope = titleCase(record.permit_type || record.permit_category || record.description || "Permit application");
     return {
       lat: record.lat,
       lon: record.lon,
-      title: recordHeadline(record),
-      meta: recordPlace(record) + " · applied " + formatDate(record.applied_date, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) + " · " + (record.permit_number || "record ID pending"),
+      title: address,
+      meta: scope + " · " + recordPlace(record) + " · applied " + formatDate(record.applied_date, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) + " · " + (record.permit_number || "record ID pending"),
       url: recordUrl(record),
       linkLabel: "Open exact filing on the full map →",
       color: markerColor(record),
-      weight: Number(record.valuation_usd_clean || 0) >= 500000 ? 2 : 0,
+      weight: Number(permitDeclaredValue(record) || 0) >= 500000 ? 2 : 0,
       tags: tags,
       record: record
     };
@@ -977,9 +992,9 @@
     const windowNode = el("#signals-window");
     if (windowNode) {
       const dates = signalRecords.map(function (record) { return record.applied_date; }).filter(Boolean).sort();
-      windowNode.textContent = dates.length ? "Application window · " + formatDate(dates[0], { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) + "–" + formatDate(dates[dates.length - 1], { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) + " · " + formatNumber(signalRecords.length) + " mapped signals" : "Application-date window unavailable; batch time not substituted.";
+      windowNode.textContent = dates.length ? "Application window · " + formatDate(dates[0], { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) + "–" + formatDate(dates[dates.length - 1], { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) + " · " + formatNumber(signalRecords.length) + " mapped filings" : "Application-date window unavailable; batch time not substituted.";
     }
-    renderSpyglass("signal", signalRecords.map(recordSpotlightItem), { color: "#009f91", popupKicker: "What’s Moving Spotlight" });
+    renderSpyglass("signal", signalRecords.map(recordSpotlightItem), { color: "#009f91", popupKicker: "New permit filing" });
     const stormRecords = state.records.filter(isStormRecord);
     renderSpyglass("storm", stormRecords.map(recordSpotlightItem), { color: "#a81920", popupKicker: "Storm Readiness Spotlight", maxZoom: 13 });
   }
@@ -1492,13 +1507,13 @@
     const filters = {
       new: function (record) { return String(record.applied_date || "") >= APPLICATION_WINDOW_START; },
       unassigned: function (record) { return !String(record.contractor_name || "").trim(); },
-      high: function (record) { return Number(record.valuation_usd_clean || 0) >= 250000; },
+      high: function (record) { return Number(permitDeclaredValue(record) || 0) >= 250000; },
       storm: isStormRecord,
       association: isAssociationRecord
     };
     const filter = filters[state.leadLens] || filters.new;
     const candidates = state.records.filter(filter).sort(function (a, b) {
-      return String(b.applied_date || "").localeCompare(String(a.applied_date || "")) || Number(b.valuation_usd_clean || 0) - Number(a.valuation_usd_clean || 0);
+      return String(b.applied_date || "").localeCompare(String(a.applied_date || "")) || Number(permitDeclaredValue(b) || 0) - Number(permitDeclaredValue(a) || 0);
     }).slice(0, 8);
     state.leadResults = candidates;
     if (!candidates.length) {
@@ -1506,7 +1521,7 @@
       return;
     }
     list.innerHTML = candidates.map(function (record, index) {
-      const value = Number(record.valuation_usd_clean || 0);
+      const value = Number(permitDeclaredValue(record) || 0);
       const operator = record.contractor_name ? titleCase(record.contractor_name) : "Operator not listed";
       const tags = recordTaxonomy(record).concat(["format:lead-card", "qualification:" + state.leadLens]);
       return '<div class="lead-card-wrap" data-signal-tags="' + taxonomyAttribute(tags) + '"><button class="lead-card" type="button" data-lead-index="' + index + '">' +
@@ -1566,7 +1581,7 @@
     const scope = fullSearch ? "live permit table" : "current map sample — full search temporarily unavailable";
     resultsNode.innerHTML = '<div class="record-search-results__head"><p><strong>' + escapeHtml(status) + '</strong><span>“' + escapeHtml(query) + '” · ' + escapeHtml(scope) + '</span></p><button type="button" data-close-search aria-label="Close search results">×</button></div>' +
       (matches.length ? '<div class="record-result-list">' + matches.map(function (record, index) {
-        const value = Number(record.valuation_usd_clean || 0);
+        const value = Number(permitDeclaredValue(record) || 0);
         const tags = recordTaxonomy(record).concat(["format:search-result"]);
         return '<div class="record-result-wrap" data-signal-tags="' + taxonomyAttribute(tags) + '"><button class="record-result" type="button" data-record-result="' + index + '"><span class="record-result__type">' + escapeHtml(record.permit_type || record.permit_category || "Permit") + '</span><strong>' + escapeHtml(titleCase(String(record.address || "Address pending").replace(/\s+/g, " "))) + '</strong>' + placeSignature(record) + taxonomyLine(tags, "Filed under") + '<span>' + escapeHtml(record.contractor_name ? titleCase(record.contractor_name) : "Contractor not listed") + '</span><em>' + (value > 0 ? escapeHtml(moneyFormat.format(value)) : "Value not listed") + ' · ' + escapeHtml(formatDate(recordDate(record), { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '</em></button>' + recordShareMarkup(record) + '</div>';
       }).join("") + '</div>' : '<p class="record-search__empty">Try a street name, permit number, company, or work type such as roof, seawall or demolition.</p>');
@@ -1857,9 +1872,9 @@
       return { label: family.label, value: state.records.filter(function (record) { return family.test.test([record.permit_type, record.permit_category, record.description].join(" ")); }).length };
     }).sort(function (a, b) { return b.value - a.value; }).slice(0, 5);
 
-    const highValue = state.featured.filter(function (record) { return Number(record.valuation_usd_clean) > 0; });
-    const highValueTotal = highValue.reduce(function (sum, record) { return sum + Number(record.valuation_usd_clean || 0); }, 0);
-    const highValueTop = highValue.slice().sort(function (a, b) { return Number(b.valuation_usd_clean || 0) - Number(a.valuation_usd_clean || 0); })[0];
+    const highValue = state.featured.filter(function (record) { return Number(permitDeclaredValue(record) || 0) > 0; });
+    const highValueTotal = highValue.reduce(function (sum, record) { return sum + Number(permitDeclaredValue(record) || 0); }, 0);
+    const highValueTop = highValue.slice().sort(function (a, b) { return Number(permitDeclaredValue(b) || 0) - Number(permitDeclaredValue(a) || 0); })[0];
     const stormRecords = state.records.filter(isStormRecord);
     const nextMeeting = state.meetings[0];
     const applicationThrough = state.applicationDates.concat(state.records.map(function (record) { return record.applied_date; })).filter(Boolean).sort().slice(-1)[0];
@@ -1911,7 +1926,7 @@
     }
 
     function network(items) {
-      return '<div class="graphic-network"><div class="graphic-network__core"><img src="/assets/emblem-2026.png" alt=""><span>ENTITY<br>LENS</span></div>' + items.map(function (item, index) {
+      return '<div class="graphic-network"><div class="graphic-network__core"><img src="/assets/mark-full-color.png" alt=""><span>ENTITY<br>LENS</span></div>' + items.map(function (item, index) {
         return '<div class="graphic-network__node graphic-network__node--' + (index + 1) + '"><strong>' + escapeHtml(item.value) + '</strong><span>' + escapeHtml(item.label) + '</span></div>';
       }).join("") + '</div>';
     }
@@ -1932,10 +1947,10 @@
       const openLink = settings.href ? '<a class="graphic-card__open" href="' + escapeHtml(settings.href) + '">' + escapeHtml(settings.linkLabel || "Open the connected intelligence") + ' →</a>' : '';
       return '<article class="graphic-card ' + (settings.tone === "navy" ? "graphic-card--navy " : "") + (settings.wide ? "graphic-card--wide" : "") + '" data-signal-tags="' + taxonomyAttribute(tags) + '" id="' + slug + '">' +
         '<div class="graphic-card__top"><p>' + escapeHtml(kicker) + '</p><span>' + escapeHtml(settings.status || "REAL RECORD") + '</span></div>' +
-        '<span class="graphic-card__crest" aria-hidden="true"><img src="/assets/emblem-2026.png" alt=""></span>' +
+        '<span class="graphic-card__crest" aria-hidden="true"><img src="/assets/mark-full-color.png" alt=""></span>' +
         '<h2>' + title + '</h2><p class="graphic-card__dek">' + dek + '</p>' + openLink + '<div class="graphic-card__body">' + body + '</div>' +
         '<p class="graphic-card__clock">' + escapeHtml(settings.clock || "Public event date · data update shown") + '</p><a class="graphic-card__sponsor" href="mailto:desk@thefloridasignal.com?subject=' + encodeURIComponent("Sponsor Florida Signal graphic: " + slug) + '"><span>Present this intelligence</span><strong>Your logo here ↗</strong></a>' +
-        '<div class="graphic-card__brand"><span><img src="/assets/' + (settings.tone === "navy" ? "emblem-2026-white.png" : "emblem-2026.png") + '" alt=""><b>Florida Signal</b><small>Development intelligence</small></span><time>' + escapeHtml(settings.stamp || applicationWindowStamp) + '</time><div>' +
+        '<div class="graphic-card__brand"><span><img src="/assets/' + (settings.tone === "navy" ? "mark-white.png" : "mark-full-color.png") + '" alt=""><b>Florida Signal</b><small>Development intelligence</small></span><time>' + escapeHtml(settings.stamp || applicationWindowStamp) + '</time><div>' +
         '<a class="publish-social publish-social--x" data-network="X" href="https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareTitle) + '&url=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on X">X</a>' +
         '<a class="publish-social publish-social--linkedin" data-network="LinkedIn" href="https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on LinkedIn">in</a>' +
         '<a class="publish-social publish-social--facebook" data-network="Facebook" href="https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(pageUrl) + '" target="_blank" rel="noreferrer" aria-label="Share on Facebook">f</a>' +
@@ -1975,7 +1990,7 @@
       card("application-pulse", "APPLICATION DATES · 14 CALENDAR DAYS", formatNumber(applicationTotal) + " <em>FILED</em>", "Fort Lauderdale permit applications grouped by the date the public application was filed—not by the day a batch arrived.", pulseBody, { tone: "navy", wide: true, status: "LIVE QUERY", stamp: applicationWindowStamp, clock: "City permit table · applied_date · window " + spanDate(APPLICATION_WINDOW_START, now.toISOString().slice(0, 10)) + " · latest filing present " + stampDate(applicationThrough) + " · zero days retained", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Explore these filings on the live map" }),
       card("place-lens", "HYPERLOCAL · OFFICIAL BOUNDARIES", "PLACE <em>LENS</em>", "The newest geocoded application sample resolved into official City neighborhoods and Census ZIP areas. Circle size expresses relative filing count inside this sample.", placeBody, { wide: true, status: "CITY + CENSUS", stamp: mappedStamp, clock: "Newest " + formatNumber(state.records.length) + " geocoded permit applications returned · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · City neighborhoods + Census ZCTAs", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Open the neighborhood and ZIP map" }),
       card("trades-pulse", "DIAGRAM OF THE DAY · LIVE WORK MIX", "WHAT FORT LAUDERDALE IS <em>BUILDING</em>", "Permit categories become momentum intelligence when trade mix, place and filing time are read together.", bars(trades), { tone: "navy", wide: true, status: "LIVE QUERY", stamp: mappedStamp, clock: "Newest " + formatNumber(state.records.length) + " geocoded applications · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · categories may overlap when one filing names more than one trade", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Investigate the work mix on the map" }),
-      card("high-value", "CAPPED HIGH-VALUE FILING QUEUE", highValueTop ? escapeHtml(moneyFormat.format(Number(highValueTop.valuation_usd_clean))) + " <em>TOP FILING</em>" : "VALUE <em>PENDING</em>", highValueTop ? escapeHtml(recordHeadline(highValueTop)) : "No valued high-dollar filing is available in the current query.", tiles([{ value: highValue.length ? formatNumber(highValue.length) : "0", label: "valued records returned" }, { value: highValueTotal ? compactFormat.format(highValueTotal) : "$0", label: "declared value in returned queue" }]), { stamp: featuredStamp, clock: "First " + formatNumber(state.featured.length) + " records in ordered current-month $100K+ query · applied_date span " + spanDate(featuredDates[0], featuredDates.slice(-1)[0]) + " · not a complete monthly total", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Open the exact high-value filings" }),
+      card("high-value", "CAPPED HIGH-VALUE FILING QUEUE", highValueTop ? escapeHtml(moneyFormat.format(Number(permitDeclaredValue(highValueTop)))) + " <em>TOP FILING</em>" : "VALUE <em>PENDING</em>", highValueTop ? escapeHtml(recordHeadline(highValueTop)) : "No valued high-dollar filing is available in the current query.", tiles([{ value: highValue.length ? formatNumber(highValue.length) : "0", label: "valued records returned" }, { value: highValueTotal ? compactFormat.format(highValueTotal) : "$0", label: "declared value in returned queue" }]), { stamp: featuredStamp, clock: "First " + formatNumber(state.featured.length) + " records in ordered current-month $100K+ query · applied_date span " + spanDate(featuredDates[0], featuredDates.slice(-1)[0]) + " · native permit valuation only · not a complete monthly total", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Open the exact high-value filings" }),
       card("value-universe", "ENRICHED PROPERTY CONTEXT", "VALUE <em>LADDER</em>", "Where parcel-linked permit records sit across the best-available property-value universe.", bars(values), { tone: "navy", stamp: cacheStamp, clock: "Verified dashboard snapshot · enriched property values · update time shown", href: PUBLIC_ROUTES.broward, linkLabel: "Open the Broward property record" }),
       card("operator-board", "NORMALIZED CONTRACTOR NAMES", "OPERATOR <em>BOARD</em>", "Names appearing most often in the normalized public record set. This measures filing activity—not quality or performance.", ranks(contractors), { stamp: cacheStamp, clock: "Verified dashboard snapshot · normalized contractor names · not a performance ranking", href: PUBLIC_ROUTES.broward, linkLabel: "Open the operator evidence" }),
       card("records-desk", "BROWARD RECORD · COVERAGE", "RECORDS <em>DESK</em>", "Recorded instruments, parcel links, ownership changes and permit joins—shown with their separate scales and source dates.", recordRings + '<p class="graphic-inline-stat"><strong>' + formatNumber(parcelCoverage) + '%</strong> of tracked permit records parcel-linked</p>', { tone: "navy", stamp: browardStamp, clock: "Broward records · latest recording date " + (stats.broward_fresh ? formatDate(stats.broward_fresh, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "pending"), href: PUBLIC_ROUTES.broward, linkLabel: "Open deeds, liens and ownership intelligence" }),
@@ -2467,6 +2482,9 @@
 
   function initBriefPrompt() {
     const forcePreview = new URLSearchParams(window.location.search).get("brief-preview") === "1";
+    // Keep the modal as a deliberate review surface only. Field, map, search,
+    // storm and first-session visits must never be interrupted by a timer.
+    if (!forcePreview) return;
     let subscribed = false;
     let recentlyDismissed = false;
     let shownThisSession = false;
@@ -2480,7 +2498,7 @@
     const prompt = document.createElement("div");
     prompt.className = "brief-prompt";
     prompt.hidden = true;
-    prompt.innerHTML = '<div class="brief-prompt__backdrop" data-brief-prompt-close></div><section class="brief-prompt__dialog" role="dialog" aria-modal="true" aria-labelledby="brief-prompt-title" aria-describedby="brief-prompt-dek"><button class="brief-prompt__close" type="button" data-brief-prompt-close aria-label="Close Daily Intel Brief signup">×</button><div class="brief-prompt__mark" aria-hidden="true"><img src="/assets/emblem-2026.png" alt=""></div><p class="eyebrow"><span class="pulse" aria-hidden="true"></span>Tomorrow starts tonight</p><h2 id="brief-prompt-title">Get the 6:15 Daily Intel Brief.</h2><p id="brief-prompt-dek">One sharp Broward email: consequential filings, neighborhood movement, meetings, storm readiness and the records behind every claim.</p><form class="signup signup--prompt" data-signup-form data-signup-source="ten-second-prompt"><label class="sr-only" for="prompt-email">Email address</label><input id="prompt-email" name="email" type="email" autocomplete="email" placeholder="Your email address" required><label class="sr-only" for="prompt-zip">ZIP you watch</label><input id="prompt-zip" name="zip" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{5}(-[0-9]{4})?" placeholder="ZIP you watch" required><button type="submit">Send me the brief →</button><p class="signup__message" data-signup-message aria-live="polite"></p></form><p class="brief-prompt__fine">Free · Broward Audience · unsubscribe anytime · powered by Graham &amp; Gold LLC</p></section>';
+    prompt.innerHTML = '<div class="brief-prompt__backdrop" data-brief-prompt-close></div><section class="brief-prompt__dialog" role="dialog" aria-modal="true" aria-labelledby="brief-prompt-title" aria-describedby="brief-prompt-dek"><button class="brief-prompt__close" type="button" data-brief-prompt-close aria-label="Close Daily Intel Brief signup">×</button><div class="brief-prompt__mark" aria-hidden="true"><img src="/assets/mark-full-color.png" alt=""></div><p class="eyebrow"><span class="pulse" aria-hidden="true"></span>Tomorrow starts tonight</p><h2 id="brief-prompt-title">Get the 6:15 Daily Intel Brief.</h2><p id="brief-prompt-dek">One sharp Broward email: consequential filings, neighborhood movement, meetings, storm readiness and the records behind every claim.</p><form class="signup signup--prompt" data-signup-form data-signup-source="manual-preview"><label class="sr-only" for="prompt-email">Email address</label><input id="prompt-email" name="email" type="email" autocomplete="email" placeholder="Your email address" required><label class="sr-only" for="prompt-zip">ZIP you watch</label><input id="prompt-zip" name="zip" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{5}(-[0-9]{4})?" placeholder="ZIP you watch" required><button type="submit">Send me the brief →</button><p class="signup__message" data-signup-message aria-live="polite"></p></form><p class="brief-prompt__fine">Free · Broward Audience · unsubscribe anytime · powered by Graham &amp; Gold LLC</p></section>';
     document.body.appendChild(prompt);
     const closeButtons = els("[data-brief-prompt-close]", prompt);
     let previousFocus = null;
@@ -2503,16 +2521,15 @@
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     });
-    const promptDelay = forcePreview ? 300 : 10000;
     window.setTimeout(function () {
       if (document.hidden || prompt.classList.contains("is-open")) return;
       previousFocus = document.activeElement;
       prompt.hidden = false;
       document.body.classList.add("brief-prompt-open");
       window.requestAnimationFrame(function () { prompt.classList.add("is-open"); const close = el(".brief-prompt__close", prompt); if (close) close.focus(); });
-      trackEvent("brief_prompt_view", { placement: "ten-second-prompt" });
+      trackEvent("brief_prompt_view", { placement: "manual-preview" });
       try { window.sessionStorage.setItem("florida-signal-brief-prompt-shown", "yes"); } catch (error) { /* Storage is optional. */ }
-    }, promptDelay);
+    }, 300);
   }
 
   function initSponsorInventory() {
@@ -2573,7 +2590,7 @@
       const sources = Array.isArray(payload.sources) ? payload.sources : [];
       const counts = sources.reduce(function (result, source) { result[source.status] = (result[source.status] || 0) + 1; return result; }, {});
       const summary = el("summary strong", details);
-      if (summary) summary.textContent = [counts.current ? counts.current + " current" : "", counts.delayed ? counts.delayed + " delayed" : "", counts.stale ? counts.stale + " stale" : "", counts.unverified ? counts.unverified + " unverified" : ""].filter(Boolean).join(" · ") || "Source clocks unavailable";
+      if (summary) summary.textContent = [counts.current ? counts.current + " current" : "", counts.delayed ? counts.delayed + " delayed" : "", counts.stale ? counts.stale + " stale" : "", counts.suppressed ? counts.suppressed + " suppressed" : "", counts.error ? counts.error + " error" : "", counts.unavailable ? counts.unavailable + " unavailable" : "", counts.unverified ? counts.unverified + " unverified" : ""].filter(Boolean).join(" · ") || "Source clocks unavailable";
       const grid = el(".source-health__grid", details);
       grid.innerHTML = sources.map(function (source) {
         const eventClock = source.event_through ? "Event through " + formatDate(source.event_through, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "Event date varies by item";
@@ -3100,7 +3117,7 @@
         const printWindow = window.open("", "_blank");
         if (!printWindow) { status.textContent = "Allow pop-ups to print this report."; return; }
         const rows = items.map(function (item, index) { return '<article><span>' + String(index + 1).padStart(2, "0") + '</span><div><h2>' + escapeHtml(item.title) + '</h2><p>' + escapeHtml(item.meta || "") + '</p><a href="' + escapeHtml(item.url || "") + '">' + escapeHtml(item.url || "") + '</a><small>' + escapeHtml((item.tags || "").replace(/\s+/g, " · ")) + '</small></div></article>'; }).join("");
-        printWindow.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Florida Signal Field Brief</title><style>*{box-sizing:border-box}body{margin:38px;color:#071b32;font:14px Arial,sans-serif}header{position:relative;padding:24px 0;border-top:8px solid #00a596;border-bottom:1px solid #cbd8dc}header:after{content:"";position:absolute;right:10px;top:5px;width:120px;height:140px;background:url("' + window.location.origin + '/assets/emblem-2026.png") center/contain no-repeat;opacity:.1}header img{width:330px}header p{margin:8px 0 0;color:#63788b;text-transform:uppercase;letter-spacing:.12em;font-size:10px}main{margin-top:24px}article{display:grid;grid-template-columns:38px 1fr;gap:12px;padding:16px 0;border-bottom:1px solid #d8e1e4;break-inside:avoid}article>span{color:#009f91;font-weight:700}h2{margin:0 0 5px;font:24px Georgia,serif}p{margin:0 0 7px;color:#52697c}a{color:#007c72;font-size:10px;overflow-wrap:anywhere}small{display:block;margin-top:7px;color:#8797a3;font-size:8px;text-transform:uppercase}footer{margin-top:30px;padding-top:12px;border-top:2px solid #071b32;font-size:9px;color:#63788b}@media print{body{margin:12mm}}</style></head><body><header><img src="' + window.location.origin + '/assets/lockup-2026-v2.png" alt="Florida Signal"><p>Field Brief · ' + escapeHtml(new Date().toLocaleString("en-US", { timeZone: "America/New_York" })) + ' ET · ' + items.length + ' saved item' + (items.length === 1 ? '' : 's') + '</p></header><main>' + rows + '</main><footer>Florida Signal · Development Intelligence · Powered by Graham &amp; Gold LLC · Every item links to its cited public-record surface.</footer></body></html>');
+        printWindow.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Florida Signal Field Brief</title><style>*{box-sizing:border-box}body{margin:38px;color:#071b32;font:14px Arial,sans-serif}header{position:relative;padding:24px 0;border-top:8px solid #00a596;border-bottom:1px solid #cbd8dc}header img{width:330px}header p{margin:8px 0 0;color:#63788b;text-transform:uppercase;letter-spacing:.12em;font-size:10px}main{margin-top:24px}article{display:grid;grid-template-columns:38px 1fr;gap:12px;padding:16px 0;border-bottom:1px solid #d8e1e4;break-inside:avoid}article>span{color:#009f91;font-weight:700}h2{margin:0 0 5px;font:24px Georgia,serif}p{margin:0 0 7px;color:#52697c}a{color:#007c72;font-size:10px;overflow-wrap:anywhere}small{display:block;margin-top:7px;color:#8797a3;font-size:8px;text-transform:uppercase}footer{margin-top:30px;padding-top:12px;border-top:2px solid #071b32;font-size:9px;color:#63788b}@media print{body{margin:12mm}}</style></head><body><header><img src="' + window.location.origin + '/assets/lockup-2026-v2.png" alt="Florida Signal"><p>Field Brief · ' + escapeHtml(new Date().toLocaleString("en-US", { timeZone: "America/New_York" })) + ' ET · ' + items.length + ' saved item' + (items.length === 1 ? '' : 's') + '</p></header><main>' + rows + '</main><footer>Florida Signal · Development Intelligence · Powered by Graham &amp; Gold LLC · Every item links to its cited public-record surface.</footer></body></html>');
         printWindow.document.close();
         printWindow.focus();
         window.setTimeout(function () { printWindow.print(); }, 500);

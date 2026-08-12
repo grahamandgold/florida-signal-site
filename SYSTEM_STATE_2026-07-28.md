@@ -2,7 +2,16 @@
 
 **Verified July 28, 2026 · Graham & Gold LLC**
 
-This is the current operational and launch authority for Florida Signal. It supersedes
+> **Status amendment verified August 11, 2026:** the API paragraph below is a historical
+> July 28 finding and is no longer current. `api.thefloridasignal.com` now resolves to
+> `142.93.253.188`; `GET /api/health` returns HTTP 200 with
+> `mailchimp_configured:true` and `cms_configured:false`. The deployed API also persists
+> privacy-minimized analytics events in its private SQLite store. That store begins on
+> August 11 and contains no historical visitor record for the earlier public-preview period.
+> Do not repeat the July no-DNS or Mailchimp-not-configured statements as present facts.
+> Current authority: [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md).
+
+This was the operational and launch authority on July 28. It superseded
 the current-state claims in handoffs dated July 23, 2026 or earlier. Older dated documents
 remain useful historical evidence, but they do not describe today's branch, deployment,
 pipeline, or backup state.

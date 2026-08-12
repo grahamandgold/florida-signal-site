@@ -598,7 +598,7 @@
     const TABLES = {
       permits: {
         label: "Permits (Accela)",
-        select: "permit_number,applied_date,permit_type,work_type,status,address,valuation_usd_clean,contractor_name,owner_name",
+        select: "permit_number,applied_date,permit_type,work_type,status,address,valuation,valuation_usd_clean,contractor_name,owner_name",
         order: "applied_date.desc.nullslast",
         cols: [
           ["applied_date", "Applied", dateish],
@@ -606,7 +606,7 @@
           ["permit_type", "Type"],
           ["status", "Status"],
           ["address", "Address"],
-          ["valuation_usd_clean", "Valuation", money, "num"],
+          ["valuation", "Permit-declared value", money, "num"],
           ["contractor_name", "Contractor"],
           ["owner_name", "Owner"]
         ],
@@ -812,7 +812,7 @@
 
     const PRESETS = [
       { label: "Latest permits", table: "permits", extra: {} },
-      { label: "High value $100K+", table: "permits", extra: { valuation_usd_clean: "gte.100000" } },
+      { label: "Permit value $100K+", table: "permits", extra: { valuation: "gte.100000" } },
       { label: "Latest recordings", table: "broward_clerk_records_doc", extra: {} },
       { label: "Deeds", table: "broward_clerk_records_doc", extra: { doc_type_code: "eq.D" } },
       { label: "Deeds · mapped to parcels", table: "broward_property_transfer_map", extra: { doc_type_code: "eq.D", map_eligible: "is.true" } },

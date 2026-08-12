@@ -2,8 +2,8 @@
 
 > **HISTORICAL BUILD SNAPSHOT.** The body below records the July 17 build state and must not
 > be used as current deployment, pipeline, backup, or launch truth. Use
-> [`SYSTEM_STATE_2026-07-28.md`](SYSTEM_STATE_2026-07-28.md) and
-> [`REMAINING_WORK_REGISTER_2026-07-28.md`](REMAINING_WORK_REGISTER_2026-07-28.md).
+> [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md) and
+> [`EDITORIAL_LOOP_RUNBOOK.md`](EDITORIAL_LOOP_RUNBOOK.md).
 
 Updated July 17, 2026. This report is the launch-oriented source of truth for the build in this folder. It separates verified event data from system freshness, and finished interfaces from production infrastructure that still needs to be deployed.
 

@@ -1,46 +1,91 @@
 #!/usr/bin/env python3
-"""Persist Acclaim backfill progress.
-Usage: acclaim_state.py STATEFILE ISO_DATE status pages found inserted verified_max
-Updates the per-date record + top-level cursor and recomputes backlog_remaining.
+"""Persist Acclaim backfill progress without flagging a forming day as missing.
+
+Usage: acclaim_state.py STATEFILE ISO_DATE status pages found inserted verified_max [total_shown]
 """
-import json, os, sys, datetime
 
-statef, iso, status, pages, found, inserted, verified_max = (
-    sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]),
-    int(sys.argv[5]), int(sys.argv[6]), sys.argv[7])
-total_shown = int(sys.argv[8]) if len(sys.argv) > 8 else 0
+import datetime as dt
+import json
+import os
+import sys
 
-st = {"dates": {}}
-if os.path.exists(statef):
-    try:
-        st = json.load(open(statef))
-    except Exception:
-        st = {"dates": {}}
-st.setdefault("dates", {})
+from acclaim_targets import collection_end_date
 
-now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-st["dates"][iso] = {
-    "status": status, "pages": pages, "found": found, "total_shown": total_shown,
-    "inserted": inserted, "skipped": max(0, found - inserted), "at": now,
-}
-st["last_run_at"] = now
-st["verified_max_at_last_run"] = verified_max
-done = [d for d, v in st["dates"].items() if v.get("status") == "done"]
-if done:
-    st["last_completed_date"] = max(done)
 
-# Backlog = calendar dates after verified_max up to today not yet done.
-base = datetime.date.fromisoformat(verified_max)
-today = datetime.date.today()
-backlog = []
-d = base + datetime.timedelta(days=1)
-while d <= today:
-    if st["dates"].get(d.isoformat(), {}).get("status") != "done":
-        backlog.append(d.isoformat())
-    d += datetime.timedelta(days=1)
-st["backlog_remaining"] = backlog
+def update_state(
+    state_file,
+    iso_date,
+    status,
+    pages,
+    found,
+    inserted,
+    verified_max,
+    total_shown=0,
+    now=None,
+):
+    state = {"dates": {}}
+    if os.path.exists(state_file):
+        try:
+            with open(state_file, encoding="utf-8") as handle:
+                state = json.load(handle)
+        except (OSError, ValueError, TypeError):
+            state = {"dates": {}}
+    state.setdefault("dates", {})
 
-tmp = statef + ".tmp"
-json.dump(st, open(tmp, "w"), indent=2)
-os.replace(tmp, statef)
-print("state: %s %s (backlog %d)" % (iso, status, len(backlog)))
+    observed_at = now or dt.datetime.now(dt.timezone.utc)
+    observed_at_text = observed_at.astimezone(dt.timezone.utc).isoformat()
+    state["dates"][iso_date] = {
+        "status": status,
+        "pages": pages,
+        "found": found,
+        "total_shown": total_shown,
+        "inserted": inserted,
+        "skipped": max(0, found - inserted),
+        "at": observed_at_text,
+    }
+    state["last_run_at"] = observed_at_text
+    state["verified_max_at_last_run"] = verified_max
+    done = [date_text for date_text, value in state["dates"].items() if value.get("status") == "done"]
+    if done:
+        state["last_completed_date"] = max(done)
+
+    # Match acclaim_targets.py: before noon, today's still-forming grid is not backlog.
+    base = dt.date.fromisoformat(verified_max)
+    local_now = observed_at.astimezone() if observed_at.tzinfo else observed_at
+    end = collection_end_date(local_now)
+    backlog = []
+    cursor = base + dt.timedelta(days=1)
+    while cursor <= end:
+        if state["dates"].get(cursor.isoformat(), {}).get("status") != "done":
+            backlog.append(cursor.isoformat())
+        cursor += dt.timedelta(days=1)
+    state["backlog_remaining"] = backlog
+
+    temporary_file = str(state_file) + ".tmp"
+    with open(temporary_file, "w", encoding="utf-8") as handle:
+        json.dump(state, handle, indent=2)
+        handle.write("\n")
+    os.replace(temporary_file, state_file)
+    return state
+
+
+def main():
+    if len(sys.argv) not in {8, 9}:
+        raise SystemExit(
+            "usage: acclaim_state.py STATEFILE ISO_DATE status pages found inserted verified_max [total_shown]"
+        )
+    state = update_state(
+        sys.argv[1],
+        sys.argv[2],
+        sys.argv[3],
+        int(sys.argv[4]),
+        int(sys.argv[5]),
+        int(sys.argv[6]),
+        sys.argv[7],
+        int(sys.argv[8]) if len(sys.argv) > 8 else 0,
+    )
+    print("state: %s %s (backlog %d)" % (sys.argv[2], sys.argv[3], len(state["backlog_remaining"])))
+
+
+if __name__ == "__main__":
+    main()

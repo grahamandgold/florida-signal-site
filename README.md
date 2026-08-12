@@ -1,9 +1,9 @@
 # Florida Signal
 
-**New here, human or agent? Read [`SYSTEM_STATE_2026-07-28.md`](SYSTEM_STATE_2026-07-28.md)
-and [`REMAINING_WORK_REGISTER_2026-07-28.md`](REMAINING_WORK_REGISTER_2026-07-28.md) first.**
-They are the verified front door: authorities, current branches and PRs, public exposure,
-production state, backup policy, launch blockers, and the decisions that require Andy.
+**New here, human or agent? Read [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md)
+and [`EDITORIAL_LOOP_RUNBOOK.md`](EDITORIAL_LOOP_RUNBOOK.md) first.**
+They are the verified front door for production health, the live Record → Candidate loop,
+public exposure, local-only site work and remaining launch blockers.
 Earlier dated checkpoints are preserved as historical evidence.
 **The scorer and collectors are not in this repository** — they live in `grahamandgold/florida-signal`.
 
@@ -49,7 +49,9 @@ The local server provides same-origin meeting, storm, CMS, agenda-recon and subs
 
 ## Operating handoff
 
-- [`SYSTEM_STATE_2026-07-28.md`](SYSTEM_STATE_2026-07-28.md) — current operational and launch truth.
+- [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md) — current operational, data, editorial, Mailchimp, analytics and launch truth.
+- [`EDITORIAL_LOOP_RUNBOOK.md`](EDITORIAL_LOOP_RUNBOOK.md) — live Candidate schedules, evidence contract, human gate and recovery.
+- [`SYSTEM_STATE_2026-07-28.md`](SYSTEM_STATE_2026-07-28.md) — historical July checkpoint.
 - [`REMAINING_WORK_REGISTER_2026-07-28.md`](REMAINING_WORK_REGISTER_2026-07-28.md) — unresolved decisions and launch blockers.
 - [`FLORIDA_SIGNAL_BUILD_REPORT.md`](FLORIDA_SIGNAL_BUILD_REPORT.md) — source cadence, live versus scheduled updates, date methodology, CMS/Mailchimp state and production runbook.
 - [`LIVE_DATA_OPERATIONS_HANDOFF.md`](LIVE_DATA_OPERATIONS_HANDOFF.md) — exact live-stat definitions, observed source health, update/recovery procedures and daily operating sequence.

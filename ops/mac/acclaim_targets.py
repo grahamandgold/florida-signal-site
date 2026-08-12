@@ -7,9 +7,14 @@ import os
 import sys
 
 
-def candidate_dates(base, cap, state_file, now=None):
+def collection_end_date(now=None):
+    """Return the newest date safe to treat as a collection target."""
     now = now or dt.datetime.now()
-    end = now.date() if now.hour >= 12 else now.date() - dt.timedelta(days=1)
+    return now.date() if now.hour >= 12 else now.date() - dt.timedelta(days=1)
+
+
+def candidate_dates(base, cap, state_file, now=None):
+    end = collection_end_date(now)
     done = set()
     if os.path.exists(state_file):
         try:
