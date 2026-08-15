@@ -14,6 +14,39 @@
 > The public API and Mailchimp signup integration are live. The Data Wire CMS remains disconnected
 > from the public runtime, and no Candidate can publish or send automatically.
 
+## August 15 recovery and first-send state
+
+The Broward Acclaim disclaimer was accepted in the collector's real Chrome session on August 15.
+The local LaunchAgent retains `RunAtLoad`, hourly recovery, and the four scheduled collection times,
+so a sleeping/offline Mac resumes at login and keeps retrying when connectivity returns.
+
+The collector's zero-result rule is now source-aware. A weekday newer than the authoritative SFTP
+floor can no longer be marked complete merely because Acclaim briefly says `No Results to Display`.
+It remains `source_wait` and retryable, while newer exposed dates continue to collect. Current-day
+zeros also remain retryable; past weekends and dates already covered by the verified feed may close
+as real zeros. The focused resilience suite contains 11 tests for this behavior.
+
+Verified at 1:16 p.m. ET on August 15:
+
+| Lane | State | Event/source through | Evidence |
+|---|---|---:|---|
+| Broward Acclaim preliminary | Current | Aug 14 | 2,217 Aug 14 rows inserted; Aug 13 remains `source_wait` instead of being falsely closed. |
+| Broward SFTP verified | Source-delayed | Aug 11 | Latest authoritative load parsed successfully; its publication delay stays separate from collector health. |
+| Permit applications | Current | Aug 14 | Event time remains `applied_date`. |
+| Permit enrichment | Current | processing clock only | Enrichment time is not substituted for an event date. |
+| FDEP ERP | Current | Aug 13 | Daily collector completed August 15. |
+| FAA OE/AAA | Current | Aug 14 | A transient upstream 503 cleared on retry; durable retries now follow the primary daily run at 10:10 and 11:10 UTC. |
+| Sunbiz exact resolver | Current/private | source receipt Aug 15 | 583 exact-match rows; only aggregate freshness is public and raw entity rows remain RLS-protected. |
+
+The Sunbiz aggregate receipt refreshes at 04:05 UTC after the nightly private ingest. The public
+health API uses that receipt instead of requiring anonymous access to private entity rows.
+
+The local Florida Signal Newsroom is running on port 8788 with editorial writes enabled. Its first-
+send queue has 175 Candidates: 25 have non-empty evidence packets, 150 are evidence-blocked, zero
+are human-approved, and the Brief Bank is empty. Those 25 are evidence-ready Candidates—not finished
+Signals or newsletter copy. No edition has been sent or published. A human still must confirm reader
+importance, claims, unknowns, wording and edition placement before any first send.
+
 **Market:** Broward County  
 **Live city:** Fort Lauderdale  
 **Publisher:** Graham & Gold LLC  
@@ -221,7 +254,7 @@ Do not silently publish or refresh a number when any of these is true:
 ## Production work still required after the August 11 API deployment
 
 - Continue monitoring the delayed verified SFTP clock and the separate same-day Acclaim clock; do not treat source release lag as proof that the collector failed. Treat a stale `supabase-sync` heartbeat as a real mirror incident.
-- Expose Sunbiz health and event-span metadata.
+- Continue monitoring the aggregate-only Sunbiz health receipt; do not expose private entity rows or imply a comprehensive event span from the exact-match subset.
 - Deploy the Data Wire behind real user authentication with persistent Postgres/Supabase, backups and retained audit logs.
 - Confirm the first real consented signup is both durable locally and accepted by Mailchimp; replay only explicit-consent rows if retry is needed.
 - Define and document the retention policy for the persistent public API analytics SQLite database.

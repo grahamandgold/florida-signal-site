@@ -91,7 +91,15 @@ class PublicApiTests(unittest.TestCase):
             if path.startswith("broward_property_transfer_freshness"):
                 return [{"snapshot_is_current": True, "snapshot_event_through": "2026-08-05", "snapshot_lag_business_days": 0, "source_age_business_days": 3}]
             if path.startswith("editorial_pipeline_health"):
-                return []
+                return [{
+                    "component": "sunbiz-exact-resolver",
+                    "status": "current",
+                    "event_through": None,
+                    "source_through": "2026-08-11",
+                    "system_time": "2026-08-11T03:50:00Z",
+                    "detail": "Private exact-match Sunbiz resolver refreshed; raw entity rows remain private.",
+                    "metrics": {"exact_rows": 583},
+                }]
             raise AssertionError(path)
 
         with mock.patch.object(server_module, "supabase_public_rows", side_effect=rows), mock.patch.object(
@@ -106,6 +114,10 @@ class PublicApiTests(unittest.TestCase):
         self.assertEqual(sources["clerk-preliminary"]["event_through"], "2026-08-10")
         self.assertEqual(sources["clerk-preliminary"]["verification"], "preliminary")
         self.assertIn("never presented as verified early", sources["clerk-preliminary"]["detail"])
+        self.assertEqual(sources["sunbiz"]["status"], "current")
+        self.assertEqual(sources["sunbiz"]["system_time"], "2026-08-11T03:50:00Z")
+        self.assertIsNone(sources["sunbiz"]["event_through"])
+        self.assertIn("remain private", sources["sunbiz"]["detail"])
         self.assertEqual(payload["errors"], [])
 
     def test_signup_persists_and_repeats_idempotently(self):

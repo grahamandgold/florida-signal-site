@@ -133,12 +133,17 @@ PY
   # A date is COMPLETE only when every page was processed and the row count matches the
   # total Acclaim displayed (allowing rows the grid shows without an instrument number).
   DSTATUS=incomplete
+  CONTINUE_AFTER=0
   if [ "$STATUS" = "EMPTY" ]; then
-    # EMPTY is final only for a date strictly before today. Acclaim can render an empty
-    # current-day grid before the county releases that day's recordings.
-    if [ "$ISO" = "$(date '+%Y-%m-%d')" ]; then
-      FAIL=1
-      log "DATE INCOMPLETE $ISO: current-day EMPTY is not a release confirmation"
+    # Acclaim can positively render an empty grid before Broward has released a weekday.
+    # Keep every unverified weekday retryable; only a past weekend (or a date already
+    # covered by the authoritative SFTP floor) is safe to close as a real zero.
+    EMPTY_POLICY=$(/usr/bin/python3 "$DIR/acclaim_empty_policy.py" "$ISO" "$VERIFIED_MAX" 2>>"$LOG")
+    if [ "$EMPTY_POLICY" != "done" ]; then
+      DSTATUS=source_wait
+      DEGRADED=1
+      CONTINUE_AFTER=1
+      log "DATE DEGRADED $ISO: EMPTY is not authoritative beyond verified floor $VERIFIED_MAX"
     else
       DSTATUS=done
     fi
@@ -158,7 +163,10 @@ PY
   log "date $DSTATUS $ISO: found=$FOUND/$TOTAL_SHOWN inserted=$INS pages=$PAGES_DONE"
   [ "$DSTATUS" = "done" ] && LAST="$ISO"
   rm -f "$OUT" "$OUT.page"
-  if [ "$DSTATUS" != "done" ]; then break; fi   # stop; resume this date next run
+  # A not-yet-released empty weekday must stay in backlog without starving newer
+  # dates that may already be searchable. Other failures stop so a broken browser
+  # or source gate is not hammered repeatedly in the same invocation.
+  if [ "$DSTATUS" != "done" ] && [ "$CONTINUE_AFTER" -ne 1 ]; then break; fi
 done <<< "$TARGETS"
 
 log "=== acclaim pull end (fail=$FAIL degraded=$DEGRADED first=$FIRST last=$LAST) ==="

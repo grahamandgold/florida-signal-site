@@ -535,6 +535,10 @@ def data_health_payload() -> dict[str, Any]:
             editorial_health = supabase_public_rows("editorial_pipeline_health?select=component,status,event_through,source_through,system_time,detail,metrics&order=component.asc")
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
             errors.append("editorial-pipeline:" + type(error).__name__)
+        sunbiz_receipt = next(
+            (row for row in editorial_health if row.get("component") == "sunbiz-exact-resolver"),
+            {},
+        )
         stats = cache_row.get("payload", {}).get("stats", {}) if isinstance(cache_row.get("payload"), dict) else {}
         meetings = meeting_payload()
         verified_event_time = verified_clerk_record.get("recording_date_iso") or stats.get("broward_fresh")
@@ -565,7 +569,7 @@ def data_health_payload() -> dict[str, Any]:
             {"id": "fdep", "label": "FDEP environmental permits", "status": health_status(fdep_fetch.get("last_fetched_at"), 30, 54), "system_time": fdep_fetch.get("last_fetched_at"), "event_through": fdep_event.get("received_date"), "cadence": "daily at 9:20 UTC", "detail": "State ERP record date and fetch time remain separate"},
             {"id": "faa", "label": "FAA obstruction cases", "status": health_status(faa_fetch.get("last_fetched_at"), 30, 54), "system_time": faa_fetch.get("last_fetched_at"), "event_through": faa_event.get("date_entered"), "cadence": "daily at 9:40 UTC", "detail": "Federal filing date and fetch time remain separate"},
             {"id": "meetings", "label": "Meeting watch", "status": health_status(meetings.get("updated_at"), .5, 2), "system_time": meetings.get("updated_at"), "event_through": None, "cadence": "Legistar every 15 minutes; DRC and industry editorially checked", "detail": f"{len(meetings.get('meetings', []))} upcoming rooms · every row links to its public source"},
-            {"id": "sunbiz", "label": "Sunbiz", "status": health_status(sunbiz_fetch.get("fetched_at"), 30, 54) if sunbiz_fetch else "unavailable", "system_time": sunbiz_fetch.get("fetched_at"), "event_through": sunbiz_fetch.get("date_filed"), "cadence": "raw ingest nightly at 11:30 PM; exact matching in enrichment", "detail": "No public entity rows are available" if not sunbiz_fetch else "Exact entity rows available; fuzzy identity writes remain off"},
+            {"id": "sunbiz", "label": "Sunbiz", "status": (health_status(sunbiz_fetch.get("fetched_at"), 30, 54) if sunbiz_fetch else sunbiz_receipt.get("status") or "unavailable"), "system_time": (sunbiz_fetch.get("fetched_at") if sunbiz_fetch else sunbiz_receipt.get("system_time")), "event_through": (sunbiz_fetch.get("date_filed") if sunbiz_fetch else sunbiz_receipt.get("event_through")), "source_through": (None if sunbiz_fetch else sunbiz_receipt.get("source_through")), "cadence": "raw ingest nightly at 11:30 PM; exact matching in enrichment", "detail": ("Exact entity rows available; fuzzy identity writes remain off" if sunbiz_fetch else sunbiz_receipt.get("detail") or "No sanitized private-corpus receipt is available")},
         ]
         source_rows.extend(
             {
