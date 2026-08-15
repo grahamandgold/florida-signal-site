@@ -46,7 +46,9 @@ test.describe("Florida Signal Brief front door", () => {
 
     await expect(page.locator("[data-launch-signup]")).toHaveCount(2);
     await expect(page.getByRole("link", { name: "Explore the research site" })).toHaveAttribute("href", "/fort-lauderdale/");
-    await expect(page.getByText("Development Intelligence").first()).toBeVisible();
+    const tagline = page.locator(".fs-lockup__tagline").first();
+    await expect(tagline).toBeVisible();
+    await expect(tagline).toHaveAttribute("aria-label", "Development Intelligence");
     await expect(page.getByRole("link", { name: "Privacy" }).first()).toHaveAttribute("href", "/privacy/");
     await expect(page.locator("body")).not.toContainText("Sunday Signal");
   });

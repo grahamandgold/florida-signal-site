@@ -1,0 +1,105 @@
+/* Florida Signal responsive lockup
+   Claude Design 3c/4-series handoff, implemented with the canonical emblem.
+   One control: --fs-logo-size scales the emblem, spacing, rule and type. */
+.fs-lockup {
+  --fs-logo-size: 40px;
+  --fs-logo-ink: #071b2e;
+  --fs-logo-blue: #1767ff;
+  --fs-logo-rule: #cbd7df;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--fs-logo-size) * .42);
+  color: var(--fs-logo-ink);
+  text-decoration: none;
+}
+
+.fs-lockup__mark {
+  flex: 0 0 auto;
+  width: calc(var(--fs-logo-size) * 1.55);
+  height: calc(var(--fs-logo-size) * 1.72);
+  object-fit: contain;
+}
+
+.fs-lockup__words {
+  width: calc(var(--fs-logo-size) * 9.18);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fs-lockup__name {
+  display: block;
+  color: var(--fs-logo-ink);
+  font-family: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--fs-logo-size);
+  font-weight: 700;
+  letter-spacing: .035em;
+  line-height: .9;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.fs-lockup__name i {
+  color: var(--fs-logo-blue);
+  font-style: normal;
+}
+
+.fs-lockup__rule {
+  display: block;
+  width: 100%;
+  margin: calc(var(--fs-logo-size) * .29) 0 calc(var(--fs-logo-size) * .23);
+  border-top: max(1px, calc(var(--fs-logo-size) * .018)) solid var(--fs-logo-rule);
+}
+
+.fs-lockup__tagline {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--fs-logo-ink);
+  font-family: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  font-size: calc(var(--fs-logo-size) * .285);
+  font-weight: 500;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.fs-lockup__word-gap { margin-left: calc(var(--fs-logo-size) * .18); }
+
+.fs-lockup--header { --fs-logo-size: clamp(30px, 2.55vw, 40px); }
+.fs-lockup--footer { --fs-logo-size: 24px; }
+
+.fs-lockup--reverse {
+  --fs-logo-ink: #ffffff;
+  --fs-logo-blue: #74a0ff;
+  --fs-logo-rule: rgba(255, 255, 255, .34);
+}
+
+.fs-lockup--reverse .fs-lockup__mark { content: url("/assets/mark-white.png"); }
+
+.fs-lockup--stacked {
+  flex-direction: column;
+  justify-content: center;
+  gap: calc(var(--fs-logo-size) * .42);
+  text-align: center;
+}
+
+.fs-lockup--stacked .fs-lockup__mark {
+  width: calc(var(--fs-logo-size) * 1.7);
+  height: calc(var(--fs-logo-size) * 1.88);
+}
+
+.fs-lockup--mark-only .fs-lockup__words { display: none; }
+
+@media (max-width: 540px) {
+  .fs-lockup--header { --fs-logo-size: clamp(23px, 7vw, 28px); }
+  .fs-lockup--footer { --fs-logo-size: clamp(21px, 6.3vw, 24px); }
+}
+
+@media (max-width: 335px) {
+  .fs-lockup--header { --fs-logo-size: 22px; }
+  .fs-lockup--header .fs-lockup__rule,
+  .fs-lockup--header .fs-lockup__tagline { display: none; }
+}
