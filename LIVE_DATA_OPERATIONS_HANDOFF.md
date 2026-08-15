@@ -41,6 +41,14 @@ Verified at 1:16 p.m. ET on August 15:
 The Sunbiz aggregate receipt refreshes at 04:05 UTC after the nightly private ingest. The public
 health API uses that receipt instead of requiring anonymous access to private entity rows.
 
+Release `030450f` (PR #18) passed repository unit/browser verification, deployed through GitHub
+Pages, and was fast-forwarded to the separate production API host on August 15. The API checkout is
+clean and `florida-signal-public.service` is active on that release; the public HTTPS data-health
+response reports no query errors and the source states shown above. The durable public-API SQLite
+database was backed up before restart. A superseded August 11 manual `server.py` hotfix remains in
+the production checkout's recovery stash, and its earlier loose backup was moved to the documented
+public-API backup directory rather than deleted.
+
 The local Florida Signal Newsroom is running on port 8788 with editorial writes enabled. Its first-
 send queue has 175 Candidates: 25 have non-empty evidence packets, 150 are evidence-blocked, zero
 are human-approved, and the Brief Bank is empty. Those 25 are evidence-ready Candidates—not finished
