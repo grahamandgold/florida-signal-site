@@ -1,6 +1,6 @@
 # Florida Signal — current system and product state
 
-**Verified August 11, 2026 · replaces present-state claims in earlier dated handoffs**
+**Verified August 11, 2026 · Newsroom control-plane addendum August 12 · replaces present-state claims in earlier dated handoffs**
 
 Older handoffs remain historical evidence. This document is the current starting point for
 pipeline, site, editorial, newsletter and automation work. Keep the public event clock
@@ -29,6 +29,10 @@ steps completed after this production snapshot.
   exact receipts through a service-role proxy. Fuzzy identity writes remain prohibited.
 - The public site remains too dense on mobile. Immediate local corrections are complete but
   are not deployed as of this document.
+- The private Newsroom now has a local Brief bank and Signal Machine control plane. Only the
+  permit/execution family is reproducibly shadow-ranked; other source families display detector
+  gaps. Bounded scoring profiles are draft simulations with no activation endpoint, and the Brief
+  bank cannot approve, publish, schedule or send.
 
 ## Live source manifest
 
@@ -67,7 +71,7 @@ Counts marked `est.` came from PostgreSQL planner statistics and can drift sligh
 | Deed-to-parcel snapshot | 21,329 after Aug 11 refresh | event-through Aug 6; zero business-day lag behind the ingested verified Clerk table; public current view is hard-gated |
 | FDEP ERP | 83,519 | ingested, underused, not on health board |
 | FAA OE/AAA | 8,086 | ingested, underused, not on health board |
-| Sunbiz entities | 0 | blocking company/officer/entity reporting |
+| Sunbiz entities | 505 private exact-match resolver rows | authenticated Newsroom research only; public RLS correctly returns zero; no fuzzy identity claims |
 | Meetings | 20 upcoming | fetched live, not persisted or joined historically |
 | Signal review queue | 8 Transfer → Permit Candidates | private, `NEW`, hash-sealed; no publication action |
 | Map candidates | 1 | dormant July example, not a working detector stream |
@@ -338,3 +342,32 @@ Do not reactivate old jobs until the current always-on owner, inputs, outputs, i
 ## Release rule
 
 Static-site repairs may merge only after unit tests and browser checks pass. API and collector changes require their own source/data reconciliation plus rollback instructions. The hourly monitor may report incidents but must not alter source data or publish a narrative repair. Human editorial approval remains mandatory for briefs and consequential narrative claims.
+
+## Launch product state · updated August 15
+
+- Root `/` is now the signup-first home of the **Florida Signal Brief**. The complete research site is
+  preserved at `/fort-lauderdale/`; no research page, diagram or data interface was deleted.
+  `/newsletter/` is a compatibility redirect to `/`.
+- The pre-switch public site is recoverable from the pushed Git tag
+  `full-site-v1-pre-newsletter-root-2026-08-15` at commit `bc8c62e`; restoration notes live in
+  `archive/full-site-v1-2026-08-15/README.md`.
+- Working publication: Florida Signal Brief, launching weekly on Monday morning ET; exact time
+  awaits a complete test send. The cadence may expand without renaming the product. Florida Signal
+  Desk byline.
+- Newsletter template: `fort-lauderdale/brand/newsletter/sunday-brief.html`.
+- The template path is legacy; its reader-facing title and cadence are Monday. The shortened,
+  premium landing-page consensus from ChatGPT, Claude, Grok and Gemini is recorded under
+  `deliverables/florida-signal-decision-package-2026-08-12/landing-review/`.
+- Final landing verification: 390-pixel mobile width has no overflow; complete first signup ends at
+  576 pixels; mobile page height is about 2,500 pixels; no broken images; focused signup/routing
+  coverage in `tests/browser/newsletter.spec.js` has five passing checks.
+- Launch decision package, AI-review captures, LinkedIn copy and founding-edition worksheet:
+  `deliverables/florida-signal-decision-package-2026-08-12/`.
+- Editorial queue at the August 15 check: 175 new Candidates, 25 evidence-ready, 150 blocked,
+  0 approved; Brief bank 0.
+- Meeting Watch reports 20 upcoming rooms overall. The narrower Agenda Watch response exposes eight
+  currently watched upcoming meetings, including four Fort Lauderdale public bodies on Aug. 18.
+  Re-query and open each official agenda before publication.
+- No external AI is in the runtime or publication path. The four-model launch review was advisory.
+- No LinkedIn external write occurred. Profile, invitations, messages and posts still await human
+  approval.

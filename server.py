@@ -90,8 +90,6 @@ BROWARD_CITIES = {
 }
 BRIEF_INTERESTS = {"development", "neighborhoods", "meetings", "property", "liens", "storm"}
 LEGACY_PUBLIC_ROUTES = {
-    "/": "/fort-lauderdale/",
-    "/index.html": "/fort-lauderdale/",
     "/stories.html": "/fort-lauderdale/briefs/",
     "/neighborhoods.html": "/fort-lauderdale/neighborhoods/",
     "/broward.html": "/fort-lauderdale/broward-record/",

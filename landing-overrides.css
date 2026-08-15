@@ -1,0 +1,6 @@
+/* Deliberately small finishing layer. The exact emblem appears as a functional
+   masthead/footer signature plus one quiet watermark—never as a button or arrow. */
+@media (prefers-reduced-motion: no-preference) {
+  .launch-proof__figure img { transition: transform .35s ease, box-shadow .35s ease; }
+  .launch-proof__figure:hover img { transform: translateY(-3px); box-shadow: 0 22px 44px -24px rgba(7, 27, 46, .55); }
+}

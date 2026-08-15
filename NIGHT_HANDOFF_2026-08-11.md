@@ -196,10 +196,116 @@ newsletter journey and field-tool redesign are the next separate product phase.
 - Chrome was left narrow by the audit extension; that browser-window size is not a product change.
   The Design canvas itself reports 100% zoom after the audit handoff.
 
+### Signal Machine control plane and Brief bank · August 12 continuation
+
+The private Newsroom now contains the implementation foundation for the cross-source Signal
+Machine workflow described in `SIGNAL_MACHINE_INTEGRATION_2026-08-11.md`:
+
+- Live Desk carries a permanent warning that only the permit/execution family is shadow-ranked.
+  Agenda, Sunbiz, capital and regulatory sources may be readable while their Candidate detectors
+  remain absent; source health is never presented as detector coverage.
+- The visible responsibility chain names collectors, deterministic normalization, detector gaps,
+  v2.6 shadow ranking, an unconnected same-evidence AI consistency check, the human editor and the
+  unconnected Mailchimp sender. AI can only flag contradictions or lower confidence; it cannot add
+  sources, corroborate, score, approve or publish.
+- The discovery barometer uses bounded 1.00×–2.00× preview multipliers. Saving requires a name and
+  rationale, creates only `status=draft / backtest_status=not_run`, writes an audit row and has no
+  activation endpoint or production effect.
+- Agenda Watch and evidence-ready Triage items can be saved to a weekday/date Brief bank. An exact
+  date controls the weekday; a weekday-only choice resolves to its next occurrence. Stable source
+  identity prevents duplicate rows while allowing an editor to change the edition slot.
+- Every bank row keeps its direct source, immutable JSON snapshot hash, confidence value or explicit
+  absence reason, passed gates, rules, source lane, machine/profile lineage and audit timestamps.
+  The bank opens only an unverified module draft and cannot approve, publish, schedule or send.
+- Agenda cards now say `Raw public record · not scored · not a Signal`; “send” language was replaced
+  with “save” so the staging action cannot be mistaken for email delivery.
+- Brief drafts now carry a stored writing profile: AP style, headline approach, jargon treatment
+  and required ethics rules for attribution, uncertainty, anti-hype, right of reply, conflicts and
+  no invented context. The default is `Catchy but precise`, not clickbait, and the role-based byline
+  remains intact.
+
+### Signal Machine live-runtime truth · August 12, 12:30 a.m. ET
+
+- The production `florida-signals-shadow.timer` is active, daily at 5:45 a.m. ET; next fire was
+  independently observed for August 12 at 5:45 a.m.
+- The shadow wrapper explicitly uses `--since yesterday`. This is a calendar-date gate (yesterday
+  through the run date), not a rolling 24-hour interval and not a historical trend window.
+- The August 11 engine 2.7.0 artifact loaded 22,895 permit-anchored candidates and returned six
+  MAIN items: demolition, structural, property-record and paving permits. This explains the weak
+  editorial output; the machine is still permit/execution-first.
+- Historical context is attached only after a current trigger and is limited to folio permit
+  counts/value/date span, up to two sales, owner permit count, code cases and related permits. No
+  neighborhood baseline, trajectory, seasonality, predictive trend or full cross-source history
+  engine exists.
+- The shadow job cannot publish or write production signal tables. The production signal writer
+  remains paused/frozen.
+- External Claude/Grok/Gemini reviews are not connected to runtime. A future advisory AI layer
+  requires source-locked packets, citations, model/prompt/version receipts and a permanent human
+  Candidate -> Signal gate.
+
+### Newsletter-first launch decision package · August 12 evening
+
+The founder identified a Sunday edition as the clearest way through product paralysis. A new
+decision package is saved under
+`deliverables/florida-signal-decision-package-2026-08-12/`:
+
+- `MULTI_AI_PRODUCT_DECISION_PROMPT.md` — a source- and clock-qualified prompt for independent AI
+  review, including founder runway, South Florida/self-employment goal, ghostwriter constraint,
+  verified data inventory, machine limitations and a required decision format;
+- `SUNDAY_NEWSLETTER_PILOT.md` — the initial recommendation; the four-model review below supersedes
+  its 6:15 p.m. working time with a Sunday 7 a.m. ET send;
+- `florida-signal-current-product-contact-sheet.png` — current desktop and 390-pixel mobile evidence
+  for the private Live Desk/Data Explorer and public homepage/Data Room; and
+- the six labeled source screenshots used to make the contact sheet.
+
+The recommended modules are Lead Signal (or honestly labeled What We're Watching), Early Watch,
+Paper Trail, Development Pulse and Week Ahead, followed by a compact receipts/corrections footer.
+Do not promise daily until four real weekly editions establish production time, engagement and the
+desk's ability to clear meaningful items without padding. Preserve the public data site as Explore
+and source proof; simplify the first-time journey around the newsletter rather than rebuild the
+whole site before Sunday.
+
+The Mailchimp campaign-planning skill supported the email-first recurring weekly pilot, but its
+account analytics connector was not authenticated in this session. No audience size, campaign
+history or engagement benchmark was invented; the first four editions establish the baseline.
+
+### Closed-loop agent future · saved August 12
+
+`CLOSED_LOOP_AGENT_FUTURE_2026-08-12.md` preserves the user's longer-term direction from a set of
+X screenshots: versioned intent, derived tasks, isolated parallel work, independent tests, docs,
+human-gated release and monitoring that feeds evidence back into the next specification. The social
+post's “Anthropic leak” claim is unverified and is not treated as product documentation.
+
+The recommended Florida Signal starting point is three bounded loops—not seven unattended loops:
+spec/task planning, isolated implementation/verification, and monitoring that creates a proposed
+spec amendment. The canonical spec may never be silently rewritten. Release, destructive data/schema
+changes, Candidate → Signal, scoring-profile activation, publication and Mailchimp send remain human
+gates. The first proposed pilot is one non-permit Agenda Watch detector in shadow mode with replay
+tests, durable receipts and no publishing authority.
+
+Claude, Grok and Gemini were each shown the user's X screenshots and asked the same skeptical future-
+architecture question. Their defensible consensus is recorded in the future document. Gemini's
+unverified production-state claims and arbitrary suggested thresholds were explicitly rejected;
+reviewer advice is never treated as system evidence.
+
+The Live Desk working hierarchy was also changed after operator feedback: `Latest items to confirm`
+now appears directly under the attention counts, sorted by source-event date and showing up to five
+evidence-ready Candidates before the Record/Candidate/Signal/Story explainer, early-intelligence
+sequence or Signal Machine protocols. The decision queue—not the operating manual—is the first job.
+
+Claude, Grok and Gemini received the same architecture brief, literal implementation evidence and
+the final desktop/mobile screenshots. Claude found five labeling inconsistencies plus one final
+“complete” versus “present” evidence-packet overstatement; all were corrected. Grok and Gemini found
+no remaining blocker, and Claude's last blocker was fixed to `Packet present · completeness not
+assessed`. Codex rejected invented metrics or connector claims. The current branch is
+`codex/brief-bank-signal-machine`; do not include the
+unrelated touched `social/graphic-desk/*.png`, raw Broward files, `mailchimp/` or `output/` in its
+commit.
+
 ## Verification completed
 
 - `python3 -m unittest ops/mac/test_acclaim_resilience.py` — 7 passing.
-- `python3 -m unittest tests/test_cms_server.py` — 7 passing in the latest CMS run.
+- `python3 -m unittest tests/test_cms_server.py` — 10 passing in the latest CMS run.
 - Playwright `tests/browser/data-wire.spec.js` — 5 passing against the signed Desktop app; it now
   covers all five Newsroom views, the canonical home link, the mobile decision restriction,
   source-clock sanity, 390-pixel page width, non-overlap at the 1,110-pixel sidebar viewport,
@@ -247,3 +353,57 @@ git status --short
 
 Do not use a `file://.../cms/review.html` tab. Open the signed Desktop app or
 `http://127.0.0.1:8788/`; loopback auto-unlock is deliberately unavailable to a file URL.
+
+### Newsletter launch execution · August 13
+
+ChatGPT, Grok Heavy, Claude Opus 5 High and Gemini Flash-Lite received the same blind launch brief.
+All four independently chose the same path: a weekly Sunday newsletter plus a signup-first landing
+page, with the dense public data site preserved as the research/explore layer. Their captured DOM
+responses and the reconciled decision are saved in
+`deliverables/florida-signal-decision-package-2026-08-12/`.
+
+The models initially recommended a Sunday send, but the founder's later cadence decision supersedes
+that recommendation. The initial working title was **The Monday Signal**. On August 15 it became the
+**Florida Signal Brief** so a future daily cadence will not require a rebrand. It launches Monday
+morning at an exact time to be confirmed after a test send and is bylined **Florida Signal Desk**.
+Its modules are
+Lead Signal, Record Watch, Week Ahead, Open Questions and Source
+proof/corrections. If no Lead Signal clears, publish What We Checked and state why the Candidate did
+not clear. Do not pad.
+
+On August 15, the launch priority changed: root `/` now presents the signup-first newsletter landing
+page. The full Florida Signal research homepage remains intact at `/fort-lauderdale/`; it was not
+dismantled. `/newsletter/` redirects to the new root. The exact pre-switch state is preserved in the
+pushed tag `full-site-v1-pre-newsletter-root-2026-08-15`, with recovery notes under
+`archive/full-site-v1-2026-08-15/`. The landing continues to use `landing.css` and `landing.js`. A
+one-column Mailchimp template remains at the legacy path `fort-lauderdale/brand/newsletter/sunday-brief.html`
+but its reader-facing title and cadence now say Monday. The working issue and
+LinkedIn approval copy are in `FOUNDING_EDITION_WORKING_DRAFT.md` and `LINKEDIN_LAUNCH_KIT.md`.
+
+The separate `/newsletter/` page was then given the same skeptical premium-product brief in ChatGPT,
+Claude, Grok and Gemini. Their consensus is saved in
+`landing-review/MULTI_AI_PREMIUM_REVIEW_2026-08-13.md`. The page now removes the aerial and crane
+photographs, reduces overlapping promises/modules, puts the complete signup in the first phone
+viewport, uses two signup points, and keeps one actual desk diagram as product evidence. Its compact
+masthead uses the exact approved `assets/mark-full-color.png` emblem, a two-tone `FLORIDA SIGNAL`
+wordmark and one uninterrupted `DEVELOPMENT INTELLIGENCE` line; the former divider is gone. No arrow
+or withdrawn emblem asset is used. The original public homepage remains untouched. Final evidence
+is saved under `landing-review/final/`. After the August 15 phone-spacing refinement, at 390 x 844
+the complete hero signup ends at 576 pixels,
+the document is about 2,500 pixels tall, and there is no horizontal overflow, broken image or
+browser console error. The focused newsletter browser suite has five passing checks covering the
+first-screen conversion, mocked subscription payload, two-signup limit, Monday copy, privacy link,
+preserved research-site link and the `/newsletter/` alias.
+
+No LinkedIn profile field, invitation, message or post was changed. Read-only findings: 100
+connections, 124 followers, two pending invitations, and only generic website/app vendor outreach
+in the unread messages inspected. The Selene Oceanfront explainer remains the strongest visible
+engagement proof at 27 reactions and one comment.
+
+Live desk checks at the August 15 handoff: 175 new review Candidates, 25 with evidence packets,
+150 blocked, 0 approved and 0 Brief-bank items. Meeting Watch reports 20 upcoming rooms overall;
+the narrower Agenda Watch response lists eight watched upcoming meetings. The Aug. 10 808 SW 8
+Terrace packet is the first reporting
+Candidate, but its sealed source receipt still reports an Aug. 6 source clock. It is not a Signal
+until the official Clerk and permit records are opened, relationships/status are reported and the
+packet is reconciled against current data.

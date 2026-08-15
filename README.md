@@ -8,7 +8,7 @@ public exposure, local-only site work and remaining launch blockers.
 Earlier dated checkpoints are preserved as historical evidence.
 **The scorer and collectors are not in this repository** — they live in `grahamandgold/florida-signal`.
 
-Florida Signal is Broward-wide, source-first development intelligence launching city by city. Fort Lauderdale is the first live public desk. Every public content URL is scoped under `/fort-lauderdale/`; other Broward municipality paths use one shared “coming soon” template without dates or coverage promises.
+Florida Signal is Broward-wide, source-first development intelligence launching city by city. The public root `/` is the signup-first home of the **Florida Signal Brief**. It launches on Monday mornings without hard-coding a weekly cadence into the product name. The preserved research site remains available at `/fort-lauderdale/`; Fort Lauderdale is its first live desk. Other Broward municipality paths use one shared “coming soon” template without dates or coverage promises.
 
 There are **two sites, with two different jobs**: the public Florida Signal reader/newsletter site
 and the private Florida Signal Newsroom CMS. Live Desk, Agenda Watch, Brief, Data Explorer and
@@ -39,8 +39,9 @@ export FLORIDA_SIGNAL_CMS_MARKET='broward'
 python3 server.py --bind 127.0.0.1 --port 4173
 ```
 
-Open the public site at `http://127.0.0.1:4173/fort-lauderdale/` and the private Florida Signal
-Newsroom at `http://127.0.0.1:8788/`.
+Open the newsletter front door at `http://127.0.0.1:4173/`, the preserved research site at
+`http://127.0.0.1:4173/fort-lauderdale/`, and the private Florida Signal Newsroom at
+`http://127.0.0.1:8788/`.
 
 ### Unlock the private Florida Signal Newsroom
 
@@ -57,6 +58,9 @@ The local server provides same-origin meeting, storm, CMS, agenda-recon and subs
 
 - [`NIGHT_HANDOFF_2026-08-11.md`](NIGHT_HANDOFF_2026-08-11.md) — tonight's implementation,
   scheduled-task audit, same-day Broward ownership, tests and exact next work.
+- [`NEWSLETTER_LAUNCH_HANDOFF_2026-08-15.md`](NEWSLETTER_LAUNCH_HANDOFF_2026-08-15.md) — the
+  newsletter-first routing decision, preserved full-site recovery point, landing verification and
+  first-edition state.
 - [`AUTOMATION_AND_AGENT_INVENTORY_2026-08-11.md`](AUTOMATION_AND_AGENT_INVENTORY_2026-08-11.md) —
   what actually runs, what is paused, unverified Grok/Claude surfaces and the safe loop/graph design.
 - [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md) — current operational, data, editorial, Mailchimp, analytics and launch truth.
