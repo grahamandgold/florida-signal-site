@@ -49,6 +49,13 @@ test.describe("Florida Signal Brief front door", () => {
     const tagline = page.locator(".fs-lockup__tagline").first();
     await expect(tagline).toBeVisible();
     await expect(tagline).toHaveAttribute("aria-label", "Development Intelligence");
+    await expect(page.locator(".launch-footer .fs-lockup--mark-only")).toBeVisible();
+    await expect(page.locator(".launch-footer .fs-lockup__mark")).toHaveAttribute("src", "/assets/mark-full-color.png");
+    await expect(page.locator(".launch-footer .fs-lockup__name")).toContainText("Florida Signal");
+    await expect(page.locator(".launch-footer .fs-lockup__tagline")).toHaveCount(0);
+    await expect(page.locator(".launch-source-strip")).toContainText("130K+");
+    await expect(page.locator(".launch-source-strip")).toContainText("2.4M+");
+    await expect(page.locator(".launch-source-note")).toContainText("Sunbiz");
     await expect(page.getByRole("link", { name: "Privacy" }).first()).toHaveAttribute("href", "/privacy/");
     await expect(page.locator("body")).not.toContainText("Sunday Signal");
   });

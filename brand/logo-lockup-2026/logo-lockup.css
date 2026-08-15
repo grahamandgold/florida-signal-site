@@ -69,7 +69,7 @@
 .fs-lockup__word-gap { margin-left: calc(var(--fs-logo-size) * .18); }
 
 .fs-lockup--header { --fs-logo-size: clamp(30px, 2.55vw, 40px); }
-.fs-lockup--footer { --fs-logo-size: 24px; }
+.fs-lockup--footer { --fs-logo-size: 17px; }
 
 .fs-lockup--reverse {
   --fs-logo-ink: #ffffff;
@@ -91,11 +91,14 @@
   height: calc(var(--fs-logo-size) * 1.88);
 }
 
-.fs-lockup--mark-only .fs-lockup__words { display: none; }
+.fs-lockup--mark-only .fs-lockup__rule,
+.fs-lockup--mark-only .fs-lockup__tagline { display: none; }
+
+.fs-lockup--mark-only .fs-lockup__name { line-height: 1; }
 
 @media (max-width: 540px) {
   .fs-lockup--header { --fs-logo-size: clamp(23px, 7vw, 28px); }
-  .fs-lockup--footer { --fs-logo-size: clamp(21px, 6.3vw, 24px); }
+  .fs-lockup--footer { --fs-logo-size: 17px; }
 }
 
 @media (max-width: 335px) {
