@@ -41,6 +41,6 @@ The production markup contains one span per tagline letter so the line exactly j
 - Compact/mobile: `23–28px`
 - Footer: `21–24px`
 - Below 335 CSS pixels, hide the hairline/tagline rather than render unreadable microtype
-- Below the compact wordmark threshold, use `.fs-lockup--mark-only`
+- Use `.fs-lockup--mark-only` for Claude's final compact emblem + `FLORIDA SIGNAL` wordmark with no rule or tagline
 
 Available modifiers: `.fs-lockup--reverse`, `.fs-lockup--stacked`, `.fs-lockup--mark-only`.
