@@ -34,6 +34,14 @@ is off, the job reports an action-required degraded state instead of a generic c
   plus an hourly retry and `RunAtLoad` catch-up, absolute paths, logs outside repo. Installed at
   `~/Library/LaunchAgents/`.
 
+### Zero-result safety
+
+An explicit empty Acclaim grid is not enough to close an unreleased weekday. The collector keeps
+any weekday newer than the authoritative SFTP floor in its retry backlog, because Broward can show
+“No Results to Display” before that date is released. Past weekends may close as zero; the current
+day is always rechecked. This prevents a temporary source response from becoming a permanent data
+gap. A waiting weekday does not block collection of a newer date that Broward has already exposed.
+
 The target selector does not query the still-forming current day before noon. An `EMPTY`
 current-day grid is never marked done; only an empty date strictly before today is final. This
 prevents a pre-release visit from suppressing the later retry. A successful current-day pass also

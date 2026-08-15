@@ -22,6 +22,7 @@ def load_module(name):
 
 verified = load_module("acclaim_verified_max")
 targets = load_module("acclaim_targets")
+empty_policy = load_module("acclaim_empty_policy")
 
 
 class VerifiedMaxTests(unittest.TestCase):
@@ -136,6 +137,47 @@ class TargetTests(unittest.TestCase):
                 [dt.date(2026, 7, 24)],
             )
 
+
+class EmptyPolicyTests(unittest.TestCase):
+    def test_unverified_past_weekday_remains_retryable(self):
+        self.assertEqual(
+            empty_policy.classify_empty(
+                dt.date(2026, 8, 13),
+                dt.date(2026, 8, 11),
+                today=dt.date(2026, 8, 15),
+            ),
+            "retry",
+        )
+
+    def test_past_weekend_can_close_as_zero(self):
+        self.assertEqual(
+            empty_policy.classify_empty(
+                dt.date(2026, 8, 9),
+                dt.date(2026, 8, 7),
+                today=dt.date(2026, 8, 15),
+            ),
+            "done",
+        )
+
+    def test_current_day_remains_retryable(self):
+        self.assertEqual(
+            empty_policy.classify_empty(
+                dt.date(2026, 8, 15),
+                dt.date(2026, 8, 11),
+                today=dt.date(2026, 8, 15),
+            ),
+            "retry",
+        )
+
+    def test_authoritatively_covered_weekday_can_close(self):
+        self.assertEqual(
+            empty_policy.classify_empty(
+                dt.date(2026, 8, 11),
+                dt.date(2026, 8, 11),
+                today=dt.date(2026, 8, 15),
+            ),
+            "done",
+        )
 
 class LaunchAgentTests(unittest.TestCase):
     def test_hourly_and_login_recovery_are_enabled(self):
