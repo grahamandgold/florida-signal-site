@@ -72,8 +72,11 @@ a { color: inherit; }
 .launch-fine { max-width: 50ch; margin: 8px 0 0; color: rgba(209, 225, 236, .62); font: 400 8.5px/1.55 "IBM Plex Mono", monospace; }
 .launch-fine a { text-underline-offset: 2px; }
 .launch-source-strip { position: relative; z-index: 1; max-width: 1180px; display: grid; grid-template-columns: repeat(4, 1fr); margin: 0 auto; border-top: 1px solid rgba(182, 207, 224, .18); }
-.launch-source-strip span { padding: 15px 14px; color: rgba(209, 225, 236, .7); border-right: 1px solid rgba(182, 207, 224, .14); font: 500 8px/1 "IBM Plex Mono", monospace; letter-spacing: .17em; text-align: center; text-transform: uppercase; }
+.launch-source-strip span { min-width: 0; display: grid; gap: 5px; padding: 15px 14px; color: rgba(209, 225, 236, .7); border-right: 1px solid rgba(182, 207, 224, .14); text-align: center; }
+.launch-source-strip strong { color: white; font: 600 clamp(17px, 1.7vw, 22px)/1 "Archivo", sans-serif; letter-spacing: -.02em; }
+.launch-source-strip small { font: 500 7.5px/1.35 "IBM Plex Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
 .launch-source-strip span:last-child { border-right: 0; }
+.launch-source-note { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 10px 20px 16px; color: rgba(209, 225, 236, .62); font: 400 8px/1.45 "IBM Plex Mono", monospace; letter-spacing: .04em; text-align: center; }
 
 .launch-edition { padding: clamp(64px, 8vw, 108px) clamp(20px, 4vw, 56px); background: white; }
 .launch-section-head, .launch-edition__ledger { max-width: 1180px; margin-inline: auto; }
@@ -145,7 +148,12 @@ a { color: inherit; }
   .launch-signup input { font-size: 16px; }
   .launch-signup button { font-size: 10px; }
   .launch-fine { font-size: 7.8px; }
-  .launch-source-strip span { padding: 13px 3px; font-size: 6.8px; letter-spacing: .08em; }
+  .launch-source-strip { grid-template-columns: repeat(2, 1fr); }
+  .launch-source-strip span { min-height: 68px; padding: 12px 8px; border-bottom: 1px solid rgba(182, 207, 224, .14); }
+  .launch-source-strip span:nth-child(2n) { border-right: 0; }
+  .launch-source-strip strong { font-size: 18px; }
+  .launch-source-strip small { font-size: 6.8px; letter-spacing: .06em; }
+  .launch-source-note { padding: 10px 20px 15px; font-size: 7.2px; }
 
   .launch-edition { padding: 46px 20px; }
   .launch-section-head { grid-template-columns: 1fr; gap: 13px; }

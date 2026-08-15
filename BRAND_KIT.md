@@ -35,6 +35,8 @@ In the live header lockup, `DEVELOPMENT INTELLIGENCE` must remain clearly legibl
 
 The August 15 Claude Design refinement is archived in `brand/logo-lockup-2026/`. The production website uses that responsive construction with the canonical repository emblem—not the screenshot-derived symbol from the design prototype. Use the horizontal cut for website headers, the reverse modifier on navy, the stacked cut only for centered square placements, and the mark alone below the documented minimum size.
 
+The newsletter landing-page footer intentionally uses Claude's final compact treatment: the full-color emblem plus `FLORIDA SIGNAL`, without the rule or `DEVELOPMENT INTELLIGENCE`. The complete tagline remains in the primary header lockup and is not repeated in the footer.
+
 ## Core palette
 
 | Token | Hex | Role |

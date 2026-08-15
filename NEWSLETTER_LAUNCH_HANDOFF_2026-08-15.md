@@ -22,11 +22,18 @@ The landing page is mobile-first, uses the approved Florida Signal emblem, and k
 `DEVELOPMENT INTELLIGENCE` on one uninterrupted line. It uses Atlantic navy, electric blue, aqua
 and white; there is no tan field, decorative arrow-emblem or automatic modal.
 
-On August 15, the root masthead, Privacy masthead and landing-page footer adopted the Claude Design
+On August 15, the root masthead and Privacy masthead adopted the Claude Design
 3c/4-series responsive lockup: a stronger tagline justified to the full wordmark width, a controlled
 hairline and documented horizontal/reverse/stacked/compact states. The reusable source and visual
 reference are preserved in `brand/logo-lockup-2026/`. Production always loads the canonical
 `assets/mark-full-color.png`; the screenshot-derived prototype symbol is not shipped.
+The landing-page footer uses Claude's final compact cut—the approved full-color emblem plus
+`FLORIDA SIGNAL`, without the rule or `DEVELOPMENT INTELLIGENCE`—as a quiet brand signature.
+
+The landing-page evidence strip uses conservative, durable lower bounds from the Aug. 15 aggregate
+snapshot: 130K+ permit applications, 200K+ Broward instruments, 2.4M+ permit workflow events and
+110K+ mapped applications. It separately names Sunbiz exact matching, FDEP, FAA and meeting watch;
+it does not imply that those sources are joined, enriched or current merely because they are indexed.
 
 The product name does not hard-code a cadence. The page states the launch schedule separately as
 “Free every Monday morning to start,” allowing a later daily edition without a rebrand. The first
