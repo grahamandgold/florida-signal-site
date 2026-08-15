@@ -10,6 +10,7 @@ Florida Signal is a live development-intelligence newsroom for Fort Lauderdale a
 
 | Use | File |
 |---|---|
+| Responsive website lockup | `brand/logo-lockup-2026/logo-lockup.css` + documented HTML pattern |
 | Primary horizontal lockup | `assets/lockup-horizontal-transparent.png` |
 | Full-color emblem | `assets/mark-full-color.png` |
 | Square/social emblem | `assets/mark-square.png` |
@@ -31,6 +32,8 @@ The Florida emblem is a protected signature element, especially on diagrams. Use
 - Each diagram uses one signature block below the finding: approved emblem, `FLORIDA SIGNAL`, source name and event date. A signature replaces decorative watermarks; it does not compete with the data.
 
 In the live header lockup, `DEVELOPMENT INTELLIGENCE` must remain clearly legible and track across the full visual width of `FLORIDA SIGNAL` beneath it. This relationship is part of the lockup; do not substitute a shorter, loosely centered tagline.
+
+The August 15 Claude Design refinement is archived in `brand/logo-lockup-2026/`. The production website uses that responsive construction with the canonical repository emblem—not the screenshot-derived symbol from the design prototype. Use the horizontal cut for website headers, the reverse modifier on navy, the stacked cut only for centered square placements, and the mark alone below the documented minimum size.
 
 ## Core palette
 

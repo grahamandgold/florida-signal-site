@@ -22,6 +22,12 @@ The landing page is mobile-first, uses the approved Florida Signal emblem, and k
 `DEVELOPMENT INTELLIGENCE` on one uninterrupted line. It uses Atlantic navy, electric blue, aqua
 and white; there is no tan field, decorative arrow-emblem or automatic modal.
 
+On August 15, the root masthead, Privacy masthead and landing-page footer adopted the Claude Design
+3c/4-series responsive lockup: a stronger tagline justified to the full wordmark width, a controlled
+hairline and documented horizontal/reverse/stacked/compact states. The reusable source and visual
+reference are preserved in `brand/logo-lockup-2026/`. Production always loads the canonical
+`assets/mark-full-color.png`; the screenshot-derived prototype symbol is not shipped.
+
 The product name does not hard-code a cadence. The page states the launch schedule separately as
 “Free every Monday morning to start,” allowing a later daily edition without a rebrand. The first
 phone viewport contains the promise, Broward scope, email field, primary button and trust line. The
