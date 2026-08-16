@@ -117,6 +117,37 @@ test.describe("Florida Signal Brief front door", () => {
     await expect(page.locator("body")).not.toContainText("Sunday Signal");
   });
 
+  test("offers accessible social and native share controls with privacy-minimized analytics", async ({ page }) => {
+    const analytics = [];
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "share", {
+        configurable: true,
+        value: async (payload) => { window.__floridaSignalSharePayload = payload; },
+      });
+    });
+    await page.route("**/api/events", async (route) => {
+      analytics.push(route.request().postDataJSON());
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ ok: true }) });
+    });
+    await page.goto("/");
+
+    await expect(page.getByRole("heading", { name: "Know someone who should see what’s changing?" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Share Florida Signal on LinkedIn" })).toHaveAttribute("href", /linkedin\.com\/sharing\/share-offsite/);
+    await expect(page.getByRole("link", { name: "Share Florida Signal on Facebook" })).toHaveAttribute("href", /facebook\.com\/sharer/);
+    await expect(page.getByRole("link", { name: "Share Florida Signal on X" })).toHaveAttribute("href", /twitter\.com\/intent\/tweet/);
+    await expect(page.getByRole("link", { name: "Share Florida Signal by email" })).toHaveAttribute("href", /^mailto:/);
+
+    await page.getByRole("button", { name: "Share Florida Signal" }).click();
+    const sharePayload = await page.evaluate(() => window.__floridaSignalSharePayload);
+    expect(sharePayload).toEqual({
+      title: "Florida Signal Brief",
+      text: "Know what’s changing across Broward before the headline. Get the Florida Signal Brief.",
+      url: "https://thefloridasignal.com/",
+    });
+    await expect.poll(() => analytics.some((event) => event.event === "share_click" && event.properties.method === "native")).toBe(true);
+    expect(JSON.stringify(analytics)).not.toContain("reader@example.com");
+  });
+
   test("keeps the former newsletter URL as an alias for the front door", async ({ page }) => {
     await page.goto("/newsletter/");
     expect(new URL(page.url()).pathname).toBe("/");

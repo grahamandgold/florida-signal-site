@@ -40,7 +40,6 @@
 
   window.floridaSignalTrack = trackEvent;
   trackEvent("page_view", { page_name: "newsletter_landing" });
-  if (!forms.length) return;
 
   forms.forEach(function (form) {
     var message = form.querySelector("[data-launch-message]");
@@ -80,4 +79,45 @@
       }
     });
   });
+
+  var shareUrl = "https://thefloridasignal.com/";
+  var shareTitle = "Florida Signal Brief";
+  var shareText = "Know what’s changing across Broward before the headline. Get the Florida Signal Brief.";
+  var nativeShare = document.querySelector("[data-native-share]");
+  var shareMessage = document.querySelector("[data-share-message]");
+
+  document.querySelectorAll("[data-share-method]").forEach(function (control) {
+    if (control === nativeShare) return;
+    control.addEventListener("click", function () {
+      trackEvent("share_click", { method: control.getAttribute("data-share-method") || "unknown" });
+    });
+  });
+
+  if (nativeShare) {
+    if (navigator.share) {
+      nativeShare.textContent = "Share";
+      nativeShare.setAttribute("data-share-method", "native");
+      nativeShare.setAttribute("aria-label", "Share Florida Signal");
+    }
+    nativeShare.addEventListener("click", async function () {
+      var method = nativeShare.getAttribute("data-share-method") || "copy";
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
+          trackEvent("share_click", { method: "native", status: "shared" });
+          return;
+        } catch (error) {
+          if (error && error.name === "AbortError") return;
+        }
+      }
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        shareMessage.textContent = "Link copied.";
+        trackEvent("share_click", { method: method === "native" ? "copy_fallback" : "copy", status: "copied" });
+      } catch (error) {
+        shareMessage.textContent = "Copy this link: " + shareUrl;
+        trackEvent("share_click", { method: "copy", status: "manual" });
+      }
+    });
+  }
 }());
