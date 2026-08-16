@@ -1,24 +1,24 @@
 {
   "name": "Florida Signal — Development Intelligence",
   "short_name": "Florida Signal",
-  "description": "Broward-wide development intelligence launching city by city, with Fort Lauderdale first.",
-  "start_url": "/fort-lauderdale/",
-  "scope": "/fort-lauderdale/",
+  "description": "Verified Broward County development intelligence, delivered in the Florida Signal Brief.",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#071b32",
   "icons": [
     {
-      "src": "/assets/icon-192.png",
-      "sizes": "192x192",
+      "src": "/brand/florida-signal-logo-avatar-kit-2026-08-16/avatars/fs-avatar-navy-256.png",
+      "sizes": "256x256",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "/assets/icon-512.png",
+      "src": "/brand/florida-signal-logo-avatar-kit-2026-08-16/avatars/fs-avatar-navy-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }
