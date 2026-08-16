@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Florida Signal — Development intelligence before the headline</title>
+  <desc id="desc">Aerial view of Fort Lauderdale waterfront neighborhoods with Florida Signal branding and the words Development intelligence before the headline.</desc>
+  <defs>
+    <linearGradient id="navy-wash" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#061a2e" stop-opacity="0.98"/>
+      <stop offset="0.42" stop-color="#061a2e" stop-opacity="0.88"/>
+      <stop offset="0.72" stop-color="#061a2e" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#061a2e" stop-opacity="0.06"/>
+    </linearGradient>
+    <linearGradient id="edge-wash" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#061a2e" stop-opacity="0.15"/>
+      <stop offset="0.68" stop-color="#061a2e" stop-opacity="0"/>
+      <stop offset="1" stop-color="#061a2e" stop-opacity="0.52"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="#061a2e"/>
+  <image href="../photos/fort-lauderdale-waterfront-neighborhoods-aerial-adobe-428926084.jpg" width="1200" height="630" preserveAspectRatio="xMidYMid slice"/>
+  <rect width="1200" height="630" fill="url(#navy-wash)"/>
+  <rect width="1200" height="630" fill="url(#edge-wash)"/>
+
+  <g transform="translate(72 58)">
+    <image href="../../brand/florida-signal-logo-avatar-kit-2026-08-16/sources/mark-white.png" width="54" height="54" preserveAspectRatio="xMidYMid meet"/>
+    <text x="76" y="29" fill="#ffffff" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="27" font-weight="700" letter-spacing="2.1">FLORIDA</text>
+    <text x="224" y="29" fill="#32c7dc" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="27" font-weight="700" letter-spacing="2.1">SIGNAL</text>
+    <line x1="76" y1="40" x2="359" y2="40" stroke="#ffffff" stroke-opacity="0.34"/>
+    <text x="76" y="57" fill="#d8e5ef" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="9.5" font-weight="600" letter-spacing="4.2">DEVELOPMENT INTELLIGENCE</text>
+  </g>
+
+  <text x="72" y="218" fill="#55d2e4" font-family="Courier New, monospace" font-size="14" font-weight="700" letter-spacing="3.2">BROWARD COUNTY · MONDAY BRIEF</text>
+  <text x="68" y="297" fill="#ffffff" font-family="Georgia, Times New Roman, serif" font-size="56" font-weight="400">Development intelligence</text>
+  <text x="68" y="362" fill="#ffffff" font-family="Georgia, Times New Roman, serif" font-size="56" font-weight="400">before the headline.</text>
+
+  <line x1="72" y1="450" x2="124" y2="450" stroke="#32c7dc" stroke-width="3"/>
+  <text x="72" y="490" fill="#f5f8fb" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" font-weight="500" letter-spacing="0.2">Human-verified public records.</text>
+  <text x="72" y="556" fill="#d8e5ef" font-family="Courier New, monospace" font-size="14" font-weight="700" letter-spacing="2.1">THEFLORIDASIGNAL.COM</text>
+
+  <rect y="618" width="1200" height="12" fill="#1f6fff"/>
+  <rect x="936" y="618" width="264" height="12" fill="#32c7dc"/>
+</svg>
