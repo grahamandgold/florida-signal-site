@@ -31,12 +31,17 @@ research site remains preserved at `/fort-lauderdale/` but is deliberately not l
 launch landing page yet.
 
 On August 16, Claude Design produced the corrected raster brand package directly from the canonical
-791 × 783 emblem artwork. The landing-page masthead now uses its approved horizontal lockup; the
-footer uses the compact lockup without `DEVELOPMENT INTELLIGENCE`; and its 32 px and 180 px avatars
-power the favicon and Apple touch icon. The older reconstructed HTML/CSS lockup is no longer loaded
-by the landing page. All 32 original, export, archive and guidance files are preserved in
-`brand/florida-signal-logo-avatar-kit-2026-08-16/` and in the matching Desktop kit. The emblem
-geometry is untouched and contains no added arrow. `VECTOR_MASTER_BRIEF.md` defines the remaining
+791 × 783 emblem artwork, then issued a dedicated production-hires correction after the first
+lockups proved too small for Retina delivery. The landing-page masthead now uses the tightly cropped
+2510 px horizontal lockup with a 5020 px `srcset` tier; the footer uses the equivalent compact pair
+without `DEVELOPMENT INTELLIGENCE`; and the existing 32 px and 180 px avatars power the favicon and
+Apple touch icon. The old 572 px-equivalent export and the reconstructed HTML/CSS lockup are no
+longer loaded by the landing page. The original kit plus the complete 14-file production-hires
+package and untouched source ZIP are preserved in
+`brand/florida-signal-logo-avatar-kit-2026-08-16/`; the production-hires folder and ZIP are also on
+the Desktop. The emblem geometry is untouched and contains no added arrow. The source emblems in the
+new package are byte-for-byte identical to the canonical files. A true SVG was intentionally not
+fabricated because the available emblem is raster; `VECTOR_MASTER_BRIEF.md` defines the remaining
 SVG/AI production and overlay-acceptance work.
 
 The landing-page evidence strip uses conservative, durable lower bounds from the Aug. 15 aggregate
@@ -61,6 +66,23 @@ Verified locally on August 15:
 - `tests/browser/newsletter.spec.js`: six passing checks, including the approved image lockups;
 - full Playwright suite: 22 passing checks before the privacy-page assertion was added; and
 - `tests.test_server`: five passing API tests.
+
+Production-hires integration was reverified on August 16:
+
+- every one of the 13 PNGs decodes successfully and matches the dimensions in
+  `production-hires/EXPORTS.md`;
+- all transparent lockups have a genuine alpha channel, all navy lockups are fully opaque and the
+  three packaged source emblems match the canonical originals byte for byte;
+- actual 5020 px pixels were inspected at 100% and 200%; the approved geometry is unchanged and the
+  wordmark, underline and tagline have clean edges;
+- 390 × 844 viewport: 390-pixel document width, no broken images, complete 362 × 82 masthead and
+  220 × 49 footer lockup, with the first signup/trust line ending at 785 pixels;
+- the 2510 px header source provides more than twice the required physical pixels at the measured
+  width on a 3× display; and
+- `tests/browser/newsletter.spec.js`: six passing checks against the isolated local production
+  worktree; the full public browser suite passed 19 checks with five private-desk checks skipped by
+  design; and a separate browser gut-check found meaningful content with no error overlay or page
+  errors.
 
 ## Signup and sending boundary
 

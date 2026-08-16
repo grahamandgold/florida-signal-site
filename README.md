@@ -76,7 +76,7 @@ The local server provides same-origin meeting, storm, CMS, agenda-recon and subs
 - [`FLORIDA_SIGNAL_TAGGING_SYSTEM.md`](FLORIDA_SIGNAL_TAGGING_SYSTEM.md) — controlled site and CMS taxonomy.
 - [`cms/README.md`](cms/README.md) — Data Wire endpoints, Story Packet gates and production hardening.
 - [`BRAND_KIT.md`](BRAND_KIT.md) and [`fort-lauderdale/brand/`](fort-lauderdale/brand/) — brand rules, social masters and newsletter assets.
-- [`brand/florida-signal-logo-avatar-kit-2026-08-16/`](brand/florida-signal-logo-avatar-kit-2026-08-16/) — approved website, newsletter and social lockups/avatars plus the vector-master production brief.
+- [`brand/florida-signal-logo-avatar-kit-2026-08-16/`](brand/florida-signal-logo-avatar-kit-2026-08-16/) — approved website, newsletter and social lockups/avatars, the verified 2510/5020 px production-hires package and the vector-master production brief.
 - [`assets/photos/README.md`](assets/photos/README.md) — licensed Adobe Stock provenance and usage restrictions.
 
 ## Data standard
