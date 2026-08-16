@@ -32,6 +32,11 @@ The website header uses `production-hires-v2/fs-lockup-horizontal-transparent-25
 pair. Keep the older `logos/` exports for compatibility, but do not use them for the production
 masthead. Use the compact lockup where “Development Intelligence” would become too small to read.
 
+The Claude-verified reverse lockup for newsletter headers and dark-background social share cards is
+`mailchimp/florida-signal-newsletter-system-2026-08-16/template/img/masthead-lockup.png`. Use that
+complete file unchanged; do not substitute `logos/fs-lockup-horizontal-navy.png` for the approved
+masthead treatment or reconstruct any part of it.
+
 ## Non-negotiable usage rule
 
 Never recreate, retype, trace or re-space the Florida Signal logo or wordmark. Always place one of the approved complete exports in this kit as a single, unchanged image. Do not assemble a lockup from the Florida mark plus live text, even when the fonts and colors appear to match. New formats must reuse an approved export; if none fits, return to the original Claude Design source and export a new complete asset.
