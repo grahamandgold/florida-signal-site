@@ -25,7 +25,9 @@ Use `fs-lockup-horizontal-transparent.png` as the primary light-background locku
 
 ## Non-negotiable usage rule
 
-Never recreate, retype, trace or re-space the Florida Signal logo or wordmark. Always place one of the approved complete exports in this kit as a single, unchanged image. Do not assemble a lockup from the Florida mark plus live text, even when the fonts and colors appear to match. New formats must reuse an approved export; if none fits, return to the original Claude Design source and export a new complete asset.
+Never recreate, retype, trace or re-space the Florida Signal logo or wordmark. Always place an approved complete export as a single, unchanged image. Do not assemble a lockup from the Florida mark plus live text, even when the fonts and colors appear to match.
+
+For the full reverse masthead used by the newsletter and dark-background social graphics, the current canonical Claude export is `mailchimp/florida-signal-newsletter-system-2026-08-16/template/img/masthead-lockup.png`. Do not substitute an earlier lockup from this kit when that final masthead is required. If no approved export fits a new format, return to the original Claude Design source and export a new complete asset.
 
 ## Verification
 
