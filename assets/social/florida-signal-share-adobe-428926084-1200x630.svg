@@ -20,12 +20,14 @@
   <rect width="1200" height="630" fill="url(#navy-wash)"/>
   <rect width="1200" height="630" fill="url(#edge-wash)"/>
 
-  <!-- Final Claude newsletter masthead lockup. Never reconstruct this artwork with live text or separate logo pieces. -->
-  <image href="../../mailchimp/florida-signal-newsletter-system-2026-08-16/template/img/masthead-lockup.png" x="44" y="12" width="370" height="210" preserveAspectRatio="xMidYMid meet"/>
+  <rect width="1200" height="170" fill="#ffffff"/>
+  <line x1="0" y1="169" x2="1200" y2="169" stroke="#dbe5ec"/>
+  <!-- Exact approved Claude landing-page lockup. Never reconstruct this artwork with live text or separate logo pieces. -->
+  <image href="../../brand/florida-signal-logo-avatar-kit-2026-08-16/logos/fs-lockup-horizontal-transparent.png" x="-52" y="-68" width="678" height="291" preserveAspectRatio="xMidYMid meet"/>
 
-  <text x="72" y="242" fill="#55d2e4" font-family="Courier New, monospace" font-size="14" font-weight="700" letter-spacing="3.2">BROWARD COUNTY</text>
-  <text x="68" y="319" fill="#ffffff" font-family="Georgia, Times New Roman, serif" font-size="56" font-weight="400">Development intelligence</text>
-  <text x="68" y="384" fill="#ffffff" font-family="Georgia, Times New Roman, serif" font-size="56" font-weight="400">before the headline.</text>
+  <text x="72" y="217" fill="#55d2e4" font-family="Courier New, monospace" font-size="14" font-weight="700" letter-spacing="3.2">BROWARD COUNTY</text>
+  <text x="68" y="296" fill="#ffffff" font-family="Georgia, Times New Roman, serif" font-size="56" font-weight="400">Development intelligence</text>
+  <text x="68" y="361" fill="#ffffff" font-family="Georgia, Times New Roman, serif" font-size="56" font-weight="400">before the headline.</text>
 
   <text x="72" y="556" fill="#d8e5ef" font-family="Courier New, monospace" font-size="14" font-weight="700" letter-spacing="2.1">THEFLORIDASIGNAL.COM</text>
 
