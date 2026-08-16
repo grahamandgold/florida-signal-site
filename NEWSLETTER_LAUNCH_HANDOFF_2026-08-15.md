@@ -32,13 +32,16 @@ launch landing page yet.
 
 On August 16, Claude Design produced the corrected raster brand package directly from the canonical
 791 × 783 emblem artwork, then issued a dedicated production-hires correction after the first
-lockups proved too small for Retina delivery. The landing-page masthead now uses the tightly cropped
-2510 px horizontal lockup with a 5020 px `srcset` tier; the footer uses the equivalent compact pair
+lockups proved too small for Retina delivery. The landing-page masthead now uses the v2 tightly
+cropped 2510 px horizontal lockup with a 5020 px `srcset` tier; its underline is raised 8.6 px and
+the rule-to-tagline gap tightened 3.5 px at the 440 px website size. The footer uses the equivalent
+compact pair
 without `DEVELOPMENT INTELLIGENCE`; and the existing 32 px and 180 px avatars power the favicon and
 Apple touch icon. The old 572 px-equivalent export and the reconstructed HTML/CSS lockup are no
 longer loaded by the landing page. The original kit plus the complete 14-file production-hires
 package and untouched source ZIP are preserved in
-`brand/florida-signal-logo-avatar-kit-2026-08-16/`; the production-hires folder and ZIP are also on
+`brand/florida-signal-logo-avatar-kit-2026-08-16/`; the production-hires and production-hires-v2
+folders and ZIPs are also on
 the Desktop. The emblem geometry is untouched and contains no added arrow. The source emblems in the
 new package are byte-for-byte identical to the canonical files. A true SVG was intentionally not
 fabricated because the available emblem is raster; `VECTOR_MASTER_BRIEF.md` defines the remaining
@@ -70,7 +73,7 @@ Verified locally on August 15:
 Production-hires integration was reverified on August 16:
 
 - every one of the 13 PNGs decodes successfully and matches the dimensions in
-  `production-hires/EXPORTS.md`;
+  `production-hires-v2/EXPORTS.md`;
 - all transparent lockups have a genuine alpha channel, all navy lockups are fully opaque and the
   three packaged source emblems match the canonical originals byte for byte;
 - actual 5020 px pixels were inspected at 100% and 200%; the approved geometry is unchanged and the

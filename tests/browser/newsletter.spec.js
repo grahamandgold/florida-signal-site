@@ -7,7 +7,7 @@ test.describe("Florida Signal Brief front door", () => {
 
     const headerLogo = page.locator(".launch-brand--header img");
     await expect(headerLogo).toBeVisible();
-    await expect(headerLogo).toHaveAttribute("src", "/brand/florida-signal-logo-avatar-kit-2026-08-16/production-hires/fs-lockup-horizontal-transparent-2510.png");
+    await expect(headerLogo).toHaveAttribute("src", "/brand/florida-signal-logo-avatar-kit-2026-08-16/production-hires-v2/fs-lockup-horizontal-transparent-2510.png");
     await expect(headerLogo).toHaveAttribute("srcset", /horizontal-transparent-2510\.png 2510w.+horizontal-transparent-5020\.png 5020w/);
     await expect(page.getByLabel("ZIP code").first()).toBeVisible();
     await expect(page.getByLabel("ZIP code").first()).toHaveAttribute("placeholder", "ZIP code (e.g. 33301)");
@@ -61,12 +61,12 @@ test.describe("Florida Signal Brief front door", () => {
     await expect(page.getByRole("link", { name: "Explore the research site" })).toHaveCount(0);
     const headerLogo = page.locator(".launch-brand--header img");
     await expect(headerLogo).toBeVisible();
-    await expect(headerLogo).toHaveAttribute("src", "/brand/florida-signal-logo-avatar-kit-2026-08-16/production-hires/fs-lockup-horizontal-transparent-2510.png");
+    await expect(headerLogo).toHaveAttribute("src", "/brand/florida-signal-logo-avatar-kit-2026-08-16/production-hires-v2/fs-lockup-horizontal-transparent-2510.png");
     await expect(headerLogo).toHaveAttribute("srcset", /horizontal-transparent-2510\.png 2510w.+horizontal-transparent-5020\.png 5020w/);
     await expect(page.locator(".launch-byline")).toHaveText("Built by a veteran journalist. AI-assisted; journalist-approved.");
     const footerLogo = page.locator(".launch-brand--footer img");
     await expect(footerLogo).toBeVisible();
-    await expect(footerLogo).toHaveAttribute("src", "/brand/florida-signal-logo-avatar-kit-2026-08-16/production-hires/fs-lockup-compact-transparent-2510.png");
+    await expect(footerLogo).toHaveAttribute("src", "/brand/florida-signal-logo-avatar-kit-2026-08-16/production-hires-v2/fs-lockup-compact-transparent-2510.png");
     await expect(footerLogo).toHaveAttribute("srcset", /compact-transparent-2510\.png 2510w.+compact-transparent-5020\.png 5020w/);
     await expect(page.locator(".launch-source-strip")).toContainText("130K+");
     await expect(page.locator(".launch-source-strip")).toContainText("2.4M+");
