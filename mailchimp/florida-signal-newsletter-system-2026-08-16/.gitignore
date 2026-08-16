@@ -1,0 +1,4 @@
+tmp/pdfs/render-*/
+tmp/pdfs/slices/
+tmp/pdfs/responsive-crops/
+tmp/pdfs/responsive-proof-*.png

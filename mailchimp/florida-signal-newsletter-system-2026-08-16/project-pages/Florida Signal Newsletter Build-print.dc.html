@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="omelette-print-source" content="v1786904082040833 Florida Signal Newsletter Build.dc.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,300;6..72,400&display=swap" rel="stylesheet">
+<script src="./doc-page.js"></script>
+<style>
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  * { animation-delay: -99s !important; animation-duration: .001s !important;
+      animation-iteration-count: 1 !important; animation-fill-mode: both !important;
+      animation-play-state: running !important; transition-duration: 0s !important; }
+  doc-page:not(:defined) { visibility: hidden; }
+  a { color: #1767FF; text-decoration: none; }
+</style>
+</helmet>
+<doc-page margin="0.6in">
+
+  <div slot="footer" style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 0 0;border-top:1px solid #D3DFE8;font-family:Archivo,Helvetica,Arial,sans-serif">
+    <span style="font-size:9pt;font-weight:600;letter-spacing:0.14em;color:#071B2E">FLORIDA SIGNAL</span>
+    <span style="font-size:9pt;color:#7C97AC">Production build review · Mailchimp master · Monday at launch</span>
+  </div>
+
+  <!-- TITLE -->
+  <div style="background:#071B2E;padding:0.5in 0.5in 0.46in;margin-bottom:0.34in;break-inside:avoid">
+    <img src="newsletter/img/masthead-lockup.png" alt="Florida Signal — Development Intelligence" style="width:2.3in;height:auto;display:block;margin-bottom:0.34in">
+    <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:#41D7E9;margin-bottom:0.13in">Production build review · Mailchimp master</div>
+    <h1 style="font-family:Newsreader,Georgia,serif;font-weight:300;font-size:34pt;line-height:1.07;letter-spacing:-0.02em;color:#fff;margin:0 0 0.16in;max-width:14em">The email, not the spec.</h1>
+    <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:11.5pt;line-height:1.6;color:#93AFC6;margin:0;max-width:58ch">Design System v1.0 is locked visually. This is the production master with the four editorial-system changes applied, the renderings and configurations needed to sign it off, and an honest list of what still has to be tested before it can be called production-ready.</p>
+  </div>
+
+  <!-- 01 CHANGES -->
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:0.1in;break-after:avoid">
+    <span style="font-family:'SF Mono',Consolas,monospace;font-size:9pt;font-weight:700;color:#1767FF">01</span>
+    <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#071B2E">Editorial-system changes in this build</span>
+    <span style="flex:1;height:1px;background:#C9D8E3"></span>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#D3DFE8;border:1px solid #D3DFE8;margin-bottom:0.36in">
+    <sc-for list="{{ changes }}" as="c" hint-placeholder-count="4">
+      <div style="background:#fff;padding:0.18in 0.2in;break-inside:avoid">
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8pt;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#1767FF;margin-bottom:8px">{{ c.k }}</div>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9.5pt;line-height:1.55;color:#3C566B">{{ c.v }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 02 SPECIMEN -->
+  <div style="break-before:page"></div>
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:0.1in;break-after:avoid">
+    <span style="font-family:'SF Mono',Consolas,monospace;font-size:9pt;font-weight:700;color:#1767FF">02</span>
+    <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#071B2E">Master specimen · full length</span>
+    <span style="flex:1;height:1px;background:#C9D8E3"></span>
+  </div>
+  <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:11pt;line-height:1.6;color:#3C566B;margin:0 0 0.2in;max-width:74ch;orphans:3;widows:3">The production master at 600px, read top to bottom in columns — all ten modules in one continuous run. The component library that sits below the footer in the file is excluded here, because it is deleted from every real edition.</p>
+  <div style="column-count:3;column-gap:0.16in;font-size:0;margin-bottom:0.3in">
+    <sc-for list="{{ strip }}" as="s" hint-placeholder-count="12">
+      <img src="{{ s }}" alt="" style="width:100%;display:block;break-inside:avoid">
+    </sc-for>
+  </div>
+
+  <!-- 02b DETAIL -->
+  <div style="break-before:page"></div>
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:0.1in;break-after:avoid">
+    <span style="font-family:'SF Mono',Consolas,monospace;font-size:9pt;font-weight:700;color:#1767FF">02b</span>
+    <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#071B2E">Specimen detail</span>
+    <span style="flex:1;height:1px;background:#C9D8E3"></span>
+  </div>
+  <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:11pt;line-height:1.6;color:#3C566B;margin:0 0 0.22in;max-width:74ch">Five passages at reading size.</p>
+  <sc-for list="{{ details }}" as="d" hint-placeholder-count="5">
+    <div style="margin-bottom:0.28in;break-inside:avoid">
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:0.09in">
+        <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.16em;color:#071B2E">{{ d.label }}</span>
+        <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;color:#7C97AC">{{ d.note }}</span>
+      </div>
+      <img src="{{ d.src }}" alt="{{ d.label }}" style="width:5.2in;max-width:100%;height:auto;display:block;border:1px solid #D3DFE8">
+    </div>
+  </sc-for>
+
+  <!-- 03 CONFIGURATIONS -->
+  <div style="break-before:page"></div>
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:0.1in;break-after:avoid">
+    <span style="font-family:'SF Mono',Consolas,monospace;font-size:9pt;font-weight:700;color:#1767FF">03</span>
+    <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#071B2E">Three real configurations</span>
+    <span style="flex:1;height:1px;background:#C9D8E3"></span>
+  </div>
+  <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:11pt;line-height:1.6;color:#3C566B;margin:0 0 0.22in;max-width:76ch;orphans:3;widows:3">Each is a real file generated from the master by deleting whole modules between their START/END comments and changing nothing else — the removability test. Configuration C carries no flagship at all: nothing cleared the threshold, so the edition simply runs shorter rather than inventing a lead.</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.16in;margin-bottom:0.3in">
+    <sc-for list="{{ configs }}" as="cfg" hint-placeholder-count="3">
+      <div style="border:1px solid #D3DFE8;padding:0.18in 0.2in;break-inside:avoid">
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8pt;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#1767FF;margin-bottom:5px">{{ cfg.tag }}</div>
+        <div style="font-family:Newsreader,Georgia,serif;font-size:14pt;line-height:1.2;color:#071B2E;margin-bottom:4px">{{ cfg.title }}</div>
+        <div style="font-family:'SF Mono',Consolas,monospace;font-size:8.5pt;color:#7C97AC;margin-bottom:0.1in">{{ cfg.file }}</div>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;line-height:1.5;color:#50697B;margin-bottom:0.12in">{{ cfg.note }}</div>
+        <sc-for list="{{ cfg.rows }}" as="r" hint-placeholder-count="6">
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #ECF1F5">
+            <span style="width:7px;height:7px;background:{{ r.c }};flex:none"></span>
+            <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8.5pt;font-weight:600;letter-spacing:0.08em;color:{{ r.t }};flex:1">{{ r.name }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 04 OPERATIONS -->
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:0.1in;break-after:avoid">
+    <span style="font-family:'SF Mono',Consolas,monospace;font-size:9pt;font-weight:700;color:#1767FF">04</span>
+    <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#071B2E">Removing &amp; reordering modules</span>
+    <span style="flex:1;height:1px;background:#C9D8E3"></span>
+  </div>
+  <div style="border:1px solid #D3DFE8;padding:0.2in 0.24in;margin-bottom:0.36in">
+    <sc-for list="{{ ops }}" as="o" hint-placeholder-count="6">
+      <div style="display:flex;gap:14px;padding:0.1in 0;border-top:1px solid #ECF1F5;break-inside:avoid">
+        <span style="flex:none;width:0.24in;font-family:'SF Mono',Consolas,monospace;font-size:9.5pt;font-weight:700;color:#B9CBD9">{{ o.n }}</span>
+        <div>
+          <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:10.5pt;font-weight:600;color:#071B2E;margin-bottom:3px">{{ o.t }}</div>
+          <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9.5pt;line-height:1.55;color:#50697B">{{ o.d }}</div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 05 COMPROMISES -->
+  <div style="break-before:page"></div>
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:0.1in;break-after:avoid">
+    <span style="font-family:'SF Mono',Consolas,monospace;font-size:9pt;font-weight:700;color:#1767FF">05</span>
+    <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#071B2E">Known client compromises</span>
+    <span style="flex:1;height:1px;background:#C9D8E3"></span>
+  </div>
+  <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:11pt;line-height:1.6;color:#3C566B;margin:0 0 0.2in;max-width:76ch">Every one is a deliberate trade, not an oversight. None of them lose editorial meaning — that is the test the design has to pass.</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#D3DFE8;border:1px solid #D3DFE8;margin-bottom:0.36in">
+    <sc-for list="{{ compromises }}" as="c" hint-placeholder-count="8">
+      <div style="background:#fff;padding:0.16in 0.18in;break-inside:avoid">
+        <span style="display:inline-block;font-family:Archivo,Helvetica,Arial,sans-serif;font-size:7.5pt;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#fff;background:{{ c.tone }};padding:3px 8px;margin-bottom:9px">{{ c.client }}</span>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:10pt;font-weight:600;color:#071B2E;margin-bottom:4px">{{ c.issue }}</div>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;line-height:1.5;color:#50697B">{{ c.fix }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 06 CHECKLIST -->
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:0.1in;break-after:avoid">
+    <span style="font-family:'SF Mono',Consolas,monospace;font-size:9pt;font-weight:700;color:#1767FF">06</span>
+    <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#071B2E">Pre-send technical checklist</span>
+    <span style="flex:1;height:1px;background:#C9D8E3"></span>
+  </div>
+  <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:11pt;line-height:1.6;color:#3C566B;margin:0 0 0.18in;max-width:76ch">Technical only — the editorial checklist lives in the design system and is run first.</p>
+  <div style="background:#071B2E;padding:0.26in 0.3in;margin-bottom:0.28in;break-inside:avoid">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 0.3in">
+      <sc-for list="{{ checklist }}" as="c" hint-placeholder-count="12">
+        <div style="display:flex;gap:11px;padding:7px 0;border-bottom:1px solid #17334C">
+          <span style="flex:none;width:0.13in;height:0.13in;border:1px solid #41D7E9;margin-top:2px"></span>
+          <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9.5pt;line-height:1.45;color:#DCE7F0">{{ c }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="border:1px solid #D3DFE8;padding:0.24in 0.26in;display:flex;gap:0.26in;align-items:center;justify-content:space-between;break-inside:avoid">
+    <div style="max-width:64ch">
+      <div style="font-family:Newsreader,Georgia,serif;font-size:15pt;line-height:1.3;color:#071B2E;margin-bottom:6px">Still not production-ready.</div>
+      <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9.5pt;line-height:1.55;color:#50697B">The HTML exists and the renderings are clean, but nothing in this document substitutes for a seed send. Ship a test to Gmail web, the Gmail app on Android, Apple Mail on iOS and Outlook desktop — images off, dark mode on — before this goes to the list. Emblem images also need hosting on the sending domain; Mailchimp rewrites them on upload, but the source of truth should be <strong style="color:#071B2E">thefloridasignal.com</strong>.</div>
+    </div>
+    <img src="assets/mark-navy-mono.png" alt="" style="width:0.5in;height:auto;display:block;opacity:0.28">
+  </div>
+
+</doc-page>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  renderVals() {
+    const UNC = '#071B2E', FLAG = '#1767FF', ROT = '#7FA3C0', VIS = '#41D7E9', PROV = '#B9CBD9', GONE = '#E4EBF1';
+    const strip = [];
+    for (let i = 1; i <= 12; i++) strip.push('newsletter/strip/seg-' + String(i).padStart(2, '0') + '.png');
+    return {
+      strip: strip,
+      details: [
+        { src: 'newsletter/detail/01-masthead-open.png', label: 'MASTHEAD + THE OPEN', note: 'brand, then intelligence within the first scroll' },
+        { src: 'newsletter/detail/02-proof-lead.png', label: 'THE PROOF — lead', note: 'status, serif headline, full-bleed rendering, what changed' },
+        { src: 'newsletter/detail/03-proof-evidence.png', label: 'THE PROOF — evidence card', note: 'the only heavy element in the edition' },
+        { src: 'newsletter/detail/04-place-lens.png', label: 'PLACE LENS', note: 'navy field, largest map, now carrying impact and next' },
+        { src: 'newsletter/detail/05-receipt.png', label: 'THE RECEIPT', note: 'sources, coverage window, the eight-line standard' }
+      ],
+      changes: [
+        { k: 'Anchor rule', v: 'THE OPEN and THE RECEIPT are the only unconditional modules. THE PROOF is the preferred flagship and runs whenever a Signal clears that threshold — if none does, the strongest verified rotator takes the lead position and the edition runs shorter. Configuration C is that case, built as a real file.' },
+        { k: 'Universal anatomy', v: 'WHAT CHANGED → THE PROOF → WHY IT MATTERS → THE IMPACT → WHAT\u2019S NEXT now runs through every substantive module, with specialised labels layered on top. THE IMPACT was added to Signal Board, The Money, The Room, The Operators, On the Radar, Stall Watch and Place Lens — each marked deletable, because proof is mandatory and impact is earned.' },
+        { k: 'Colour restraint', v: 'Navy stays scarce by editorial discipline, not by structure. Nothing in the markup limits dark treatment to three places, so a fourth dark block can be added later without a rebuild. Masthead, evidence card and Place Lens remain the approved dark treatments.' },
+        { k: 'Send day', v: 'The day exists in exactly one string, in the masthead metadata bar. Monday at launch. Nothing in the brand, module names, copy or CTA references a weekday, so Sunday or a daily cadence needs no redesign.' }
+      ],
+      configs: [
+        {
+          tag: 'A', title: 'Busy week', file: 'config-a-busy-week.html', note: 'Seven modules. Two heavy visuals, and the flagship still dominates.',
+          rows: [
+            { c: UNC, t: '#071B2E', name: 'THE OPEN' },
+            { c: FLAG, t: '#071B2E', name: 'THE PROOF' },
+            { c: ROT, t: '#071B2E', name: 'SIGNAL BOARD' },
+            { c: ROT, t: '#071B2E', name: 'THE ROOM' },
+            { c: ROT, t: '#071B2E', name: 'THE OPERATORS' },
+            { c: VIS, t: '#071B2E', name: 'PLACE LENS' },
+            { c: UNC, t: '#071B2E', name: 'THE RECEIPT' },
+            { c: GONE, t: '#B9CBD9', name: '— The Money, Radar, Stall' }
+          ]
+        },
+        {
+          tag: 'B', title: 'Property week', file: 'config-b-property-week.html', note: 'Six modules, map-led. The Money carries the rotation.',
+          rows: [
+            { c: UNC, t: '#071B2E', name: 'THE OPEN' },
+            { c: FLAG, t: '#071B2E', name: 'THE PROOF' },
+            { c: ROT, t: '#071B2E', name: 'THE MONEY' },
+            { c: PROV, t: '#071B2E', name: 'ON THE RADAR' },
+            { c: VIS, t: '#071B2E', name: 'PLACE LENS' },
+            { c: UNC, t: '#071B2E', name: 'THE RECEIPT' },
+            { c: GONE, t: '#B9CBD9', name: '— Board, Room, Operators, Stall' }
+          ]
+        },
+        {
+          tag: 'C', title: 'Quiet week · no flagship', file: 'config-c-quiet-week.html', note: 'Four modules. Nothing cleared the flagship threshold, so THE PROOF was removed rather than invented. Both section transitions came out with their modules.',
+          rows: [
+            { c: UNC, t: '#071B2E', name: 'THE OPEN' },
+            { c: ROT, t: '#071B2E', name: 'THE ROOM' },
+            { c: ROT, t: '#071B2E', name: 'STALL WATCH' },
+            { c: UNC, t: '#071B2E', name: 'THE RECEIPT' },
+            { c: GONE, t: '#B9CBD9', name: '— The Proof and five others' }
+          ]
+        }
+      ],
+      ops: [
+        { n: '01', t: 'Deleting a module', d: 'Remove everything from its START MODULE comment block through its END MODULE comment, inclusive. Spacing is owned by each module\u2019s own top padding, so the modules above and below close up cleanly — no orphan rule, no empty wrapper.' },
+        { n: '02', t: 'Section transitions', d: 'The two emblem transitions sit outside the module blocks and are marked OPTIONAL SECTION TRANSITION. Delete the module directly beneath one and its row goes too, or you are left with a rule under nothing.' },
+        { n: '03', t: 'Reordering', d: 'Cut and paste the whole START-to-END block. Order lives nowhere but document order; the mono index numbers are literal text, so renumber by hand or drop them — they are decorative, not structural.' },
+        { n: '04', t: 'Optional visual blocks', d: 'Rendering, document crop, parcel map and map preview each carry their own OPTIONAL comment pair inside their module. Delete one and the module keeps working; the caption row directly beneath it goes with it.' },
+        { n: '05', t: 'The component library', d: 'Delete the whole COMPONENT LIBRARY block before every send — roughly 8KB of copy-paste source that must never reach a reader. All three configurations already have it stripped.' },
+        { n: '06', t: 'Repeating an item', d: 'Signal Board items, Open findings and record-table rows are self-contained rows — duplicate one to add another. Hard caps: five findings in The Open, four items in Signal Board.' }
+      ],
+      compromises: [
+        { client: 'Outlook', tone: '#071B2E', issue: 'Media queries ignored entirely', fix: 'The Word engine never applies them, so Outlook always gets the 600px desktop layout, including the two-column metric pair. Intended — on desktop Outlook there is room for it.' },
+        { client: 'Outlook', tone: '#071B2E', issue: 'Double-rule STALL may flatten', fix: 'A 3px double border can render solid. Meaning survives because the word STALL carries it — precisely why status is never colour-only or shape-only.' },
+        { client: 'Outlook', tone: '#071B2E', issue: 'Images blocked by default', fix: 'All four images are branding, never content. Alt text is styled to stay legible on navy, and every record, label and status is live text.' },
+        { client: 'Gmail', tone: '#1767FF', issue: 'Clips messages over ~102KB', fix: 'The master is 68KB before the library is removed, roughly 60KB after. Mailchimp adds tracking on top — keep populated editions under 90KB or The Receipt disappears behind “View entire message”.' },
+        { client: 'Gmail', tone: '#1767FF', issue: 'App strips <style> for non-Gmail accounts', fix: 'On those accounts the media queries vanish and the fixed 600px table letterboxes on a phone. Every critical style is inlined, so it degrades to a scaled-down but complete layout rather than a broken one.' },
+        { client: 'Dark mode', tone: '#3C566B', issue: 'Forced inversion on iOS and Outlook.com', fix: 'Navy blocks survive; the white field and pale panels invert. Every cell carries an explicit bgcolor and colour so text never lands on a same-tone background — but this needs a real device check, not a simulator.' },
+        { client: 'All', tone: '#3C566B', issue: 'Monospace substitution', fix: 'Consolas on Windows, Menlo on macOS, Courier on iOS. Evidence-table column widths shift slightly between them; fields are stacked label-over-value rather than tabulated, so nothing misaligns.' },
+        { client: 'All', tone: '#3C566B', issue: 'No border-radius, shadows or web fonts', fix: 'Deliberate. The system is rules, spacing, flat colour and native type — which is also why it renders identically everywhere.' }
+      ],
+      checklist: [
+        'COMPONENT LIBRARY block deleted from the campaign.',
+        'Unused modules deleted whole, with their orphan section transitions.',
+        'Total HTML under 90KB after population — Gmail clips at ~102KB.',
+        'All four emblem images hosted on the sending domain, loading over HTTPS.',
+        'Alt text present and accurate on every image.',
+        'Rendered at 390px — no horizontal scroll, no label under 13px.',
+        'Seed send opened in Gmail web, Gmail Android, Apple Mail iOS, Outlook desktop.',
+        'Checked with images blocked and with dark mode forced on.',
+        'Every link clicked, including source documents and the interactive map.',
+        'Merge tags resolve: ARCHIVE, UPDATE_PROFILE, UNSUB, LIST:ADDRESSLINE.',
+        'From name, from address, reply-to and SPF/DKIM/DMARC verified on thefloridasignal.com.',
+        'Subject and preheader set, different from each other, neither truncating at 40 characters.'
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,300;6..72,400&display=swap" rel="stylesheet">
+<script src="./doc-page.js"></script>
+<style>
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  * { animation-delay: -99s !important; animation-duration: .001s !important;
+      animation-iteration-count: 1 !important; animation-fill-mode: both !important;
+      animation-play-state: running !important; transition-duration: 0s !important; }
+  doc-page:not(:defined) { visibility: hidden; }
+  a { color: #1767FF; text-decoration: none; }
+  a:hover { color: #071B2E; }
+</style>
+</helmet>
+<doc-page margin="0.6in">
+
+  <div slot="footer" style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 0 0;border-top:1px solid #D3DFE8;font-family:Archivo,Helvetica,Arial,sans-serif">
+    <span style="font-size:9pt;font-weight:600;letter-spacing:0.14em;color:#071B2E">FLORIDA SIGNAL</span>
+    <span style="font-size:9pt;color:#7C97AC">Newsletter design system · v1.0 · Monday at launch</span>
+  </div>
+
+  <!-- TITLE -->
+  <div style="background:#071B2E;padding:0.5in 0.5in 0.46in;margin-bottom:0.34in;break-inside:avoid">
+    <img src="newsletter/img/masthead-lockup.png" alt="Florida Signal — Development Intelligence" style="width:2.3in;height:auto;display:block;margin-bottom:0.34in">
+    <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:#41D7E9;margin-bottom:0.13in">Newsletter design system · v1.0 · Monday at launch</div>
+    <h1 style="font-family:Newsreader,Georgia,serif;font-weight:300;font-size:34pt;line-height:1.07;letter-spacing:-0.02em;color:#fff;margin:0 0 0.16in;max-width:14em">The record is the design.</h1>
+    <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:11.5pt;line-height:1.6;color:#93AFC6;margin:0;max-width:56ch">One modular system, ten editorial modules, one production master. Built on a single rule — evidence or explanation, never decoration. Fort Lauderdale and Broward County.</p>
+  </div>
+
+  <!-- 01 AUDIT -->
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:0.1in;break-after:avoid">
+    <span style="font-family:'SF Mono',Consolas,monospace;font-size:9pt;font-weight:700;color:#1767FF">01</span>
+    <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#071B2E">Contact-sheet audit</span>
+    <span style="flex:1;height:1px;background:#C9D8E3"></span>
+  </div>
+  <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:11pt;line-height:1.6;color:#3C566B;margin:0 0 0.22in;max-width:74ch;orphans:3;widows:3">Six historical campaigns across three Florida Signal issues plus unrelated experiments. Read as a research archive, not a starting template. The editorial instinct in those issues was consistently better than the packaging around it — the reporting knew what mattered; the design never gave it a hierarchy.</p>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.18in;margin-bottom:0.3in">
+    <div style="border:1px solid #D3DFE8;padding:0.22in 0.24in;break-inside:avoid">
+      <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8.5pt;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:#1767FF;margin-bottom:0.12in">Five things to keep</div>
+      <sc-for list="{{ keep }}" as="k" hint-placeholder-count="5">
+        <div style="display:flex;gap:11px;padding:0.09in 0;border-top:1px solid #ECF1F5;break-inside:avoid">
+          <span style="flex:none;font-family:Newsreader,Georgia,serif;font-size:15pt;line-height:1.1;color:#B9CBD9">{{ k.n }}</span>
+          <div>
+            <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:10.5pt;font-weight:600;color:#071B2E;margin-bottom:3px">{{ k.t }}</div>
+            <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9.5pt;line-height:1.5;color:#50697B">{{ k.d }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="border:1px solid #D3DFE8;padding:0.22in 0.24in;break-inside:avoid">
+      <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8.5pt;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:#50697B;margin-bottom:0.12in">Five things to kill</div>
+      <sc-for list="{{ kill }}" as="k" hint-placeholder-count="5">
+        <div style="display:flex;gap:11px;padding:0.09in 0;border-top:1px solid #ECF1F5;break-inside:avoid">
+          <span style="flex:none;font-family:Newsreader,Georgia,serif;font-size:15pt;line-height:1.1;color:#D9BCB8">{{ k.n }}</span>
+          <div>
+            <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:10.5pt;font-weight:600;color:#071B2E;margin-bottom:3px">{{ k.t }}</div>
+            <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9.5pt;line-height:1.5;color:#50697B">{{ k.d }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9.5pt;line-height:1.55;color:#50697B;margin:0 0 0.36in;max-width:80ch">The Michigan drafts were read only for email mechanics — a dark masthead survives Gmail cleanly, and a rigid label rail reads as authority. No Michigan branding, language, geography or editorial concept enters Florida Signal.</p>
+
+  <!-- 02 DIRECTION -->
+  <div style="break-before:page"></div>
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:0.1in;break-after:avoid">
+    <span style="font-family:'SF Mono',Consolas,monospace;font-size:9pt;font-weight:700;color:#1767FF">02</span>
+    <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#071B2E">The creative direction</span>
+    <span style="flex:1;height:1px;background:#C9D8E3"></span>
+  </div>
+  <h2 style="font-family:Newsreader,Georgia,serif;font-weight:400;font-size:22pt;line-height:1.16;letter-spacing:-0.015em;margin:0 0 0.12in;max-width:24em;break-after:avoid">A white editorial field, interrupted only by evidence.</h2>
+  <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:11pt;line-height:1.6;color:#3C566B;margin:0 0 0.24in;max-width:74ch;orphans:3;widows:3">Navy is rationed to three places in the whole issue: the masthead, the evidence card, and Place Lens. That restraint is the entire idea — when a reader hits a dark block, they are looking at a record. Everything else is white space, a serif headline and a thin rule. No cards, no shadows, no gradients, no boxed sections.</p>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#D3DFE8;border:1px solid #D3DFE8;margin-bottom:0.3in">
+    <sc-for list="{{ direction }}" as="d" hint-placeholder-count="14">
+      <div style="background:#fff;padding:0.14in 0.16in;break-inside:avoid">
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8pt;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#1767FF;margin-bottom:6px">{{ d.k }}</div>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9.5pt;line-height:1.55;color:#3C566B">{{ d.v }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.18in;margin-bottom:0.36in">
+    <div style="border:1px solid #D3DFE8;padding:0.22in 0.24in;break-inside:avoid">
+      <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8.5pt;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:#50697B;margin-bottom:0.14in">Palette</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.12in">
+        <sc-for list="{{ palette }}" as="p" hint-placeholder-count="7">
+          <div style="break-inside:avoid">
+            <div style="height:0.36in;background:{{ p.hex }};border:1px solid #DCE4EB"></div>
+            <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:600;color:#071B2E;margin-top:5px">{{ p.name }}</div>
+            <div style="font-family:'SF Mono',Consolas,monospace;font-size:8pt;color:#7C97AC;margin-top:1px">{{ p.hex }}</div>
+            <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8pt;line-height:1.35;color:#7C97AC;margin-top:2px">{{ p.use }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border:1px solid #D3DFE8;padding:0.22in 0.24in;break-inside:avoid">
+      <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8.5pt;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:#50697B;margin-bottom:0.14in">Type — email-safe by design</div>
+      <div style="border-bottom:1px solid #ECF1F5;padding-bottom:0.11in;margin-bottom:0.11in">
+        <div style="font-family:Georgia,serif;font-size:18pt;line-height:1.16;color:#071B2E">Headlines set in Georgia</div>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8.5pt;color:#7C97AC;margin-top:5px">Editorial serif · module headlines and pull statements</div>
+      </div>
+      <div style="border-bottom:1px solid #ECF1F5;padding-bottom:0.11in;margin-bottom:0.11in">
+        <div style="font-family:Helvetica,Arial,sans-serif;font-size:10.5pt;line-height:1.5;color:#0B2033">Body in Helvetica Neue / Arial at 16–17px, never below 16.</div>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8.5pt;color:#7C97AC;margin-top:5px">Labels at 13px with wide tracking, never smaller</div>
+      </div>
+      <div>
+        <div style="font-family:Consolas,'Courier New',monospace;font-size:9.5pt;line-height:1.5;color:#0B2033">BLD-GEN-[ID] · [INSTRUMENT] · [DATE]</div>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8.5pt;line-height:1.45;color:#7C97AC;margin-top:5px">Monospace is reserved for record identity. It signals evidence, and never carries prose.</div>
+      </div>
+      <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;line-height:1.5;color:#50697B;margin:0.13in 0 0">No webfonts. The lockup carries Archivo as artwork; everything else uses the native stack, so the issue looks identical whether or not a font loads.</p>
+    </div>
+  </div>
+
+  <!-- 03 EMBLEM -->
+  <div style="break-before:page"></div>
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:0.1in;break-after:avoid">
+    <span style="font-family:'SF Mono',Consolas,monospace;font-size:9pt;font-weight:700;color:#1767FF">03</span>
+    <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#071B2E">Emblem system</span>
+    <span style="flex:1;height:1px;background:#C9D8E3"></span>
+  </div>
+  <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:11pt;line-height:1.6;color:#3C566B;margin:0 0 0.22in;max-width:74ch;orphans:3;widows:3">The emblem appears exactly three times in a full issue — masthead, one section transition, footer. That scarcity is what makes it read as a seal rather than a logo. Every placement uses the approved production export; the wordmark is never re-typeset in HTML.</p>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.18in;margin-bottom:0.2in">
+    <div style="border:1px solid #D3DFE8;break-inside:avoid">
+      <div style="background:#071B2E;padding:0.26in;text-align:center">
+        <img src="newsletter/img/masthead-lockup.png" alt="Florida Signal" style="width:1.9in;height:auto;display:inline-block">
+      </div>
+      <div style="padding:0.14in 0.16in">
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:10pt;font-weight:600;color:#071B2E">Masthead · centrepiece</div>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;line-height:1.5;color:#50697B;margin-top:4px">Stacked reverse lockup, 340px wide. The only place it appears at scale. Masthead height stays under 210px so the first finding clears the mobile fold.</div>
+      </div>
+    </div>
+    <div style="border:1px solid #D3DFE8;break-inside:avoid">
+      <div style="padding:0.26in;display:flex;align-items:center;gap:12px">
+        <span style="flex:1;height:1px;background:#D3DFE8"></span>
+        <img src="assets/mark-navy-mono.png" alt="" style="width:0.2in;height:auto;display:block;opacity:0.5">
+        <span style="flex:1;height:1px;background:#D3DFE8"></span>
+      </div>
+      <div style="padding:0.14in 0.16in">
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:10pt;font-weight:600;color:#071B2E">Section transition · 20px</div>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;line-height:1.5;color:#50697B;margin-top:4px">Navy mono at 50% between a hairline rule. Maximum twice per issue — before The Proof, and before Place Lens. It marks a change of register, not every section.</div>
+      </div>
+    </div>
+    <div style="border:1px solid #D3DFE8;break-inside:avoid">
+      <div style="background:#F2F7FA;padding:0.26in;position:relative;overflow:hidden;text-align:center">
+        <img src="assets/mark-navy-mono.png" alt="" style="position:absolute;right:-0.18in;bottom:-0.22in;width:1.2in;height:auto;opacity:0.06">
+        <div style="position:relative;font-family:Georgia,serif;font-size:12pt;line-height:1.4;color:#3C566B">Watermark · 5% opacity</div>
+      </div>
+      <div style="padding:0.14in 0.16in">
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:10pt;font-weight:600;color:#071B2E">Watermark · optional</div>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;line-height:1.5;color:#50697B;margin-top:4px">Reserved for The Receipt on the pale field. Never behind body copy, evidence or a map. If it costs any legibility, drop it — most issues will not use it.</div>
+      </div>
+    </div>
+    <div style="border:1px solid #D3DFE8;break-inside:avoid">
+      <div style="background:#071B2E;padding:0.26in;text-align:center">
+        <img src="newsletter/img/footer-lockup.png" alt="Florida Signal" style="width:1.5in;height:auto;display:inline-block">
+      </div>
+      <div style="padding:0.14in 0.16in">
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:10pt;font-weight:600;color:#071B2E">Footer · compact cut</div>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;line-height:1.5;color:#50697B;margin-top:4px">The approved no-tagline cut at 200px. Quiet and institutional — it closes the issue, it does not re-sell it.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="border:1px solid #D3DFE8;padding:0.2in 0.22in;margin-bottom:0.36in;break-inside:avoid">
+    <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8.5pt;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:#50697B;margin-bottom:0.11in">Where the emblem must not go</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 0.24in">
+      <sc-for list="{{ emblemNo }}" as="e" hint-placeholder-count="6">
+        <div style="display:flex;gap:8px;font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9.5pt;line-height:1.5;color:#3C566B"><span style="color:#B9CBD9;flex:none">—</span><span>{{ e }}</span></div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- 04 MODULES -->
+  <div style="break-before:page"></div>
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:0.1in;break-after:avoid">
+    <span style="font-family:'SF Mono',Consolas,monospace;font-size:9pt;font-weight:700;color:#1767FF">04</span>
+    <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#071B2E">The ten modules</span>
+    <span style="flex:1;height:1px;background:#C9D8E3"></span>
+  </div>
+  <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:11pt;line-height:1.6;color:#3C566B;margin:0 0 0.2in;max-width:74ch;orphans:3;widows:3">Two modules always ship. Everything else rotates on the strength of the week's journalism. A normal edition runs five to seven modules; a quiet one runs four and still feels complete. Never fill a slot to fill a slot.</p>
+
+  <!-- ANCHOR RULE -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:#D3DFE8;border:1px solid #D3DFE8;margin-bottom:0.24in;break-inside:avoid">
+    <div style="background:#071B2E;padding:0.16in 0.18in">
+      <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8pt;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#41D7E9;margin-bottom:7px">Always</div>
+      <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:11pt;font-weight:700;letter-spacing:0.12em;color:#fff;margin-bottom:6px">THE OPEN</div>
+      <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;line-height:1.5;color:#93AFC6">Unconditional. Every edition opens with intelligence, never a greeting.</div>
+    </div>
+    <div style="background:#fff;padding:0.16in 0.18in">
+      <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8pt;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#1767FF;margin-bottom:7px">Only when earned</div>
+      <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:11pt;font-weight:700;letter-spacing:0.12em;color:#071B2E;margin-bottom:6px">THE PROOF</div>
+      <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;line-height:1.5;color:#50697B">The preferred flagship, not a requirement. It runs whenever one Signal clearly earns flagship treatment. If none does, the strongest verified rotator takes the lead position and the edition runs shorter. <strong style="color:#071B2E">Never manufacture a flagship to satisfy the template.</strong></div>
+    </div>
+    <div style="background:#071B2E;padding:0.16in 0.18in">
+      <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8pt;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#41D7E9;margin-bottom:7px">Always</div>
+      <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:11pt;font-weight:700;letter-spacing:0.12em;color:#fff;margin-bottom:6px">THE RECEIPT</div>
+      <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;line-height:1.5;color:#93AFC6">Unconditional. The trust contract closes every edition, never shortened.</div>
+    </div>
+  </div>
+
+  <!-- UNIVERSAL ANATOMY -->
+  <div style="border:1px solid #D3DFE8;padding:0.22in 0.24in;margin-bottom:0.24in;break-inside:avoid">
+    <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8.5pt;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:#50697B;margin-bottom:0.06in">Universal editorial anatomy</div>
+    <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9.5pt;line-height:1.55;color:#50697B;margin:0 0 0.16in;max-width:80ch">Every substantive module answers the same five questions in the same order. Specialised labels sit <em>on top of</em> this logic — they never replace it.</p>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:0.18in">
+      <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.12em;color:#fff;background:#071B2E;padding:7px 12px">WHAT CHANGED</span>
+      <span style="color:#9AA7B8">→</span>
+      <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.12em;color:#fff;background:#1767FF;padding:7px 12px">THE PROOF</span>
+      <span style="color:#9AA7B8">→</span>
+      <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.12em;color:#071B2E;border:1px solid #071B2E;padding:6px 12px">WHY IT MATTERS</span>
+      <span style="color:#9AA7B8">→</span>
+      <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.12em;color:#50697B;border:1px dashed #9DB6C8;padding:6px 12px">THE IMPACT</span>
+      <span style="color:#9AA7B8">→</span>
+      <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.12em;color:#071B2E;border:1px solid #071B2E;padding:6px 12px">WHAT'S NEXT</span>
+      <span style="color:#9AA7B8">+</span>
+      <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.12em;color:#50697B;background:#F2F7FA;border:1px solid #D3DFE8;padding:6px 12px">WHAT WE DON'T KNOW</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.1in 0.3in;padding-top:0.14in;border-top:1px solid #ECF1F5">
+      <sc-for list="{{ anatomyMap }}" as="a" hint-placeholder-count="4">
+        <div style="display:flex;gap:12px">
+          <span style="flex:none;width:1.05in;font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8.5pt;font-weight:700;letter-spacing:0.1em;color:#071B2E">{{ a.m }}</span>
+          <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;line-height:1.5;color:#50697B">{{ a.v }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display:flex;gap:0.24in;margin-top:0.18in;padding-top:0.14in;border-top:1px solid #ECF1F5">
+      <div style="flex:1;font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9.5pt;line-height:1.5;color:#3C566B"><strong style="color:#071B2E">Proof is mandatory.</strong> No claim ships without a named record. THE PROOF is required for any substantive factual intelligence.</div>
+      <div style="flex:1;font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9.5pt;line-height:1.5;color:#3C566B"><strong style="color:#071B2E">Impact is earned.</strong> Delete THE IMPACT rather than manufacture it. The field existing in the template is not a reason to fill it.</div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:0.18in">
+    <sc-for list="{{ roleKey }}" as="r" hint-placeholder-count="5">
+      <div style="display:flex;align-items:center;gap:7px;border:1px solid #D3DFE8;padding:5px 10px">
+        <span style="width:8px;height:8px;background:{{ r.c }};flex:none"></span>
+        <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8.5pt;font-weight:600;color:#3C566B">{{ r.label }}</span>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#D3DFE8;border:1px solid #D3DFE8;margin-bottom:0.24in">
+    <sc-for list="{{ modules }}" as="m" hint-placeholder-count="10">
+      <div style="background:#fff;padding:0.16in 0.18in;break-inside:avoid">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">
+          <span style="font-family:'SF Mono',Consolas,monospace;font-size:8.5pt;font-weight:700;color:#1767FF">{{ m.n }}</span>
+          <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9.5pt;font-weight:700;letter-spacing:0.16em;color:#071B2E">{{ m.name }}</span>
+          <span style="flex:1"></span>
+          <span style="width:9px;height:9px;background:{{ m.c }};flex:none"></span>
+        </div>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9.5pt;line-height:1.55;color:#3C566B;margin-bottom:9px">{{ m.purpose }}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          <sc-for list="{{ m.fields }}" as="f" hint-placeholder-count="4">
+            <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:7.5pt;font-weight:600;letter-spacing:0.09em;color:#50697B;background:#F2F7FA;border:1px solid #E0E8EF;padding:3px 6px">{{ f }}</span>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="border:1px solid #D3DFE8;padding:0.22in 0.24in;margin-bottom:0.36in;break-inside:avoid">
+    <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8.5pt;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:#50697B;margin-bottom:7px">Status language</div>
+    <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9.5pt;line-height:1.55;color:#50697B;margin:0 0 0.16in;max-width:78ch">Each state differs by <strong style="color:#071B2E">shape</strong>, not colour — solid, outlined, double-ruled, dashed banner. They stay distinguishable in dark mode, in plain text and to a colour-blind reader. No emoji.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1.3fr;gap:0.18in">
+      <div>
+        <span style="display:inline-block;background:#071B2E;color:#fff;font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8pt;font-weight:700;letter-spacing:0.14em;padding:5px 10px">ADVANCE</span>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;line-height:1.45;color:#50697B;margin-top:8px">Solid fill. Documented movement forward.</div>
+      </div>
+      <div>
+        <span style="display:inline-block;border:1px solid #071B2E;color:#071B2E;font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8pt;font-weight:700;letter-spacing:0.14em;padding:4px 10px">WATCH</span>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;line-height:1.45;color:#50697B;margin-top:8px">Outline. Verified, but the outcome is unresolved.</div>
+      </div>
+      <div>
+        <span style="display:inline-block;border-top:3px double #071B2E;border-bottom:3px double #071B2E;color:#071B2E;font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8pt;font-weight:700;letter-spacing:0.14em;padding:3px 10px">STALL</span>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;line-height:1.45;color:#50697B;margin-top:8px">Double rule. Documented setback or expiry.</div>
+      </div>
+      <div>
+        <span style="display:inline-block;border:1px dashed #7C97AC;background:#F2F7FA;color:#3C566B;font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8pt;font-weight:700;letter-spacing:0.14em;padding:5px 10px">CANDIDATE · NOT YET A SIGNAL</span>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;line-height:1.45;color:#50697B;margin-top:8px">Dashed banner wrapping the whole module — structurally different from a pill, so it can never be mistaken for a verified state.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 05 SPECIMEN -->
+  <div style="break-before:page"></div>
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:0.1in;break-after:avoid">
+    <span style="font-family:'SF Mono',Consolas,monospace;font-size:9pt;font-weight:700;color:#1767FF">05</span>
+    <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#071B2E">Master specimen · full length</span>
+    <span style="flex:1;height:1px;background:#C9D8E3"></span>
+  </div>
+  <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:11pt;line-height:1.6;color:#3C566B;margin:0 0 0.2in;max-width:74ch;orphans:3;widows:3">The complete production master at 600px, read top to bottom in columns. All ten modules in one continuous run — a system specimen, not an edition any reader would receive. Readable detail follows.</p>
+
+  <div style="column-count:3;column-gap:0.16in;font-size:0;margin-bottom:0.3in">
+    <sc-for list="{{ strip }}" as="s" hint-placeholder-count="12">
+      <img src="{{ s }}" alt="" style="width:100%;display:block;break-inside:avoid">
+    </sc-for>
+  </div>
+
+  <!-- DETAIL -->
+  <div style="break-before:page"></div>
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:0.1in;break-after:avoid">
+    <span style="font-family:'SF Mono',Consolas,monospace;font-size:9pt;font-weight:700;color:#1767FF">05b</span>
+    <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#071B2E">Specimen detail</span>
+    <span style="flex:1;height:1px;background:#C9D8E3"></span>
+  </div>
+  <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:11pt;line-height:1.6;color:#3C566B;margin:0 0 0.22in;max-width:74ch">Four passages at reading size — the masthead and open, the flagship lead with its evidence card, Place Lens on the navy field, and the trust contract that closes every edition.</p>
+
+  <sc-for list="{{ details }}" as="d" hint-placeholder-count="5">
+    <div style="margin-bottom:0.28in;break-inside:avoid">
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:0.09in">
+        <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.16em;color:#071B2E">{{ d.label }}</span>
+        <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;color:#7C97AC">{{ d.note }}</span>
+      </div>
+      <img src="{{ d.src }}" alt="{{ d.label }}" style="width:5.2in;max-width:100%;height:auto;display:block;border:1px solid #D3DFE8">
+    </div>
+  </sc-for>
+
+  <!-- 06 COMPONENTS -->
+  <div style="break-before:page"></div>
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:0.1in;break-after:avoid">
+    <span style="font-family:'SF Mono',Consolas,monospace;font-size:9pt;font-weight:700;color:#1767FF">06</span>
+    <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#071B2E">Image &amp; map library</span>
+    <span style="flex:1;height:1px;background:#C9D8E3"></span>
+  </div>
+  <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:11pt;line-height:1.6;color:#3C566B;margin:0 0 0.2in;max-width:74ch">Eight reusable patterns, usable inside any module. Every one carries a caption slot and a source line — an image without a source does not ship.</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#D3DFE8;border:1px solid #D3DFE8;margin-bottom:0.36in">
+    <sc-for list="{{ components }}" as="c" hint-placeholder-count="8">
+      <div style="background:#fff;padding:0.16in 0.18in;break-inside:avoid">
+        <div style="height:0.52in;background:#F2F7FA;border:1px solid #E0E8EF;display:flex;align-items:center;justify-content:center;font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8pt;font-weight:600;letter-spacing:0.16em;color:#8CA4B6;margin-bottom:9px">{{ c.slot }}</div>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:10pt;font-weight:600;color:#071B2E;margin-bottom:3px">{{ c.name }}</div>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;line-height:1.5;color:#50697B">{{ c.note }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 07 CONFIGURATIONS -->
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:0.1in;break-after:avoid">
+    <span style="font-family:'SF Mono',Consolas,monospace;font-size:9pt;font-weight:700;color:#1767FF">07</span>
+    <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#071B2E">Three edition configurations</span>
+    <span style="flex:1;height:1px;background:#C9D8E3"></span>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.16in;margin-bottom:0.36in">
+    <sc-for list="{{ configs }}" as="cfg" hint-placeholder-count="3">
+      <div style="border:1px solid #D3DFE8;padding:0.18in 0.2in;break-inside:avoid">
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8pt;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#1767FF;margin-bottom:5px">{{ cfg.tag }}</div>
+        <div style="font-family:Newsreader,Georgia,serif;font-size:14pt;line-height:1.2;color:#071B2E;margin-bottom:5px">{{ cfg.title }}</div>
+        <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;line-height:1.5;color:#50697B;margin-bottom:0.12in">{{ cfg.note }}</div>
+        <sc-for list="{{ cfg.rows }}" as="r" hint-placeholder-count="6">
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #ECF1F5">
+            <span style="width:7px;height:7px;background:{{ r.c }};flex:none"></span>
+            <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8.5pt;font-weight:600;letter-spacing:0.08em;color:#071B2E;flex:1">{{ r.name }}</span>
+            <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:8pt;color:#8CA4B6">{{ r.visual }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 08 POPULATION GUIDE -->
+  <div style="break-before:page"></div>
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:0.1in;break-after:avoid">
+    <span style="font-family:'SF Mono',Consolas,monospace;font-size:9pt;font-weight:700;color:#1767FF">08</span>
+    <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#071B2E">Module population guide</span>
+    <span style="flex:1;height:1px;background:#C9D8E3"></span>
+  </div>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:0.14in;font-family:Archivo,Helvetica,Arial,sans-serif">
+    <thead>
+      <tr>
+        <th style="background:#F2F7FA;border:1px solid #D3DFE8;padding:7px 9px;text-align:left;font-size:7.5pt;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#50697B;width:1.05in">Module</th>
+        <th style="background:#F2F7FA;border:1px solid #D3DFE8;padding:7px 9px;text-align:left;font-size:7.5pt;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#50697B">Use when</th>
+        <th style="background:#F2F7FA;border:1px solid #D3DFE8;padding:7px 9px;text-align:left;font-size:7.5pt;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#50697B">Do not use when</th>
+        <th style="background:#F2F7FA;border:1px solid #D3DFE8;padding:7px 9px;text-align:left;font-size:7.5pt;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#50697B;width:1.05in">Items / words</th>
+        <th style="background:#F2F7FA;border:1px solid #D3DFE8;padding:7px 9px;text-align:left;font-size:7.5pt;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#50697B;width:1.1in">Visuals</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="break-inside:avoid">
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:8.5pt;font-weight:700;letter-spacing:0.08em;color:#071B2E">THE OPEN</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">Every edition, without exception.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#8093A6">Never skipped. Never opened with a greeting or an essay.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">3–5 items · 20–35 words each</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">None</td>
+      </tr>
+      <tr style="break-inside:avoid">
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:8.5pt;font-weight:700;letter-spacing:0.08em;color:#071B2E">THE PROOF</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">One Signal clearly earns flagship treatment. Preferred, never required.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#8093A6">Nothing clears the threshold — the strongest rotator leads instead and the edition runs shorter.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">1 item · 250–400 words</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">Rendering, map, crop or chart</td>
+      </tr>
+      <tr style="break-inside:avoid">
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:8.5pt;font-weight:700;letter-spacing:0.08em;color:#071B2E">SIGNAL BOARD</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">Two to four further Signals cleared verification.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#8093A6">Only one Signal exists, or items would repeat the lead.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">2–4 items · 60–90 words each</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">Rarely — keep it typographic</td>
+      </tr>
+      <tr style="break-inside:avoid">
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:8.5pt;font-weight:700;letter-spacing:0.08em;color:#071B2E">THE MONEY</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">Deeds, mortgages, liens or assemblage show a documented pattern.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#8093A6">A single ordinary sale with no pattern behind it.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">1 item · 150–250 words</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">Parcel map, record table</td>
+      </tr>
+      <tr style="break-inside:avoid">
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:8.5pt;font-weight:700;letter-spacing:0.08em;color:#071B2E">THE ROOM</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">An agenda item could shape development before permits.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#8093A6">The meeting is routine or the item is procedural.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">1–2 items · 120–200 words</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">Agenda excerpt, site plan</td>
+      </tr>
+      <tr style="break-inside:avoid">
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:8.5pt;font-weight:700;letter-spacing:0.08em;color:#071B2E">THE OPERATORS</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">An operator changed how they are moving through the system.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#8093A6">Only raw volume — a ranking is not a Signal.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">1 subject · 120–180 words</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">Two metrics, optional chart</td>
+      </tr>
+      <tr style="break-inside:avoid">
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:8.5pt;font-weight:700;letter-spacing:0.08em;color:#071B2E">ON THE RADAR</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">Something is consequential but unverified.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#8093A6">It already cleared verification — then it belongs above.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">1–2 items · 100–150 words</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">Doc crop or map</td>
+      </tr>
+      <tr style="break-inside:avoid">
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:8.5pt;font-weight:700;letter-spacing:0.08em;color:#071B2E">STALL WATCH</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">A record documents withdrawal, expiry, denial or deferral.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#8093A6">Only silence — absence of filing is not a setback.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">1–2 items · 80–140 words</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">Rarely</td>
+      </tr>
+      <tr style="break-inside:avoid">
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:8.5pt;font-weight:700;letter-spacing:0.08em;color:#071B2E">PLACE LENS</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">Several records converge on one geography.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#8093A6">A single site — that is The Proof, not a lens.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">1 geography · 180–280 words</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">Largest map in the edition</td>
+      </tr>
+      <tr style="break-inside:avoid">
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:8.5pt;font-weight:700;letter-spacing:0.08em;color:#071B2E">THE RECEIPT</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">Every edition, without exception.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#8093A6">Never skipped, never shortened, never restyled.</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">Fixed · sources vary</td>
+        <td style="border:1px solid #E4EBF1;padding:8px 9px;font-size:9pt;line-height:1.45;color:#3C566B">Optional watermark</td>
+      </tr>
+    </tbody>
+  </table>
+  <p style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;line-height:1.55;color:#50697B;margin:0 0 0.34in;max-width:80ch">Word counts are ceilings, not targets. Every module can be deleted whole from the master between its <span style="font-family:'SF Mono',Consolas,monospace;font-size:8.5pt">START MODULE</span> / <span style="font-family:'SF Mono',Consolas,monospace;font-size:8.5pt">END MODULE</span> comments without touching anything else.</p>
+
+  <!-- 09 CHECKLIST -->
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:0.1in;break-after:avoid">
+    <span style="font-family:'SF Mono',Consolas,monospace;font-size:9pt;font-weight:700;color:#1767FF">09</span>
+    <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9pt;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#071B2E">Pre-send checklist</span>
+    <span style="flex:1;height:1px;background:#C9D8E3"></span>
+  </div>
+  <div style="background:#071B2E;padding:0.26in 0.3in;margin-bottom:0.3in;break-inside:avoid">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 0.3in">
+      <sc-for list="{{ checklist }}" as="c" hint-placeholder-count="12">
+        <div style="display:flex;gap:11px;padding:7px 0;border-bottom:1px solid #17334C">
+          <span style="flex:none;width:0.13in;height:0.13in;border:1px solid #41D7E9;margin-top:2px"></span>
+          <span style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9.5pt;line-height:1.45;color:#DCE7F0">{{ c }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- CLOSE -->
+  <div style="border:1px solid #D3DFE8;padding:0.24in 0.26in;display:flex;gap:0.26in;align-items:center;justify-content:space-between;break-inside:avoid">
+    <div style="max-width:62ch">
+      <div style="font-family:Newsreader,Georgia,serif;font-size:15pt;line-height:1.3;color:#071B2E;margin-bottom:6px">Built for Monday, not locked to it.</div>
+      <div style="font-family:Archivo,Helvetica,Arial,sans-serif;font-size:9.5pt;line-height:1.55;color:#50697B">The day appears in exactly one place — the masthead metadata bar — and nowhere in the brand, the copy or the module names. Going to five days a week means changing one string per edition. A daily cadence simply runs shorter configurations: <strong style="color:#071B2E">The Open + one rotator + The Receipt</strong> on a light day, the full lead on a heavy one. Nothing in the system needs redesigning to get there.</div>
+    </div>
+    <img src="assets/mark-navy-mono.png" alt="" style="width:0.5in;height:auto;display:block;opacity:0.28">
+  </div>
+
+</doc-page>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  renderVals() {
+    const ANCHOR = '#071B2E', FEATURE = '#1767FF', COMPACT = '#7FA3C0', VISUAL = '#41D7E9', PROV = '#B9CBD9';
+    const FLAG = FEATURE, ROT = COMPACT;
+    const strip = [];
+    for (let i = 1; i <= 12; i++) strip.push('newsletter/strip/seg-' + String(i).padStart(2, '0') + '.png');
+    return {
+      strip: strip,
+      details: [
+        { src: 'newsletter/detail/01-masthead-open.png', label: 'MASTHEAD + THE OPEN', note: 'brand authority, then intelligence within one scroll' },
+        { src: 'newsletter/detail/02-proof-lead.png', label: 'THE PROOF — lead', note: 'status, serif headline, full-bleed rendering, what changed' },
+        { src: 'newsletter/detail/03-proof-evidence.png', label: 'THE PROOF — evidence card', note: 'the only heavy element in the issue' },
+        { src: 'newsletter/detail/04-place-lens.png', label: 'PLACE LENS', note: 'navy field, largest map, static preview into the live map' },
+        { src: 'newsletter/detail/05-receipt.png', label: 'THE RECEIPT', note: 'sources, coverage window, the eight-line standard' }
+      ],
+      keep: [
+        { n: '1', t: 'Named, specific subjects', d: 'Real addresses and project names in the opening scan. The strongest historical issues led with a place, not a category.' },
+        { n: '2', t: 'Why It Matters as a fixed beat', d: 'Already recurring, already recognisable. Promote it from a habit to a labelled part of the anatomy.' },
+        { n: '3', t: 'Forward-looking closes', d: '"What we\'re tracking this week" gave every issue a reason to stay subscribed. It becomes WHAT\'S NEXT.' },
+        { n: '4', t: 'Record IDs shown in the open', d: 'Permit and case numbers appeared inline. That instinct is the whole product — it just needs a real evidence treatment.' },
+        { n: '5', t: 'Geographic clustering', d: 'Corridor and parcel observations were the most original reporting in the archive. That becomes Place Lens.' }
+      ],
+      kill: [
+        { n: '1', t: 'Brand drift', d: 'Three different logos, two publication names and a gold CTA across three issues. One masthead, one lockup, one accent from now on.' },
+        { n: '2', t: 'Counts without meaning', d: '"41 permits, $1.5M declared" answers nothing. A number ships only when it carries a verified change.' },
+        { n: '3', t: 'Flat equal sections', d: 'Every block was the same weight, so nothing was the lead. The new system makes The Proof unmistakably the centre.' },
+        { n: '4', t: 'Repeat subscribe buttons', d: 'Three "Get Early Signals" per issue, all aimed at people already subscribed. Replaced by one forward ask.' },
+        { n: '5', t: 'Decorative and unsourced imagery', d: 'A stock portrait and untitled map crops. Every visual now carries a caption and a credit or it does not run.' }
+      ],
+      direction: [
+        { k: 'Emblem', v: 'A seal, used three times: masthead, one transition, footer. Never a corner logo on every block.' },
+        { k: 'Masthead', v: 'Approved stacked reverse lockup on Atlantic navy, then a thin metadata bar — MONDAY · DATE, FORT LAUDERDALE · BROWARD. Under 210px tall. The day is a variable, so cadence can change without touching the brand.' },
+        { k: 'Typography', v: 'Georgia headlines, Helvetica body at 16–17px, monospace only for record identity. No webfonts anywhere.' },
+        { k: 'Colour', v: 'Navy, electric blue, aqua, pale blue-gray. Electric blue is for labels and links; aqua only for the single forward button and dark-field accents.' },
+        { k: 'Page field', v: 'White column on a pale blue-gray desk. No cards, no shadows, no rounded containers.' },
+        { k: 'Navy discipline', v: 'A default restraint, not a technical limit. Three dark blocks is the resting state; when a story genuinely needs a fourth, take it — the rule exists to keep navy scarce, never to block the best presentation of real evidence.' },
+        { k: 'Section rhythm', v: 'Numbered mono index, tracked label, hairline rule to the edge. That header repeats ten times and does all the structural work.' },
+        { k: 'Evidence card', v: 'Full navy block, aqua THE PROOF label, monospace field table, one aqua source link. The only heavy element in the issue.' },
+        { k: 'Maps', v: 'Static preview, one-line intelligence takeaway, then EXPLORE THE INTERACTIVE MAP → to thefloridasignal.com.' },
+        { k: 'Renderings', v: 'Full-bleed to the column edge, caption plus mandatory credit, always labelled proposed.' },
+        { k: 'Source metadata', v: 'Monospace at 13px, never smaller, always source · ID · date in that order.' },
+        { k: 'Captions', v: 'State the takeaway, not the picture. Credit set in a lighter tone on the same line.' },
+        { k: 'Status', v: 'Solid, outlined, double-ruled, dashed. Shape carries the meaning so colour never has to.' },
+        { k: 'CTA', v: 'Exactly one per edition — forward, on aqua, near the end. Evidence links live inline where they are earned.' },
+        { k: 'Footer', v: 'Compact reverse cut, publisher line, Mailchimp merge tags. Quiet and institutional.' }
+      ],
+      palette: [
+        { name: 'Atlantic Navy', hex: '#071B2E', use: 'Masthead, evidence, Place Lens' },
+        { name: 'Deep Blue', hex: '#0C2944', use: 'Metadata bars, source strips' },
+        { name: 'Electric Blue', hex: '#1767FF', use: 'Labels, links, module index' },
+        { name: 'Aqua', hex: '#41D7E9', use: 'One CTA, dark-field accents' },
+        { name: 'Pale Blue-Gray', hex: '#F2F7FA', use: 'Quiet fields, The Receipt' },
+        { name: 'Body Navy', hex: '#0B2033', use: 'Body copy' },
+        { name: 'Secondary', hex: '#50697B', use: 'Metadata, captions' }
+      ],
+      emblemNo: [
+        'Not beside every module header — that turns a seal into wallpaper.',
+        'Not inside the evidence card; nothing competes with the record.',
+        'Not over a map, rendering or document crop.',
+        'Not stretched, rotated, outlined, or given a shadow or glow.',
+        'Not recoloured outside the three approved files.',
+        'Not more than three placements in one edition.'
+      ],
+      anatomyMap: [
+        { m: 'THE MONEY', v: 'adds THE PATTERN between the proof and the analysis.' },
+        { m: 'THE ROOM', v: "opens with WHAT'S HAPPENING and closes with IF APPROVED →." },
+        { m: 'ON THE RADAR', v: "uses WHAT WE SEE, WHY WE'RE WATCHING, WHAT'S MISSING, and POTENTIAL IMPACT in conditional voice." },
+        { m: 'PLACE LENS', v: "opens with WHAT'S CHANGING and adds THE PATTERN." }
+      ],
+      roleKey: [
+        { c: '#071B2E', label: 'Unconditional — every edition' },
+        { c: '#1767FF', label: 'Flagship — when it clears' },
+        { c: '#7FA3C0', label: 'Rotator' },
+        { c: '#41D7E9', label: 'Visual module' },
+        { c: '#B9CBD9', label: 'Provisional' }
+      ],
+      modules: [
+        { n: '01', name: 'THE OPEN', c: ANCHOR, purpose: 'The whole week in fifteen seconds. Three to five numbered findings, each a bolded subject and one factual sentence. A reader who stops here has still learned something.', fields: ['Summary line', 'Numbered findings', 'Compact proof'] },
+        { n: '02', name: 'THE PROOF', c: FLAG, purpose: 'The flagship verified Signal and the reason someone subscribes. Strongly preferred, but conditional — it runs whenever a Signal clears the flagship threshold. If none does, the strongest rotator takes the lead position and the edition runs shorter.', fields: ['What changed', 'The proof', 'Why it matters', 'The impact', "What's next", "What we don't know"] },
+        { n: '03', name: 'SIGNAL BOARD', c: ROT, purpose: 'Two to four additional verified Signals in compact form. Hard cap at four so they never crowd the lead.', fields: ['Compact anatomy', 'Status pill', 'Source line'] },
+        { n: '04', name: 'THE MONEY', c: ROT, purpose: 'Property and capital movement — deeds, mortgages, liens, assemblage. Patterns beat isolated transactions.', fields: ['The pattern', 'Record table', 'Parcel map'] },
+        { n: '05', name: 'THE ROOM', c: ROT, purpose: 'Decisions that shape development before permits exist. Agendas, votes, staff memoranda, and the conditional next step.', fields: ["What's happening", 'IF APPROVED →', 'Agenda link'] },
+        { n: '06', name: 'THE OPERATORS', c: ROT, purpose: 'How a developer, contractor or applicant is moving through the system. A change in behaviour, never a leaderboard.', fields: ['Two metrics', 'Change vs prior', 'Why it matters'] },
+        { n: '07', name: 'ON THE RADAR', c: PROV, purpose: 'Activity that has not cleared the Signal threshold. Wrapped in a dashed CANDIDATE banner and written entirely in conditional language.', fields: ['What we see', "Why we're watching", "What's missing"] },
+        { n: '08', name: 'STALL WATCH', c: ROT, purpose: 'Documented loss of momentum — withdrawal, expiry, denial, deferral. The record only; never an inference about finances.', fields: ['Double-rule status', 'The record', 'Why it matters'] },
+        { n: '09', name: 'PLACE LENS', c: VISUAL, purpose: 'The signature visual feature. One geography read through many records, on a full navy field with the largest map in the issue.', fields: ['Static map', 'Interactive link', 'The pattern'] },
+        { n: '10', name: 'THE RECEIPT', c: ANCHOR, purpose: 'The trust contract. Named sources, coverage window, data-as-of, the eight-line standard and the desk byline.', fields: ['Sources', 'Coverage window', 'The standard'] }
+      ],
+      components: [
+        { slot: '600 × 340', name: 'Full-width rendering', note: 'Bleeds to the column edge. Caption plus mandatory credit; always labelled proposed.' },
+        { slot: '600 × 400 + LINK', name: 'Static map + interactive link', note: 'Preview must inform on its own. Aqua link bar sits directly beneath, never floating.' },
+        { slot: '600 × 320', name: 'Parcel map', note: 'For assemblage and multi-parcel reporting. Caption states the pattern, not the geography.' },
+        { slot: '520 × 150', name: 'Document crop', note: 'Cropped to the meaningful clause. Monospace source · ID · date underneath.' },
+        { slot: '600 × 300', name: 'Property photo', note: 'Actual site or streetscape only. Alt text, credit, caption — no generic construction stock.' },
+        { slot: '2 × 285', name: 'Two-image comparison', note: 'Side by side at 600, stacked at 390 with captions intact.' },
+        { slot: '600 × 260', name: 'Chart', note: 'Only when it answers an editorial question. The takeaway is written in the copy, not left to the reader.' },
+        { slot: 'CAPTION', name: 'Caption + source', note: 'One pattern everywhere: takeaway in secondary navy, credit in a lighter tone on the same line.' }
+      ],
+      configs: [
+        {
+          tag: 'A', title: 'Busy development week', note: 'Seven modules. Two heavy visuals, and the lead still dominates.',
+          rows: [
+            { c: ANCHOR, name: 'THE OPEN', visual: '5 findings' },
+            { c: ANCHOR, name: 'THE PROOF', visual: 'Rendering + crop' },
+            { c: COMPACT, name: 'SIGNAL BOARD', visual: '4 items' },
+            { c: FEATURE, name: 'THE ROOM', visual: 'Agenda excerpt' },
+            { c: COMPACT, name: 'THE OPERATORS', visual: 'Metrics' },
+            { c: VISUAL, name: 'PLACE LENS', visual: 'Full map' },
+            { c: ANCHOR, name: 'THE RECEIPT', visual: '—' }
+          ]
+        },
+        {
+          tag: 'B', title: 'Property / assemblage week', note: 'Six modules built around maps. The Money leads the rotation.',
+          rows: [
+            { c: ANCHOR, name: 'THE OPEN', visual: '4 findings' },
+            { c: ANCHOR, name: 'THE PROOF', visual: 'Parcel map' },
+            { c: FEATURE, name: 'THE MONEY', visual: 'Table + map' },
+            { c: VISUAL, name: 'PLACE LENS', visual: 'Ownership map' },
+            { c: PROV, name: 'ON THE RADAR', visual: 'Doc crop' },
+            { c: ANCHOR, name: 'THE RECEIPT', visual: '—' }
+          ]
+        },
+        {
+          tag: 'C', title: 'Quiet edition', note: 'Four modules. Complete, not thin — the spacing carries it. This is also the shape a daily edition takes.',
+          rows: [
+            { c: ANCHOR, name: 'THE OPEN', visual: '3 findings' },
+            { c: ANCHOR, name: 'THE PROOF', visual: 'One strong visual' },
+            { c: COMPACT, name: 'STALL WATCH', visual: 'Record only' },
+            { c: ANCHOR, name: 'THE RECEIPT', visual: '—' }
+          ]
+        }
+      ],
+      guideHead: ['Module', 'Use when', 'Do not use when', 'Items / words', 'Visuals'],
+      guide: [
+        { name: 'THE OPEN', use: 'Every edition, without exception.', avoid: 'Never skipped. Never opened with a greeting or an essay.', size: '3–5 items · 20–35 words each', visual: 'None' },
+        { name: 'THE PROOF', use: 'One verified Signal is clearly the strongest of the week.', avoid: 'Nothing cleared verification — then the edition does not send.', size: '1 item · 250–400 words', visual: 'Rendering, map, crop or chart' },
+        { name: 'SIGNAL BOARD', use: '2–4 further Signals cleared verification.', avoid: 'Only one Signal exists, or items would repeat the lead.', size: '2–4 items · 60–90 words each', visual: 'Rarely — keep it typographic' },
+        { name: 'THE MONEY', use: 'Deeds, mortgages, liens or assemblage show a documented pattern.', avoid: 'A single ordinary sale with no pattern behind it.', size: '1 item · 150–250 words', visual: 'Parcel map, record table' },
+        { name: 'THE ROOM', use: 'An agenda item could shape development before permits.', avoid: 'The meeting is routine or the item is procedural.', size: '1–2 items · 120–200 words', visual: 'Agenda excerpt, site plan' },
+        { name: 'THE OPERATORS', use: 'An operator changed how they are moving through the system.', avoid: 'Only raw volume — a ranking is not a Signal.', size: '1 subject · 120–180 words', visual: 'Two metrics, optional chart' },
+        { name: 'ON THE RADAR', use: 'Something is consequential but unverified.', avoid: 'It already cleared verification — then it belongs above.', size: '1–2 items · 100–150 words', visual: 'Doc crop or map' },
+        { name: 'STALL WATCH', use: 'A record documents withdrawal, expiry, denial or deferral.', avoid: 'Only silence — absence of filing is not a setback.', size: '1–2 items · 80–140 words', visual: 'Rarely' },
+        { name: 'PLACE LENS', use: 'Several records converge on one geography.', avoid: 'A single site — that is The Proof, not a lens.', size: '1 geography · 180–280 words', visual: 'Largest map in the edition' },
+        { name: 'THE RECEIPT', use: 'Every edition, without exception.', avoid: 'Never skipped, never shortened, never restyled.', size: 'Fixed · sources vary', visual: 'Optional watermark' }
+      ],
+      checklist: [
+        'Every bracketed placeholder removed.',
+        'Every factual claim traced to a named record.',
+        'Every published Signal human-cleared by an editor.',
+        'Candidate items sit only under ON THE RADAR, in the dashed banner.',
+        'Preliminary or partial records explicitly labelled.',
+        'Source IDs present and every evidence link opens correctly.',
+        'Map, rendering and photo credits present and accurate.',
+        'Subject line names the strongest specific finding.',
+        'Preheader uses the second finding and does not repeat the subject.',
+        'Rendered at 390px — no microscopic labels, no horizontal scroll.',
+        'Rendered in Gmail, Apple Mail and Outlook, images off and on.',
+        'Mailchimp sender, domain, address line and unsubscribe verified.'
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
