@@ -26,6 +26,7 @@ These are web-optimized derivatives of Adobe Stock files purchased and supplied 
 ## Visible placement audit
 
 - Homepage field-photo strip: Adobe 125666941, 1935934410, 257427799, 428926084, 490952530 and 861811982.
+- Homepage and LinkedIn website share card: Adobe 428926084 (`assets/social/florida-signal-share-adobe-428926084-1200x630.png`).
 - Neighborhoods corridor feature: Adobe 561906123 (Brightline, editorial-use-only).
 - Storm Window archive feature: Adobe 171083541 (Hurricane Irma historical image).
 
