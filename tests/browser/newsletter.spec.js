@@ -1,13 +1,24 @@
 const { test, expect } = require("@playwright/test");
 
 test.describe("Florida Signal Brief front door", () => {
+  test("keeps the complete logo and ZIP signup visible on a narrow phone", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 844 });
+    await page.goto("/");
+
+    const headerLogo = page.locator(".launch-brand--header img");
+    await expect(headerLogo).toBeVisible();
+    await expect(headerLogo).toHaveAttribute("src", "/brand/florida-signal-logo-avatar-kit-2026-08-16/logos/fs-lockup-horizontal-transparent.png");
+    await expect(page.getByLabel("ZIP code").first()).toBeVisible();
+    await expect(page.getByLabel("ZIP code").first()).toHaveAttribute("placeholder", "ZIP code (e.g. 33301)");
+  });
+
   test("keeps the complete conversion action in the first phone viewport", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
 
     await expect(page.getByRole("heading", { level: 1 })).toContainText("across Broward");
     await expect(page.getByRole("button", { name: "Get the Brief" }).first()).toBeVisible();
-    await expect(page.getByText("Free every Monday morning to start.")).toBeVisible();
+    await expect(page.getByText("Delivered Mondays at 7 a.m. ET. More timely alerts as the desk expands.")).toBeVisible();
 
     const layout = await page.evaluate(() => ({
       width: document.documentElement.scrollWidth,
@@ -32,30 +43,36 @@ test.describe("Florida Signal Brief front door", () => {
     });
     await page.goto("/");
     await page.getByLabel("Email address").first().fill("reader@example.com");
+    await page.getByLabel("ZIP code").first().fill("33301");
     await page.getByRole("button", { name: "Get the Brief" }).first().click();
 
     await expect(page.getByText("You’re in. Watch for the next brief.")).toBeVisible();
     expect(posted.email).toBe("reader@example.com");
     expect(posted.source).toBe("florida-signal-brief-launch");
-    expect(posted.zip).toBe("");
+    expect(posted.zip).toBe("33301");
   });
 
-  test("has two signup points and preserves the research site", async ({ page }) => {
+  test("has two signup points and keeps the landing page focused", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/");
 
     await expect(page.locator("[data-launch-signup]")).toHaveCount(2);
-    await expect(page.getByRole("link", { name: "Explore the research site" })).toHaveAttribute("href", "/fort-lauderdale/");
-    const tagline = page.locator(".fs-lockup__tagline").first();
-    await expect(tagline).toBeVisible();
-    await expect(tagline).toHaveAttribute("aria-label", "Development Intelligence");
-    await expect(page.locator(".launch-footer .fs-lockup--mark-only")).toBeVisible();
-    await expect(page.locator(".launch-footer .fs-lockup__mark")).toHaveAttribute("src", "/assets/mark-full-color.png");
-    await expect(page.locator(".launch-footer .fs-lockup__name")).toContainText("Florida Signal");
-    await expect(page.locator(".launch-footer .fs-lockup__tagline")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Explore the research site" })).toHaveCount(0);
+    const headerLogo = page.locator(".launch-brand--header img");
+    await expect(headerLogo).toBeVisible();
+    await expect(headerLogo).toHaveAttribute("src", "/brand/florida-signal-logo-avatar-kit-2026-08-16/logos/fs-lockup-horizontal-transparent.png");
+    await expect(page.locator(".launch-byline")).toHaveText("Built by a veteran journalist. AI-assisted; journalist-approved.");
+    const footerLogo = page.locator(".launch-brand--footer img");
+    await expect(footerLogo).toBeVisible();
+    await expect(footerLogo).toHaveAttribute("src", "/brand/florida-signal-logo-avatar-kit-2026-08-16/logos/fs-lockup-compact-transparent.png");
     await expect(page.locator(".launch-source-strip")).toContainText("130K+");
     await expect(page.locator(".launch-source-strip")).toContainText("2.4M+");
-    await expect(page.locator(".launch-source-note")).toContainText("Sunbiz");
+    await expect(page.locator(".launch-source-note")).toContainText("records are leads");
+    await expect(page.locator(".launch-signal-sample")).toContainText("What changed");
+    await expect(page.locator(".launch-signal-sample")).toContainText("Why it matters");
+    await expect(page.locator(".launch-signal-sample")).toContainText("What happens next");
+    await expect(page.locator(".launch-signal-sample")).toContainText("The receipt");
+    await expect(page.locator(".launch-footer")).toContainText("Published by Graham & Gold, LLC");
     await expect(page.getByRole("link", { name: "Privacy" }).first()).toHaveAttribute("href", "/privacy/");
     await expect(page.locator("body")).not.toContainText("Sunday Signal");
   });
