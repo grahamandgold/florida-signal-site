@@ -8,7 +8,7 @@ public exposure, local-only site work and remaining launch blockers.
 Earlier dated checkpoints are preserved as historical evidence.
 **The scorer and collectors are not in this repository** — they live in `grahamandgold/florida-signal`.
 
-Florida Signal is Broward-wide, source-first development intelligence launching city by city. The public root `/` is the signup-first home of the **Florida Signal Brief**. It launches on Monday mornings without hard-coding a weekly cadence into the product name. The preserved research site remains available at `/fort-lauderdale/`; Fort Lauderdale is its first live desk. Other Broward municipality paths use one shared “coming soon” template without dates or coverage promises.
+Florida Signal is Broward-wide, source-first development intelligence launching city by city. The public root `/` is the signup-first home of the **Florida Signal Brief**. It launches Mondays at 7 a.m. ET without hard-coding a weekly cadence into the product name. The launch page collects email and ZIP, explains the four-part Signal standard and keeps the research experience out of the conversion path. The preserved research site remains available at `/fort-lauderdale/`; Fort Lauderdale is its first live desk. Other Broward municipality paths use one shared “coming soon” template without dates or coverage promises.
 
 There are **two sites, with two different jobs**: the public Florida Signal reader/newsletter site
 and the private Florida Signal Newsroom CMS. Live Desk, Agenda Watch, Brief, Data Explorer and
@@ -76,6 +76,7 @@ The local server provides same-origin meeting, storm, CMS, agenda-recon and subs
 - [`FLORIDA_SIGNAL_TAGGING_SYSTEM.md`](FLORIDA_SIGNAL_TAGGING_SYSTEM.md) — controlled site and CMS taxonomy.
 - [`cms/README.md`](cms/README.md) — Data Wire endpoints, Story Packet gates and production hardening.
 - [`BRAND_KIT.md`](BRAND_KIT.md) and [`fort-lauderdale/brand/`](fort-lauderdale/brand/) — brand rules, social masters and newsletter assets.
+- [`brand/florida-signal-logo-avatar-kit-2026-08-16/`](brand/florida-signal-logo-avatar-kit-2026-08-16/) — approved website, newsletter and social lockups/avatars plus the vector-master production brief.
 - [`assets/photos/README.md`](assets/photos/README.md) — licensed Adobe Stock provenance and usage restrictions.
 
 ## Data standard

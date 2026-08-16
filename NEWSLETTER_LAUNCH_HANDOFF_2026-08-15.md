@@ -22,41 +22,52 @@ The landing page is mobile-first, uses the approved Florida Signal emblem, and k
 `DEVELOPMENT INTELLIGENCE` on one uninterrupted line. It uses Atlantic navy, electric blue, aqua
 and white; there is no tan field, decorative arrow-emblem or automatic modal.
 
-On August 15, the root masthead and Privacy masthead adopted the Claude Design
-3c/4-series responsive lockup: a stronger tagline justified to the full wordmark width, a controlled
-hairline and documented horizontal/reverse/stacked/compact states. The reusable source and visual
-reference are preserved in `brand/logo-lockup-2026/`. Production always loads the canonical
-`assets/mark-full-color.png`; the screenshot-derived prototype symbol is not shipped.
-The landing-page footer uses Claude's final compact cut—the approved full-color emblem plus
-`FLORIDA SIGNAL`, without the rule or `DEVELOPMENT INTELLIGENCE`—as a quiet brand signature.
+The completed Claude Design refinement was implemented on August 15 rather than shipped as an
+isolated mockup. The public page now uses its decision-focused deck, ZIP-enabled signup, simplified
+navigation, four-part Signal anatomy, readable coverage proof, mobile Place Lens crop/expand action,
+top-of-page “Built by a veteran journalist. AI-assisted; journalist-approved.” credibility line and
+Graham & Gold, LLC footer attribution. The
+research site remains preserved at `/fort-lauderdale/` but is deliberately not linked from the
+launch landing page yet.
+
+On August 16, Claude Design produced the corrected raster brand package directly from the canonical
+791 × 783 emblem artwork. The landing-page masthead now uses its approved horizontal lockup; the
+footer uses the compact lockup without `DEVELOPMENT INTELLIGENCE`; and its 32 px and 180 px avatars
+power the favicon and Apple touch icon. The older reconstructed HTML/CSS lockup is no longer loaded
+by the landing page. All 32 original, export, archive and guidance files are preserved in
+`brand/florida-signal-logo-avatar-kit-2026-08-16/` and in the matching Desktop kit. The emblem
+geometry is untouched and contains no added arrow. `VECTOR_MASTER_BRIEF.md` defines the remaining
+SVG/AI production and overlay-acceptance work.
 
 The landing-page evidence strip uses conservative, durable lower bounds from the Aug. 15 aggregate
 snapshot: 130K+ permit applications, 200K+ Broward instruments, 2.4M+ permit workflow events and
 110K+ mapped applications. It separately names Sunbiz exact matching, FDEP, FAA and meeting watch;
 it does not imply that those sources are joined, enriched or current merely because they are indexed.
 
-The product name does not hard-code a cadence. The page states the launch schedule separately as
-“Free every Monday morning to start,” allowing a later daily edition without a rebrand. The first
-phone viewport contains the promise, Broward scope, email field, primary button and trust line. The
-page has exactly two signup forms, one real desk diagram as product proof, a direct Method link, a
-Privacy page and a deliberately secondary link to the research site.
+The product name does not hard-code a cadence. The page states the launch schedule once as
+“Delivered Mondays at 7 a.m. ET. More timely alerts as the desk expands,” allowing a later
+daily edition without a rebrand. The first phone viewport contains the promise, Broward scope,
+email and ZIP fields, primary button and trust lines. The page has exactly two signup forms, one real
+desk diagram as product proof and a direct Privacy link. Research, Method and Corrections remain
+preserved but are intentionally absent from the focused launch navigation.
 
 Verified locally on August 15:
 
 - 390 × 844 viewport: 390-pixel document width, no horizontal overflow;
-- first signup/trust line ends at 576 pixels;
+- first signup/trust line ends at about 637 pixels;
 - no broken images;
 - mocked signup posts the established `florida-signal-brief-launch` source;
 - `/newsletter/` resolves to `/`;
-- `tests/browser/newsletter.spec.js`: five passing checks;
+- `tests/browser/newsletter.spec.js`: six passing checks, including the approved image lockups;
 - full Playwright suite: 22 passing checks before the privacy-page assertion was added; and
 - `tests.test_server`: five passing API tests.
 
 ## Signup and sending boundary
 
 The form posts to `/api/subscribe`; on the production hostname, `landing.js` uses
-`https://api.thefloridasignal.com/api/subscribe`. The page collects email first and does not require
-a ZIP code. A successful mock returns “You’re in. Watch for Monday’s brief.”
+`https://api.thefloridasignal.com/api/subscribe`. Both signup points require email and a five-digit
+ZIP code so geographic interest is captured from launch. A successful mock returns “You’re in.
+Watch for the next brief.”
 
 Mailchimp remains a downstream delivery service. A working landing page does not authorize a
 campaign send. Test-device review, final subject/preview text, all source receipts and the human

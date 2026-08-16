@@ -19,6 +19,7 @@ Each source is a transparent 791 × 783 PNG. The emblem geometry is a signature 
 - `symbol/` — transparent full-color, white and navy emblem exports.
 - `EXPORTS.md` — file-by-file use guidance from the export package.
 - `source-package/` — the original corrected Claude Design download preserved unchanged.
+- `VECTOR_MASTER_BRIEF.md` — the production and acceptance specification for the future SVG/AI master.
 
 Use `fs-lockup-horizontal-transparent.png` as the primary light-background lockup and `fs-lockup-horizontal-navy.png` on Atlantic navy. Use the compact lockup where “Development Intelligence” would become too small to read.
 
