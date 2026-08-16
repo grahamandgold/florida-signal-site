@@ -23,6 +23,10 @@ Each source is a transparent 791 × 783 PNG. The emblem geometry is a signature 
 
 Use `fs-lockup-horizontal-transparent.png` as the primary light-background lockup and `fs-lockup-horizontal-navy.png` on Atlantic navy. Use the compact lockup where “Development Intelligence” would become too small to read.
 
+## Non-negotiable usage rule
+
+Never recreate, retype, trace or re-space the Florida Signal logo or wordmark. Always place one of the approved complete exports in this kit as a single, unchanged image. Do not assemble a lockup from the Florida mark plus live text, even when the fonts and colors appear to match. New formats must reuse an approved export; if none fits, return to the original Claude Design source and export a new complete asset.
+
 ## Verification
 
 Codex visually inspected representative light/dark lockups, compact and stacked lockups, the circle-safe avatar and full-color symbol. The emblem matches the original source artwork and contains no added arrow.
