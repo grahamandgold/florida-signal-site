@@ -1,0 +1,29 @@
+# Florida Signal logo and avatar kit
+
+Approved digital brand exports assembled on August 16, 2026.
+
+## Canonical mark
+
+The three files in `sources/` are the cleanest original artwork currently available:
+
+- `mark-full-color.png` — primary navy Florida mark with blue and aqua building forms.
+- `mark-white.png` — reverse mark for dark backgrounds and photography.
+- `mark-navy-mono.png` — one-color mark for print and low-detail reproduction.
+
+Each source is a transparent 791 × 783 PNG. The emblem geometry is a signature element: do not redraw it, add an arrow, stretch it, recolor individual shapes, or merge it with an action icon.
+
+## Ready-to-use exports
+
+- `logos/` — horizontal, compact and stacked lockups for light and Atlantic-navy backgrounds.
+- `avatars/` — square and circle-safe social/profile artwork from 32 px through 1024 px.
+- `symbol/` — transparent full-color, white and navy emblem exports.
+- `EXPORTS.md` — file-by-file use guidance from the export package.
+- `source-package/` — the original corrected Claude Design download preserved unchanged.
+
+Use `fs-lockup-horizontal-transparent.png` as the primary light-background lockup and `fs-lockup-horizontal-navy.png` on Atlantic navy. Use the compact lockup where “Development Intelligence” would become too small to read.
+
+## Verification
+
+Codex visually inspected representative light/dark lockups, compact and stacked lockups, the circle-safe avatar and full-color symbol. The emblem matches the original source artwork and contains no added arrow.
+
+These are high-resolution raster exports suitable for the website, email and social profiles. A true SVG, AI or EPS master has not been located; obtain one before billboard, vehicle-wrap or other large-format print work.
