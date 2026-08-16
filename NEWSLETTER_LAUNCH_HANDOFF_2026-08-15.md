@@ -82,10 +82,22 @@ Production-hires integration was reverified on August 16:
   220 × 49 footer lockup, with the first signup/trust line ending at 785 pixels;
 - the 2510 px header source provides more than twice the required physical pixels at the measured
   width on a 3× display; and
-- `tests/browser/newsletter.spec.js`: six passing checks against the isolated local production
+- `tests/browser/newsletter.spec.js`: eight passing checks against the isolated local production
   worktree; the full public browser suite passed 19 checks with five private-desk checks skipped by
   design; and a separate browser gut-check found meaningful content with no error overlay or page
   errors.
+
+Launch readiness was reverified on August 16 after the copy and analytics pass:
+
+- the approved 32 px favicon, 180 px Apple touch icon and 256/512 px web-app icons point to the
+  current Florida Signal avatar artwork;
+- the footer uses the 2510 px compact v2 lockup with a 5020 px high-density tier;
+- axe-core 4.13 reports zero automated violations on both the landing and privacy pages after six
+  low-contrast text instances were corrected, and the skip-link keyboard path is browser-tested;
+- the landing page emits privacy-minimized `page_view`, `newsletter_submit`,
+  `newsletter_conversion` and `newsletter_error` events without email or ZIP; and
+- the production analytics endpoint passed its CORS preflight and accepted a launch-readiness
+  event with HTTP 201.
 
 ## Signup and sending boundary
 
@@ -93,6 +105,11 @@ The form posts to `/api/subscribe`; on the production hostname, `landing.js` use
 `https://api.thefloridasignal.com/api/subscribe`. Both signup points require email and a five-digit
 ZIP code so geographic interest is captured from launch. A successful mock returns “You’re in.
 Watch for the next brief.”
+
+The same script posts privacy-minimized analytics events to
+`https://api.thefloridasignal.com/api/events`. It stores a random session ID in session storage,
+never includes form values in analytics and exposes `window.floridaSignalTrack` plus a `dataLayer`
+hook for future measurement integrations. The privacy page discloses this first-party collection.
 
 Mailchimp remains a downstream delivery service. A working landing page does not authorize a
 campaign send. Test-device review, final subject/preview text, all source receipts and the human

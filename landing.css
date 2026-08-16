@@ -6,7 +6,8 @@
   --cool: #f2f7fa;
   --blue: #1767ff;
   --aqua: #41d7e9;
-  --aqua-dark: #057f9d;
+  --aqua-dark: #006b82;
+  --link-blue: #0757d9;
   --sky: #a9d8f0;
   --slate: #50697b;
   --line: #d8e4eb;
@@ -147,9 +148,9 @@ a { color: inherit; }
 .policy section { padding: 25px 0; border-top: 1px solid var(--line); }
 .policy h2 { margin: 0; font-size: 19px; }
 .policy section p { margin: 10px 0 0; color: var(--slate); font-size: 14px; line-height: 1.7; }
-.policy section a { color: var(--blue); }
+.policy section a { color: var(--link-blue); }
 .policy__updated { margin: 30px 0 0; color: var(--slate); font: 400 9px/1.6 "IBM Plex Mono", monospace; }
-.policy__back { display: inline-block; margin-top: 28px; color: var(--blue); font: 500 9px/1.4 "IBM Plex Mono", monospace; letter-spacing: .1em; text-decoration: none; text-transform: uppercase; }
+.policy__back { display: inline-block; margin-top: 28px; color: var(--link-blue); font: 500 9px/1.4 "IBM Plex Mono", monospace; letter-spacing: .1em; text-decoration: none; text-transform: uppercase; }
 
 @media (max-width: 850px) {
   .launch-hero__inner, .launch-proof, .launch-final__inner { grid-template-columns: minmax(0, 1fr); }

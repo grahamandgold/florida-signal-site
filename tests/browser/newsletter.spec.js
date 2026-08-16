@@ -53,6 +53,38 @@ test.describe("Florida Signal Brief front door", () => {
     expect(posted.zip).toBe("33301");
   });
 
+  test("sends privacy-minimized landing and signup analytics", async ({ page }) => {
+    const analytics = [];
+    await page.route("**/api/events", async (route) => {
+      analytics.push(route.request().postDataJSON());
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ ok: true }) });
+    });
+    await page.route("**/api/subscribe", async (route) => {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, existing: false }) });
+    });
+
+    await page.goto("/");
+    await expect.poll(() => analytics.some((event) => event.event === "page_view")).toBe(true);
+    await page.getByLabel("Email address").first().fill("reader@example.com");
+    await page.getByLabel("ZIP code").first().fill("33301");
+    await page.getByRole("button", { name: "Get the Brief" }).first().click();
+    await expect.poll(() => analytics.some((event) => event.event === "newsletter_conversion")).toBe(true);
+
+    expect(analytics.map((event) => event.event)).toEqual(expect.arrayContaining(["page_view", "newsletter_submit", "newsletter_conversion"]));
+    expect(JSON.stringify(analytics)).not.toContain("reader@example.com");
+    expect(JSON.stringify(analytics)).not.toContain("33301");
+  });
+
+  test("exposes the skip link and a logical keyboard entry point", async ({ page }) => {
+    await page.goto("/");
+    const skipLink = page.getByRole("link", { name: "Skip to content" });
+    await page.keyboard.press("Tab");
+    await expect(skipLink).toBeFocused();
+    await expect(skipLink).toBeVisible();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/#main$/);
+  });
+
   test("has two signup points and keeps the landing page focused", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/");
@@ -68,6 +100,11 @@ test.describe("Florida Signal Brief front door", () => {
     await expect(footerLogo).toBeVisible();
     await expect(footerLogo).toHaveAttribute("src", "/brand/florida-signal-logo-avatar-kit-2026-08-16/production-hires-v2/fs-lockup-compact-transparent-2510.png");
     await expect(footerLogo).toHaveAttribute("srcset", /compact-transparent-2510\.png 2510w.+compact-transparent-5020\.png 5020w/);
+    await expect(footerLogo).toHaveAttribute("width", "2510");
+    await expect(footerLogo).toHaveAttribute("height", "556");
+    await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/brand/florida-signal-logo-avatar-kit-2026-08-16/avatars/fs-avatar-navy-32.png");
+    await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", "/brand/florida-signal-logo-avatar-kit-2026-08-16/avatars/fs-avatar-navy-180.png");
+    await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("href", "/site.webmanifest");
     await expect(page.locator(".launch-source-strip")).toContainText("130K+");
     await expect(page.locator(".launch-source-strip")).toContainText("2.4M+");
     await expect(page.locator(".launch-source-note")).toContainText("records are leads");
@@ -90,6 +127,9 @@ test.describe("Florida Signal Brief front door", () => {
     await page.goto("/privacy/");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Privacy, in plain English.");
     await expect(page.getByText("We do not sell your personal information.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Privacy-minimized analytics" })).toBeVisible();
+    await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/brand/florida-signal-logo-avatar-kit-2026-08-16/avatars/fs-avatar-navy-32.png");
+    await expect(page.locator(".launch-brand--header img")).toHaveAttribute("src", "/brand/florida-signal-logo-avatar-kit-2026-08-16/production-hires-v2/fs-lockup-horizontal-transparent-2510.png");
     await expect(page.getByRole("link", { name: "Return to the Florida Signal Brief" })).toHaveAttribute("href", "/");
   });
 });
