@@ -32,6 +32,10 @@ The website header uses `production-hires-v2/fs-lockup-horizontal-transparent-25
 pair. Keep the older `logos/` exports for compatibility, but do not use them for the production
 masthead. Use the compact lockup where “Development Intelligence” would become too small to read.
 
+## Non-negotiable usage rule
+
+Never recreate, retype, trace or re-space the Florida Signal logo or wordmark. Always place one of the approved complete exports in this kit as a single, unchanged image. Do not assemble a lockup from the Florida mark plus live text, even when the fonts and colors appear to match. New formats must reuse an approved export; if none fits, return to the original Claude Design source and export a new complete asset.
+
 ## Verification
 
 Codex visually inspected every production-hires-v2 light/dark, compact, horizontal and stacked lockup.
