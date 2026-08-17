@@ -102,8 +102,8 @@ test.describe("Florida Signal Brief front door", () => {
     await expect(footerLogo).toHaveAttribute("srcset", /compact-transparent-2510\.png 2510w.+compact-transparent-5020\.png 5020w/);
     await expect(footerLogo).toHaveAttribute("width", "2510");
     await expect(footerLogo).toHaveAttribute("height", "556");
-    await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/brand/florida-signal-logo-avatar-kit-2026-08-16/avatars/fs-avatar-navy-32.png");
-    await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", "/brand/florida-signal-logo-avatar-kit-2026-08-16/avatars/fs-avatar-navy-180.png");
+    await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/assets/favicon-32.png");
+    await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", "/assets/apple-touch-icon.png");
     await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("href", "/site.webmanifest");
     await expect(page.locator(".launch-source-strip")).toContainText("130K+");
     await expect(page.locator(".launch-source-strip")).toContainText("2.4M+");
@@ -159,7 +159,7 @@ test.describe("Florida Signal Brief front door", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Privacy, in plain English.");
     await expect(page.getByText("We do not sell your personal information.")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Privacy-minimized analytics" })).toBeVisible();
-    await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/brand/florida-signal-logo-avatar-kit-2026-08-16/avatars/fs-avatar-navy-32.png");
+    await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/assets/favicon-32.png");
     await expect(page.locator(".launch-brand--header img")).toHaveAttribute("src", "/brand/florida-signal-logo-avatar-kit-2026-08-16/production-hires-v2/fs-lockup-horizontal-transparent-2510.png");
     await expect(page.getByRole("link", { name: "Return to the Florida Signal Brief" })).toHaveAttribute("href", "/");
   });

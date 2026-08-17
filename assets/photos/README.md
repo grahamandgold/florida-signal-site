@@ -31,3 +31,7 @@ These are web-optimized derivatives of Adobe Stock files purchased and supplied 
 - Storm Window archive feature: Adobe 171083541 (Hurricane Irma historical image).
 
 All eight purchased files are therefore both preserved in the repository and used visibly on the site.
+
+## Owner-provided aerial
+
+- `broward-aerial.jpg` — original 1800×1114 aerial photograph supplied by AJ Gill and used in the final personal LinkedIn banner. Preserve the original file unchanged; the banner export contains the crop and overlay treatment.
