@@ -4,14 +4,13 @@ Last verified: July 17, 2026
 
 ## Brand files
 
-- Primary horizontal logo: `assets/lockup-horizontal-transparent.png`
-- Full-color Florida emblem: `assets/mark-full-color.png`
-- Square/social emblem: `assets/mark-square.png`
-- Reverse and one-color emblems: `assets/mark-white.png` and `assets/mark-navy-mono.png`
+- Canonical colour-bar package: `brand/florida-signal-logo-avatar-kit-2026-08-16/colorbar/`
+- Complete light, reverse and navy lockups: `brand/florida-signal-logo-avatar-kit-2026-08-16/colorbar/lockups/`
+- Complete full-color and reverse emblems: `brand/florida-signal-logo-avatar-kit-2026-08-16/colorbar/emblem/`
 - Complete visual rules: `BRAND_KIT.md`
 - Licensed photo inventory and required labels: `assets/photos/README.md`
 
-Use the horizontal logo when the words must be readable. Use the full-color emblem as a centered signature/crest inside maps and diagrams. Keep it readable with clear space and the correct full-color or reverse treatment. Never add an arrow, stretch, crop or recolor the emblem, and never use a CTA arrow or the report-builder document icon as branding.
+Use the horizontal logo when the words must be readable. Use the full-color emblem as a centered signature/crest inside maps and diagrams. The blue and teal tower bars are official on every active mark; place the appropriate complete Claude export unchanged. Never add an arrow, stretch, crop or recolor the emblem, and never use a CTA arrow or the report-builder document icon as branding.
 
 ## Channel masters
 

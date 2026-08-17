@@ -9,13 +9,13 @@
   "theme_color": "#071b32",
   "icons": [
     {
-      "src": "/brand/florida-signal-logo-avatar-kit-2026-08-16/avatars/fs-avatar-navy-256.png",
-      "sizes": "256x256",
+      "src": "/assets/icon-192.png",
+      "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/brand/florida-signal-logo-avatar-kit-2026-08-16/avatars/fs-avatar-navy-512.png",
+      "src": "/assets/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"

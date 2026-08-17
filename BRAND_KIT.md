@@ -24,16 +24,17 @@ The Florida emblem is a protected signature element, especially on diagrams. Use
 ### Emblem system rules
 
 - The approved motif is the Florida silhouette with three tower forms. It has no arrow, chevron, caret or directional cutout.
-- Use the full-color mark on white, mint and other light flat backgrounds. Use the white mark on navy, dark colors and photographs.
+- The blue `#0175b7` and teal `#0aac9a` tower bars are the official treatment everywhere the mark appears.
+- Use the complete full-color mark with a navy Florida body on white, mint and other light flat backgrounds. Use the complete reverse colour-bar export—with a white Florida body—on navy, dark colors and photographs.
 - Identity uses render at full opacity. Do not place a faint emblem behind text, maps, charts, photographs or data.
 - Minimum emblem size is 24 pixels on either axis; diagram, map, share-card and exported-report signatures use at least 32 pixels.
-- Lock the aspect ratio and use `object-fit: contain`. Never rotate, skew, apply perspective, recolor or add filters, glow or drop shadows.
+- Lock the aspect ratio and use `object-fit: contain`. Never rotate, skew, apply perspective, recolor a downstream copy, or add filters, glow or drop shadows.
 - Keep interface arrows, share controls and report-builder icons outside the emblem's clear space and never combine them in one badge.
 - Each diagram uses one signature block below the finding: approved emblem, `FLORIDA SIGNAL`, source name and event date. A signature replaces decorative watermarks; it does not compete with the data.
 
 In the live header lockup, `DEVELOPMENT INTELLIGENCE` must remain clearly legible and track across the full visual width of `FLORIDA SIGNAL` beneath it. This relationship is part of the lockup; do not substitute a shorter, loosely centered tagline.
 
-The August 15 Claude Design refinement is archived in `brand/logo-lockup-2026/`. The production website uses that responsive construction with the canonical repository emblem—not the screenshot-derived symbol from the design prototype. Use the horizontal cut for website headers, the reverse modifier on navy, the stacked cut only for centered square placements, and the mark alone below the documented minimum size.
+Claude Design's canonical colour-bar exports and proof sheet are saved in `brand/florida-signal-logo-avatar-kit-2026-08-16/colorbar/`. Use the horizontal cut for website headers, the reverse colour-bar cut on navy and photographs, the stacked cut only for centered square placements, and the approved emblem export below the documented lockup minimum size.
 
 The newsletter landing-page footer intentionally uses Claude's final compact treatment: the full-color emblem plus `FLORIDA SIGNAL`, without the rule or `DEVELOPMENT INTELLIGENCE`. The complete tagline remains in the primary header lockup and is not repeated in the footer.
 
