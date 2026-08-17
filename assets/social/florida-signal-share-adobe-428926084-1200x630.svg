@@ -4,9 +4,9 @@
   <defs>
     <linearGradient id="navy-wash" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#071b2e" stop-opacity="1"/>
-      <stop offset="0.42" stop-color="#071b2e" stop-opacity="1"/>
-      <stop offset="0.72" stop-color="#071b2e" stop-opacity="0.3"/>
-      <stop offset="1" stop-color="#071b2e" stop-opacity="0.06"/>
+      <stop offset="0.5" stop-color="#071b2e" stop-opacity="1"/>
+      <stop offset="0.78" stop-color="#071b2e" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#071b2e" stop-opacity="0.1"/>
     </linearGradient>
     <linearGradient id="edge-wash" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#061a2e" stop-opacity="0.15"/>
@@ -20,14 +20,11 @@
   <rect width="1200" height="630" fill="url(#navy-wash)"/>
   <rect width="1200" height="630" fill="url(#edge-wash)"/>
 
-  <!-- Exact complete lockup from Claude's live design. Never reconstruct this artwork with live text or separate logo pieces. -->
-  <image href="../../mailchimp/florida-signal-newsletter-system-2026-08-16/template/img/masthead-lockup.png" x="40" y="14" width="450" height="255" preserveAspectRatio="xMidYMid meet"/>
+  <!-- Exact complete Claude footer lockup. Never reconstruct this artwork with live text or separate logo pieces. -->
+  <image href="../../mailchimp/florida-signal-newsletter-system-2026-08-16/template/img/footer-lockup.png" x="64" y="50" width="470" height="99" preserveAspectRatio="xMinYMid meet"/>
 
-  <text x="72" y="300" fill="#55d2e4" font-family="Courier New, monospace" font-size="14" font-weight="700" letter-spacing="3.2">BROWARD COUNTY</text>
-  <text x="68" y="379" fill="#ffffff" font-family="Georgia, Times New Roman, serif" font-size="56" font-weight="400">Development intelligence</text>
-  <text x="68" y="444" fill="#ffffff" font-family="Georgia, Times New Roman, serif" font-size="56" font-weight="400">before the headline.</text>
-
-  <text x="72" y="556" fill="#d8e5ef" font-family="Courier New, monospace" font-size="14" font-weight="700" letter-spacing="2.1">THEFLORIDASIGNAL.COM</text>
+  <text x="68" y="300" fill="#ffffff" font-family="Georgia, Times New Roman, serif" font-size="62" font-weight="400">Development intelligence</text>
+  <text x="68" y="372" fill="#ffffff" font-family="Georgia, Times New Roman, serif" font-size="62" font-weight="400">before the headline.</text>
 
   <rect y="618" width="1200" height="12" fill="#1f6fff"/>
   <rect x="936" y="618" width="264" height="12" fill="#32c7dc"/>
