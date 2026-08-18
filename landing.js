@@ -27,8 +27,13 @@
       properties: Object.assign({ device: window.matchMedia("(max-width: 620px)").matches ? "mobile" : "desktop" }, cleanProperties)
     });
     if (window.dataLayer && Array.isArray(window.dataLayer)) window.dataLayer.push(Object.assign({ event: name }, cleanProperties));
+    var url = apiBase + "/api/events";
     try {
-      fetch(apiBase + "/api/events", {
+      if (navigator.sendBeacon) {
+        var sent = navigator.sendBeacon(url, new Blob([payload], { type: "application/json" }));
+        if (sent) return;
+      }
+      fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: payload,

@@ -19,7 +19,7 @@ test.describe("Florida Signal Brief front door", () => {
 
     await expect(page.getByRole("heading", { level: 1 })).toContainText("across Broward");
     await expect(page.getByRole("button", { name: "Get the Brief" }).first()).toBeVisible();
-    await expect(page.getByText("Delivered Mondays at 7 a.m. ET. More timely alerts as the desk expands.")).toBeVisible();
+    await expect(page.getByText("Delivered weekly.")).toBeVisible();
 
     const layout = await page.evaluate(() => ({
       width: document.documentElement.scrollWidth,
@@ -95,7 +95,7 @@ test.describe("Florida Signal Brief front door", () => {
     await expect(headerLogo).toBeVisible();
     await expect(headerLogo).toHaveAttribute("src", "/brand/florida-signal-logo-avatar-kit-2026-08-16/production-hires-v2/fs-lockup-horizontal-transparent-2510.png");
     await expect(headerLogo).toHaveAttribute("srcset", /horizontal-transparent-2510\.png 2510w.+horizontal-transparent-5020\.png 5020w/);
-    await expect(page.locator(".launch-byline")).toHaveText("Built by a veteran journalist. AI-assisted; journalist-approved.");
+    await expect(page.locator(".launch-byline")).toHaveText("Built by a veteran journalist.");
     const footerLogo = page.locator(".launch-brand--footer img");
     await expect(footerLogo).toBeVisible();
     await expect(footerLogo).toHaveAttribute("src", "/brand/florida-signal-logo-avatar-kit-2026-08-16/production-hires-v2/fs-lockup-compact-transparent-2510.png");
@@ -132,10 +132,14 @@ test.describe("Florida Signal Brief front door", () => {
     await page.goto("/");
 
     await expect(page.getByRole("heading", { name: "Know someone who should see what’s changing?" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Share Florida Signal on LinkedIn" })).toHaveAttribute("href", /linkedin\.com\/sharing\/share-offsite/);
-    await expect(page.getByRole("link", { name: "Share Florida Signal on Facebook" })).toHaveAttribute("href", /facebook\.com\/sharer/);
-    await expect(page.getByRole("link", { name: "Share Florida Signal on X" })).toHaveAttribute("href", /twitter\.com\/intent\/tweet/);
-    await expect(page.getByRole("link", { name: "Share Florida Signal by email" })).toHaveAttribute("href", /^mailto:/);
+    const linkedIn = page.getByRole("link", { name: "Follow Florida Signal on LinkedIn" });
+    await expect(linkedIn).toHaveAttribute("href", "https://www.linkedin.com/company/floridasignal/");
+    await linkedIn.click();
+    await expect.poll(() => analytics.some((event) => event.event === "share_click" && event.properties.method === "linkedin")).toBe(true);
+    await expect(page.getByRole("link", { name: "Share Florida Signal on Facebook" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Share Florida Signal on X" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /instagram/i })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Email Florida Signal at desk@thefloridasignal.com" })).toHaveAttribute("href", "mailto:desk@thefloridasignal.com?subject=Florida%20Signal");
 
     await page.getByRole("button", { name: "Share Florida Signal" }).click();
     const sharePayload = await page.evaluate(() => window.__floridaSignalSharePayload);
