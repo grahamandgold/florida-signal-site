@@ -10,3 +10,5 @@ Production source and local image assets for the unsent Florida Signal launch-ed
 - The importable package is `../florida-signal-this-weeks-brief-2026-08-18-v5.zip`.
 
 The HTML keeps the light-only color treatment, Mailchimp merge tags, source links, company LinkedIn URL, compact footer, and responsive 600px/390px layout. It spells out Community Redevelopment Agency on first mention and uses plain-language Signal Board copy. The campaign was saved as a draft and was not sent.
+
+The final mobile pass uses one fixed, right-aligned amount rail across all 11 data rows: 104px on desktop, 96px on mobile, 18px/20px Georgia tabular figures, explicit 10px/12px labels, and consistent 14px row padding. The permanent reporting record is `../../proofs/florida-signal-reporting-proof-sheet-2026-08-18.html`.

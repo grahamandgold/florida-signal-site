@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Florida Signal — Aug. 18, 2026 Reporting Proof Sheet</title>
+<style>
+  :root{
+    --navy:#0A2134; --navy2:#071B2E; --card:#13293C;
+    --cyan:#41D7E9; --cyan2:#00B8DC; --teal:#0F7F86; --teal2:#009F91;
+    --yellow:#FFCF4A; --ink:#22384A; --ink2:#071B2E;
+    --soft:#617789; --soft2:#8FA9BF; --line:#D3DFE8; --line2:#BDCDD7;
+    --paper:#E4EBF1; --pale:#F2F7FA; --white:#FFFFFF;
+    --serif:Georgia,'Times New Roman',serif;
+    --sans:'Helvetica Neue',Helvetica,Arial,sans-serif;
+    --mono:Consolas,'Courier New',monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.5;font-size:15px}
+  a{color:#1767FF}
+  a:hover{color:#0B4CD1}
+  h1,h2,h3,h4{font-family:var(--serif);font-weight:400;color:var(--ink2);margin:0}
+  table{border-collapse:collapse;width:100%}
+  th,td{text-align:left;vertical-align:top;padding:8px 10px;font-size:13px;border-bottom:1px solid var(--line)}
+  th{background:var(--pale);color:var(--soft);font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;white-space:nowrap}
+  tr:last-child td{border-bottom:1px solid var(--line)}
+  code{font-family:var(--mono);font-size:12px;background:var(--pale);padding:1px 5px;border-radius:3px;color:var(--ink)}
+
+  /* ===== Toolbar ===== */
+  .toolbar{position:sticky;top:0;z-index:50;background:var(--navy);border-bottom:3px solid var(--cyan);
+    padding:12px 22px;display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;color:#fff}
+  .toolbar .brand{font-family:var(--serif);font-size:16px;color:#fff;white-space:nowrap}
+  .toolbar .brand small{display:block;font-family:var(--sans);font-size:10.5px;letter-spacing:1.6px;color:var(--cyan);text-transform:uppercase;font-weight:700}
+  .toolbar .spacer{flex:1 1 auto}
+  .toolbar button{font-family:var(--sans);font-size:11.5px;font-weight:700;letter-spacing:.8px;
+    padding:9px 14px;border-radius:5px;border:1px solid #2E6E7A;background:#13293C;color:var(--cyan);cursor:pointer}
+  .toolbar button:hover{background:#1B3A52}
+  .toolbar button.primary{background:var(--yellow);border-color:var(--yellow);color:var(--ink2)}
+  .toolbar button.primary:hover{background:#FFD86B}
+  .legend-chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.4px;color:#DCE7F0}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .dot.v{background:#3FD3C9}.dot.p{background:var(--yellow)}.dot.n{background:#8FA9BF}
+
+  main{max-width:980px;margin:0 auto;padding:26px 22px 70px}
+
+  /* ===== Status pills ===== */
+  .status{display:inline-block;font-family:var(--sans);font-size:10px;font-weight:800;letter-spacing:1px;
+    text-transform:uppercase;padding:3px 8px;border-radius:3px;white-space:nowrap}
+  .status-verified{background:#DFF8FB;color:#086B74;border:1px solid #9FE0E8}
+  .status-pending{background:#FFF3D6;color:#8A5A00;border:1px solid #F3D998}
+  .status-na{background:#EEF2F5;color:#5C7086;border:1px solid #D7E0E7}
+
+  /* ===== Cover ===== */
+  .cover{background:var(--navy);color:#fff;border-top:5px solid var(--cyan);border-radius:0 0 10px 10px;
+    padding:30px 30px 26px;margin-bottom:26px}
+  .cover .eyebrow{font-size:11.5px;font-weight:700;letter-spacing:2.6px;color:var(--cyan);text-transform:uppercase}
+  .cover h1{color:#fff;font-size:27px;line-height:1.25;margin:8px 0 4px}
+  .cover .sub{color:#AAC0D1;font-size:14px;margin-bottom:22px}
+  .cover-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 22px}
+  .cover-field{background:#13293C;border-left:3px solid var(--cyan);padding:11px 14px;border-radius:0 4px 4px 0}
+  .cover-field.warn{border-left-color:var(--yellow)}
+  .cover-field .k{font-size:10px;font-weight:700;letter-spacing:1.4px;color:#8FA9BF;text-transform:uppercase}
+  .cover-field .v{font-size:13.5px;color:#EAF2F7;margin-top:4px;line-height:1.5}
+  .cover-field .v.mono{font-family:var(--mono);font-size:12.5px}
+  .cover-field .v .blank{display:inline-block;border-bottom:1px dashed #4E6E86;min-width:220px}
+  .cover-full{grid-column:1/-1}
+  .signoff{margin-top:22px;padding-top:18px;border-top:1px solid #22384A;display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+  .signoff div{font-size:11px;color:#8FA9BF;font-weight:700;letter-spacing:.8px;text-transform:uppercase}
+  .signoff .line{display:block;margin-top:22px;border-bottom:1px solid #4E6E86;height:1px}
+
+  /* ===== Section chrome: table of contents & legend ===== */
+  .panel{background:#fff;border:1px solid var(--line);border-radius:6px;padding:20px 24px;margin-bottom:22px}
+  .panel h2{font-size:12px;letter-spacing:2.4px;color:var(--navy2);text-transform:uppercase;font-family:var(--sans);font-weight:700;margin-bottom:12px}
+  .toc{columns:2;column-gap:28px;font-size:13.5px}
+  .toc a{display:block;padding:4px 0;color:var(--ink);text-decoration:none;border-bottom:1px dotted transparent}
+  .toc a:hover{color:#1767FF;border-color:#B9D0FF}
+  .toc .num{color:var(--cyan2);font-family:var(--mono);font-weight:700;margin-right:6px}
+  .legend-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+  .legend-grid .item{border:1px solid var(--line);border-radius:5px;padding:12px 14px}
+  .legend-grid .item p{margin:8px 0 0;font-size:12.5px;color:var(--soft);line-height:1.5}
+  .methodology{margin-top:14px;font-size:12.5px;color:var(--soft);background:var(--pale);border:1px solid var(--line);
+    border-radius:5px;padding:12px 14px;line-height:1.6}
+  .methodology strong{color:var(--ink)}
+
+  /* ===== Modules ===== */
+  .module{background:#fff;border:1px solid var(--line);border-radius:6px;margin-bottom:22px;overflow:hidden}
+  .module > summary{list-style:none;cursor:pointer;padding:18px 24px;display:flex;align-items:center;gap:14px;
+    background:var(--pale);border-bottom:1px solid var(--line)}
+  .module > summary::-webkit-details-marker{display:none}
+  .module > summary::marker{content:''}
+  .module .modno{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--cyan2);
+    background:var(--navy);width:30px;height:30px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex:none}
+  .module .modtitle{flex:1 1 auto;min-width:0}
+  .module .modtitle .eyebrow{font-size:10.5px;font-weight:700;letter-spacing:2px;color:var(--teal2);text-transform:uppercase}
+  .module .modtitle h2{font-size:19px;line-height:1.3;margin-top:2px}
+  .module .caret{flex:none;font-size:11px;color:var(--soft);transition:transform .15s}
+  .module[open] > summary .caret{transform:rotate(90deg)}
+  .module-body{padding:22px 24px 26px}
+  .subhead{font-size:11px;font-weight:700;letter-spacing:2px;color:var(--teal2);text-transform:uppercase;
+    margin:22px 0 9px;padding-top:14px;border-top:1px solid var(--line)}
+  .subhead:first-child{margin-top:0;border-top:0;padding-top:0}
+
+  .verbatim{background:var(--pale);border-left:3px solid var(--cyan);border-radius:0 5px 5px 0;
+    padding:14px 16px;font-family:var(--serif);font-style:normal;font-size:14.5px;line-height:1.65;color:var(--ink);margin:6px 0 4px}
+  .verbatim .tag{display:block;font-family:var(--sans);font-style:normal;font-size:9.5px;font-weight:700;
+    letter-spacing:1.4px;color:var(--soft2);text-transform:uppercase;margin-bottom:6px}
+  .verbatim a{color:#1767FF}
+
+  .vtable td:first-child, .vtable th:first-child{width:34px;color:var(--soft2);font-family:var(--mono);font-size:11px}
+  .vtable td.figure{font-family:var(--serif);font-size:14px;color:var(--ink2);white-space:nowrap}
+  .vtable td.note{color:var(--soft);font-size:12px}
+
+  .ltable td.label{font-weight:700;color:var(--ink)}
+  .ltable td.url{font-family:var(--mono);font-size:11px;word-break:break-all;color:var(--soft)}
+
+  .callout{border:1px solid var(--line);border-left:3px solid var(--yellow);background:#FFFDF6;
+    border-radius:0 5px 5px 0;padding:12px 14px;font-size:12.5px;color:var(--ink);line-height:1.55;margin:8px 0}
+  .callout.limit{border-left-color:var(--cyan);background:#F3FCFE}
+  .callout ul{margin:4px 0 0;padding-left:18px}
+  .callout li{margin:3px 0}
+
+  .assets{display:flex;flex-wrap:wrap;gap:14px;margin:8px 0}
+  .asset{border:1px solid var(--line);border-radius:6px;padding:10px;width:220px;background:#fafcfd}
+  .asset img{display:block;width:100%;height:auto;border-radius:4px;background:var(--navy);border:1px solid var(--line2)}
+  .asset .fn{font-family:var(--mono);font-size:10.5px;color:var(--ink);margin-top:8px;word-break:break-all}
+  .asset .cdn{font-family:var(--mono);font-size:10px;color:var(--soft);margin-top:3px;word-break:break-all}
+  .asset .label{font-size:10px;font-weight:700;letter-spacing:1px;color:var(--teal2);text-transform:uppercase}
+
+  .anchornote{font-size:12px;color:var(--soft);background:var(--pale);border:1px dashed var(--line2);
+    border-radius:5px;padding:10px 13px;font-family:var(--mono);line-height:1.6}
+  .anchornote b{font-family:var(--sans);color:var(--ink);font-weight:700}
+
+  .checklist{list-style:none;margin:6px 0 0;padding:0;columns:2;column-gap:22px}
+  .checklist li{font-size:12.5px;color:var(--ink);padding:4px 0;break-inside:avoid;display:flex;gap:8px;align-items:flex-start}
+  .checklist input{margin-top:3px;flex:none}
+
+  .repnote{font-size:12.5px;color:var(--ink);background:#F7FBFC;border:1px solid var(--line);border-radius:5px;
+    padding:11px 13px;line-height:1.6}
+  .repnote .who{font-weight:700;color:var(--teal2)}
+
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+
+  /* ===== Appendix / template ===== */
+  .appendix .modtitle .eyebrow{color:var(--cyan2)}
+  .template-banner{background:#FFF3D6;border:1px solid #F3D998;color:#8A5A00;font-size:12.5px;font-weight:700;
+    padding:10px 14px;border-radius:5px;margin-bottom:14px}
+
+  footer.docfoot{margin-top:30px;padding-top:18px;border-top:1px solid var(--line);color:var(--soft);font-size:11.5px;
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+
+  /* ===== Print ===== */
+  @media print{
+    .toolbar{position:static;background:var(--navy) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .toolbar button{display:none}
+    body{background:#fff}
+    main{max-width:100%;padding:0 6mm}
+    .module{page-break-before:always;border:1px solid #999}
+    .module:first-of-type{page-break-before:auto}
+    .cover, .panel{page-break-inside:avoid}
+    details:not([open]) > *:not(summary){display:block !important}
+    .module > summary{cursor:default}
+    .module > summary .caret{display:none}
+    a{color:#0B4CD1 !important;text-decoration:underline}
+    .cover-field .v .blank{min-width:160px}
+    tr, .callout, .asset, .anchornote, .repnote{page-break-inside:avoid}
+    @page{margin:14mm}
+  }
+  @media (max-width:720px){
+    .cover-grid{grid-template-columns:1fr}
+    .toc{columns:1}
+    .legend-grid{grid-template-columns:1fr}
+    .two-col{grid-template-columns:1fr}
+    .signoff{grid-template-columns:1fr}
+    .checklist{columns:1}
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="brand">Florida Signal<small>Reporting Proof Sheet</small></div>
+  <div class="spacer"></div>
+  <span class="legend-chip"><span class="dot v"></span>Verified</span>
+  <span class="legend-chip"><span class="dot p"></span>Pending</span>
+  <span class="legend-chip"><span class="dot n"></span>N/A</span>
+  <button type="button" onclick="fsExpandAll(true)">Expand all</button>
+  <button type="button" onclick="fsExpandAll(false)">Collapse all</button>
+  <button type="button" class="primary" onclick="window.print()">Print / Save PDF</button>
+</div>
+
+<main>
+
+  <!-- ============ COVER ============ -->
+  <section class="cover" id="cover">
+    <div class="eyebrow">◆ Reporting Proof Sheet · Internal Record ◆</div>
+    <h1>Florida Signal — Aug. 18, 2026 Reporting Proof Sheet</h1>
+    <div class="sub">Special Launch Edition · Broward County development intelligence · prepared for the reporting archive</div>
+
+    <div class="cover-grid">
+      <div class="cover-field">
+        <div class="k">Issue date</div>
+        <div class="v">Tuesday, August 18, 2026 — Special Launch Edition</div>
+      </div>
+      <div class="cover-field">
+        <div class="k">Campaign ID</div>
+        <div class="v mono">Web campaign ID: 9304907<br>Mailchimp API campaign id: a63be33eb6</div>
+      </div>
+      <div class="cover-field cover-full">
+        <div class="k">Final subject line</div>
+        <div class="v">Your Broward intelligence: $2.9M in votes + Zara filings</div>
+      </div>
+      <div class="cover-field cover-full">
+        <div class="k">Final preheader</div>
+        <div class="v">Shader Retail goes to a 6 p.m. vote. Plus: 10 Zara-named Galleria records and nearly $205M in Fort Lauderdale deeds.</div>
+      </div>
+      <div class="cover-field warn">
+        <div class="k">Archive slug / URL <span class="status status-pending">Pending recheck</span></div>
+        <div class="v">Wiring confirmed correct: <code>og:url</code>, the LinkedIn share-block link, and the footer "View in browser" link all correctly reference <code>*|ARCHIVE|*</code>, and the welcome-series CTA correctly points to the audience archive home. The literal resolved URL still only exists once Mailchimp generates it at send — this campaign remains Draft/unsent, so the slug itself is not yet populated, and the archive home currently shows no published campaigns for that same reason. This is expected pre-launch state, not a wiring failure. Recheck and record the live URL and archive listing immediately after send. <span class="blank"></span></div>
+      </div>
+      <div class="cover-field">
+        <div class="k">Social title / image URL <span class="status status-verified">Verified</span></div>
+        <div class="v">Confirmed present as a single, non-duplicated set in the canonical HTML <code>&lt;head&gt;</code> (exactly one <code>og:title</code> and one <code>twitter:card</code>), and confirmed matching in the Mailchimp campaign API content, with campaign <code>social_card</code> enabled using the same image, title and description.<br>
+        <strong>Social title:</strong> "Florida Signal — Aug. 18: $2.9M in votes + Zara filings"<br>
+        <strong>Social description:</strong> "Shader Retail goes to a 6 p.m. vote. Plus: 10 Zara-named Galleria records and nearly $205M in Fort Lauderdale deeds."<br>
+        <strong>Social image:</strong> <code>https://mcusercontent.com/224e87bfc7d2cd51e4b2f70a4/images/b06f263f-33ee-f974-6535-fa2f2a73a545.png</code> (1200×630; alt: "Florida Signal development intelligence over an aerial view of Fort Lauderdale waterfront neighborhoods")<br>
+        <em>Note: the social title is a shorter, dated variant for card display and intentionally differs from the full email subject line above — a normal social-card vs. subject-line distinction, not an inconsistency.</em></div>
+      </div>
+      <div class="cover-field">
+        <div class="k">Byline</div>
+        <div class="v">Written by Florida Signal Desk · debut welcome note signed by AJ Gill (editor)</div>
+      </div>
+      <div class="cover-field">
+        <div class="k">Publisher</div>
+        <div class="v">Graham &amp; Gold LLC · 2222 W Grand River Ave · Suite A · Okemos, MI 48864 · USA</div>
+      </div>
+      <div class="cover-field cover-full">
+        <div class="k">Audience state <span class="status status-verified">Verified</span></div>
+        <div class="v">Campaign status: <strong>Draft / unsent</strong>, 25 recipients. Full audience: 26 total contacts — 25 subscribed, 1 unsubscribed. This reconciles the 25-vs-26 discrepancy flagged in the second-pass review, and is now independently confirmed (not just publisher-reported) via an end-to-end landing-page signup test: a tagged QA address (ZIP 33301) was subscribed through the live signup flow, the success UI displayed, Mailchimp's API recorded the subscription, the welcome automation sent and was received, and the QA contact was then archived — restoring the audience to its clean 25-subscribed / 1-unsubscribed state. <strong>Policy: the unsubscribed contact is never to be re-subscribed without their explicit, direct consent.</strong></div>
+      </div>
+      <div class="cover-field cover-full">
+        <div class="k">Build / version</div>
+        <div class="v">Final v5 build (<code>index.html</code>, reconciliation pass Aug. 18, 2026) — supersedes the "hosted-image fix pass" build referenced in the prior version of this proof sheet. Changes confirmed in this build: single non-duplicated social meta tag set added; numeric rails standardized on shared <code>.fs-value-rail</code> / <code>.fs-value-number</code> / <code>.fs-value-label</code> classes (104px desktop / 96px mobile, 18px/20px Georgia tabular figures, 10px/12px labels, 14px row padding via <code>.fs-data-row</code>); dated "AUG. 18, 2026 EDITION" share label added; forward-icon glyph changed to a "FWD" text label; LinkedIn share-block link upgraded to a direct article-share intent URL; welcome-note link text changed to "Email us"; subscribe-CTA cadence line changed to "It arrives at least weekly" (now consistent with the welcome note); Zara store-locator count reverted to seven Florida locations / four in Miami-Dade (see Module 3 — this figure has now changed across builds and should be freshly re-checked before the next send, not assumed stable). All four original brand images remain on absolute <code>mcusercontent.com</code> CDN URLs. Supersedes the Mailchimp import ZIP referenced as <code>florida-signal-this-weeks-brief-2026-08-18-v5.zip</code> in the launch-handoff contact sheet. Formal version tag: <span class="blank"></span> <em>(publisher to assign at final lock)</em></div>
+      </div>
+    </div>
+
+    <div class="signoff">
+      <div>Prepared by<span class="line"></span>AI-assisted compilation, Aug. 18, 2026</div>
+      <div>Final sign-off (name)<span class="line"></span></div>
+      <div>Date / time sent<span class="line"></span></div>
+    </div>
+  </section>
+
+  <!-- ============ TOC ============ -->
+  <section class="panel" id="toc">
+    <h2>Contents</h2>
+    <div class="toc">
+      <a href="#legend"><span class="num">00</span>Status legend &amp; verification methodology</a>
+      <a href="#module-1"><span class="num">01</span>A Quick Welcome</a>
+      <a href="#module-2"><span class="num">02</span>The Signals / Meeting Watch, Also Today, The Week Mapped</a>
+      <a href="#module-3"><span class="num">03</span>The Proof / Zara permit trail</a>
+      <a href="#module-4"><span class="num">04</span>The Money</a>
+      <a href="#module-5"><span class="num">05</span>Signal Board / Development Watch</a>
+      <a href="#module-6"><span class="num">06</span>Place Lens</a>
+      <a href="#module-7"><span class="num">07</span>Subscription / share block</a>
+      <a href="#module-8"><span class="num">08</span>The Receipt / trust language</a>
+      <a href="#appendix"><span class="num">09</span>Delivery / QA appendix</a>
+      <a href="#next-edition"><span class="num">10</span>Next Edition Module (blank template)</a>
+    </div>
+  </section>
+
+  <!-- ============ LEGEND ============ -->
+  <section class="panel" id="legend">
+    <h2>Status legend</h2>
+    <div class="legend-grid">
+      <div class="item">
+        <span class="status status-verified">Verified</span>
+        <p>The claim reconciles internally against figures stated elsewhere in the newsletter or the review-thread history, or the referenced copy/caveat is confirmed present verbatim in the final HTML.</p>
+      </div>
+      <div class="item">
+        <span class="status status-pending">Pending</span>
+        <p>The claim depends on an external primary source (a deed, permit, agenda item, article or locator page) that has not been independently re-fetched as part of building this proof sheet. Confirm against the linked source before treating as closed.</p>
+      </div>
+      <div class="item">
+        <span class="status status-na">N/A</span>
+        <p>Editorial, forward-looking, or design/process statement with no external fact to verify (e.g., cadence commitments, planned features).</p>
+      </div>
+    </div>
+    <div class="methodology">
+      <strong>Verification methodology and scope.</strong> This proof sheet was compiled from the final reviewed newsletter HTML and the three prior review passes already on record for this edition (initial pre-send review, second-pass regression review, and the hosted-image-fix confirmation). Arithmetic reconciliations shown here (e.g., deed totals, permit-value rounding) were recomputed directly from the figures printed in the newsletter. No outbound URL in this document was re-fetched or live-tested while building this proof sheet; link status therefore defaults to <span class="status status-pending">Pending</span> unless noted otherwise, and any prior blanket assertion by the editorial team (e.g., "403 responses are bot-protected, not dead links") is cited as context, not treated as independent confirmation. No reporting, figure, or quote has been altered, rounded differently, or invented beyond what appears in the source HTML and review history.
+    </div>
+  </section>
+
+  <!-- ============ MODULE 1 ============ -->
+  <details class="module" id="module-1" open>
+    <summary>
+      <span class="modno">01</span>
+      <span class="modtitle"><span class="eyebrow">Editor's Note</span><h2>A Quick Welcome</h2></span>
+      <span class="caret">▶</span>
+    </summary>
+    <div class="module-body">
+
+      <div class="subhead">Final published copy — verbatim</div>
+      <div class="verbatim">
+        <span class="tag">A Quick Welcome</span>
+        Thank you for reading Florida Signal's debut edition. I'm AJ Gill, a veteran journalist building a record-first Broward development briefing that will arrive at least weekly. A data room and coverage in more Florida markets are in development. Have feedback, a tip or sponsorship interest? <a href="mailto:desk@thefloridasignal.com?subject=Florida%20Signal%20feedback">Email us</a>.
+      </div>
+
+      <div class="subhead">Claims &amp; commitments</div>
+      <table class="vtable">
+        <tr><th>#</th><th>Statement</th><th>Type</th><th>Source</th><th>Status</th></tr>
+        <tr><td>1.1</td><td>Debut / first edition</td><td class="note">Editorial fact</td><td class="note">This edition itself</td><td><span class="status status-verified">Verified</span></td></tr>
+        <tr><td>1.2</td><td>Byline: AJ Gill, veteran journalist</td><td class="note">Editorial identity claim</td><td class="note">Self-attested, this note</td><td><span class="status status-na">N/A</span></td></tr>
+        <tr><td>1.3</td><td>Cadence: "at least weekly"</td><td class="note">Forward-looking commitment</td><td class="note">n/a</td><td><span class="status status-na">N/A</span></td></tr>
+        <tr><td>1.4</td><td>Data room and additional Florida-market coverage "in development"</td><td class="note">Forward-looking / roadmap</td><td class="note">n/a</td><td><span class="status status-na">N/A</span></td></tr>
+      </table>
+      <p class="repnote"><span class="who">Note:</span> this module carries no reported facts requiring source citation — it is the publication's own editorial voice. Nothing here should be treated as a verifiable news claim; do not backfill sourcing for the cadence or roadmap language.</p>
+
+      <div class="subhead">Outbound links</div>
+      <table class="ltable">
+        <tr><th>Label</th><th>Destination</th><th>Status</th></tr>
+        <tr><td class="label">Email us <em>(link text updated from "Reply to this email" in this build)</em></td><td class="url">mailto:desk@thefloridasignal.com?subject=Florida%20Signal%20feedback</td><td><span class="status status-verified">Verified</span> — campaign reply-to header confirmed set to desk@thefloridasignal.com, matching this in-body link (see Appendix)</td></tr>
+      </table>
+
+      <div class="subhead">Record dates</div>
+      <table class="vtable">
+        <tr><th>Field</th><th>Value</th></tr>
+        <tr><td>Copy finalized</td><td>Second-pass regression review, Aug. 18, 2026</td></tr>
+        <tr><td>Checked on</td><td>Aug. 18, 2026 (hosted-image-fix confirmation pass)</td></tr>
+      </table>
+
+      <div class="subhead">Caveats, unknowns &amp; claim limits</div>
+      <div class="callout limit">No claim limit needed — module contains no factual reporting claim. The only durability risk is tonal: keep this note current in future editions rather than reusing "debut" language after issue 1.</div>
+
+      <div class="subhead">Assets</div>
+      <p class="repnote">No dedicated image asset for this module; it renders as a bordered text callout using the shared cyan accent rule (<code>#41D7E9</code>) and pale background (<code>#F2F7FA</code>).</p>
+
+      <div class="subhead">Final HTML anchor / module identifier</div>
+      <div class="anchornote"><b>Current state:</b> only an HTML comment marker exists — <code>&lt;!-- EDITOR'S NOTE --&gt;</code>. No <code>id</code> attribute is present on the containing table row.<br><b>Recommended for future durability:</b> add <code>id="editors-note"</code> to the module's outer <code>&lt;tr&gt;</code> or wrapping <code>&lt;td&gt;</code> so it can be deep-linked and diffed across issues.</div>
+
+      <div class="subhead">Reporter verification notes</div>
+      <div class="repnote"><span class="who">AJ Gill / Florida Signal Desk:</span> new addition for this edition — did not exist in the first-pass draft. Introduced specifically to give first-time readers context before the vote coverage begins, per first-pass "optional polish" recommendation. Copy stable through the second-pass and hosted-image-fix passes; link text tightened in the final v5 build, and the campaign's actual reply-to header is now confirmed to match the link's destination.</div>
+
+      <div class="subhead">Correction / version log</div>
+      <table class="ltable">
+        <tr><th>Pass</th><th>Change</th></tr>
+        <tr><td>First-pass review</td><td>Flagged as missing — recommended a short founder/editor note before "01 The Signals."</td></tr>
+        <tr><td>Second-pass regression review</td><td>Added: "A Quick Welcome" note from AJ Gill, covering debut framing, at-least-weekly cadence, veteran-journalist background, planned data room and market expansion, with one reply link.</td></tr>
+        <tr><td>Hosted-image-fix pass</td><td>No change to this module; confirmed copy intact.</td></tr>
+        <tr><td>Reconciliation pass (final v5 build, <code>index.html</code>)</td><td>Link text changed from "Reply to this email" to "Email us." Campaign reply-to header independently confirmed as desk@thefloridasignal.com, resolving the prior Pending status on this link.</td></tr>
+      </table>
+
+      <div class="subhead">Evidence-retention checklist</div>
+      <ul class="checklist">
+        <li><input type="checkbox">Archive final rendered HTML snapshot of this module</li>
+        <li><input type="checkbox">Confirm desk@thefloridasignal.com inbox access for reply monitoring</li>
+        <li><input type="checkbox">Retain review-thread excerpt documenting the addition (this proof sheet)</li>
+      </ul>
+    </div>
+  </details>
+
+  <!-- ============ MODULE 2 ============ -->
+  <details class="module" id="module-2">
+    <summary>
+      <span class="modno">02</span>
+      <span class="modtitle"><span class="eyebrow">01 · The Signals</span><h2>Meeting Watch, Also Today &amp; The Week, Mapped</h2></span>
+      <span class="caret">▶</span>
+    </summary>
+    <div class="module-body">
+
+      <div class="subhead">Exact final headline</div>
+      <div class="verbatim">
+        <span class="tag">Lead headline</span>
+        Four Fort Lauderdale decisions today: $2.9M in CRA money and the Shader site plan
+      </div>
+      <div class="verbatim">
+        <span class="tag">Lead paragraph</span>
+        At 1 p.m., Fort Lauderdale's Community Redevelopment Agency (CRA) Board takes up nearly $2.9 million across three items: a $2.5 million Holy Cross incentive, Queen Progress's $193,500 conversion grant and $189,952 in Central City planning money. At 6 p.m., the City Commission votes on the Shader Retail site plan. Both meetings are at the police department on West Broward Boulevard. Here's what each action could move, what stays unresolved, and the record behind it.
+      </div>
+
+      <div class="subhead">Meeting Watch — card copy (verbatim, per item)</div>
+      <div class="verbatim"><span class="tag">1 p.m. · Fort Lauderdale CRA Board — Holy Cross · $2.5M incentive vote</span>Public money would help finance the underway $57.3M outpatient and emergency campus; the subsidy terms are the news, not the project.<br><em>Limit — An incentive vote, not a new construction announcement.</em><br>Progresso Village · 200 E. Sunrise Blvd.</div>
+      <div class="verbatim"><span class="tag">1 p.m. · Fort Lauderdale CRA Board — Queen Progress · $193.5K grant vote</span>Public funding could convert a small industrial space to active retail use; we found no earlier coverage of the grant.<br><em>Limit — A grant vote is not an opening or a completed conversion.</em><br>Middle River Terrace · 603 NE 13th St.</div>
+      <div class="verbatim"><span class="tag">1 p.m. · Fort Lauderdale CRA Board — Central City · $189,952 planning contract</span>The planning consultant would shape the area's next land-use framework for density, uses and infrastructure.<br><em>Limit — Does not change zoning or approve development today.</em><br>Central City · Redevelopment Area</div>
+      <div class="verbatim"><span class="tag">6 p.m. · Fort Lauderdale City Commission — Shader Retail · site plan and alternative design vote</span>Approval would clear the entitlement step for a five-parcel retail expansion; our checks found no prior reporting on the decision.<br><em>Limit — Approval is not a construction start; permits would still be next.</em><br>N. Federal Highway Corridor · 801–811 N. Federal Hwy.</div>
+      <div class="verbatim"><span class="tag">Thu. Aug. 20 · 10 a.m. · Broward County Commission — Ombelle staging · competitive-process decision</span>Access to the public lot could affect construction logistics for the active 754-unit tower and raises a public-land value question.<br><em>Limit — The County is not awarding or transferring the property Thursday.</em><br>Flagler Village · 400 NE 4th St.</div>
+      <p class="repnote"><span class="who">Card footnote (verbatim):</span> "Agendas checked Aug. 17 · times and items can change"</p>
+
+      <div class="subhead">Also Today — verbatim</div>
+      <div class="verbatim">Fort Lauderdale sets Oct. 6 hearings on moving two public parcels toward Community Redevelopment Agency control: the Sylvia H. Alridge post office at 400 NW 7th Ave. and 1306 NW 6th St. Both sit in the Northwest-Progresso-Flagler Heights district. No conveyance or redevelopment is approved today. <a href="https://fortlauderdale.legistar.com/Calendar.aspx">Open the agendas →</a></div>
+
+      <div class="subhead">The Week, Mapped — card copy</div>
+      <div class="verbatim">Three addresses explain the edition: the Galleria permit filings on East Sunrise Boulevard, the $59.95 million Sea Club hotel sale and Stoler's $44.8 million Holman Honda purchase. <a href="https://www.google.com/maps/search/?api=1&amp;query=2442+E+Sunrise+Blvd+Fort+Lauderdale+FL+33304">Open the Galleria site →</a></div>
+
+      <div class="subhead">Key claims &amp; figures — verification table</div>
+      <table class="vtable">
+        <tr><th>#</th><th>Claim / figure</th><th>Value</th><th>Primary source</th><th>Record date</th><th>Checked on</th><th>Status</th></tr>
+        <tr><td>2.1</td><td>Holy Cross incentive vote</td><td class="figure">$2.5M</td><td class="note"><a href="https://fortlauderdale.legistar.com/MeetingDetail.aspx?GUID=D3441524-B2AA-40AE-82D7-1BC478741875&amp;ID=1436523&amp;Options=info%7C&amp;Search=">CRA meeting agenda</a></td><td>Aug. 18, 2026 (meeting date)</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>2.2</td><td>Holy Cross underway campus cost</td><td class="figure">$57.3M</td><td class="note">Same CRA agenda (figure not independently hyperlinked)</td><td>Aug. 18, 2026</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span> — verify against agenda packet directly</td></tr>
+        <tr><td>2.3</td><td>Queen Progress conversion grant</td><td class="figure">$193,500</td><td class="note">Same CRA agenda</td><td>Aug. 18, 2026</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>2.4</td><td>Central City planning contract</td><td class="figure">$189,952</td><td class="note">Same CRA agenda</td><td>Aug. 18, 2026</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>2.5</td><td>CRA total across three items</td><td class="figure">"nearly $2.9 million"</td><td class="note">Internal arithmetic: 2,500,000 + 193,500 + 189,952 = 2,883,452</td><td>—</td><td>This proof sheet</td><td><span class="status status-verified">Verified</span> — reconciles to $2,883,452, consistent with "nearly $2.9 million"</td></tr>
+        <tr><td>2.6</td><td>Shader Retail vote</td><td class="figure">Site plan + alt. design</td><td class="note"><a href="https://fortlauderdale.legistar.com/MeetingDetail.aspx?GUID=2BC0EEDE-9146-4597-A69D-5BA1D0D4C1FD&amp;ID=1339146&amp;Options=info%7C&amp;Search=">Commission agenda</a></td><td>Aug. 18, 2026</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>2.7</td><td>Ombelle 754-unit tower / staging item</td><td class="figure">754 units (active tower)</td><td class="note"><a href="https://broward.legistar.com/LegislationDetail.aspx?GUID=CB19FFCA-63DE-4B17-818C-4F3982903C85&amp;ID=8164550&amp;Options=&amp;Search=">County legislation item</a></td><td>Aug. 20, 2026 (meeting date)</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>2.8</td><td>Also Today: Oct. 6 hearing date, two parcel addresses</td><td class="figure">400 NW 7th Ave. / 1306 NW 6th St.</td><td class="note"><a href="https://fortlauderdale.legistar.com/Calendar.aspx">Fort Lauderdale agenda calendar</a></td><td>Set for Oct. 6, 2026</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>2.9</td><td>Week-mapped total: Galleria + Sea Club + Holman Honda</td><td class="figure">3 sites</td><td class="note">Cross-reference with Modules 3, 4</td><td>—</td><td>This proof sheet</td><td><span class="status status-verified">Verified</span> — same $59.95M / $44.8M figures used consistently in Module 4</td></tr>
+      </table>
+
+      <div class="subhead">Caveats, unknowns &amp; claim limits (preserved verbatim above)</div>
+      <div class="callout limit">
+        <ul>
+          <li>Holy Cross: "An incentive vote, not a new construction announcement."</li>
+          <li>Queen Progress: "A grant vote is not an opening or a completed conversion."</li>
+          <li>Central City: "Does not change zoning or approve development today."</li>
+          <li>Shader Retail: "Approval is not a construction start; permits would still be next."</li>
+          <li>Ombelle: "The County is not awarding or transferring the property Thursday."</li>
+          <li>Also Today: "No conveyance or redevelopment is approved today."</li>
+          <li>Standing footnote: "Agendas checked Aug. 17 · times and items can change."</li>
+        </ul>
+      </div>
+
+      <div class="subhead">Assets</div>
+      <div class="assets">
+        <div class="asset">
+          <img src="https://mcusercontent.com/224e87bfc7d2cd51e4b2f70a4/images/c688b88a-c408-bbe7-2a0c-862d4c686ef7.png" alt="Week map of three Fort Lauderdale sites">
+          <div class="label">The Week, Mapped</div>
+          <div class="fn">Working name (pre-fix): florida-signal-week-map-oriented.png</div>
+          <div class="cdn">https://mcusercontent.com/224e87bfc7d2cd51e4b2f70a4/images/c688b88a-c408-bbe7-2a0c-862d4c686ef7.png</div>
+        </div>
+      </div>
+
+      <div class="subhead">Outbound links</div>
+      <table class="ltable">
+        <tr><th>Label</th><th>Destination</th><th>Status</th></tr>
+        <tr><td class="label">WATCH LIVE → (CRA Board, 1 p.m.)</td><td class="url">https://www.youtube.com/cityoffortlauderdale</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">OPEN CRA AGENDA →</td><td class="url">https://fortlauderdale.legistar.com/MeetingDetail.aspx?GUID=D3441524-B2AA-40AE-82D7-1BC478741875&amp;ID=1436523&amp;Options=info%7C&amp;Search=</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">WATCH LIVE → (City Commission, 6 p.m.)</td><td class="url">https://www.youtube.com/cityoffortlauderdale</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">OPEN COMMISSION AGENDA →</td><td class="url">https://fortlauderdale.legistar.com/MeetingDetail.aspx?GUID=2BC0EEDE-9146-4597-A69D-5BA1D0D4C1FD&amp;ID=1339146&amp;Options=info%7C&amp;Search=</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">WATCH LIVE → (County Commission, Thu.)</td><td class="url">https://www.broward.org/Meetings</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">OPEN OMBELLE ITEM →</td><td class="url">https://broward.legistar.com/LegislationDetail.aspx?GUID=CB19FFCA-63DE-4B17-818C-4F3982903C85&amp;ID=8164550&amp;Options=&amp;Search=</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">Open the agendas → (Also Today)</td><td class="url">https://fortlauderdale.legistar.com/Calendar.aspx</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">Open the Galleria site →</td><td class="url">https://www.google.com/maps/search/?api=1&amp;query=2442+E+Sunrise+Blvd+Fort+Lauderdale+FL+33304</td><td><span class="status status-pending">Pending</span></td></tr>
+      </table>
+
+      <div class="subhead">Final HTML anchor / module identifier</div>
+      <div class="anchornote"><b>Current state:</b> comment markers only — <code>&lt;!-- 01 SECTION HEADER --&gt;</code>, <code>&lt;!-- LEAD --&gt;</code>, <code>&lt;!-- DOCKET CARD --&gt;</code>, <code>&lt;!-- ALSO TODAY --&gt;</code>, <code>&lt;!-- WEEK MAP CARD --&gt;</code>. No <code>id</code> attributes present.<br><b>Recommended:</b> <code>id="signals"</code>, <code>id="meeting-watch"</code>, <code>id="also-today"</code>, <code>id="week-mapped"</code>.</div>
+
+      <div class="subhead">Reporter verification notes</div>
+      <div class="repnote"><span class="who">AJ Gill / Florida Signal Desk:</span> section header simplified from "THIS WEEK'S SIGNALS" to "THE SIGNALS" between first and second pass. Curly-vs-straight apostrophe inconsistency (flagged first pass) resolved — hidden preheader now matches visible body style. "Shader Retail — site-plan + alternative-design vote" changed to "site plan and alternative design vote" per first-pass polish note. "Also Today" paragraph restructured into shorter sentences per em-dash-reduction pass; content unchanged.</div>
+
+      <div class="subhead">Correction / version log</div>
+      <table class="ltable">
+        <tr><th>Pass</th><th>Change</th></tr>
+        <tr><td>First-pass review</td><td>No MUST FIX items in this module; optional polish flagged the "+" in the Shader headline and curly/straight apostrophe mismatch.</td></tr>
+        <tr><td>Second-pass regression review</td><td>Section 01 renamed "THE SIGNALS." Shader headline punctuation fixed. Also Today paragraph restructured (shorter sentences, em dashes reduced). Header SIGN UP link given UTM tracking.</td></tr>
+        <tr><td>Hosted-image-fix pass</td><td>Week map image swapped from relative filename to absolute mcusercontent CDN URL. No copy change.</td></tr>
+        <tr><td>Reconciliation pass (final v5 build, <code>index.html</code>)</td><td>Re-scanned against the final build: all headline, card and caveat copy in this module confirmed byte-for-byte unchanged. No new claims to update; link statuses remain Pending as no source was independently re-fetched in this pass.</td></tr>
+      </table>
+
+      <div class="subhead">Evidence-retention checklist</div>
+      <ul class="checklist">
+        <li><input type="checkbox">Screenshot/PDF of CRA Board agenda (GUID D3441524…)</li>
+        <li><input type="checkbox">Screenshot/PDF of City Commission agenda (GUID 2BC0EEDE…)</li>
+        <li><input type="checkbox">Screenshot/PDF of Broward County legislation item (GUID CB19FFCA…)</li>
+        <li><input type="checkbox">Screenshot of Fort Lauderdale agenda calendar showing Oct. 6 hearing listing</li>
+        <li><input type="checkbox">Archive dated screenshot noting "agendas checked Aug. 17"</li>
+        <li><input type="checkbox">Retain post-meeting outcome notes for correction-log follow-up (all five items)</li>
+      </ul>
+    </div>
+  </details>
+
+  <!-- ============ MODULE 3 ============ -->
+  <details class="module" id="module-3">
+    <summary>
+      <span class="modno">03</span>
+      <span class="modtitle"><span class="eyebrow">02 · The Proof</span><h2>Zara permit trail — Galleria</h2></span>
+      <span class="caret">▶</span>
+    </summary>
+    <div class="module-body">
+
+      <div class="subhead">Exact final headline</div>
+      <div class="verbatim"><span class="tag">Headline</span>Ten permit records trace Zara work at Galleria's empty anchor</div>
+      <div class="verbatim"><span class="tag">Dek</span>2442 E. Sunrise Blvd. · Galleria / East Sunrise Boulevard</div>
+      <div class="verbatim"><span class="tag">Lead paragraph</span>Ten Fort Lauderdale permit records filed June 26 through Aug. 11 name the Spanish fast-fashion retailer Zara, owned by Inditex, in landlord-work descriptions for the Galleria's former Neiman Marcus building, empty of permanent retail tenants since the store closed in 2020. The permit process is underway; none had been issued as of Aug. 17, and no public lease announcement surfaced in our checks. Zara's <a href="https://www.zara.com/us/en/z-stores-st1404.html">official store locator</a> lists seven Florida locations, four in Miami-Dade and none in Broward.</div>
+
+      <div class="subhead">Paper Trail card — stat blocks &amp; timeline (verbatim)</div>
+      <div class="verbatim"><span class="tag">Stat blocks</span>10 Zara-named records · $557K largest single filing · 0 Zara-named permit records issued as of Aug. 17</div>
+      <div class="verbatim"><span class="tag">Timeline</span>
+        Jun. 26 — Demolition, electrical and plumbing filings open the trail<br>
+        Jul. 15 — Sprinkler demolition<br>
+        Aug. 4 — $557K main landlord-work filing; includes structural reinforcement<br>
+        Aug. 11 — 5 trade filings follow the main permit
+      </div>
+      <p class="repnote"><span class="who">Card footnote (verbatim):</span> "Permit process underway · no public lease announcement in our checks"</p>
+
+      <div class="subhead">What Changed / Why It Matters / What We Don't Know — verbatim</div>
+      <div class="verbatim"><span class="tag">What Changed</span>The trail starts June 26 with interior-demolition, electrical and plumbing filings at unit Z17. A sprinkler-demolition filing followed July 15. On Aug. 4, a $556,991 main permit described landlord work to prepare the empty retail space, including selective structural reinforcement; five trade applications followed Aug. 11. The filings cover overlapping work, so their declared values should not be added together. <a href="https://aca-prod.accela.com/FTL/Cap/CapDetail.aspx?Module=Permits&amp;TabName=Permits&amp;capID1=26CAP&amp;capID2=00000&amp;capID3=018Z4&amp;agencyCode=FTL&amp;IsToShowInspection=">Open the $557K main permit →</a></div>
+      <div class="verbatim"><span class="tag">Why It Matters</span>The locator shows Aventura Mall in Miami-Dade as the nearest listed South Florida location. The long-vacant anchor sits inside the Galleria's <a href="https://www.gflalliance.org/news/2026/03/16/in-the-news/the-galleria-reimagined/">mall-wide mixed-use repositioning</a>. <a href="https://www.prnewswire.com/news-releases/wayfair-announces-first-florida-store-in-fort-lauderdale-opening-in-2027-302735063.html">Wayfair has separately announced a 2027 store</a>. Neither announcement names Zara. The permits establish what was filed with the city, not what is signed.</div>
+      <div class="verbatim"><span class="tag">What We Don't Know</span>Whether a lease is signed; the proposed store size, format or opening timetable. <a href="https://web.bcpa.net/bcpaclient/#/Record-Search?fnumber=504201320023">BCPA measures the entire building at 96,748 square feet</a>; that is not a Zara-space figure. As of Aug. 17, Florida Signal found no public Zara, Inditex or Galleria announcement naming Zara at this address. We also found no indexed prior report.</div>
+
+      <div class="subhead">Key claims &amp; figures — verification table</div>
+      <table class="vtable">
+        <tr><th>#</th><th>Claim / figure</th><th>Value</th><th>Primary source</th><th>Record date</th><th>Checked on</th><th>Status</th></tr>
+        <tr><td>3.1</td><td>Zara-named permit records filed</td><td class="figure">10</td><td class="note"><a href="https://aca-prod.accela.com/FTL">Fort Lauderdale permit portal (Accela)</a></td><td>Jun. 26–Aug. 11, 2026</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>3.2</td><td>Main landlord-work filing (card, rounded)</td><td class="figure">$557K</td><td class="note"><a href="https://aca-prod.accela.com/FTL/Cap/CapDetail.aspx?Module=Permits&amp;TabName=Permits&amp;capID1=26CAP&amp;capID2=00000&amp;capID3=018Z4&amp;agencyCode=FTL&amp;IsToShowInspection=">Main permit record (capID 018Z4)</a></td><td>Aug. 4, 2026</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>3.3</td><td>Main landlord-work filing (body, exact)</td><td class="figure">$556,991</td><td class="note">Same permit record</td><td>Aug. 4, 2026</td><td>Aug. 17, 2026</td><td><span class="status status-verified">Verified</span> — $556,991 rounds to the $557K card figure; internally consistent, not a discrepancy</td></tr>
+        <tr><td>3.4</td><td>Zara-named permits issued as of Aug. 17</td><td class="figure">0</td><td class="note">Same permit portal</td><td>as of Aug. 17, 2026</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>3.5</td><td>Zara Florida store-locator count</td><td class="figure">7 stores, 4 in Miami-Dade, 0 in Broward <em>(reverted from the "6 / 3" figure carried in the prior proof-sheet version — see correction log)</em></td><td class="note"><a href="https://www.zara.com/us/en/z-stores-st1404.html">Zara official store locator</a></td><td>Locator as viewed, final v5 build</td><td>Aug. 18, 2026 (reconciliation pass)</td><td><span class="status status-pending">Pending</span> — this figure has now changed across two builds (7/4 → 6/3 → 7/4); a live retailer locator is not a static record, so re-pull and date-stamp it fresh immediately before every future send rather than reusing any prior count</td></tr>
+        <tr><td>3.6</td><td>Building empty of permanent retail tenants since Neiman Marcus closed</td><td class="figure">Closed 2020</td><td class="note">Not independently hyperlinked in this edition</td><td>2020</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span> — attach a dated closure-announcement source for future editions</td></tr>
+        <tr><td>3.7</td><td>BCPA building size</td><td class="figure">96,748 sq. ft. (whole building, not a Zara-space figure)</td><td class="note"><a href="https://web.bcpa.net/bcpaclient/#/Record-Search?fnumber=504201320023">Broward County Property Appraiser record</a></td><td>Record as viewed</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>3.8</td><td>Wayfair 2027 store announcement (does not name Zara)</td><td class="figure">Separate item</td><td class="note"><a href="https://www.prnewswire.com/news-releases/wayfair-announces-first-florida-store-in-fort-lauderdale-opening-in-2027-302735063.html">PR Newswire release</a></td><td>Release date per PR Newswire</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>3.9</td><td>No public Zara/Inditex/Galleria lease announcement or prior indexed report found</td><td class="figure">Negative finding</td><td class="note">Florida Signal's own search checks</td><td>as of Aug. 17, 2026</td><td>Aug. 17, 2026</td><td><span class="status status-na">N/A</span> — absence claim; re-verify at each future issue rather than assign external URL</td></tr>
+      </table>
+
+      <div class="subhead">Reconciliation notes</div>
+      <div class="callout">Card figure ($557K) vs. body exact figure ($556,991): consistent rounding, not a discrepancy. "The filings cover overlapping work, so their declared values should not be added together" is itself a stated claim limit — the 10-record count and the single $557K/$556,991 figure should not be multiplied or summed with the timeline's other line items (demolition, sprinkler, five trade filings) to produce a larger total.</div>
+
+      <div class="subhead">Caveats, unknowns &amp; precise claim limits</div>
+      <div class="callout limit">
+        <ul>
+          <li>"The permit process is underway; none had been issued as of Aug. 17."</li>
+          <li>"No public lease announcement surfaced in our checks."</li>
+          <li>"The filings cover overlapping work, so their declared values should not be added together."</li>
+          <li>"Neither announcement names Zara. The permits establish what was filed with the city, not what is signed."</li>
+          <li>"That is not a Zara-space figure" (re: BCPA's 96,748 sq. ft. whole-building measurement).</li>
+          <li>Unresolved: lease-signed status, proposed store size/format, opening timetable.</li>
+        </ul>
+      </div>
+
+      <div class="subhead">Assets</div>
+      <p class="repnote">No dedicated photo/map asset for this module beyond the shared Galleria map-link reference (see Module 2 Week Map) and the two small recurring UI icons (diamond section-rule marker and info-dot footnote marker) cataloged once in the Delivery/QA appendix asset registry.</p>
+
+      <div class="subhead">Outbound links</div>
+      <table class="ltable">
+        <tr><th>Label</th><th>Destination</th><th>Status</th></tr>
+        <tr><td class="label">2442 E. Sunrise Blvd. (dek)</td><td class="url">https://www.google.com/maps/search/?api=1&amp;query=2442+E+Sunrise+Blvd+Fort+Lauderdale+FL+33304</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">official store locator</td><td class="url">https://www.zara.com/us/en/z-stores-st1404.html</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">Open the $557K main permit →</td><td class="url">https://aca-prod.accela.com/FTL/Cap/CapDetail.aspx?...capID3=018Z4...</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">mall-wide mixed-use repositioning</td><td class="url">https://www.gflalliance.org/news/2026/03/16/in-the-news/the-galleria-reimagined/</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">Wayfair has separately announced a 2027 store</td><td class="url">https://www.prnewswire.com/news-releases/wayfair-announces-first-florida-store-in-fort-lauderdale-opening-in-2027-302735063.html</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">BCPA measures the entire building at 96,748 square feet</td><td class="url">https://web.bcpa.net/bcpaclient/#/Record-Search?fnumber=504201320023</td><td><span class="status status-pending">Pending</span></td></tr>
+      </table>
+
+      <div class="subhead">Final HTML anchor / module identifier</div>
+      <div class="anchornote"><b>Current state:</b> comment markers only — <code>&lt;!-- 02 THE PROOF --&gt;</code>, <code>&lt;!-- ZARA CARD --&gt;</code>. No <code>id</code> attributes present.<br><b>Recommended:</b> <code>id="the-proof"</code>, <code>id="zara-paper-trail"</code>.</div>
+
+      <div class="subhead">Reporter verification notes</div>
+      <div class="repnote"><span class="who">AJ Gill / Florida Signal Desk:</span> first-pass review found the Zara locator count wrong (originally "seven Florida locations, four in Miami-Dade") and the June 26 timeline mislabeled ("3 demolition filings" when only one of three was a demolition filing) — both corrected in the second pass to six locations/three in Miami-Dade and "Demolition, electrical and plumbing filings." The unsupported "26,000–34,000 square feet" South Florida Zara store-size range was removed in the second pass rather than sourced, per the review's copyright/overclaim guidance. "WHY IT MATTERS — ANALYSIS" was retitled plain "WHY IT MATTERS" and tightened. <strong>Reconciliation-pass flag:</strong> the final v5 build carries the locator count back to seven locations/four in Miami-Dade — the same figure the first pass originally called wrong. This has now moved twice (7/4 → 6/3 → 7/4) across three builds. Treat it as a live, re-checkable figure rather than a settled fact in any future edition; do not silently carry forward whichever count appears in the most recent build without a fresh locator pull.</div>
+
+      <div class="subhead">Correction / version log</div>
+      <table class="ltable">
+        <tr><th>Pass</th><th>Change</th></tr>
+        <tr><td>First-pass review</td><td>MUST FIX: mislabeled June 26 timeline entry. Optional polish: redundant Zara-locator phrasing; unsourced store-size range; repeated "Neiman Marcus" wording.</td></tr>
+        <tr><td>Second-pass regression review</td><td>Locator corrected to six FL stores / three Miami-Dade / none Broward. June 26 timeline corrected to "Demolition, electrical and plumbing filings open the trail." Store-size range removed. "Since Neiman Marcus closed" tightened to "since the store closed."</td></tr>
+        <tr><td>Hosted-image-fix pass</td><td>No content change to this module.</td></tr>
+        <tr><td>Reconciliation pass (final v5 build, <code>index.html</code>)</td><td>Locator count reverted to seven FL stores / four Miami-Dade / none Broward — the same figure the first-pass review originally flagged as wrong, now current again in the live locator. Updated verbatim copy and verification table; count remains Pending pending a fresh source check, and is flagged for re-verification before every future send given it has now changed twice.</td></tr>
+      </table>
+
+      <div class="subhead">Evidence-retention checklist</div>
+      <ul class="checklist">
+        <li><input type="checkbox">Screenshots/PDFs of all 10 Zara-named permit records</li>
+        <li><input type="checkbox">Dated screenshot of Zara store locator (seven Florida locations; four in Miami-Dade, checked Aug. 18, 2026)</li>
+        <li><input type="checkbox">BCPA record screenshot/PDF (folio 504201320023)</li>
+        <li><input type="checkbox">Archived copy of GFL Alliance "Galleria reimagined" article</li>
+        <li><input type="checkbox">Archived copy of Wayfair PR Newswire release</li>
+        <li><input type="checkbox">Search-log or notes documenting "no indexed prior report" finding and date checked</li>
+      </ul>
+    </div>
+  </details>
+
+  <!-- ============ MODULE 4 ============ -->
+  <details class="module" id="module-4">
+    <summary>
+      <span class="modno">04</span>
+      <span class="modtitle"><span class="eyebrow">03 · The Money</span><h2>Fort Lauderdale deeds, Aug. 3–9</h2></span>
+      <span class="caret">▶</span>
+    </summary>
+    <div class="module-body">
+
+      <div class="subhead">Exact final headline</div>
+      <div class="verbatim"><span class="tag">Headline</span>Two known sales supplied 51% of the week's recorded dollars</div>
+
+      <div class="subhead">Money card — verbatim</div>
+      <div class="verbatim"><span class="tag">Card header &amp; totals</span>FORT LAUDERDALE DEEDS · AUG. 3–9 — Nearly $205M, stated consideration on 106 deeds. Bar: 51% · TWO KNOWN SALES.<br>Sea Club hotel — $59.95M deed value · Holman Honda property — $44.8M deed value · Other 104 deeds — ≈$100M (104 deeds).</div>
+      <p class="repnote"><span class="who">Card footnote (verbatim):</span> "Stated consideration on recorded deeds, not permits or appraisals"</p>
+
+      <div class="subhead">Body copy — verbatim</div>
+      <div class="verbatim">Broward Clerk records show 106 Fort Lauderdale deeds recorded Aug. 3–9 with nearly $205 million in stated consideration, the amount reported on the deeds rather than an appraisal. Two deeds, the $59.95 million Sea Club transfer and the $44.8 million three-parcel Holman Honda transfer, carried $104.75 million combined. <a href="https://commercialobserver.com/2026/08/el-ad-national-sea-club-resort-florida/">Commercial Observer</a> and the <a href="https://www.bizjournals.com/southflorida/news/2026/08/07/stoler-buys-fort-lauderdale-honda-dealership-448.html">South Florida Business Journal</a> previously reported the transactions.</div>
+      <div class="verbatim"><strong>The concentration is the story, but not the whole story.</strong> The other 104 deeds carried about $100 million. Not every recorded deed is an open-market sale, so this measures filing activity, not a market-price index. Source: <a href="https://officialrecords.broward.org/">Broward County official records</a>.</div>
+
+      <div class="subhead">Key claims &amp; figures — verification table</div>
+      <table class="vtable">
+        <tr><th>#</th><th>Claim / figure</th><th>Value</th><th>Primary source</th><th>Record date</th><th>Checked on</th><th>Status</th></tr>
+        <tr><td>4.1</td><td>Total deeds recorded</td><td class="figure">106</td><td class="note"><a href="https://officialrecords.broward.org/">Broward County official records</a></td><td>Aug. 3–9, 2026</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>4.2</td><td>Total stated consideration</td><td class="figure">Nearly $205M</td><td class="note">Same source, aggregate</td><td>Aug. 3–9, 2026</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>4.3</td><td>Sea Club hotel deed value</td><td class="figure">$59.95M</td><td class="note"><a href="https://commercialobserver.com/2026/08/el-ad-national-sea-club-resort-florida/">Commercial Observer</a> (prior report) + Broward Clerk deed</td><td>Deed within Aug. 3–9, 2026 window</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>4.4</td><td>Holman Honda property deed value (3 parcels)</td><td class="figure">$44.8M</td><td class="note"><a href="https://www.bizjournals.com/southflorida/news/2026/08/07/stoler-buys-fort-lauderdale-honda-dealership-448.html">South Florida Business Journal</a> (prior report) + Broward Clerk deed</td><td>Deed within Aug. 3–9, 2026 window</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>4.5</td><td>Two known sales, combined</td><td class="figure">$104.75M</td><td class="note">Internal arithmetic: 59.95M + 44.8M</td><td>—</td><td>This proof sheet</td><td><span class="status status-verified">Verified</span> — exact sum matches stated $104.75M</td></tr>
+        <tr><td>4.6</td><td>Other 104 deeds, combined</td><td class="figure">≈$100M</td><td class="note">Internal arithmetic: 205M − 104.75M = 100.25M</td><td>—</td><td>This proof sheet</td><td><span class="status status-verified">Verified</span> — reconciles to "about $100 million"</td></tr>
+        <tr><td>4.7</td><td>Two-sale share of total</td><td class="figure">51%</td><td class="note">Internal arithmetic: 104.75 / 205 = 51.1%</td><td>—</td><td>This proof sheet</td><td><span class="status status-verified">Verified</span></td></tr>
+        <tr><td>4.8</td><td>Bar-chart segment widths</td><td class="figure">29% (Sea Club) / 22% (Holman Honda)</td><td class="note">Internal arithmetic: 59.95/205=29.2%; 44.8/205=21.9%</td><td>—</td><td>This proof sheet</td><td><span class="status status-verified">Verified</span> — segment widths match each deed's individual share; sum (51%) matches the headline stat</td></tr>
+        <tr><td>4.9</td><td>Deed count cross-check</td><td class="figure">2 + 104 = 106</td><td class="note">Internal arithmetic</td><td>—</td><td>This proof sheet</td><td><span class="status status-verified">Verified</span></td></tr>
+      </table>
+
+      <div class="subhead">Reconciliation notes</div>
+      <div class="callout">All headline arithmetic in this module reconciles cleanly: $59.95M + $44.8M = $104.75M (exact); $205M − $104.75M ≈ $100.25M ("about $100 million," consistent); $104.75M / $205M ≈ 51% (matches both the card's "51% · TWO KNOWN SALES" label and the visual bar-chart segment widths of 29% + 22%). No arithmetic discrepancy found in this module. Deed count (2 + 104 = 106) also reconciles against the stated total.</div>
+
+      <div class="subhead">Caveats, unknowns &amp; claim limits</div>
+      <div class="callout limit">
+        <ul>
+          <li>"The amount reported on the deeds rather than an appraisal" — stated consideration is not a valuation.</li>
+          <li>"Not every recorded deed is an open-market sale, so this measures filing activity, not a market-price index."</li>
+          <li>Deed-story links are attributed as prior reporting ("previously reported the transactions"), not as the recorded deed instruments themselves — corrected in the second pass so the links no longer imply they are the deeds.</li>
+        </ul>
+      </div>
+
+      <div class="subhead">Assets</div>
+      <p class="repnote">No dedicated map/photo asset in this module; figures render as a stat card using the shared navy card component (<code>#13293C</code> on <code>#0A2134</code>) with cyan/teal bar segments.</p>
+
+      <div class="subhead">Outbound links</div>
+      <table class="ltable">
+        <tr><th>Label</th><th>Destination</th><th>Status</th></tr>
+        <tr><td class="label">Commercial Observer</td><td class="url">https://commercialobserver.com/2026/08/el-ad-national-sea-club-resort-florida/</td><td><span class="status status-pending">Pending</span> — earlier team check noted 403 responses on some official/paywalled destinations are bot-protection, not dead links; not independently re-verified for this proof sheet</td></tr>
+        <tr><td class="label">South Florida Business Journal</td><td class="url">https://www.bizjournals.com/southflorida/news/2026/08/07/stoler-buys-fort-lauderdale-honda-dealership-448.html</td><td><span class="status status-pending">Pending</span> — likely paywalled; same caveat as above</td></tr>
+        <tr><td class="label">Broward County official records</td><td class="url">https://officialrecords.broward.org/</td><td><span class="status status-pending">Pending</span></td></tr>
+      </table>
+
+      <div class="subhead">Final HTML anchor / module identifier</div>
+      <div class="anchornote"><b>Current state:</b> comment markers only — <code>&lt;!-- 03 THE MONEY --&gt;</code>, <code>&lt;!-- MONEY CARD --&gt;</code>. No <code>id</code> attributes present.<br><b>Recommended:</b> <code>id="the-money"</code>.</div>
+
+      <div class="subhead">Reporter verification notes</div>
+      <div class="repnote"><span class="who">AJ Gill / Florida Signal Desk:</span> figures standardized from rounded values ($60M / $45M) in the first draft to exact deed figures ($59.95M / $44.8M / $7.48M / $2.38M) across the whole newsletter in the second pass — this module's Sea Club and Holman Honda figures were part of that standardization. An unsupported "24% more than the average across the previous four full weeks" comparison was removed in the second pass rather than sourced. Deed-story links relabeled by publication name (Commercial Observer / South Florida Business Journal) so they no longer read as if they linked directly to the recorded deed instruments.</div>
+
+      <div class="subhead">Correction / version log</div>
+      <table class="ltable">
+        <tr><th>Pass</th><th>Change</th></tr>
+        <tr><td>First-pass review</td><td>No MUST FIX; arithmetic already reconciled cleanly ($60M/$45M rounded figures at that stage).</td></tr>
+        <tr><td>Second-pass regression review</td><td>Deed figures standardized to exact values; unsourced 24% comparison removed; deed-story links relabeled to publication names.</td></tr>
+        <tr><td>Hosted-image-fix pass</td><td>No content change to this module.</td></tr>
+        <tr><td>Reconciliation pass (final v5 build, <code>index.html</code>)</td><td>Re-scanned against the final build: all headline, card and body copy in this module confirmed byte-for-byte unchanged. No new claims to update; external-source link statuses remain Pending as no source was independently re-fetched in this pass.</td></tr>
+      </table>
+
+      <div class="subhead">Evidence-retention checklist</div>
+      <ul class="checklist">
+        <li><input type="checkbox">Broward Clerk deed export/screenshot for Aug. 3–9 window (106 deeds)</li>
+        <li><input type="checkbox">Sea Club deed record (screenshot/PDF)</li>
+        <li><input type="checkbox">Holman Honda three-parcel deed records (screenshot/PDF)</li>
+        <li><input type="checkbox">Archived copy of Commercial Observer article</li>
+        <li><input type="checkbox">Archived copy of South Florida Business Journal article</li>
+        <li><input type="checkbox">Working spreadsheet showing the 106-deed aggregate calculation</li>
+      </ul>
+    </div>
+  </details>
+
+  <!-- ============ MODULE 5 ============ -->
+  <details class="module" id="module-5">
+    <summary>
+      <span class="modno">05</span>
+      <span class="modtitle"><span class="eyebrow">04 · Signal Board</span><h2>Development Watch — Las Olas to the beach</h2></span>
+      <span class="caret">▶</span>
+    </summary>
+    <div class="module-body">
+
+      <div class="subhead">Exact final headline</div>
+      <div class="verbatim"><span class="tag">Headline</span>Three development signals, from Las Olas to the beach</div>
+
+      <div class="subhead">Development Watch card — verbatim</div>
+      <div class="verbatim"><span class="tag">Joe &amp; The Juice — Buildout plans filed</span>Downtown · 401 E. Las Olas Blvd. — $138K permit value</div>
+      <div class="verbatim"><span class="tag">Art of Tea — CRA award · not a permit value</span>Middle River Terrace · 900 NE 13th St. Buildout work is advancing. — $350K CRA award</div>
+      <div class="verbatim"><span class="tag">Bahia Mar — Site-work plans filed</span>Central Beach · 801 Seabreeze Blvd. — $100K permit value</div>
+      <p class="repnote"><span class="who">Card footnote (verbatim):</span> "Permit values reflect filed applications; an application is not an approval. Art of Tea is a CRA award, not a permit value."</p>
+
+      <div class="subhead">Key claims &amp; figures — verification table</div>
+      <table class="vtable">
+        <tr><th>#</th><th>Claim / figure</th><th>Value</th><th>Primary source</th><th>Record date</th><th>Checked on</th><th>Status</th></tr>
+        <tr><td>5.1</td><td>Joe &amp; The Juice buildout permit</td><td class="figure">$138K</td><td class="note"><a href="https://aca-prod.accela.com/FTL/Cap/CapDetail.aspx?Module=Permits&amp;TabName=Permits&amp;capID1=26CAP&amp;capID2=00000&amp;capID3=01BCH&amp;agencyCode=FTL&amp;IsToShowInspection=">Permit record (capID 01BCH)</a></td><td>Filed, exact date not printed in copy</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>5.2</td><td>Art of Tea CRA award</td><td class="figure">$350K</td><td class="note"><a href="https://fortlauderdale.legistar.com/gateway.aspx?M=F&amp;ID=8f3724db-164e-430a-8d23-678cc8b16c14.docx">CRA award file</a></td><td>Award, exact date not printed in copy</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>5.3</td><td>Bahia Mar site-work permit</td><td class="figure">$100K</td><td class="note"><a href="https://aca-prod.accela.com/FTL/Cap/CapDetail.aspx?Module=Permits&amp;TabName=Permits&amp;capID1=26CAP&amp;capID2=00000&amp;capID3=01B8M&amp;agencyCode=FTL&amp;IsToShowInspection=">Permit record (capID 01B8M)</a></td><td>Filed, exact date not printed in copy</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>5.4</td><td>Category distinction: award vs. permit value</td><td class="figure">Art of Tea is a CRA award, not a permit value</td><td class="note">Newsletter's own labeling, cross-checked against CRA file vs. Accela permit records</td><td>—</td><td>This proof sheet</td><td><span class="status status-verified">Verified</span> — the card visually separates Art of Tea's figure with a distinct "CRA AWARD · NOT A PERMIT VALUE" label, consistent with the footnote</td></tr>
+      </table>
+
+      <div class="subhead">Reconciliation notes</div>
+      <div class="callout">The three figures ($138K, $350K, $100K) are of different kinds — two permit values and one grant award — and the module explicitly does not sum them into a combined total. No aggregate figure is claimed for this module, so no cross-figure arithmetic check applies here beyond confirming the category labels are internally consistent (done above).</div>
+
+      <div class="subhead">Caveats, unknowns &amp; claim limits</div>
+      <div class="callout limit">"Permit values reflect filed applications; an application is not an approval." "Art of Tea is a CRA award, not a permit value." Buildout/site-work status for all three ("plans filed," "buildout work is advancing") describes filing/progress status only, not completion.</div>
+
+      <div class="subhead">Assets</div>
+      <p class="repnote">No dedicated photo/map asset in this module; entries render as three stacked navy list rows inside the "Development Watch" card.</p>
+
+      <div class="subhead">Outbound links</div>
+      <table class="ltable">
+        <tr><th>Label</th><th>Destination</th><th>Status</th></tr>
+        <tr><td class="label">Joe &amp; The Juice permit</td><td class="url">https://aca-prod.accela.com/FTL/Cap/CapDetail.aspx?...capID3=01BCH...</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">Art of Tea CRA file</td><td class="url">https://fortlauderdale.legistar.com/gateway.aspx?M=F&amp;ID=8f3724db-164e-430a-8d23-678cc8b16c14.docx</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">Bahia Mar filing</td><td class="url">https://aca-prod.accela.com/FTL/Cap/CapDetail.aspx?...capID3=01B8M...</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">permit search</td><td class="url">https://aca-prod.accela.com/FTL</td><td><span class="status status-pending">Pending</span></td></tr>
+      </table>
+
+      <div class="subhead">Final HTML anchor / module identifier</div>
+      <div class="anchornote"><b>Current state:</b> comment marker only — <code>&lt;!-- 04 SIGNAL BOARD --&gt;</code>. No <code>id</code> attribute present. Note the numbered section header still reads "SIGNAL BOARD" while the inner card eyebrow reads "DEVELOPMENT WATCH" — two labels for one section (cosmetic, not a factual issue).<br><b>Recommended:</b> <code>id="signal-board"</code> or <code>id="development-watch"</code> — pick one label consistently in a future pass.</div>
+
+      <div class="subhead">Reporter verification notes</div>
+      <div class="repnote"><span class="who">AJ Gill / Florida Signal Desk:</span> first-pass review found this module's footnote was a stray copy/paste of the Zara-warning caption ("Zara-named applications filed; none issued yet · an application is not an approval"), mismatched to the actual Joe &amp; The Juice / Art of Tea / Bahia Mar content. Second pass replaced it with the correct caveat shown above and renamed the inner card "Development Watch." Section headline changed from "Three plans in city review, from Las Olas to the beach" (first pass) to "Three development signals, from Las Olas to the beach" (final), since Art of Tea is an award, not a plan "in review."</div>
+
+      <div class="subhead">Correction / version log</div>
+      <table class="ltable">
+        <tr><th>Pass</th><th>Change</th></tr>
+        <tr><td>First-pass review</td><td>MUST FIX: mismatched Zara-warning footnote under this card; header overstated "in city review" given Art of Tea is a funding award.</td></tr>
+        <tr><td>Second-pass regression review</td><td>Footnote replaced with the correct application/award caveat. Card inner eyebrow renamed "Development Watch." Headline retitled "Three development signals, from Las Olas to the beach."</td></tr>
+        <tr><td>Hosted-image-fix pass</td><td>No content change to this module.</td></tr>
+        <tr><td>Reconciliation pass (final v5 build, <code>index.html</code>)</td><td>Re-scanned against the final build: all headline, card and footnote copy in this module confirmed byte-for-byte unchanged. No new claims to update; external-source link statuses remain Pending as no source was independently re-fetched in this pass.</td></tr>
+      </table>
+
+      <div class="subhead">Evidence-retention checklist</div>
+      <ul class="checklist">
+        <li><input type="checkbox">Joe &amp; The Juice permit record (capID 01BCH) screenshot/PDF</li>
+        <li><input type="checkbox">Art of Tea CRA award file (.docx) archived copy</li>
+        <li><input type="checkbox">Bahia Mar permit record (capID 01B8M) screenshot/PDF</li>
+        <li><input type="checkbox">Note confirming category distinction (award vs. permit) at source</li>
+      </ul>
+    </div>
+  </details>
+
+  <!-- ============ MODULE 6 ============ -->
+  <details class="module" id="module-6">
+    <summary>
+      <span class="modno">06</span>
+      <span class="modtitle"><span class="eyebrow">05 · Place Lens</span><h2>Pompano Beach — two neighboring sites</h2></span>
+      <span class="caret">▶</span>
+    </summary>
+    <div class="module-body">
+
+      <div class="subhead">Exact final headline</div>
+      <div class="verbatim"><span class="tag">Headline</span>One investment firm bought two neighboring Pompano sites</div>
+      <div class="verbatim"><span class="tag">Dek</span>1500 and 1610 S. Dixie Highway · South Dixie at West McNab Road</div>
+
+      <div class="subhead">Place Lens card — verbatim</div>
+      <div class="verbatim"><span class="tag">Card header</span>PLACE LENS · POMPANO BEACH — $7.48M · 2 DEEDS</div>
+      <div class="verbatim"><span class="tag">Parcel 1</span>1610 S. Dixie Hwy. — S. Dixie at W. McNab · WREV Industrial VI — $5.1M deed value</div>
+      <div class="verbatim"><span class="tag">Parcel 2</span>1500 S. Dixie Hwy. — S. Dixie at W. McNab · WREV Industrial VII — $2.38M deed value</div>
+      <p class="repnote"><span class="who">Card footnote (verbatim):</span> "Deeds recorded Aug. 5 · parcel outlines from Broward County records · © OpenStreetMap contributors · © CARTO"</p>
+
+      <div class="subhead">Body copy — verbatim</div>
+      <div class="verbatim">Two WREV deeds recorded Aug. 5 list a combined $7.482 million for adjacent industrial parcels: 1610 S. Dixie Highway at $5.1 million and 1500 S. Dixie Highway at $2.382 million. The buyers, WREV Industrial VI and VII, list Tyler Workman as manager and share a West Palm Beach address. <a href="https://www.w-rev.com/">Workman is WREV's founding principal</a>; the firm targets $3 million to $35 million industrial deals.</div>
+      <div class="verbatim">The pair gives owners, tenants and brokers a defined block to watch for permits, construction notices, lease changes or further purchases. The records do not establish buyer intent or a combined redevelopment plan. <a href="https://www.google.com/maps/search/?api=1&amp;query=1500-1610+S+Dixie+Hwy+Pompano+Beach+FL">Open the block in Google Maps →</a></div>
+
+      <div class="subhead">Key claims &amp; figures — verification table</div>
+      <table class="vtable">
+        <tr><th>#</th><th>Claim / figure</th><th>Value</th><th>Primary source</th><th>Record date</th><th>Checked on</th><th>Status</th></tr>
+        <tr><td>6.1</td><td>1610 S. Dixie Hwy. deed value</td><td class="figure">$5.1M</td><td class="note"><a href="https://officialrecords.broward.org/">Broward County official records</a></td><td>Aug. 5, 2026</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>6.2</td><td>1500 S. Dixie Hwy. deed value</td><td class="figure">$2.38M ($2,382,000 exact)</td><td class="note">Same source</td><td>Aug. 5, 2026</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>6.3</td><td>Combined value</td><td class="figure">$7.482M → "$7.48M" card figure</td><td class="note">Internal arithmetic: 5.1M + 2.382M = 7.482M</td><td>—</td><td>This proof sheet</td><td><span class="status status-verified">Verified</span> — rounds correctly to the card's $7.48M</td></tr>
+        <tr><td>6.4</td><td>Buyer entities &amp; manager</td><td class="figure">WREV Industrial VI &amp; VII; Tyler Workman, manager</td><td class="note">Deed / entity records; <a href="https://www.w-rev.com/">WREV firm site</a></td><td>Aug. 5, 2026</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>6.5</td><td>Firm deal-size target</td><td class="figure">$3M–$35M industrial deals</td><td class="note"><a href="https://www.w-rev.com/">WREV firm site</a></td><td>As published on firm site</td><td>Aug. 17, 2026</td><td><span class="status status-pending">Pending</span></td></tr>
+      </table>
+
+      <div class="subhead">Reconciliation notes</div>
+      <div class="callout">$5.1M + $2.382M = $7.482M, which rounds cleanly to the card's "$7.48M · 2 DEEDS" header. No discrepancy between the exact body figures and the rounded card figure.</div>
+
+      <div class="subhead">Caveats, unknowns &amp; claim limits</div>
+      <div class="callout limit">"The records do not establish buyer intent or a combined redevelopment plan." The two purchases are reported as a proximity/pattern signal ("a defined block to watch") — not as evidence of an announced project.</div>
+
+      <div class="subhead">Assets</div>
+      <div class="assets">
+        <div class="asset">
+          <img src="https://mcusercontent.com/224e87bfc7d2cd51e4b2f70a4/images/62c3eb64-d33a-794b-3fb9-41edd3505e7c.png" alt="Pompano Beach map of two neighboring WREV sites">
+          <div class="label">Place Lens map</div>
+          <div class="fn">Working name (pre-fix): florida-signal-pompano-map-oriented.png</div>
+          <div class="cdn">https://mcusercontent.com/224e87bfc7d2cd51e4b2f70a4/images/62c3eb64-d33a-794b-3fb9-41edd3505e7c.png</div>
+        </div>
+      </div>
+
+      <div class="subhead">Outbound links</div>
+      <table class="ltable">
+        <tr><th>Label</th><th>Destination</th><th>Status</th></tr>
+        <tr><td class="label">Workman is WREV's founding principal</td><td class="url">https://www.w-rev.com/</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">Open the block in Google Maps →</td><td class="url">https://www.google.com/maps/search/?api=1&amp;query=1500-1610+S+Dixie+Hwy+Pompano+Beach+FL</td><td><span class="status status-pending">Pending</span></td></tr>
+      </table>
+
+      <div class="subhead">Final HTML anchor / module identifier</div>
+      <div class="anchornote"><b>Current state:</b> comment marker only — <code>&lt;!-- 05 PLACE LENS --&gt;</code>. No <code>id</code> attribute present.<br><b>Recommended:</b> <code>id="place-lens"</code>.</div>
+
+      <div class="subhead">Reporter verification notes</div>
+      <div class="repnote"><span class="who">AJ Gill / Florida Signal Desk:</span> first-pass review flagged the Google Maps link as covering only 1500 S. Dixie Hwy. despite the surrounding text describing both parcels; second pass broadened the query to <code>1500-1610+S+Dixie+Hwy+Pompano+Beach+FL</code>, resolving the mismatch. Deed figures standardized to exact values ($5.1M / $2.38M / $7.48M) in the same pass, consistent with the newsletter-wide figure standardization noted in Module 4.</div>
+
+      <div class="subhead">Correction / version log</div>
+      <table class="ltable">
+        <tr><th>Pass</th><th>Change</th></tr>
+        <tr><td>First-pass review</td><td>MUST FIX: Google Maps link/anchor mismatch (single-parcel query for a two-parcel story).</td></tr>
+        <tr><td>Second-pass regression review</td><td>Maps query broadened to cover both parcels. Map alt text cleaned. Deed figures standardized.</td></tr>
+        <tr><td>Hosted-image-fix pass</td><td>Pompano map image swapped from relative filename to absolute mcusercontent CDN URL. No copy change.</td></tr>
+        <tr><td>Reconciliation pass (final v5 build, <code>index.html</code>)</td><td>Re-scanned against the final build: all headline, card and body copy in this module confirmed byte-for-byte unchanged. No new claims to update; external-source link statuses remain Pending as no source was independently re-fetched in this pass.</td></tr>
+      </table>
+
+      <div class="subhead">Evidence-retention checklist</div>
+      <ul class="checklist">
+        <li><input type="checkbox">1610 S. Dixie Hwy. deed record (screenshot/PDF)</li>
+        <li><input type="checkbox">1500 S. Dixie Hwy. deed record (screenshot/PDF)</li>
+        <li><input type="checkbox">Entity records for WREV Industrial VI &amp; VII (Sunbiz or equivalent)</li>
+        <li><input type="checkbox">Archived copy of WREV firm site (deal-size claim)</li>
+      </ul>
+    </div>
+  </details>
+
+  <!-- ============ MODULE 7 ============ -->
+  <details class="module" id="module-7">
+    <summary>
+      <span class="modno">07</span>
+      <span class="modtitle"><span class="eyebrow">Subscribe CTA</span><h2>Subscription / share block</h2></span>
+      <span class="caret">▶</span>
+    </summary>
+    <div class="module-body">
+
+      <div class="subhead">Final published copy — verbatim</div>
+      <div class="verbatim"><span class="tag">Header signup (folio)</span>SIGN UP → (header link, upper right)</div>
+      <div class="verbatim"><span class="tag">Subscribe CTA heading</span>Forwarded this email?</div>
+      <div class="verbatim"><span class="tag">Subscribe CTA body</span>Subscribe free for Florida Signal's development intelligence on permits, deeds and votes across Fort Lauderdale and Broward County. It arrives at least weekly.</div>
+      <div class="verbatim"><span class="tag">Button</span>SUBSCRIBE FREE →</div>
+      <div class="verbatim"><span class="tag">Share row label (replaces the earlier "SHARE THE SIGNAL" label)</span>AUG. 18, 2026 EDITION — LinkedIn icon (article-share link) · "FWD" text-label icon (forward-by-email)</div>
+
+      <div class="subhead">Claims table</div>
+      <table class="vtable">
+        <tr><th>#</th><th>Statement</th><th>Type</th><th>Status</th></tr>
+        <tr><td>7.1</td><td>"It arrives at least weekly."</td><td class="note">Cadence commitment</td><td><span class="status status-verified">Verified (internal consistency)</span> — now matches the welcome note's "at least weekly" wording in Module 1, resolving the phrasing mismatch flagged in the prior proof-sheet version. Still a forward-looking commitment, not an external fact.</td></tr>
+        <tr><td>7.2</td><td>Subscription is free</td><td class="note">Product fact</td><td><span class="status status-verified">Verified</span> — matches button label and CTA copy consistently</td></tr>
+        <tr><td>7.3</td><td>Dated edition label present at point of share ("AUG. 18, 2026 EDITION")</td><td class="note">Copy/traceability fact</td><td><span class="status status-verified">Verified</span> — confirmed present in the final v5 build, directly beside the share icons, replacing the earlier undated "SHARE THE SIGNAL" label</td></tr>
+      </table>
+
+      <div class="subhead">Outbound links</div>
+      <table class="ltable">
+        <tr><th>Label</th><th>Destination</th><th>Status</th></tr>
+        <tr><td class="label">Header SIGN UP</td><td class="url">https://thefloridasignal.com/?utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=fs-2026-08-18-this-weeks-signals&amp;utm_content=header-signup</td><td><span class="status status-verified">Verified</span> — absolute URL and UTM parameters passed link audit; the live landing-page form was then tested end to end with a tagged QA subscriber (see Appendix)</td></tr>
+        <tr><td class="label">SUBSCRIBE FREE (footer CTA)</td><td class="url">https://thefloridasignal.com/?utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=fs-2026-08-18-this-weeks-signals&amp;utm_content=forward-signup</td><td><span class="status status-verified">Verified</span> — absolute URL and UTM parameters passed link audit; it reaches the same live form used for the completed signup-and-welcome journey</td></tr>
+        <tr><td class="label">LinkedIn icon (share block) — now an article-share intent, not just the company page</td><td class="url">https://www.linkedin.com/sharing/share-offsite/?url=*|ARCHIVE|* <em>(resolves once *|ARCHIVE|* is populated at send)</em></td><td><span class="status status-pending">Pending recheck</span> — wiring confirmed correct; live resolution depends on send</td></tr>
+        <tr><td class="label">LinkedIn icon (header folio, company page)</td><td class="url">https://www.linkedin.com/company/floridasignal/</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">Forward icon — now a "FWD" text label (was an "@" glyph in the second-pass build)</td><td class="url">*|FORWARD|* (Mailchimp merge tag)</td><td><span class="status status-na">N/A</span> — resolved by Mailchimp at send, not a static URL</td></tr>
+      </table>
+      <div class="callout">
+        <strong>UTM alignment: Verified.</strong> Both subscribe CTAs now share the same <code>utm_campaign=fs-2026-08-18-this-weeks-signals</code> value; only <code>utm_content</code> differs (<code>header-signup</code> vs. <code>forward-signup</code>), and that split is intentional, for distinguishing header-click vs. forward/footer-click attribution within the same campaign. This resolves the campaign-value mismatch flagged in the prior proof-sheet version.
+      </div>
+
+      <div class="subhead">Record dates / checked on</div>
+      <table class="vtable">
+        <tr><th>Field</th><th>Value</th></tr>
+        <tr><td>UTM added to header link</td><td>Second-pass regression review, Aug. 18, 2026</td></tr>
+        <tr><td>UTM campaign value aligned to match footer CTA</td><td>Final v5 build (reconciliation pass), Aug. 18, 2026</td></tr>
+        <tr><td>Dated share label added; icons updated (FWD label, article-share LinkedIn link)</td><td>Final v5 build (reconciliation pass), Aug. 18, 2026</td></tr>
+        <tr><td>Checked on</td><td>Aug. 18, 2026 (reconciliation pass against final v5 build)</td></tr>
+      </table>
+
+      <div class="subhead">Caveats, unknowns &amp; claim limits</div>
+      <div class="callout limit">The dated share label now reads "AUG. 18, 2026 EDITION" in place of the earlier "SHARE THE SIGNAL" text — a label swap, not an addition alongside the old text. The article-share LinkedIn link and the "View in browser" footer link both depend on <code>*|ARCHIVE|*</code>, which only resolves after send (see cover panel).</div>
+
+      <div class="subhead">Assets</div>
+      <p class="repnote">Icon set, final v5 build: LinkedIn-blue (<code>#0A66C2</code>) square for LinkedIn — now wired to a direct article-share intent URL rather than the static company-page link used in the second-pass build — and Florida-Signal-navy (<code>#0A2134</code>) square with a plain "FWD" text label for forward-by-email, replacing the "@" glyph used in the second pass (itself a replacement for an earlier small envelope glyph flagged for cross-client legibility). No separate hosted image asset — both render as styled text/glyphs inside colored table cells, not <code>&lt;img&gt;</code> elements.</p>
+
+      <div class="subhead">Final HTML anchor / module identifier</div>
+      <div class="anchornote"><b>Current state:</b> comment marker only — <code>&lt;!-- SUBSCRIBE CTA --&gt;</code>. Header signup link and folio icons have no dedicated wrapping comment or <code>id</code>.<br><b>Recommended:</b> <code>id="subscribe-cta"</code>, <code>id="header-signup"</code>, <code>id="share-block"</code>.</div>
+
+      <div class="subhead">Reporter verification notes</div>
+      <div class="repnote"><span class="who">AJ Gill / Florida Signal Desk:</span> share/forward icon treatment changed from a small "✉" glyph and mismatched icon colors (first pass) to a consistent LinkedIn-blue + Florida-Signal-navy set with a clear "@" mark (second pass), specifically for cross-email-client legibility. Header SIGN UP link went from no UTM parameters (first pass) to UTM parameters that still didn't match the footer CTA's campaign value (second pass) — a partial fix at that stage. The final v5 build completes it: campaign values now match, and the "@" mark was itself replaced with a clearer "FWD" text label. The share block also gained a dated "AUG. 18, 2026 EDITION" label and the LinkedIn share icon now shares the specific issue (via <code>*|ARCHIVE|*</code>) rather than just linking to the company page — a meaningfully better share experience than either prior build.</div>
+
+      <div class="subhead">Correction / version log</div>
+      <table class="ltable">
+        <tr><th>Pass</th><th>Change</th></tr>
+        <tr><td>First-pass review</td><td>Optional polish: header SIGN UP link carried no UTM tracking while the footer CTA did; small envelope icon flagged for legibility.</td></tr>
+        <tr><td>Second-pass regression review</td><td>UTM added to header link (though campaign value still differed from the footer CTA). Icons unified to LinkedIn-blue/navy with a plain "@" mark.</td></tr>
+        <tr><td>Hosted-image-fix pass</td><td>No content change to this module.</td></tr>
+        <tr><td>Reconciliation pass (final v5 build, <code>index.html</code>)</td><td>Header SIGN UP UTM campaign value aligned to <code>fs-2026-08-18-this-weeks-signals</code>, matching the footer CTA (only <code>utm_content</code> now differs, intentionally). Forward icon changed from "@" to a "FWD" text label. LinkedIn share-block icon upgraded from the static company-page link to a direct article-share intent URL. Dated "AUG. 18, 2026 EDITION" label added, replacing the undated "SHARE THE SIGNAL" text. Subscribe-CTA cadence line changed from "It arrives every week at 7 a.m." to "It arrives at least weekly," resolving the wording mismatch against Module 1's welcome note.</td></tr>
+      </table>
+
+      <div class="subhead">Evidence-retention checklist</div>
+      <ul class="checklist">
+        <li><input type="checkbox">Screenshot of live subscribe landing page reached from both CTA links</li>
+        <li><input type="checkbox">Confirm both UTM-tagged links resolve and record in analytics as expected</li>
+        <li><input type="checkbox" checked>Signup journey tested end to end with a tagged QA address — success UI, Mailchimp API subscription, welcome automation sent/received, QA contact archived (see Appendix for full detail)</li>
+        <li><input type="checkbox">Screenshot of the LinkedIn share-block card once <code>*|ARCHIVE|*</code> resolves post-send</li>
+      </ul>
+    </div>
+  </details>
+
+  <!-- ============ MODULE 8 ============ -->
+  <details class="module" id="module-8">
+    <summary>
+      <span class="modno">08</span>
+      <span class="modtitle"><span class="eyebrow">06 · The Receipt</span><h2>Trust language, sourcing &amp; footer</h2></span>
+      <span class="caret">▶</span>
+    </summary>
+    <div class="module-body">
+
+      <div class="subhead">Final published copy — verbatim</div>
+      <div class="verbatim"><span class="tag">Primary Records</span>Fort Lauderdale permits · Broward deeds and mortgages · Fort Lauderdale agendas · Broward agendas · Florida corporate filings</div>
+      <div class="verbatim"><span class="tag">Coverage Window</span>The money analysis uses 106 Fort Lauderdale deeds recorded Aug. 3–9, the latest fully verified Clerk week. The permit feed covers Fort Lauderdale through Aug. 17. Agendas were checked as posted through Aug. 17. Records queried Aug. 17, 2026.</div>
+      <div class="verbatim"><span class="tag">The Standard</span>Raw records are leads, not published Signals. Published Signals are human verified. Facts come from named evidence. Analysis and unknowns are labeled. Corrections are public. Built by a veteran journalist. AI-assisted; journalist-approved.</div>
+      <div class="verbatim"><span class="tag">Byline</span>Written by Florida Signal Desk. Send a tip · Corrections</div>
+      <div class="verbatim"><span class="tag">Footer publisher line</span>Published by Graham &amp; Gold LLC · 2222 W Grand River Ave · Suite A · Okemos, MI 48864 · USA</div>
+      <div class="verbatim"><span class="tag">Footer links</span>Florida Signal on LinkedIn · Forward this brief · View in browser · Update preferences · Unsubscribe</div>
+
+      <div class="subhead">Claims table</div>
+      <table class="vtable">
+        <tr><th>#</th><th>Statement</th><th>Type</th><th>Status</th></tr>
+        <tr><td>8.1</td><td>Coverage window: deeds Aug. 3–9, permits through Aug. 17, agendas through Aug. 17, records queried Aug. 17, 2026</td><td class="note">Methodology / scope statement</td><td><span class="status status-verified">Verified</span> — consistent with the "checked on" dates used throughout Modules 2–6 in this proof sheet</td></tr>
+        <tr><td>8.2</td><td>"Published Signals are human verified... AI-assisted; journalist-approved"</td><td class="note">Editorial standard, self-attested</td><td><span class="status status-na">N/A</span> — process claim, not an external fact</td></tr>
+        <tr><td>8.3</td><td>Publisher of record: Graham &amp; Gold LLC, Okemos, MI</td><td class="note">Corporate/mailing fact</td><td><span class="status status-pending">Pending</span> — confirm against CAN-SPAM-required physical mailing address on file</td></tr>
+      </table>
+
+      <div class="subhead">Outbound links</div>
+      <table class="ltable">
+        <tr><th>Label</th><th>Destination</th><th>Status</th></tr>
+        <tr><td class="label">Fort Lauderdale permits</td><td class="url">https://aca-prod.accela.com/FTL</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">Broward deeds and mortgages</td><td class="url">https://officialrecords.broward.org/</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">Fort Lauderdale agendas</td><td class="url">https://fortlauderdale.legistar.com/Calendar.aspx</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">Broward agendas</td><td class="url">https://broward.legistar.com/Calendar.aspx</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">Florida corporate filings</td><td class="url">https://search.sunbiz.org/Inquiry/CorporationSearch/ByName</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">Send a tip</td><td class="url">mailto:desk@thefloridasignal.com?subject=Florida%20Signal%20tip</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">Corrections</td><td class="url">mailto:desk@thefloridasignal.com?subject=Florida%20Signal%20correction</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">Florida Signal on LinkedIn (footer)</td><td class="url">https://www.linkedin.com/company/floridasignal/</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td class="label">Forward this brief</td><td class="url">*|FORWARD|* (Mailchimp merge tag)</td><td><span class="status status-na">N/A</span> — resolved at send</td></tr>
+        <tr><td class="label">View in browser</td><td class="url">*|ARCHIVE|* (Mailchimp merge tag)</td><td><span class="status status-pending">Pending</span> — resolves only after send; see cover panel</td></tr>
+        <tr><td class="label">Update preferences</td><td class="url">*|UPDATE_PROFILE|* (Mailchimp merge tag)</td><td><span class="status status-na">N/A</span> — resolved at send</td></tr>
+        <tr><td class="label">Unsubscribe</td><td class="url">*|UNSUB|* (Mailchimp merge tag)</td><td><span class="status status-na">N/A</span> — resolved at send; CAN-SPAM required</td></tr>
+      </table>
+
+      <div class="subhead">Record dates / checked on</div>
+      <table class="vtable">
+        <tr><th>Field</th><th>Value</th></tr>
+        <tr><td>Coverage window close</td><td>Aug. 17, 2026 (deeds week Aug. 3–9; permits/agendas through Aug. 17)</td></tr>
+        <tr><td>Checked on (this proof sheet)</td><td>Aug. 18, 2026</td></tr>
+      </table>
+
+      <div class="subhead">Caveats, unknowns &amp; claim limits</div>
+      <div class="callout limit">"Raw records are leads, not published Signals" — the entire edition's standing methodology statement; carry it forward unchanged into future issues rather than restating figures without it. No standalone "Methodology" page link exists in the current footer; THE STANDARD block serves as the newsletter's inline methodology statement.</div>
+
+      <div class="subhead">Assets</div>
+      <div class="assets">
+        <div class="asset">
+          <img src="https://mcusercontent.com/224e87bfc7d2cd51e4b2f70a4/images/3a5293e5-a91f-e64d-31cd-bb132d2f9029.png" alt="Florida Signal footer lockup">
+          <div class="label">Footer lockup</div>
+          <div class="fn">Working name (pre-fix): florida-signal-lockup-compact-reverse.png</div>
+          <div class="cdn">https://mcusercontent.com/224e87bfc7d2cd51e4b2f70a4/images/3a5293e5-a91f-e64d-31cd-bb132d2f9029.png</div>
+        </div>
+      </div>
+
+      <div class="subhead">Final HTML anchor / module identifier</div>
+      <div class="anchornote"><b>Current state:</b> comment markers only — <code>&lt;!-- 06 THE RECEIPT --&gt;</code>, <code>&lt;!-- FOOTER --&gt;</code>. No <code>id</code> attributes present.<br><b>Recommended:</b> <code>id="the-receipt"</code>, <code>id="site-footer"</code>.</div>
+
+      <div class="subhead">Reporter verification notes</div>
+      <div class="repnote"><span class="who">AJ Gill / Florida Signal Desk:</span> trust language and sourcing list unchanged in substance across all three review passes; confirmed stable through the hosted-image-fix pass. Contact-sheet notes reference a "Methodology removed" step during footer consolidation — no separate methodology page link is present in the final HTML either way; THE STANDARD paragraph is the operative inline statement.</div>
+
+      <div class="subhead">Correction / version log</div>
+      <table class="ltable">
+        <tr><th>Pass</th><th>Change</th></tr>
+        <tr><td>First-pass review</td><td>No MUST FIX items; noted em-dash usage in trust copy for the general em-dash-reduction pass.</td></tr>
+        <tr><td>Second-pass regression review</td><td>Footer consolidated; no separate Methodology link retained. Company LinkedIn URL standardized throughout. Light-only color-scheme metadata retained.</td></tr>
+        <tr><td>Hosted-image-fix pass</td><td>Footer lockup image swapped from relative filename to absolute mcusercontent CDN URL. No copy change.</td></tr>
+        <tr><td>Reconciliation pass (final v5 build, <code>index.html</code>)</td><td>Re-scanned against the final build: Primary Records, Coverage Window, The Standard and footer copy all confirmed byte-for-byte unchanged. A full social meta tag set was added to the document head during this build (see cover panel and Appendix) but sits outside this module's own comment markers.</td></tr>
+      </table>
+
+      <div class="subhead">Evidence-retention checklist</div>
+      <ul class="checklist">
+        <li><input type="checkbox">Archive full rendered HTML of the final send</li>
+        <li><input type="checkbox">Confirm CAN-SPAM physical address matches records on file with Mailchimp</li>
+        <li><input type="checkbox">Retain screenshot of resolved *|ARCHIVE|*, *|FORWARD|*, *|UNSUB|* links post-send</li>
+        <li><input type="checkbox">Log any reader-submitted corrections against this issue going forward</li>
+      </ul>
+    </div>
+  </details>
+
+  <!-- ============ APPENDIX ============ -->
+  <details class="module appendix" id="appendix" open>
+    <summary>
+      <span class="modno">09</span>
+      <span class="modtitle"><span class="eyebrow">Delivery / QA</span><h2>Delivery &amp; QA appendix</h2></span>
+      <span class="caret">▶</span>
+    </summary>
+    <div class="module-body">
+
+      <div class="subhead">Send-readiness checklist</div>
+      <table class="vtable">
+        <tr><th>Item</th><th>Finding</th><th>Status</th></tr>
+        <tr><td>All images hosted (no relative filenames)</td><td>Reconfirmed in the final v5 build: masthead, week map, Pompano map, footer lockup, the two recurring UI icons, and the new social-card image all use absolute <code>mcusercontent.com</code> CDN URLs.</td><td><span class="status status-verified">Verified</span></td></tr>
+        <tr><td>Social metadata (og:/twitter: tags)</td><td>Exactly one <code>og:title</code> and one <code>twitter:card</code> set confirmed in the canonical HTML head (no duplication), with dated title/description/image. Confirmed matching in the Mailchimp campaign API content, and campaign <code>social_card</code> is enabled with the same image, title and description. Full values recorded in the cover panel.</td><td><span class="status status-verified">Verified</span></td></tr>
+        <tr><td>Reply-to address</td><td>Campaign reply-to independently confirmed as <code>desk@thefloridasignal.com</code>, matching the in-body mailto links used for feedback, tips and corrections.</td><td><span class="status status-verified">Verified</span></td></tr>
+        <tr><td>UTM alignment</td><td>Both subscribe CTAs now use <code>utm_campaign=fs-2026-08-18-this-weeks-signals</code>; only <code>utm_content</code> differs (<code>header-signup</code> vs. <code>forward-signup</code>), and that split is intentional, for attribution between the two entry points.</td><td><span class="status status-verified">Verified</span></td></tr>
+        <tr><td>Light-mode lock (code present)</td><td><code>&lt;meta name="color-scheme" content="only light"&gt;</code>, <code>&lt;meta name="supported-color-schemes" content="light"&gt;</code>, and the matching <code>:root</code> CSS rule are present in the HTML head.</td><td><span class="status status-verified">Verified (code)</span></td></tr>
+        <tr><td>Light-mode lock (rendering)</td><td>A final Mailchimp test send went to the single saved iCloud test inbox after the rail fix, specifically to check this. The send itself is confirmed dispatched; the on-device visual read (dark-mode suppression, overall rendering) is not yet confirmed by the user on the physical phone.</td><td><span class="status status-pending">Pending — awaiting on-device confirmation</span></td></tr>
+        <tr><td>Numeric rail alignment (390px, Chrome)</td><td>A new 390px-viewport Chrome render was visually inspected after the rail fix; the numeric rails were confirmed aligned. Scope note: this check covered rail alignment specifically, not a full page-by-page mobile QA pass (text wrapping, tap targets, etc. were not separately itemized).</td><td><span class="status status-verified">Verified (rail alignment, 390px Chrome)</span></td></tr>
+        <tr><td>Real iPhone / iCloud inbox test — sent</td><td>A final test send was dispatched to the single saved iCloud test inbox after the rail fix.</td><td><span class="status status-verified">Verified — test sent</span></td></tr>
+        <tr><td>Real iPhone / iCloud inbox test — visual confirmation on device</td><td>Receipt and visual inspection on the physical phone has not yet been confirmed by the user. Keep this open until confirmed.</td><td><span class="status status-pending">Pending</span></td></tr>
+        <tr><td>Numeric rail alignment (code)</td><td>See detailed findings below — now implemented via shared <code>.fs-value-rail</code> / <code>.fs-value-number</code> / <code>.fs-value-label</code> classes across all 11 rail instances in the HTML.</td><td><span class="status status-verified">Verified</span></td></tr>
+        <tr><td>Dated share block ("AUG. 18, 2026 EDITION")</td><td>Confirmed present in the final v5 build, directly beside the LinkedIn and forward icons in the share block — replacing the earlier undated "SHARE THE SIGNAL" label.</td><td><span class="status status-verified">Verified</span></td></tr>
+        <tr><td>Signup journey test</td><td>Completed end to end: a tagged QA address (ZIP 33301) was subscribed via the live landing-page signup flow; success UI displayed; Mailchimp's API recorded the subscription; the welcome automation sent and was received; the QA contact was then archived, restoring the audience to 25 subscribed / 1 unsubscribed. See also Module 7 and the cover panel.</td><td><span class="status status-verified">Verified</span></td></tr>
+        <tr><td>Subscriber-count reconciliation</td><td>26 total contacts — 25 subscribed, 1 unsubscribed. Now confirmed via the end-to-end signup-journey test above, not only by publisher report. Policy: never re-subscribe the unsubscribed contact without consent.</td><td><span class="status status-verified">Verified</span></td></tr>
+        <tr><td>Welcome CTA → audience archive home</td><td>Wiring is correct — the welcome-series CTA points to the audience archive home. It currently shows no published campaigns for the simple reason that this debut edition remains unsent (Draft status, 25 recipients); an unsent campaign has nothing to list yet. Not a wiring failure.</td><td><span class="status status-pending">Pending recheck — post-launch</span></td></tr>
+        <tr><td>Email authentication (SPF / DKIM / DMARC)</td><td>The original Mailchimp send authenticated cleanly and passed SPF, DKIM and DMARC. Separately, a desk copy forwarded internally through a Google Group landed in Spam after sender rewriting during that forwarding hop — this is a routing artifact of the internal forwarding setup, not evidence of an authentication failure or of how the message would land for actual external subscribers.</td><td><span class="status status-verified">Verified (authentication) / <span class="status status-na" style="margin-left:4px;">N/A (Spam placement — routing artifact)</span></span></td></tr>
+        <tr><td>Campaign status &amp; identifiers</td><td>Draft / unsent, 25 recipients. Web campaign ID 9304907; Mailchimp API campaign id <code>a63be33eb6</code>. See cover panel for full detail.</td><td><span class="status status-verified">Verified</span></td></tr>
+      </table>
+
+      <div class="subhead">Numeric rail alignment — detailed findings</div>
+      <p class="repnote">Target design lock: one shared right-aligned numeric rail at <strong>104px desktop / 96px mobile</strong>; amounts set uniformly in <strong>18px/20px Georgia</strong> with tabular lining numerals; uniform label styling; uniform <strong>14px</strong> row padding. All findings below are reconfirmed directly against the final v5 build (<code>index.html</code>).</p>
+      <table class="vtable">
+        <tr><th>Element</th><th>Value found in the final v5 build</th><th>Target</th><th>Status</th></tr>
+        <tr><td>Shared rail class</td><td><code>.fs-value-rail{width:104px!important;...font-variant-numeric:tabular-nums lining-nums;font-feature-settings:'tnum' 1,'lnum' 1;}</code>, applied consistently across all 11 amount cells in the document (Meeting Watch, Week Mapped, Zara stat blocks, Money card, Signal Board, Place Lens)</td><td>One shared rail class, 104px desktop</td><td><span class="status status-verified">Verified</span></td></tr>
+        <tr><td>Mobile rail width</td><td><code>.fs-container td.fs-value-rail{width:96px!important;min-width:96px!important;}</code> under the 620px breakpoint. The prior conflicting generic <code>td[width="104"]</code> → 88px selector is confirmed gone from the stylesheet.</td><td>96px mobile</td><td><span class="status status-verified">Verified</span></td></tr>
+        <tr><td>Amount typography</td><td><code>.fs-value-number{font-family:Georgia...;font-size:18px!important;line-height:20px!important;...}</code> — uniform 18px/20px Georgia with tabular lining numerals, applied via the shared class rather than per-card inline sizing</td><td>18px/20px Georgia, uniform</td><td><span class="status status-verified">Verified</span></td></tr>
+        <tr><td>Label typography</td><td><code>.fs-value-label{font-size:10px!important;line-height:12px!important;...}</code> — uniform 10px/12px, applied via the shared class</td><td>10px/12px, uniform</td><td><span class="status status-verified">Verified</span></td></tr>
+        <tr><td>Row padding</td><td><code>.fs-data-row{padding-left:14px!important;padding-right:14px!important;}</code>, applied consistently to data rows across cards</td><td>Uniform 14px</td><td><span class="status status-verified">Verified</span></td></tr>
+        <tr><td>Hero/total figures (Money-card big total, Zara stat blocks)</td><td>Remain at their larger, distinct sizes (e.g., 38px / 30px) — these use a separate treatment from the shared line-item rail classes</td><td>N/A for hero totals</td><td><span class="status status-na">N/A</span> — intentionally distinct from line-item amounts, not a rail-alignment element</td></tr>
+        <tr><td>390px Chrome visual check</td><td>Rails visually confirmed aligned at a 390px viewport after the fix</td><td>Visual pass at common mobile width</td><td><span class="status status-verified">Verified</span></td></tr>
+      </table>
+      <p class="repnote">All rows above are reconfirmed directly against class definitions and usage counts in the final v5 build, superseding the "Pending update" findings from the prior proof-sheet version, which were based on the pre-fix build's mixed inline padding and the conflicting generic 88px mobile selector.</p>
+
+      <div class="subhead">Asset registry (all images hosted; includes the new social-card asset)</div>
+      <table class="ltable">
+        <tr><th>Asset</th><th>Hosted CDN URL</th><th>Notes</th></tr>
+        <tr><td class="label">Masthead</td><td class="url">https://mcusercontent.com/224e87bfc7d2cd51e4b2f70a4/images/83e25d05-d8b9-d078-1565-1352b7211ca2.png</td><td class="url">Pre-fix working filename: florida-signal-masthead-reverse-color.png</td></tr>
+        <tr><td class="label">Week map</td><td class="url">https://mcusercontent.com/224e87bfc7d2cd51e4b2f70a4/images/c688b88a-c408-bbe7-2a0c-862d4c686ef7.png</td><td class="url">Pre-fix working filename: florida-signal-week-map-oriented.png</td></tr>
+        <tr><td class="label">Pompano map</td><td class="url">https://mcusercontent.com/224e87bfc7d2cd51e4b2f70a4/images/62c3eb64-d33a-794b-3fb9-41edd3505e7c.png</td><td class="url">Pre-fix working filename: florida-signal-pompano-map-oriented.png</td></tr>
+        <tr><td class="label">Footer lockup</td><td class="url">https://mcusercontent.com/224e87bfc7d2cd51e4b2f70a4/images/3a5293e5-a91f-e64d-31cd-bb132d2f9029.png</td><td class="url">Pre-fix working filename: florida-signal-lockup-compact-reverse.png</td></tr>
+        <tr><td class="label">Social card (og:image / twitter:image) — new in final v5 build</td><td class="url">https://mcusercontent.com/224e87bfc7d2cd51e4b2f70a4/images/b06f263f-33ee-f974-6535-fa2f2a73a545.png</td><td class="url">1200×630; alt: "Florida Signal development intelligence over an aerial view of Fort Lauderdale waterfront neighborhoods"</td></tr>
+        <tr><td class="label">Recurring section-rule icon</td><td class="url">https://mcusercontent.com/224e87bfc7d2cd51e4b2f70a4/images/05ce36de-2022-15f1-ba2a-8e690c204588.png</td><td class="url">n/a — always CDN-hosted</td></tr>
+        <tr><td class="label">Recurring footnote info-dot icon</td><td class="url">https://mcusercontent.com/224e87bfc7d2cd51e4b2f70a4/images/244c548f-0973-b0f3-2652-c9b28cf0acf1.png</td><td class="url">n/a — always CDN-hosted</td></tr>
+      </table>
+
+      <div class="subhead">Cross-edition review-pass summary</div>
+      <table class="ltable">
+        <tr><th>Pass</th><th>Focus</th><th>Outcome</th></tr>
+        <tr><td>Pass 1 — Pre-send editorial &amp; strategy review</td><td>Full read of the original HTML for factual consistency, clarity, link intent, subject-line strategy, 7 a.m. rollout, new-subscriber flow</td><td>Conditional GO; several MUST FIX items identified (stray footnote, Zara-locator count, timeline mislabel, Maps link mismatch, undefined "MHCP COLAB," relative image filenames)</td></tr>
+        <tr><td>Pass 2 — Second-pass regression review</td><td>Confirm fixes landed; check for new regressions; evaluate new welcome note and subject line</td><td>Conditional GO; editorial fixes confirmed correct; image-hosting blocker still present; social metadata and subscriber-count reconciliation flagged as remaining</td></tr>
+        <tr><td>Pass 3 — Hosted-image-blocker confirmation</td><td>Confirm all four brand images now resolve to absolute CDN URLs</td><td>Cleared</td></tr>
+        <tr><td>Pass 4 — Reconciliation pass against final v5 build (<code>index.html</code>)</td><td>Re-scan the authoritative final build against every open item from Passes 1–3: social metadata, dated share label, UTM alignment, reply-to, numeric rail system, Zara locator count, audience/signup-journey test, authentication, campaign identifiers and send status</td><td>All listed items reconciled: social metadata, dated share label, UTM alignment, reply-to and the numeric rail system confirmed <strong>Verified</strong>; Zara locator count corrected to seven/four (flagged as a live, re-checkable figure, not settled); archive population and on-device iPhone visual confirmation remain correctly <strong>Pending</strong> as genuine pre-send/pre-confirmation states, not failures. External-source claims not independently reopened in this pass (deed, permit and agenda figures throughout Modules 2–6, 8) remain <strong>Pending</strong>, unchanged.</td></tr>
+      </table>
+
+    </div>
+  </details>
+
+  <!-- ============ NEXT EDITION TEMPLATE ============ -->
+  <details class="module" id="next-edition">
+    <summary>
+      <span class="modno">10</span>
+      <span class="modtitle"><span class="eyebrow">Reusable template</span><h2>Next Edition Module (blank)</h2></span>
+      <span class="caret">▶</span>
+    </summary>
+    <div class="module-body">
+      <div class="template-banner">TEMPLATE ONLY — do not fill in for the Aug. 18, 2026 edition. Duplicate this module once per section when building the proof sheet for the next issue.</div>
+
+      <div class="subhead">Module number / name</div>
+      <div class="verbatim"><span class="tag">Module #</span><span class="blank" style="min-width:280px;display:inline-block;border-bottom:1px dashed #B9C6D0;">&nbsp;</span></div>
+
+      <div class="subhead">Exact final headline</div>
+      <div class="verbatim"><span class="tag">Headline</span><span class="blank" style="min-width:400px;display:inline-block;border-bottom:1px dashed #B9C6D0;">&nbsp;</span></div>
+
+      <div class="subhead">Exact final published copy — verbatim</div>
+      <div class="verbatim"><span class="tag">Paste verbatim final copy here</span>&nbsp;</div>
+
+      <div class="subhead">Key claims &amp; figures — verification table</div>
+      <table class="vtable">
+        <tr><th>#</th><th>Claim / figure</th><th>Value</th><th>Primary source</th><th>Record date</th><th>Checked on</th><th>Status</th></tr>
+        <tr><td>&nbsp;</td><td>&nbsp;</td><td class="figure">&nbsp;</td><td class="note">&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td><span class="status status-pending">Pending</span></td></tr>
+      </table>
+
+      <div class="subhead">Reconciliation notes</div>
+      <div class="callout">&nbsp;</div>
+
+      <div class="subhead">Caveats, unknowns &amp; claim limits</div>
+      <div class="callout limit">&nbsp;</div>
+
+      <div class="subhead">Assets</div>
+      <div class="assets">
+        <div class="asset">
+          <div class="label">Asset name</div>
+          <div class="fn">filename.png</div>
+          <div class="cdn">https://mcusercontent.com/…</div>
+        </div>
+      </div>
+
+      <div class="subhead">Outbound links</div>
+      <table class="ltable">
+        <tr><th>Label</th><th>Destination</th><th>Status</th></tr>
+        <tr><td class="label">&nbsp;</td><td class="url">&nbsp;</td><td><span class="status status-pending">Pending</span></td></tr>
+      </table>
+
+      <div class="subhead">Final HTML anchor / module identifier</div>
+      <div class="anchornote"><b>Current state:</b> &nbsp;<br><b>Recommended:</b> &nbsp;</div>
+
+      <div class="subhead">Reporter verification notes</div>
+      <div class="repnote"><span class="who">Reporter:</span> &nbsp;</div>
+
+      <div class="subhead">Correction / version log</div>
+      <table class="ltable">
+        <tr><th>Pass</th><th>Change</th></tr>
+        <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
+      </table>
+
+      <div class="subhead">Evidence-retention checklist</div>
+      <ul class="checklist">
+        <li><input type="checkbox">&nbsp;</li>
+        <li><input type="checkbox">&nbsp;</li>
+      </ul>
+    </div>
+  </details>
+
+  <footer class="docfoot">
+    <span>Florida Signal — Aug. 18, 2026 Reporting Proof Sheet · Campaign ID 9304907 · for internal reporting-archive use</span>
+    <span>Compiled with AI assistance from the final newsletter HTML and review-thread history · not a substitute for independent source re-verification</span>
+  </footer>
+
+</main>
+
+<script>
+  function fsExpandAll(open){
+    document.querySelectorAll('main details').forEach(function(d){ d.open = open; });
+  }
+</script>
+</body>
+</html>
