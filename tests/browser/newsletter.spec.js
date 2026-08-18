@@ -111,6 +111,7 @@ test.describe("Florida Signal Brief front door", () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/");
 
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", "https://thefloridasignal.com/");
     await expect(page.locator("[data-launch-signup]")).toHaveCount(2);
     await expect(page.getByRole("link", { name: "Explore the research site" })).toHaveCount(0);
     const headerLogo = page.locator(".launch-brand--header img");
@@ -185,7 +186,7 @@ test.describe("Florida Signal Brief front door", () => {
     expect(sharePayload).toEqual({
       title: "Florida Signal Brief",
       text: "Know what’s changing across Broward before the headline. Get the Florida Signal Brief.",
-      url: "https://thefloridasignal.com/?utm_source=email&utm_medium=forward&utm_campaign=referral",
+      url: "https://thefloridasignal.com/?utm_source=share&utm_medium=referral&utm_campaign=subscriber-share",
     });
     await expect.poll(() => analytics.some((event) => event.event === "share_click" && event.properties.method === "native")).toBe(true);
     expect(JSON.stringify(analytics)).not.toContain("reader@example.com");
