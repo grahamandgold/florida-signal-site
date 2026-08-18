@@ -895,11 +895,31 @@ def mailchimp_configured() -> bool:
 
 
 def mailchimp_upsert(email: str, zip_code: str, cities: list[str], interests: list[str]) -> bool:
-    """Upsert an explicitly consented signup without exposing credentials client-side."""
+    """Add a new consented signup to Mailchimp. Never mutate an existing contact."""
     if not mailchimp_configured():
         return False
+    # Mailchimp member IDs are MD5(lowercase email). Normalize here so mixed-case
+    # resubmits of an existing contact cannot hash to a different member.
+    email = email.strip().lower()
     member_hash = hashlib.md5(email.encode("utf-8")).hexdigest()  # Mailchimp's documented member key.
     url = f"https://{MAILCHIMP_SERVER_PREFIX}.api.mailchimp.com/3.0/lists/{MAILCHIMP_AUDIENCE_ID}/members/{member_hash}"
+    basic = base64.b64encode(f"florida-signal:{MAILCHIMP_API_KEY}".encode("utf-8")).decode("ascii")
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Basic {basic}",
+        "Content-Type": "application/json",
+        "User-Agent": "FloridaSignalPreview/1.0 (consented-signup-upsert)",
+    }
+    lookup = urllib.request.Request(url, method="GET", headers=headers)
+    try:
+        with urllib.request.urlopen(lookup, timeout=12) as response:
+            if 200 <= response.status < 300:
+                return True  # Already on the audience — leave status and fields untouched.
+    except urllib.error.HTTPError as error:
+        if error.code != 404:
+            return False
+    except (urllib.error.URLError, TimeoutError):
+        return False
     merge_fields = {MAILCHIMP_ZIP_MERGE_TAG: zip_code} if MAILCHIMP_ZIP_MERGE_TAG else {}
     if MAILCHIMP_CITIES_MERGE_TAG:
         merge_fields[MAILCHIMP_CITIES_MERGE_TAG] = ", ".join(cities)
@@ -908,21 +928,15 @@ def mailchimp_upsert(email: str, zip_code: str, cities: list[str], interests: li
     body = json.dumps(
         {
             "email_address": email,
-            "status_if_new": "subscribed",
+            "status_if_new": "pending",
             "merge_fields": merge_fields,
         }
     ).encode("utf-8")
-    basic = base64.b64encode(f"florida-signal:{MAILCHIMP_API_KEY}".encode("utf-8")).decode("ascii")
     request = urllib.request.Request(
         url,
         data=body,
         method="PUT",
-        headers={
-            "Accept": "application/json",
-            "Authorization": f"Basic {basic}",
-            "Content-Type": "application/json",
-            "User-Agent": "FloridaSignalPreview/1.0 (consented-signup-upsert)",
-        },
+        headers=headers,
     )
     try:
         with urllib.request.urlopen(request, timeout=12) as response:
