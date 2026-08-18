@@ -39,13 +39,15 @@ class PublicApiTests(unittest.TestCase):
         cls.db_patch.stop()
         cls.tempdir.cleanup()
 
-    def request(self, path, method="GET", body=None, origin=None):
+    def request(self, path, method="GET", body=None, origin=None, extra_headers=None):
         headers = {}
         if body is not None:
             headers["Content-Type"] = "application/json"
             body = json.dumps(body).encode("utf-8")
         if origin:
             headers["Origin"] = origin
+        if extra_headers:
+            headers.update(extra_headers)
         request = urllib.request.Request(self.base + path, data=body, method=method, headers=headers)
         with urllib.request.urlopen(request, timeout=5) as response:
             return response, json.loads(response.read().decode("utf-8")) if method != "OPTIONS" else None
@@ -148,6 +150,43 @@ class PublicApiTests(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as caught:
             self.request("/api/subscribe", "POST", body)
         self.assertEqual(caught.exception.code, 422)
+
+    def test_honeypot_returns_ok_and_writes_nothing(self):
+        body = {
+            "email": "bot@example.com",
+            "zip": "33301",
+            "cities": ["fort-lauderdale"],
+            "interests": ["development"],
+            "company_website": "https://spam.example",
+        }
+        response, payload = self.request("/api/subscribe", "POST", body, extra_headers={"X-Forwarded-For": "203.0.113.50"})
+        self.assertEqual(response.status, 200)
+        self.assertTrue(payload["ok"])
+        self.assertNotIn("bot", json.dumps(payload).lower())
+        self.assertNotIn("honeypot", json.dumps(payload).lower())
+        with sqlite3.connect(self.db_path) as connection:
+            row = connection.execute("select count(*) from brief_subscribers where email = ?", ("bot@example.com",)).fetchone()
+        self.assertEqual(row[0], 0)
+
+    def test_subscribe_rate_limit_is_three_per_hour(self):
+        server_module._subscribe_rate_hits.clear()
+        body = {
+            "zip": "33301",
+            "cities": ["fort-lauderdale"],
+            "interests": ["development"],
+        }
+        for index in range(3):
+            payload = dict(body, email="rate-%s@example.com" % index)
+            response, _ok = self.request("/api/subscribe", "POST", payload, extra_headers={"X-Forwarded-For": "203.0.113.80"})
+            self.assertIn(response.status, (200, 201))
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.request(
+                "/api/subscribe",
+                "POST",
+                dict(body, email="rate-3@example.com"),
+                extra_headers={"X-Forwarded-For": "203.0.113.80"},
+            )
+        self.assertEqual(caught.exception.code, 429)
 
 
 class MailchimpUpsertTests(unittest.TestCase):
