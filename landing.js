@@ -91,10 +91,32 @@
   var nativeShare = document.querySelector("[data-native-share]");
   var shareMessage = document.querySelector("[data-share-message]");
 
+  var deskEmail = "desk@thefloridasignal.com";
+  var deskMailto = "mailto:desk@thefloridasignal.com?subject=" + encodeURIComponent("Florida Signal");
+  var deskGmail = "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(deskEmail) + "&su=" + encodeURIComponent("Florida Signal");
+
+  function showDeskEmail() {
+    if (!shareMessage) return;
+    shareMessage.innerHTML = deskEmail + ' · <a href="' + deskGmail + '" target="_blank" rel="noopener noreferrer">Open Gmail</a>';
+  }
+
   document.querySelectorAll("[data-share-method]").forEach(function (control) {
     if (control === nativeShare) return;
-    control.addEventListener("click", function () {
-      trackEvent("share_click", { method: control.getAttribute("data-share-method") || "unknown" });
+    control.addEventListener("click", function (event) {
+      var method = control.getAttribute("data-share-method") || "unknown";
+      trackEvent("share_click", { method: method });
+      if (method !== "email") return;
+      event.preventDefault();
+      showDeskEmail();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(deskEmail).catch(function () { /* visible address is the fallback */ });
+      }
+      var prefersNativeMail = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || "");
+      if (prefersNativeMail) {
+        window.location.href = deskMailto;
+        return;
+      }
+      window.open(deskGmail, "_blank", "noopener,noreferrer");
     });
   });
 
