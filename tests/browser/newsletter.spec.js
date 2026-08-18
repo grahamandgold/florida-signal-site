@@ -95,7 +95,7 @@ test.describe("Florida Signal Brief front door", () => {
     await expect(headerLogo).toBeVisible();
     await expect(headerLogo).toHaveAttribute("src", "/brand/florida-signal-logo-avatar-kit-2026-08-16/production-hires-v2/fs-lockup-horizontal-transparent-2510.png");
     await expect(headerLogo).toHaveAttribute("srcset", /horizontal-transparent-2510\.png 2510w.+horizontal-transparent-5020\.png 5020w/);
-    await expect(page.locator(".launch-byline")).toHaveText("Built by a veteran journalist. AI-assisted; journalist-approved.");
+    await expect(page.locator(".launch-byline")).toHaveText("Built by a veteran journalist.");
     const footerLogo = page.locator(".launch-brand--footer img");
     await expect(footerLogo).toBeVisible();
     await expect(footerLogo).toHaveAttribute("src", "/brand/florida-signal-logo-avatar-kit-2026-08-16/production-hires-v2/fs-lockup-compact-transparent-2510.png");
