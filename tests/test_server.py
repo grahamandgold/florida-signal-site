@@ -160,6 +160,9 @@ class MailchimpUpsertTests(unittest.TestCase):
             MAILCHIMP_ZIP_MERGE_TAG="WATCHZIP",
             MAILCHIMP_CITIES_MERGE_TAG="",
             MAILCHIMP_INTERESTS_MERGE_TAG="",
+            MAILCHIMP_UTM_CAMPAIGN_TAG="UTMCAMP",
+            MAILCHIMP_UTM_SOURCE_TAG="UTMSRCE",
+            MAILCHIMP_UTM_MEDIUM_TAG="UTMMED",
         )
         self.cfg.start()
 
@@ -210,6 +213,33 @@ class MailchimpUpsertTests(unittest.TestCase):
         expected_hash = hashlib.md5(b"john@gmail.com").hexdigest()
         self.assertIn(expected_hash, put.full_url)
         self.assertNotIn("status", payload)
+        self.assertEqual(payload["merge_fields"]["WATCHZIP"], "33301")
+        self.assertNotIn("UTMCAMP", payload["merge_fields"])
+
+    def test_new_member_writes_utm_campaign_merge_field(self):
+        not_found = urllib.error.HTTPError(
+            "https://example.test/members", 404, "Not Found", hdrs={}, fp=io.BytesIO(b"{}")
+        )
+        created = self._response(200)
+
+        def opener(request, timeout=12):
+            if request.get_method() == "GET":
+                raise not_found
+            return created
+
+        with mock.patch.object(server_module.urllib.request, "urlopen", side_effect=opener) as urlopen:
+            ok = server_module.mailchimp_upsert(
+                "reader@example.com",
+                "33301",
+                ["fort-lauderdale"],
+                ["development"],
+                {"utm_campaign": "featured", "utm_source": "linkedin", "utm_medium": "profile"},
+            )
+        self.assertTrue(ok)
+        payload = json.loads(urlopen.call_args_list[1].args[0].data.decode("utf-8"))
+        self.assertEqual(payload["merge_fields"]["UTMCAMP"], "featured")
+        self.assertEqual(payload["merge_fields"]["UTMSRCE"], "linkedin")
+        self.assertEqual(payload["merge_fields"]["UTMMED"], "profile")
 
     def test_lookup_failure_does_not_write(self):
         with mock.patch.object(

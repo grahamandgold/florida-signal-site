@@ -51,6 +51,28 @@ test.describe("Florida Signal Brief front door", () => {
     expect(posted.email).toBe("reader@example.com");
     expect(posted.source).toBe("florida-signal-brief-launch");
     expect(posted.zip).toBe("33301");
+    expect(posted.utm_campaign).toBe("");
+  });
+
+  test("captures first-touch utm_campaign on signup", async ({ page }) => {
+    let posted = null;
+    await page.route("**/api/subscribe", async (route) => {
+      posted = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, existing: false }),
+      });
+    });
+    await page.goto("/?utm_source=linkedin&utm_medium=profile&utm_campaign=featured");
+    await page.getByLabel("Email address").first().fill("reader@example.com");
+    await page.getByLabel("ZIP code").first().fill("33301");
+    await page.getByRole("button", { name: "Get the Brief" }).first().click();
+
+    await expect(page.getByText("You’re in. Watch for the next brief.")).toBeVisible();
+    expect(posted.utm_source).toBe("linkedin");
+    expect(posted.utm_medium).toBe("profile");
+    expect(posted.utm_campaign).toBe("featured");
   });
 
   test("sends privacy-minimized landing and signup analytics", async ({ page }) => {
@@ -163,7 +185,7 @@ test.describe("Florida Signal Brief front door", () => {
     expect(sharePayload).toEqual({
       title: "Florida Signal Brief",
       text: "Know what’s changing across Broward before the headline. Get the Florida Signal Brief.",
-      url: "https://thefloridasignal.com/",
+      url: "https://thefloridasignal.com/?utm_source=email&utm_medium=forward&utm_campaign=referral",
     });
     await expect.poll(() => analytics.some((event) => event.event === "share_click" && event.properties.method === "native")).toBe(true);
     expect(JSON.stringify(analytics)).not.toContain("reader@example.com");

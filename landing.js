@@ -4,6 +4,50 @@
   var year = document.querySelector("[data-launch-year]");
   if (year) year.textContent = String(new Date().getFullYear());
   var apiBase = /(^|\.)thefloridasignal\.com$/i.test(window.location.hostname) ? "https://api.thefloridasignal.com" : "";
+  var UTM_STORAGE_KEY = "florida-signal-utm";
+  // Official first-touch scheme. Company page is already tagged — do not change it.
+  // Profile featured: ?utm_source=linkedin&utm_medium=profile&utm_campaign=featured
+  // LinkedIn post:    ?utm_source=linkedin&utm_medium=post&utm_campaign=20260825-galleria
+  // LinkedIn DM:      ?utm_source=linkedin&utm_medium=dm&utm_campaign=warm102
+  // Email forward:    ?utm_source=email&utm_medium=forward&utm_campaign=referral
+  var FORWARD_URL = "https://thefloridasignal.com/?utm_source=email&utm_medium=forward&utm_campaign=referral";
+
+  function readQueryUtms() {
+    var params = new URLSearchParams(window.location.search);
+    var utm = {
+      utm_source: (params.get("utm_source") || "").trim(),
+      utm_medium: (params.get("utm_medium") || "").trim(),
+      utm_campaign: (params.get("utm_campaign") || "").trim()
+    };
+    if (!utm.utm_source && !utm.utm_medium && !utm.utm_campaign) return null;
+    return utm;
+  }
+
+  function firstTouchUtms() {
+    var incoming = readQueryUtms();
+    try {
+      var stored = window.sessionStorage.getItem(UTM_STORAGE_KEY);
+      if (stored) return JSON.parse(stored);
+      if (incoming) {
+        window.sessionStorage.setItem(UTM_STORAGE_KEY, JSON.stringify(incoming));
+        return incoming;
+      }
+    } catch (error) {
+      return incoming;
+    }
+    return incoming;
+  }
+
+  var attribution = firstTouchUtms() || {};
+
+  function fillUtmFields() {
+    forms.forEach(function (form) {
+      ["utm_source", "utm_medium", "utm_campaign"].forEach(function (name) {
+        var field = form.elements[name];
+        if (field && attribution[name]) field.value = attribution[name];
+      });
+    });
+  }
 
   function analyticsSessionId() {
     try {
@@ -44,7 +88,8 @@
   }
 
   window.floridaSignalTrack = trackEvent;
-  trackEvent("page_view", { page_name: "newsletter_landing" });
+  fillUtmFields();
+  trackEvent("page_view", Object.assign({ page_name: "newsletter_landing" }, attribution));
 
   forms.forEach(function (form) {
     var message = form.querySelector("[data-launch-message]");
@@ -67,7 +112,10 @@
             zip: zip,
             cities: ["fort-lauderdale"],
             interests: ["development", "neighborhoods", "meetings", "property", "liens", "storm"],
-            source: "florida-signal-brief-launch"
+            source: "florida-signal-brief-launch",
+            utm_source: (form.elements.utm_source && form.elements.utm_source.value) || attribution.utm_source || "",
+            utm_medium: (form.elements.utm_medium && form.elements.utm_medium.value) || attribution.utm_medium || "",
+            utm_campaign: (form.elements.utm_campaign && form.elements.utm_campaign.value) || attribution.utm_campaign || ""
           })
         });
         var data = await response.json();
@@ -85,7 +133,7 @@
     });
   });
 
-  var shareUrl = "https://thefloridasignal.com/";
+  var shareUrl = FORWARD_URL;
   var shareTitle = "Florida Signal Brief";
   var shareText = "Know what’s changing across Broward before the headline. Get the Florida Signal Brief.";
   var nativeShare = document.querySelector("[data-native-share]");

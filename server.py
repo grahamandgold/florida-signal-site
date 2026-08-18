@@ -74,6 +74,10 @@ MAILCHIMP_AUDIENCE_ID = os.getenv("MAILCHIMP_AUDIENCE_ID", "123540d751").strip()
 MAILCHIMP_ZIP_MERGE_TAG = os.getenv("MAILCHIMP_ZIP_MERGE_TAG", "WATCHZIP").strip()
 MAILCHIMP_CITIES_MERGE_TAG = os.getenv("MAILCHIMP_CITIES_MERGE_TAG", "").strip()
 MAILCHIMP_INTERESTS_MERGE_TAG = os.getenv("MAILCHIMP_INTERESTS_MERGE_TAG", "").strip()
+MAILCHIMP_UTM_CAMPAIGN_TAG = os.getenv("MAILCHIMP_UTM_CAMPAIGN_TAG", "UTMCAMP").strip()
+MAILCHIMP_UTM_SOURCE_TAG = os.getenv("MAILCHIMP_UTM_SOURCE_TAG", "UTMSRCE").strip()
+MAILCHIMP_UTM_MEDIUM_TAG = os.getenv("MAILCHIMP_UTM_MEDIUM_TAG", "UTMMED").strip()
+UTM_VALUE_RE = re.compile(r"[^a-zA-Z0-9._-]")
 SUPABASE_URL = (os.getenv("FLORIDA_SIGNAL_SUPABASE_URL", "").strip() or "https://jrjewmzkyluxdywyusrw.supabase.co").rstrip("/")
 SUPABASE_PUBLISHABLE_KEY = os.getenv("FLORIDA_SIGNAL_SUPABASE_PUBLISHABLE_KEY", "").strip() or "sb_publishable_dEyBjKE_vcTj3YYx4p6XvA_xnkVW3Wb"
 _health_lock = threading.Lock()
@@ -847,6 +851,12 @@ def init_db() -> None:
             connection.execute("alter table brief_subscribers add column cities_json text not null default '[\"fort-lauderdale\"]'")
         if "interests_json" not in columns:
             connection.execute("alter table brief_subscribers add column interests_json text not null default '[\"development\",\"neighborhoods\",\"meetings\",\"property\",\"liens\",\"storm\"]'")
+        if "utm_campaign" not in columns:
+            connection.execute("alter table brief_subscribers add column utm_campaign text")
+        if "utm_source" not in columns:
+            connection.execute("alter table brief_subscribers add column utm_source text")
+        if "utm_medium" not in columns:
+            connection.execute("alter table brief_subscribers add column utm_medium text")
         connection.execute(
             """
             create table if not exists analytics_events (
@@ -894,7 +904,18 @@ def mailchimp_configured() -> bool:
     return bool(MAILCHIMP_API_KEY and MAILCHIMP_SERVER_PREFIX and MAILCHIMP_AUDIENCE_ID)
 
 
-def mailchimp_upsert(email: str, zip_code: str, cities: list[str], interests: list[str]) -> bool:
+def sanitize_utm(value: Any) -> str:
+    cleaned = UTM_VALUE_RE.sub("", str(value or "").strip())[:80]
+    return cleaned
+
+
+def mailchimp_upsert(
+    email: str,
+    zip_code: str,
+    cities: list[str],
+    interests: list[str],
+    attribution: dict[str, str] | None = None,
+) -> bool:
     """Add a new consented signup to Mailchimp. Never mutate an existing contact."""
     if not mailchimp_configured():
         return False
@@ -925,6 +946,13 @@ def mailchimp_upsert(email: str, zip_code: str, cities: list[str], interests: li
         merge_fields[MAILCHIMP_CITIES_MERGE_TAG] = ", ".join(cities)
     if MAILCHIMP_INTERESTS_MERGE_TAG:
         merge_fields[MAILCHIMP_INTERESTS_MERGE_TAG] = ", ".join(interests)
+    attrs = attribution or {}
+    if MAILCHIMP_UTM_CAMPAIGN_TAG and attrs.get("utm_campaign"):
+        merge_fields[MAILCHIMP_UTM_CAMPAIGN_TAG] = attrs["utm_campaign"]
+    if MAILCHIMP_UTM_SOURCE_TAG and attrs.get("utm_source"):
+        merge_fields[MAILCHIMP_UTM_SOURCE_TAG] = attrs["utm_source"]
+    if MAILCHIMP_UTM_MEDIUM_TAG and attrs.get("utm_medium"):
+        merge_fields[MAILCHIMP_UTM_MEDIUM_TAG] = attrs["utm_medium"]
     body = json.dumps(
         {
             "email_address": email,
@@ -1077,7 +1105,7 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
             if not re.fullmatch(r"[a-z0-9_]{2,64}", event_name) or not page_path.startswith("/"):
                 self.json_response({"error": "Invalid event"}, HTTPStatus.UNPROCESSABLE_ENTITY)
                 return
-            allowed_keys = {"action", "placement", "record_type", "source", "mode", "device", "section", "result_count", "share_type", "page_name", "status", "method"}
+            allowed_keys = {"action", "placement", "record_type", "source", "mode", "device", "section", "result_count", "share_type", "page_name", "status", "method", "utm_campaign", "utm_source", "utm_medium"}
             incoming = payload.get("properties") if isinstance(payload.get("properties"), dict) else {}
             properties: dict[str, Any] = {}
             for key, value in incoming.items():
@@ -1118,6 +1146,12 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
         raw_interests = payload.get("interests")
         interests = list(dict.fromkeys(str(interest).strip().lower() for interest in raw_interests)) if isinstance(raw_interests, list) else sorted(BRIEF_INTERESTS)
         source = re.sub(r"[^a-zA-Z0-9_-]", "", str(payload.get("source", "website")))[:64] or "website"
+        attribution = {
+            "utm_campaign": sanitize_utm(payload.get("utm_campaign")),
+            "utm_source": sanitize_utm(payload.get("utm_source")),
+            "utm_medium": sanitize_utm(payload.get("utm_medium")),
+        }
+        attribution = {key: value for key, value in attribution.items() if value}
         if len(email) > 254 or not EMAIL_RE.match(email):
             self.json_response({"error": "Enter a valid email address."}, HTTPStatus.UNPROCESSABLE_ENTITY)
             return
@@ -1139,16 +1173,37 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
             ).fetchone()
             if existing:
                 connection.execute(
-                    "update brief_subscribers set status = 'active', zip_code = ?, cities_json = ?, interests_json = ?, source = ?, updated_at = ? where id = ?",
-                    (zip_code, cities_json, interests_json, source, now, existing[0]),
+                    "update brief_subscribers set status = 'active', zip_code = ?, cities_json = ?, interests_json = ?, source = ?, utm_campaign = ?, utm_source = ?, utm_medium = ?, updated_at = ? where id = ?",
+                    (
+                        zip_code,
+                        cities_json,
+                        interests_json,
+                        source,
+                        attribution.get("utm_campaign"),
+                        attribution.get("utm_source"),
+                        attribution.get("utm_medium"),
+                        now,
+                        existing[0],
+                    ),
                 )
             else:
                 connection.execute(
-                    "insert into brief_subscribers (email, zip_code, cities_json, interests_json, source, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)",
-                    (email, zip_code, cities_json, interests_json, source, now, now),
+                    "insert into brief_subscribers (email, zip_code, cities_json, interests_json, source, utm_campaign, utm_source, utm_medium, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        email,
+                        zip_code,
+                        cities_json,
+                        interests_json,
+                        source,
+                        attribution.get("utm_campaign"),
+                        attribution.get("utm_source"),
+                        attribution.get("utm_medium"),
+                        now,
+                        now,
+                    ),
                 )
             connection.commit()
-        mailchimp_synced = mailchimp_upsert(email, zip_code, cities, interests)
+        mailchimp_synced = mailchimp_upsert(email, zip_code, cities, interests, attribution)
         sync_status = "synced" if mailchimp_synced else ("pending" if mailchimp_configured() else "local_only")
         with sqlite3.connect(DB_PATH) as connection:
             connection.execute(
