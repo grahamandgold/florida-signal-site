@@ -5,11 +5,14 @@
   if (year) year.textContent = String(new Date().getFullYear());
   var apiBase = /(^|\.)thefloridasignal\.com$/i.test(window.location.hostname) ? "https://api.thefloridasignal.com" : "";
   var UTM_STORAGE_KEY = "florida-signal-utm";
-  // Official first-touch scheme. Company page is already tagged — do not change it.
+  var UTM_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+  // Official first-touch scheme. Clickable links only — never About text.
+  // Company page is already tagged — do not change it.
   // Profile featured: ?utm_source=linkedin&utm_medium=profile&utm_campaign=featured
   // LinkedIn post:    ?utm_source=linkedin&utm_medium=post&utm_campaign=20260825-galleria
   // LinkedIn DM:      ?utm_source=linkedin&utm_medium=dm&utm_campaign=warm102
   // Email forward:    ?utm_source=email&utm_medium=forward&utm_campaign=referral
+  // Do not use utm_campaign=about — About is not clickable on LinkedIn.
   var FORWARD_URL = "https://thefloridasignal.com/?utm_source=email&utm_medium=forward&utm_campaign=referral";
 
   function readQueryUtms() {
@@ -25,11 +28,28 @@
 
   function firstTouchUtms() {
     var incoming = readQueryUtms();
+    var now = Date.now();
     try {
-      var stored = window.sessionStorage.getItem(UTM_STORAGE_KEY);
-      if (stored) return JSON.parse(stored);
+      var stored = window.localStorage.getItem(UTM_STORAGE_KEY);
+      if (stored) {
+        var parsed = JSON.parse(stored);
+        var age = now - (parsed && parsed.saved_at ? parsed.saved_at : 0);
+        if (parsed && age >= 0 && age < UTM_TTL_MS) {
+          return {
+            utm_source: parsed.utm_source || "",
+            utm_medium: parsed.utm_medium || "",
+            utm_campaign: parsed.utm_campaign || ""
+          };
+        }
+        window.localStorage.removeItem(UTM_STORAGE_KEY);
+      }
       if (incoming) {
-        window.sessionStorage.setItem(UTM_STORAGE_KEY, JSON.stringify(incoming));
+        window.localStorage.setItem(UTM_STORAGE_KEY, JSON.stringify({
+          utm_source: incoming.utm_source,
+          utm_medium: incoming.utm_medium,
+          utm_campaign: incoming.utm_campaign,
+          saved_at: now
+        }));
         return incoming;
       }
     } catch (error) {

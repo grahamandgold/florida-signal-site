@@ -190,7 +190,7 @@ class MailchimpUpsertTests(unittest.TestCase):
         expected_hash = hashlib.md5(b"john@gmail.com").hexdigest()
         self.assertIn(expected_hash, request.full_url)
 
-    def test_new_member_created_pending_with_normalized_hash(self):
+    def test_new_member_created_subscribed_with_normalized_hash(self):
         not_found = urllib.error.HTTPError(
             "https://example.test/members", 404, "Not Found", hdrs={}, fp=io.BytesIO(b"{}")
         )
@@ -208,7 +208,7 @@ class MailchimpUpsertTests(unittest.TestCase):
         self.assertEqual(methods, ["GET", "PUT"])
         put = urlopen.call_args_list[1].args[0]
         payload = json.loads(put.data.decode("utf-8"))
-        self.assertEqual(payload["status_if_new"], "pending")
+        self.assertEqual(payload["status_if_new"], "subscribed")
         self.assertEqual(payload["email_address"], "john@gmail.com")
         expected_hash = hashlib.md5(b"john@gmail.com").hexdigest()
         self.assertIn(expected_hash, put.full_url)

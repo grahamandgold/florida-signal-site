@@ -916,7 +916,7 @@ def mailchimp_upsert(
     interests: list[str],
     attribution: dict[str, str] | None = None,
 ) -> bool:
-    """Add a new consented signup to Mailchimp. Never mutate an existing contact."""
+    """Add a new consented signup to Mailchimp as subscribed. Never mutate an existing contact."""
     if not mailchimp_configured():
         return False
     # Mailchimp member IDs are MD5(lowercase email). Normalize here so mixed-case
@@ -956,7 +956,7 @@ def mailchimp_upsert(
     body = json.dumps(
         {
             "email_address": email,
-            "status_if_new": "pending",
+            "status_if_new": "subscribed",
             "merge_fields": merge_fields,
         }
     ).encode("utf-8")
