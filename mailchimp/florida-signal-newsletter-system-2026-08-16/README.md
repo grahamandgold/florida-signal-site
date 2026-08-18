@@ -12,6 +12,7 @@ Archived and production-reviewed on 2026-08-16 from the Claude Design project **
 - `project-pages/` — Claude Design project pages, including the later social-share revision.
 - `previews/` — full-length, detail, strip, mobile, and production-review renderings.
 - `pdf/` — portable review copies.
+- `proofs/` — the Aug. 18 module-by-module reporting proof sheet and launch QA handoff.
 - `dist/` — Mailchimp import packages. Use the filenames containing `colorbar`; the original
   August 16 ZIPs are retained only for provenance.
 
@@ -22,6 +23,7 @@ Archived and production-reviewed on 2026-08-16 from the Claude Design project **
 - Saved colour-bar master: **Florida Signal — Modular Master v2 Colorbar** (template ID `11470432`).
 - Unsent campaign draft: **Florida Signal — Founding Edition** (campaign ID `9304907`), switched to the v2 colour-bar master on 2026-08-16.
 - Audience: **Florida Signal Subscribers**; no send or schedule was performed.
+- Current audience reconciliation: **26 total contacts — 25 subscribed and 1 unsubscribed**. The unsubscribed contact must not be re-subscribed without explicit consent.
 - Verified From identity: **Florida Signal** `<desk@thefloridasignal.com>`.
 - `thefloridasignal.com` is verified and authenticated in Mailchimp.
 - Open, HTML-click, plain-text-click, and Google Analytics link tracking are enabled on the draft.
@@ -48,5 +50,7 @@ Archived and production-reviewed on 2026-08-16 from the Claude Design project **
 5. Confirm that Mailchimp account/audience settings also use `2222 W Grand River Ave, Suite A, Okemos, MI 48864`; do not add a second address line to the template.
 6. Reconfirm Mailchimp still shows `thefloridasignal.com` as authenticated before the first live send.
 7. Send seeds to Gmail web/mobile, Apple Mail on iPhone, and Outlook; check images-off, dark mode, links, merge tags, and 390px width.
+
+For the Aug. 18 debut package, the live landing-page signup, Mailchimp subscription, welcome automation, and welcome-email receipt were tested end to end. The QA subscriber was archived afterward. Recheck the welcome email's audience-archive link after the first campaign is actually sent, because an unsent draft cannot yet appear there.
 
 No campaign in this archive is authorized for sending.
