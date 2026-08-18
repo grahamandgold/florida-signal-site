@@ -1,4 +1,6 @@
+import hashlib
 import importlib.util
+import io
 import json
 import tempfile
 import threading
@@ -145,6 +147,79 @@ class PublicApiTests(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as caught:
             self.request("/api/subscribe", "POST", body)
         self.assertEqual(caught.exception.code, 422)
+
+
+class MailchimpUpsertTests(unittest.TestCase):
+    def setUp(self):
+        self.cfg = mock.patch.multiple(
+            server_module,
+            MAILCHIMP_API_KEY="test-key",
+            MAILCHIMP_SERVER_PREFIX="us2",
+            MAILCHIMP_AUDIENCE_ID="aud123",
+            MAILCHIMP_ZIP_MERGE_TAG="WATCHZIP",
+            MAILCHIMP_CITIES_MERGE_TAG="",
+            MAILCHIMP_INTERESTS_MERGE_TAG="",
+        )
+        self.cfg.start()
+
+    def tearDown(self):
+        self.cfg.stop()
+
+    def _response(self, status=200):
+        response = mock.Mock()
+        response.status = status
+        response.__enter__ = mock.Mock(return_value=response)
+        response.__exit__ = mock.Mock(return_value=False)
+        return response
+
+    def test_subscribe_handler_lowercases_email_before_upsert(self):
+        source = Path(server_module.__file__).read_text()
+        self.assertIn('email = str(payload.get("email", "")).strip().lower()', source)
+
+    def test_existing_member_is_not_written(self):
+        with mock.patch.object(server_module.urllib.request, "urlopen", return_value=self._response(200)) as urlopen:
+            ok = server_module.mailchimp_upsert("John@Gmail.com", "33301", ["fort-lauderdale"], ["development"])
+        self.assertTrue(ok)
+        self.assertEqual(urlopen.call_count, 1)
+        request = urlopen.call_args[0][0]
+        self.assertEqual(request.get_method(), "GET")
+        expected_hash = hashlib.md5(b"john@gmail.com").hexdigest()
+        self.assertIn(expected_hash, request.full_url)
+
+    def test_new_member_created_pending_with_normalized_hash(self):
+        not_found = urllib.error.HTTPError(
+            "https://example.test/members", 404, "Not Found", hdrs={}, fp=io.BytesIO(b"{}")
+        )
+        created = self._response(200)
+
+        def opener(request, timeout=12):
+            if request.get_method() == "GET":
+                raise not_found
+            return created
+
+        with mock.patch.object(server_module.urllib.request, "urlopen", side_effect=opener) as urlopen:
+            ok = server_module.mailchimp_upsert("  John@Gmail.com ", "33301", ["fort-lauderdale"], ["development"])
+        self.assertTrue(ok)
+        methods = [call.args[0].get_method() for call in urlopen.call_args_list]
+        self.assertEqual(methods, ["GET", "PUT"])
+        put = urlopen.call_args_list[1].args[0]
+        payload = json.loads(put.data.decode("utf-8"))
+        self.assertEqual(payload["status_if_new"], "pending")
+        self.assertEqual(payload["email_address"], "john@gmail.com")
+        expected_hash = hashlib.md5(b"john@gmail.com").hexdigest()
+        self.assertIn(expected_hash, put.full_url)
+        self.assertNotIn("status", payload)
+
+    def test_lookup_failure_does_not_write(self):
+        with mock.patch.object(
+            server_module.urllib.request,
+            "urlopen",
+            side_effect=urllib.error.URLError("timeout"),
+        ) as urlopen:
+            ok = server_module.mailchimp_upsert("john@gmail.com", "33301", ["fort-lauderdale"], ["development"])
+        self.assertFalse(ok)
+        self.assertEqual(urlopen.call_count, 1)
+        self.assertEqual(urlopen.call_args[0][0].get_method(), "GET")
 
 
 if __name__ == "__main__":
