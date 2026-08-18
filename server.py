@@ -1077,7 +1077,7 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
             if not re.fullmatch(r"[a-z0-9_]{2,64}", event_name) or not page_path.startswith("/"):
                 self.json_response({"error": "Invalid event"}, HTTPStatus.UNPROCESSABLE_ENTITY)
                 return
-            allowed_keys = {"action", "placement", "record_type", "source", "mode", "device", "section", "result_count", "share_type", "page_name", "status"}
+            allowed_keys = {"action", "placement", "record_type", "source", "mode", "device", "section", "result_count", "share_type", "page_name", "status", "method"}
             incoming = payload.get("properties") if isinstance(payload.get("properties"), dict) else {}
             properties: dict[str, Any] = {}
             for key, value in incoming.items():

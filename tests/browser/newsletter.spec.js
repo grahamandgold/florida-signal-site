@@ -132,11 +132,14 @@ test.describe("Florida Signal Brief front door", () => {
     await page.goto("/");
 
     await expect(page.getByRole("heading", { name: "Know someone who should see what’s changing?" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Follow Florida Signal on LinkedIn" })).toHaveAttribute("href", "https://www.linkedin.com/company/floridasignal/");
+    const linkedIn = page.getByRole("link", { name: "Follow Florida Signal on LinkedIn" });
+    await expect(linkedIn).toHaveAttribute("href", "https://www.linkedin.com/company/floridasignal/");
+    await linkedIn.click();
+    await expect.poll(() => analytics.some((event) => event.event === "share_click" && event.properties.method === "linkedin")).toBe(true);
     await expect(page.getByRole("link", { name: "Share Florida Signal on Facebook" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Share Florida Signal on X" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /instagram/i })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Share Florida Signal by email" })).toHaveAttribute("href", /^mailto:/);
+    await expect(page.getByRole("link", { name: "Email Florida Signal at desk@thefloridasignal.com" })).toHaveAttribute("href", "mailto:desk@thefloridasignal.com?subject=Florida%20Signal");
 
     await page.getByRole("button", { name: "Share Florida Signal" }).click();
     const sharePayload = await page.evaluate(() => window.__floridaSignalSharePayload);

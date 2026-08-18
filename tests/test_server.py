@@ -2,6 +2,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import sqlite3
 import tempfile
 import threading
 import unittest
@@ -220,6 +221,69 @@ class MailchimpUpsertTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(urlopen.call_count, 1)
         self.assertEqual(urlopen.call_args[0][0].get_method(), "GET")
+
+
+class AnalyticsEventTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tempdir = tempfile.TemporaryDirectory()
+        cls.db_path = Path(cls.tempdir.name) / "public.sqlite"
+        cls.db_patch = mock.patch.object(server_module, "DB_PATH", cls.db_path)
+        cls.db_patch.start()
+        server_module.init_db()
+        cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), server_module.FloridaSignalHandler)
+        cls.base = "http://127.0.0.1:%d" % cls.httpd.server_address[1]
+        cls.thread = threading.Thread(target=cls.httpd.serve_forever, daemon=True)
+        cls.thread.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.httpd.shutdown()
+        cls.httpd.server_close()
+        cls.db_patch.stop()
+        cls.tempdir.cleanup()
+
+    def request(self, path, method="GET", body=None, origin=None):
+        headers = {}
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+            body = json.dumps(body).encode("utf-8")
+        if origin:
+            headers["Origin"] = origin
+        request = urllib.request.Request(self.base + path, data=body, method=method, headers=headers)
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return response, json.loads(response.read().decode("utf-8"))
+
+    def test_share_click_keeps_method_and_drops_email(self):
+        response, payload = self.request(
+            "/api/events",
+            method="POST",
+            origin="https://thefloridasignal.com",
+            body={
+                "event": "share_click",
+                "page": "/",
+                "session_id": "qa-linkedin-click",
+                "properties": {
+                    "method": "linkedin",
+                    "device": "desktop",
+                    "email": "secret@example.com",
+                    "zip": "33301",
+                },
+            },
+        )
+        self.assertEqual(response.status, 201)
+        self.assertTrue(payload["ok"])
+        with sqlite3.connect(self.db_path) as connection:
+            row = connection.execute(
+                "select event_name, page_path, properties_json from analytics_events order by id desc limit 1"
+            ).fetchone()
+        self.assertEqual(row[0], "share_click")
+        self.assertEqual(row[1], "/")
+        stored = json.loads(row[2])
+        self.assertEqual(stored["method"], "linkedin")
+        self.assertEqual(stored["device"], "desktop")
+        self.assertNotIn("email", stored)
+        self.assertNotIn("zip", stored)
 
 
 if __name__ == "__main__":
