@@ -124,6 +124,15 @@ test.describe("Florida Signal Brief front door", () => {
         configurable: true,
         value: async (payload) => { window.__floridaSignalSharePayload = payload; },
       });
+      window.__opened = [];
+      window.open = (url, target) => {
+        window.__opened.push({ url: url, target: target });
+        return { focus: function () {} };
+      };
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText: async (text) => { window.__copiedEmail = text; } },
+      });
     });
     await page.route("**/api/events", async (route) => {
       analytics.push(route.request().postDataJSON());
@@ -139,7 +148,15 @@ test.describe("Florida Signal Brief front door", () => {
     await expect(page.getByRole("link", { name: "Share Florida Signal on Facebook" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Share Florida Signal on X" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /instagram/i })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Email Florida Signal at desk@thefloridasignal.com" })).toHaveAttribute("href", "mailto:desk@thefloridasignal.com?subject=Florida%20Signal");
+    const email = page.getByRole("link", { name: "Email Florida Signal at desk@thefloridasignal.com" });
+    await expect(email).toHaveAttribute("href", "mailto:desk@thefloridasignal.com?subject=Florida%20Signal");
+    await email.click();
+    await expect.poll(() => analytics.some((event) => event.event === "share_click" && event.properties.method === "email")).toBe(true);
+    const opened = await page.evaluate(() => window.__opened);
+    expect(opened[0].url).toContain("mail.google.com/mail/");
+    expect(opened[0].url).toContain("desk%40thefloridasignal.com");
+    await expect(page.locator("[data-share-message]")).toContainText("desk@thefloridasignal.com");
+    expect(await page.evaluate(() => window.__copiedEmail)).toBe("desk@thefloridasignal.com");
 
     await page.getByRole("button", { name: "Share Florida Signal" }).click();
     const sharePayload = await page.evaluate(() => window.__floridaSignalSharePayload);
