@@ -6,14 +6,16 @@
   var apiBase = /(^|\.)thefloridasignal\.com$/i.test(window.location.hostname) ? "https://api.thefloridasignal.com" : "";
   var UTM_STORAGE_KEY = "florida-signal-utm";
   var UTM_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-  // Official first-touch scheme. Clickable links only — never About text.
+  // Official first-touch scheme. Clickable links only — never About text or the homepage URL itself.
   // Company page is already tagged — do not change it.
   // Profile featured: ?utm_source=linkedin&utm_medium=profile&utm_campaign=featured
   // LinkedIn post:    ?utm_source=linkedin&utm_medium=post&utm_campaign=20260825-galleria
   // LinkedIn DM:      ?utm_source=linkedin&utm_medium=dm&utm_campaign=warm102
-  // Email forward:    ?utm_source=email&utm_medium=forward&utm_campaign=referral
-  // Do not use utm_campaign=about — About is not clickable on LinkedIn.
-  var FORWARD_URL = "https://thefloridasignal.com/?utm_source=email&utm_medium=forward&utm_campaign=referral";
+  // Newsletter footer / true email forward:
+  //   ?utm_source=email&utm_medium=forward&utm_campaign=referral
+  // Site Copy/Share (text, WhatsApp, DMs):
+  //   ?utm_source=share&utm_medium=referral&utm_campaign=subscriber-share
+  var SHARE_URL = "https://thefloridasignal.com/?utm_source=share&utm_medium=referral&utm_campaign=subscriber-share";
 
   function readQueryUtms() {
     var params = new URLSearchParams(window.location.search);
@@ -153,7 +155,7 @@
     });
   });
 
-  var shareUrl = FORWARD_URL;
+  var shareUrl = SHARE_URL;
   var shareTitle = "Florida Signal Brief";
   var shareText = "Know what’s changing across Broward before the headline. Get the Florida Signal Brief.";
   var nativeShare = document.querySelector("[data-native-share]");
