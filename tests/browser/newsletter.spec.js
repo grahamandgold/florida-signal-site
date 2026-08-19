@@ -113,6 +113,13 @@ test.describe("Florida Signal Brief front door", () => {
 
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", "https://thefloridasignal.com/");
     await expect(page.locator("[data-launch-signup]")).toHaveCount(2);
+    const honeypots = page.locator('input[name="company_website"]');
+    await expect(honeypots).toHaveCount(2);
+    await expect(honeypots.first()).toHaveAttribute("type", "text");
+    await expect(honeypots.first()).not.toHaveAttribute("type", "hidden");
+    await expect(honeypots.first()).toHaveAttribute("tabindex", "-1");
+    await expect(honeypots.first()).toHaveAttribute("autocomplete", "off");
+    await expect(page.locator('[aria-hidden="true"] input[name="company_website"]')).toHaveCount(2);
     await expect(page.getByRole("link", { name: "Explore the research site" })).toHaveCount(0);
     const headerLogo = page.locator(".launch-brand--header img");
     await expect(headerLogo).toBeVisible();

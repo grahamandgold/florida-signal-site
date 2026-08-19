@@ -46,6 +46,8 @@ ZIP_RE = re.compile(r"^\d{5}(?:-\d{4})?$")
 MAX_BODY = 4096
 RATE_WINDOW_SECONDS = 60
 RATE_LIMIT = 6
+SUBSCRIBE_RATE_WINDOW_SECONDS = 60 * 60
+SUBSCRIBE_RATE_LIMIT = 3
 PUBLIC_ORIGINS = {
     origin.strip().rstrip("/")
     for origin in os.getenv(
@@ -56,6 +58,7 @@ PUBLIC_ORIGINS = {
 }
 _rate_lock = threading.Lock()
 _rate_hits: dict[str, list[float]] = {}
+_subscribe_rate_hits: dict[str, list[float]] = {}
 _nhc_lock = threading.Lock()
 _nhc_cache: dict[str, Any] = {"at": 0.0, "payload": None}
 _meeting_lock = threading.Lock()
@@ -873,16 +876,21 @@ def init_db() -> None:
         connection.commit()
 
 
-def rate_allowed(ip: str) -> bool:
+def rate_allowed(ip: str, hits_map: dict[str, list[float]] | None = None, window: int = RATE_WINDOW_SECONDS, limit: int = RATE_LIMIT) -> bool:
     now = time.time()
+    store = hits_map if hits_map is not None else _rate_hits
     with _rate_lock:
-        hits = [hit for hit in _rate_hits.get(ip, []) if now - hit < RATE_WINDOW_SECONDS]
-        if len(hits) >= RATE_LIMIT:
-            _rate_hits[ip] = hits
+        hits = [hit for hit in store.get(ip, []) if now - hit < window]
+        if len(hits) >= limit:
+            store[ip] = hits
             return False
         hits.append(now)
-        _rate_hits[ip] = hits
+        store[ip] = hits
         return True
+
+
+def subscribe_rate_allowed(ip: str) -> bool:
+    return rate_allowed(ip, _subscribe_rate_hits, SUBSCRIBE_RATE_WINDOW_SECONDS, SUBSCRIBE_RATE_LIMIT)
 
 
 def nhc_payload() -> dict[str, Any]:
@@ -1124,9 +1132,6 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
         if route != "/api/subscribe":
             self.json_response({"error": "Not found"}, HTTPStatus.NOT_FOUND)
             return
-        if not rate_allowed(self.client_ip()):
-            self.json_response({"error": "Please wait a minute and try again."}, HTTPStatus.TOO_MANY_REQUESTS)
-            return
         try:
             content_length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
@@ -1138,6 +1143,32 @@ class FloridaSignalHandler(SimpleHTTPRequestHandler):
             payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
             self.json_response({"error": "Invalid JSON"}, HTTPStatus.BAD_REQUEST)
+            return
+        if str(payload.get("company_website", "")).strip():
+            print(
+                "[subscribe] honeypot discarded ip=%s ts=%s"
+                % (self.client_ip(), datetime.now(timezone.utc).isoformat()),
+                flush=True,
+            )
+            self.json_response(
+                {
+                    "ok": True,
+                    "existing": False,
+                    "mailchimp_synced": True,
+                    "delivery": "synced",
+                    "cities": ["fort-lauderdale"],
+                    "interests": sorted(BRIEF_INTERESTS),
+                },
+                HTTPStatus.OK,
+            )
+            return
+        if not subscribe_rate_allowed(self.client_ip()):
+            print(
+                "[subscribe] rate_limited ip=%s ts=%s"
+                % (self.client_ip(), datetime.now(timezone.utc).isoformat()),
+                flush=True,
+            )
+            self.json_response({"error": "Please wait a minute and try again."}, HTTPStatus.TOO_MANY_REQUESTS)
             return
         email = str(payload.get("email", "")).strip().lower()
         zip_code = str(payload.get("zip", "")).strip()
