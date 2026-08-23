@@ -20,6 +20,10 @@ from urllib.parse import parse_qs, quote, urlparse
 
 ROOT = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("DATA_WIRE_DB_PATH", str(ROOT / "data" / "data_wire.sqlite")))
+PROJECT_STATE_PATH = Path(os.getenv(
+    "FL_SIGNAL_PROJECT_STATE_PATH",
+    str(ROOT.parent / "_source_copies" / "florida-signal" / "data" / "reference" / "florida_signal_project_state.json"),
+))
 ADMIN_TOKEN = os.getenv("DATA_WIRE_ADMIN_TOKEN", "").strip()
 MAX_BODY = 1_000_000
 
@@ -143,6 +147,81 @@ def public_json(url: str) -> dict[str, Any]:
             return payload if isinstance(payload, dict) else {}
     except (OSError, ValueError):
         return {}
+
+
+def load_project_state_manifest() -> tuple[int, dict[str, Any]]:
+    """Read durable project state from Git without treating it as live health."""
+    unavailable = {
+        "error": "Canonical project state is unavailable",
+        "status": "UNKNOWN",
+        "generated_at": now_iso(),
+        "contract": "No project state was inferred because the tracked manifest could not be verified.",
+    }
+    try:
+        payload = json.loads(PROJECT_STATE_PATH.expanduser().read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return 503, unavailable
+    required = {
+        "schema_version", "state_contract", "current_mode", "product", "now", "next",
+        "active_research", "blocked_claims", "production_pipeline_registry",
+        "sensor_status", "latest_material_decision", "source_revision", "verified_at",
+    }
+    if not isinstance(payload, dict) or not required.issubset(payload):
+        return 503, unavailable
+    if not isinstance(payload.get("production_pipeline_registry"), list):
+        return 503, unavailable
+    return 200, payload
+
+
+def project_state_payload() -> tuple[int, dict[str, Any]]:
+    """Combine canonical project state with independent, fail-closed live health."""
+    code, state = load_project_state_manifest()
+    if code != 200:
+        return code, state
+
+    health = public_json("https://api.thefloridasignal.com/api/data-health")
+    health_rows = {
+        str(row.get("id")): row for row in health.get("sources", [])
+        if isinstance(row, dict) and row.get("id")
+    } if isinstance(health, dict) else {}
+    operational_health = []
+    for component in state.get("production_pipeline_registry", []):
+        if not isinstance(component, dict):
+            continue
+        health_source = component.get("health_source")
+        health_source = health_source if isinstance(health_source, dict) else {}
+        source_id = health_source.get("id") if health_source.get("type") == "public_data_health" else None
+        receipt = health_rows.get(str(source_id), {}) if source_id else {}
+        operational_health.append({
+            "id": component.get("id"),
+            "label": component.get("label"),
+            "deployment_status": component.get("deployment_status"),
+            "status": str(receipt.get("status") or "UNKNOWN").upper(),
+            "event_through": receipt.get("event_through"),
+            "system_time": receipt.get("system_time"),
+            "detail": receipt.get("detail") or (
+                "Live health source unavailable; no status inferred."
+                if source_id else "No live health contract is configured; operational health is UNKNOWN."
+            ),
+            "health_source": (
+                f"https://api.thefloridasignal.com/api/data-health#{source_id}"
+                if source_id else None
+            ),
+            "authority": component.get("authority"),
+            "touch_policy": component.get("touch_policy"),
+        })
+
+    return 200, {
+        "project_state": state,
+        "operational_health": operational_health,
+        "live_health_generated_at": health.get("generated_at") if isinstance(health, dict) else None,
+        "live_health_errors": health.get("errors", []) if isinstance(health, dict) else [],
+        "generated_at": now_iso(),
+        "contract": (
+            "Project state comes from the tracked Git manifest. Operational health comes from "
+            "independent live receipts; missing receipts remain UNKNOWN and never inherit a manifest status."
+        ),
+    }
 
 
 def early_intel_payload() -> dict[str, Any]:
@@ -855,6 +934,12 @@ class Handler(SimpleHTTPRequestHandler):
             if not self.require_admin():
                 return
             self.reply(early_intel_payload())
+            return
+        if route == "/api/admin/project-state":
+            if not self.require_admin():
+                return
+            code, payload = project_state_payload()
+            self.reply(payload, HTTPStatus.OK if code == 200 else HTTPStatus.SERVICE_UNAVAILABLE)
             return
         if route == "/api/admin/agenda-watch":
             if not self.require_admin():

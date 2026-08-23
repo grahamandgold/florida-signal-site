@@ -19,6 +19,40 @@
     .view-head p { margin: 7px 0 0; color: var(--dw-muted); font-size: 13px; }
     .view-head__state { color: var(--dw-muted); font: 11px/1.45 var(--dw-mono); text-align: right; }
     .eyebrow { color: var(--dw-teal); font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .project-control { margin-bottom: 28px; border: 1px solid #315270; border-radius: 13px; background: var(--dw-paper); box-shadow: var(--dw-shadow); overflow: hidden; }
+    .project-control__head { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 18px; padding: 22px 24px; color: #fff; background: var(--dw-navy); }
+    .project-control__head .eyebrow { color: #70d9c5; }
+    .project-control__head h2 { margin: 4px 0 5px; font-size: clamp(24px,3vw,36px); line-height: 1.05; }
+    .project-control__head p { max-width: 760px; margin: 0; color: #b8c7d8; font-size: 11px; }
+    .project-control__mode { align-self: center; padding: 8px 10px; border: 1px solid rgba(112,217,197,.65); color: #70d9c5; font: 800 10px/1.25 var(--dw-mono); text-align: right; text-transform: uppercase; }
+    .project-control__tasks { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--dw-line); }
+    .project-task { min-width: 0; padding: 18px 24px; }
+    .project-task + .project-task { border-left: 1px solid var(--dw-line); }
+    .project-task b { display: block; margin-bottom: 5px; color: var(--dw-teal); font: 800 10px/1.25 var(--dw-mono); letter-spacing: .08em; text-transform: uppercase; }
+    .project-task strong { display: block; font-size: 15px; line-height: 1.35; }
+    .project-task span { display: block; margin-top: 6px; color: var(--dw-muted); font-size: 10px; }
+    .project-risk { margin: 0; padding: 11px 24px; border-bottom: 1px solid #efc1b8; color: #7b1d12; background: #fff1ee; font-size: 10px; font-weight: 800; }
+    .project-control__body { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(280px,.65fr); }
+    .project-block { min-width: 0; padding: 20px 24px; }
+    .project-block + .project-block { border-left: 1px solid var(--dw-line); }
+    .project-block h3 { margin: 0 0 4px; font-size: 16px; }
+    .project-block__intro { margin: 0 0 13px; color: var(--dw-muted); font-size: 10px; }
+    .project-health { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
+    .project-health__row { min-width: 0; padding: 10px 11px; border: 1px solid var(--dw-line); border-left: 4px solid #8796a6; background: #f8fafc; }
+    .project-health__row[data-health="CURRENT"] { border-left-color: var(--dw-teal); }
+    .project-health__row[data-health="DELAYED"], .project-health__row[data-health="STALE"], .project-health__row[data-health="SUPPRESSED"] { border-left-color: #c79018; background: #fffaf0; }
+    .project-health__row[data-health="ERROR"], .project-health__row[data-health="UNAVAILABLE"] { border-left-color: #c64935; background: #fff5f3; }
+    .project-health__row b { display: block; font-size: 11px; line-height: 1.25; }
+    .project-health__row span { display: block; margin-top: 3px; color: var(--dw-muted); font: 9px/1.35 var(--dw-mono); overflow-wrap: anywhere; }
+    .project-health__row strong { color: var(--dw-ink); }
+    .project-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+    .project-list li { padding: 9px 10px; border: 1px solid var(--dw-line); background: #f8fafc; font-size: 10px; }
+    .project-list b { display: block; margin-bottom: 2px; font-size: 11px; }
+    .project-research { margin-top: 16px; padding-top: 15px; border-top: 1px solid var(--dw-line); }
+    .project-research h4 { margin: 0 0 5px; font-size: 12px; }
+    .project-research p { margin: 4px 0 0; color: var(--dw-muted); font-size: 10px; }
+    .blocked-claims { margin: 9px 0 0; padding-left: 17px; color: #7b1d12; font-size: 10px; }
+    .project-control__foot { display: flex; justify-content: space-between; gap: 16px; margin: 0; padding: 10px 24px; border-top: 1px solid var(--dw-line); color: var(--dw-muted); background: #f5f7fa; font: 9px/1.4 var(--dw-mono); }
     .stage-rail { display: grid; grid-template-columns: repeat(4,1fr); margin-bottom: 24px; border: 1px solid var(--dw-line); background: var(--dw-paper); box-shadow: var(--dw-shadow); }
     .stage-step { position: relative; min-width: 0; padding: 13px 15px; border-left: 1px solid var(--dw-line); }
     .stage-step:first-child { border-left: 0; }
@@ -76,11 +110,16 @@
       .sequence-row__stage { grid-row: 1 / span 3; }
       .sequence-row h3, .sequence-row p, .sequence-row__clock { grid-column: 2; text-align: left; }
     }
-    @media (max-width: 1050px) { .changes { grid-template-columns: repeat(2,1fr); } .work-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 1050px) { .changes { grid-template-columns: repeat(2,1fr); } .work-grid, .project-control__body { grid-template-columns: 1fr; } .project-block + .project-block { border-left: 0; border-top: 1px solid var(--dw-line); } }
     @media (max-width: 760px) {
       main { padding-top: 18px !important; }
       .view-head { align-items: flex-start; flex-direction: column; }
       .view-head__state { text-align: left; }
+      .project-control__head { grid-template-columns: 1fr; }
+      .project-control__mode { justify-self: start; text-align: left; }
+      .project-control__tasks, .project-health { grid-template-columns: 1fr; }
+      .project-task + .project-task { border-left: 0; border-top: 1px solid var(--dw-line); }
+      .project-control__foot { flex-direction: column; }
       .stage-rail { grid-template-columns: repeat(2,1fr); }
       .stage-step:nth-child(3) { border-left: 0; border-top: 1px solid var(--dw-line); }
       .stage-step:nth-child(4) { border-top: 1px solid var(--dw-line); }
@@ -112,6 +151,10 @@
       <div><h1>Live Desk</h1><p>Continuous newsroom intelligence · Broward · public records only</p></div>
       <div class="view-head__state" id="since-line">Opening the current shift…</div>
     </header>
+
+    <section class="project-control" id="project-control" aria-labelledby="project-control-title">
+      <div class="empty">Opening the canonical Early Radar project state and independent live health receipts…</div>
+    </section>
 
     <section class="stage-rail" aria-label="Editorial stages">
       <div class="stage-step"><b>Record</b><span>Immutable source item</span></div>
@@ -162,6 +205,10 @@
     function esc(value) { return String(value == null ? "" : value).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
     function human(value) { return String(value || "Candidate").toLowerCase().replace(/_/g," ").replace(/\b\w/g,function(c){return c.toUpperCase();}); }
     function formatDate(value) { if(value==null||value===""||value===0||value==="0")return "not exposed";var d=new Date(value);return Number.isNaN(d.getTime())||d.getFullYear()<2000?"not exposed":d.toLocaleDateString(); }
+    function formatDateTime(value) { if(!value)return "not exposed";var d=new Date(value);return Number.isNaN(d.getTime())?"not exposed":d.toLocaleString(); }
+    function projectHealthHtml(row) { var status=String(row.status||"UNKNOWN").toUpperCase(),clock=row.event_through?"event through "+row.event_through:row.system_time?"system "+formatDateTime(row.system_time):"no live clock";return '<article class="project-health__row" data-health="'+esc(status)+'"><b>'+esc(row.label||row.id)+'</b><span><strong>'+esc(status)+'</strong> · '+esc(clock)+'</span><span>'+esc(row.deployment_status||"status unknown")+' · '+esc(row.touch_policy||"touch policy unknown")+'</span></article>'; }
+    function projectStateHtml(data) { var state=data.project_state||{},now=state.now||{},next=state.next||{},research=state.active_research||{},decision=state.latest_material_decision||{},health=Array.isArray(data.operational_health)?data.operational_health:[],sensors=Array.isArray(state.sensor_status)?state.sensor_status:[],claims=Array.isArray(state.blocked_claims)?state.blocked_claims:[],risks=Array.isArray(state.risks)?state.risks:[],runtimeRisk=risks.find(function(risk){return risk.id==="runtime-drift";})||{},sourceRevision=state.source_revision||{};return '<div class="project-control__head"><div><div class="eyebrow">Operator truth · Early Radar control</div><h2 id="project-control-title">Project state</h2><p>'+esc(state.product||"Canonical product description unavailable.")+'</p></div><div class="project-control__mode">'+esc(state.current_mode||"MODE UNKNOWN")+'</div></div><div class="project-control__tasks"><div class="project-task"><b>NOW · current task</b><strong>'+esc(now.title||"UNKNOWN")+'</strong><span>'+esc(now.status||"UNKNOWN")+'</span></div><div class="project-task"><b>NEXT · ready when authorized</b><strong>'+esc(next.title||"UNKNOWN")+'</strong><span>'+esc(next.status||"UNKNOWN")+'</span></div></div>'+(runtimeRisk.detail?'<p class="project-risk">RUNTIME DRIFT / NEEDS SEPARATE RECONCILIATION · '+esc(runtimeRisk.detail)+'</p>':'')+'<div class="project-control__body"><div class="project-block"><h3>Production pipeline health</h3><p class="project-block__intro">Independent live receipts only. UNKNOWN means no current health contract answered; a tracked manifest never supplies a green check.</p><div class="project-health">'+(health.length?health.map(projectHealthHtml).join(""):'<div class="empty">Live pipeline health unavailable. Every lane remains UNKNOWN.</div>')+'</div></div><div class="project-block"><h3>Sensor status</h3><p class="project-block__intro">Researched, built, automated, deployed and validated are separate states.</p><ul class="project-list">'+sensors.map(function(sensor){return '<li><b>'+esc(sensor.sensor)+' · '+esc(sensor.status)+'</b>'+esc(sensor.detail||"")+'</li>';}).join("")+'</ul><div class="project-research"><h4>Active research · '+esc(research.status||"UNKNOWN")+'</h4><p><b>'+esc(research.study||"Study unavailable")+'</b><br>'+esc(research.cohort||"")+'</p><p>'+esc(research.current_gate||"")+'</p><p><b>Descriptive only:</b> '+esc(research.descriptive_result||"No result authorized")+'</p><p><b>Not proven:</b> '+esc(research.not_proven||"Unknown")+'</p><h4 style="margin-top:14px">Claims blocked</h4><ul class="blocked-claims">'+claims.map(function(claim){return '<li>'+esc(claim)+'</li>';}).join("")+'</ul><p><b>Latest decision:</b> '+esc(decision.decision||"UNKNOWN")+'</p></div></div></div><p class="project-control__foot"><span>Project state reconciled '+esc(formatDateTime(state.verified_at))+' · base '+esc(sourceRevision.base_head||sourceRevision.head||"revision unknown")+'</span><span>Live health generated '+esc(formatDateTime(data.live_health_generated_at))+'</span></p>'; }
+    async function loadProjectState() { var target=document.getElementById("project-control");try{var data=await newsroom.admin("/api/admin/project-state");target.innerHTML=projectStateHtml(data);}catch(error){target.innerHTML='<div class="empty error"><b>Project state unavailable.</b> No status was inferred. Open the tracked canonical front door before continuing.</div>';}}
     function packet(item) { return item && item.evidence_packet && Array.isArray(item.evidence_packet.records) ? item.evidence_packet : {records:[],supported_claims:[],unknowns:[]}; }
     function itemHtml(item,index) { var p=packet(item);var claims=Array.isArray(p.supported_claims)?p.supported_claims:[];var unknowns=Array.isArray(p.unknowns)?p.unknowns:[];return '<a class="candidate-card" href="/review.html"><span class="candidate-card__number">'+String(index+1).padStart(2,"0")+'</span><div><div class="eyebrow">'+esc(human(item.candidate_type||item.signal_type))+'</div><h3>'+esc(item.editor_headline||item.generated_headline||item.signal_id||"Untitled Candidate")+'</h3><p>'+esc(item.editor_summary||item.generated_summary||"Open the evidence packet for the supported facts and unknowns.")+'</p><div class="candidate-card__meta"><span><b>'+p.records.length+'</b> source records</span><span><b>'+claims.length+'</b> supported facts</span><span><b>'+unknowns.length+'</b> unknowns</span><span>latest event '+esc(formatDate(item.source_record_date))+'</span></div></div><span class="candidate-card__action">Read evidence →</span></a>'; }
     async function loadSummary() { try { var data=await newsroom.admin("/api/admin/review-summary");["ready-count","action-ready"].forEach(function(id){document.getElementById(id).textContent=data.ready;});["blocked-count","action-blocked"].forEach(function(id){document.getElementById(id).textContent=data.blocked;}); } catch(error) { document.getElementById("shift-note").textContent="Decision queue unavailable. No count was inferred.";document.getElementById("shift-note").classList.add("error"); } }
@@ -169,7 +216,7 @@
     async function loadSequence() { var target=document.getElementById("sequence");try { var data=await newsroom.admin("/api/admin/early-intel");var lanes=Array.isArray(data.lanes)?data.lanes:[];document.getElementById("source-count").textContent=lanes.length;target.innerHTML=lanes.length?lanes.map(function(lane){return '<a class="sequence-row" href="'+esc(lane.href||"/data.html")+'"><span class="sequence-row__stage">'+esc(lane.phase)+'</span><h3>'+esc(lane.label)+'</h3><p><b>'+esc(lane.headline)+'</b><br>'+esc(lane.note)+'</p><span class="sequence-row__clock">Event '+esc(lane.event_through||"not exposed")+'<br>System '+esc(formatDate(lane.system_time))+'</span></a>';}).join(""):'<div class="empty">No monitored source lane responded.</div>'; } catch(error) { target.innerHTML='<div class="empty error">Source sequence unavailable. No state was inferred.</div>'; } }
     async function loadLeads() { var target=document.getElementById("lead-list"),hero=document.getElementById("lead-story");try { var data=await newsroom.admin("/api/admin/review-queue?status=ALL&readiness=ready&limit=3&offset=0");var items=Array.isArray(data.items)?data.items:[];target.innerHTML=items.length?items.map(itemHtml).join(""):'<div class="empty">No Candidate currently has a complete evidence packet.</div>';if(!items.length){hero.innerHTML='<div><div class="eyebrow">Top evidence-ready Candidate</div><h2>No Candidate has cleared the evidence gate.</h2><p>Raw records remain available in Data Explorer. Nothing is being promoted merely to fill this space.</p></div><a class="primary-link lead__action" href="/data.html">Explore records</a>';return;}var item=items[0],p=packet(item),claims=Array.isArray(p.supported_claims)?p.supported_claims:[],unknowns=Array.isArray(p.unknowns)?p.unknowns:[];hero.innerHTML='<div><div class="eyebrow">Top evidence-ready Candidate</div><h2>'+esc(item.editor_headline||item.generated_headline||item.signal_id)+'</h2><p>'+esc(item.editor_summary||item.generated_summary||"Open the source packet before deciding whether this change matters.")+'</p><div class="lead__proof"><span><b>'+p.records.length+'</b> source records</span><span><b>'+claims.length+'</b> supported facts</span><span><b>'+unknowns.length+'</b> open questions</span><span>Candidate—not yet a Signal</span></div></div><a class="primary-link lead__action" href="/review.html">Open the evidence →</a>'; } catch(error) { target.innerHTML='<div class="empty error">Candidate queue unavailable.</div>';hero.innerHTML='<div><div class="eyebrow">Top evidence-ready Candidate</div><h2>Decision queue unavailable.</h2><p>No lead was inferred from missing data.</p></div>'; } }
     var prior=localStorage.getItem("fs-newsroom:last-visit");document.getElementById("since-line").textContent=prior?"Last opened "+new Date(prior).toLocaleString():"First visit recorded on this device";localStorage.setItem("fs-newsroom:last-visit",new Date().toISOString());
-    Promise.all([loadSummary(),loadAgenda(),loadSequence(),loadLeads()]);
+    Promise.all([loadProjectState(),loadSummary(),loadAgenda(),loadSequence(),loadLeads()]);
   })();
   </script>
 </body>

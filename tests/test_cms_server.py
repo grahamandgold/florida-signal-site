@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -13,6 +14,60 @@ SPEC.loader.exec_module(cms_server)
 
 
 class DataWireServerTests(unittest.TestCase):
+    def test_project_state_keeps_tracked_state_separate_from_live_health(self):
+        manifest = {
+            "schema_version": "FloridaSignalProjectStateV1",
+            "state_contract": "Tracked state is not live health.",
+            "current_mode": "STATE RECONCILIATION",
+            "product": "A verified early-warning radar.",
+            "now": {"title": "Reconcile state", "status": "IN_PROGRESS"},
+            "next": {"title": "Adjudicate PDMRs", "status": "PAUSED_UNTIL_NOW_APPROVED"},
+            "active_research": {"status": "PAUSED_NEXT"},
+            "blocked_claims": ["93-day proven lead"],
+            "sensor_status": [],
+            "latest_material_decision": {"decision": "Reconcile first."},
+            "source_revision": {"head": "85341f1"},
+            "verified_at": "2026-08-23T18:48:52-04:00",
+            "production_pipeline_registry": [
+                {
+                    "id": "permits", "label": "Permits", "deployment_status": "PROD",
+                    "health_source": {"type": "public_data_health", "id": "permits"},
+                    "touch_policy": "PRESERVE", "authority": "production",
+                },
+                {
+                    "id": "pdmr", "label": "PDMR", "deployment_status": "LOCAL_ONLY",
+                    "health_source": {"type": "none", "id": None},
+                    "touch_policy": "DO_NOT_DEPLOY", "authority": "local",
+                },
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "project-state.json"
+            path.write_text(json.dumps(manifest), encoding="utf-8")
+            with mock.patch.object(cms_server, "PROJECT_STATE_PATH", path), \
+                    mock.patch.object(cms_server, "public_json", return_value={
+                        "generated_at": "2026-08-23T22:00:00Z",
+                        "sources": [{
+                            "id": "permits", "status": "current", "event_through": "2026-08-22",
+                        }],
+                    }):
+                code, payload = cms_server.project_state_payload()
+        self.assertEqual(code, 200)
+        self.assertEqual(payload["project_state"]["current_mode"], "STATE RECONCILIATION")
+        self.assertEqual(payload["operational_health"][0]["status"], "CURRENT")
+        self.assertEqual(payload["operational_health"][1]["status"], "UNKNOWN")
+        self.assertEqual(payload["operational_health"][1]["deployment_status"], "LOCAL_ONLY")
+        self.assertIn("never inherit a manifest status", payload["contract"])
+
+    def test_project_state_fails_closed_when_manifest_is_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing.json"
+            with mock.patch.object(cms_server, "PROJECT_STATE_PATH", missing):
+                code, payload = cms_server.project_state_payload()
+        self.assertEqual(code, 503)
+        self.assertEqual(payload["status"], "UNKNOWN")
+        self.assertIn("No project state was inferred", payload["contract"])
+
     def test_review_queue_defaults_to_ready_and_bounds_paging(self):
         path, limit, offset, readiness = cms_server.review_queue_path({
             "status": ["not-a-status"], "limit": ["9999"], "offset": ["-4"]

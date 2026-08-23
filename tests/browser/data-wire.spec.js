@@ -5,6 +5,22 @@ const dataWireBase = String(process.env.DATA_WIRE_BASE_URL || "").replace(/\/$/,
 test.describe("private Florida Signal Newsroom", () => {
   test.skip(!dataWireBase, "Set DATA_WIRE_BASE_URL to verify the running private desk");
 
+  test("Early Radar control keeps one NOW and fails closed on missing live health", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${dataWireBase}/`);
+    const control = page.locator("#project-control");
+    await expect(control.getByRole("heading", { name: "Project state" })).toBeVisible({ timeout: 15_000 });
+    await expect(control).toContainText("NOW · current task");
+    await expect(control).toContainText("NEXT · ready when authorized");
+    await expect(control).toContainText("Production pipeline health");
+    await expect(control).toContainText("UNKNOWN means no current health contract answered");
+    await expect(control).toContainText("PDMR · LOCAL_ONLY");
+    await expect(control).toContainText("93-day proven lead");
+    await expect(control).toContainText("RUNTIME DRIFT / NEEDS SEPARATE RECONCILIATION");
+    await expect(control.locator(".project-health__row")).toHaveCount(13);
+    expect(await page.evaluate(() => document.body.scrollWidth)).toBe(390);
+  });
+
   test("candidate investigation kit and live pipeline remain usable on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${dataWireBase}/review.html`);
