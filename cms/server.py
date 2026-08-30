@@ -207,6 +207,24 @@ def project_state_payload() -> tuple[int, dict[str, Any]]:
     if code != 200:
         return code, state
 
+    def clarify_frozen_pdmr_cohort(value: Any) -> Any:
+        """Keep legacy manifests from presenting a frozen study roster as access-locked."""
+        if isinstance(value, dict):
+            return {key: clarify_frozen_pdmr_cohort(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [clarify_frozen_pdmr_cohort(item) for item in value]
+        if isinstance(value, str):
+            return value.replace(
+                "all 27 locked PDMRs",
+                "all 27 records in the frozen PDMR research cohort",
+            ).replace(
+                "the 27 locked PDMRs",
+                "the frozen 27-record PDMR research cohort",
+            )
+        return value
+
+    state = clarify_frozen_pdmr_cohort(state)
+
     health = public_json("https://api.thefloridasignal.com/api/data-health")
     health_rows = {
         str(row.get("id")): row for row in health.get("sources", [])

@@ -21,11 +21,17 @@ class DataWireServerTests(unittest.TestCase):
             "state_contract": "Durable state only",
             "current_mode": "STATE RECONCILIATION",
             "verified_at": "2026-08-23T18:48:52-04:00",
-            "now": {"title": "Reconcile", "status": "IN_PROGRESS"},
+            "now": {
+                "title": "Submit the records request for the 27 locked PDMRs",
+                "status": "IN_PROGRESS",
+            },
             "next": {"title": "Adjudicate", "status": "PAUSED"},
             "active_research": {"study": "PDMR", "status": "PAUSED_NEXT"},
             "blocked_claims": ["93-day proven lead"],
-            "sensor_status": [{"sensor": "PDMR", "status": "LOCAL_ONLY"}],
+            "sensor_status": [{
+                "sensor": "PDMR", "status": "LOCAL_ONLY",
+                "detail": "first-public timing is unresolved for all 27 locked PDMRs",
+            }],
             "latest_material_decision": {"decision": "Repository is institutional memory"},
             "production_pipeline_registry": [
                 {
@@ -70,6 +76,10 @@ class DataWireServerTests(unittest.TestCase):
         self.assertEqual(receipts["clerk-preliminary"]["event_through"], "2026-08-22")
         self.assertEqual(receipts["broward"]["event_through"], "2026-08-19")
         self.assertEqual(receipts["broward"]["status"], "DELAYED")
+        rendered_state = json.dumps(payload["project_state"])
+        self.assertNotIn("locked PDMRs", rendered_state)
+        self.assertIn("frozen 27-record PDMR research cohort", rendered_state)
+        self.assertIn("all 27 records in the frozen PDMR research cohort", rendered_state)
         self.assertIn("never inherit", payload["contract"])
 
     def test_project_state_fails_closed_when_manifest_is_missing(self):
