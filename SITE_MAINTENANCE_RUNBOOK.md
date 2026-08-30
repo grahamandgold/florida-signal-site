@@ -23,6 +23,9 @@ The browser suite verifies that:
   source clocks without internal errors and the public meetings feed is non-empty; and
 - data health contains both the `broward` verified SFTP clock and the `clerk-preliminary`
   AcclaimWeb clock with their evidence labels intact; and
+- Data Room failed live queries render unavailable state rather than zero, a later permit failure
+  preserves the last good map, and a successful empty meetings response remains distinct from an
+  outage; and
 - the `supabase-sync` public-mirror heartbeat is `current` or `delayed`, never `stale` or
   `unavailable`.
 
@@ -43,6 +46,12 @@ To test the deployed site explicitly:
 SITE_BASE_URL=https://thefloridasignal.com npm run test:browser
 ```
 
+To test the private Finder app and its real local source connections:
+
+```sh
+DATA_WIRE_BASE_URL=http://127.0.0.1:8788 npx playwright test tests/browser/data-wire.spec.js
+```
+
 ## Incident response
 
 1. Confirm whether the failure is static hosting, JavaScript, API/DNS, or upstream data.
@@ -56,6 +65,12 @@ SITE_BASE_URL=https://thefloridasignal.com npm run test:browser
    root-only `public-site.env` file.
 7. For conflicting or missing source fields, quarantine the affected output and retain raw text/provenance.
 8. Close the incident only after the production monitor passes and the underlying clock/count is independently checked.
+
+The Data Room has one refresh path for permit cards/map, meetings, storms and source health. It runs
+on the refresh button, every five minutes while visible, and on focus/visibility return. Do not add
+per-card refresh paths that can race and erase another source's availability state. A transport or
+query failure is not a valid zero. Preserve the last verified map through a later failure and label
+the current source unavailable.
 
 API host checks:
 
@@ -96,6 +111,7 @@ checkout on the droplet and must be updated with the fast-forward/test/restart s
 
 - A capped sample or planner estimate appears as an exact total.
 - A source says current without a defensible event/system clock.
+- A failed or malformed live query is rendered as a zero count or a successful empty result.
 - Preliminary Clerk rows appear without a visible `PRELIMINARY` evidence label or are combined into the verified total.
 - A non-map page crashes because a map library is absent.
 - Briefs or CMS substitutes draft/older content after an adapter failure.

@@ -4,6 +4,9 @@
 **Date:** 2026-08-12
 **Deciders:** Florida Signal product and editorial desk
 
+**Amended:** 2026-08-30 by ADR-003, which makes PDMR the first built private discovery lane and
+separates availability, source health, automation and detector coverage.
+
 ## Context
 
 The original three-tab information architecture made the private pages reachable, but it did not

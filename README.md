@@ -1,11 +1,10 @@
 # Florida Signal
 
-**New here, human or agent? Read [`NIGHT_HANDOFF_2026-08-11.md`](NIGHT_HANDOFF_2026-08-11.md),
-[`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md) and
-[`EDITORIAL_LOOP_RUNBOOK.md`](EDITORIAL_LOOP_RUNBOOK.md) first.**
-They are the verified front door for production health, the live Record → Candidate loop,
-public exposure, local-only site work and remaining launch blockers.
-Earlier dated checkpoints are preserved as historical evidence.
+**New here, human or agent? Read [`SYSTEM_STATE_2026-08-30.md`](SYSTEM_STATE_2026-08-30.md)
+and [`EDITORIAL_LOOP_RUNBOOK.md`](EDITORIAL_LOOP_RUNBOOK.md) first.** The August 30 checkpoint is
+the current branch/build handoff. [`NIGHT_HANDOFF_2026-08-11.md`](NIGHT_HANDOFF_2026-08-11.md) and
+[`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md) remain historical evidence, not current
+source health or release state.
 **The scorer and collectors are not in this repository** — they live in `grahamandgold/florida-signal`.
 
 Florida Signal is Broward-wide, source-first development intelligence launching city by city. The public root `/` is the signup-first home of the **Florida Signal Brief**. It launches Mondays at 7 a.m. ET without hard-coding a weekly cadence into the product name. The launch page collects email and ZIP, explains the four-part Signal standard and keeps the research experience out of the conversion path. The preserved research site remains available at `/fort-lauderdale/`; Fort Lauderdale is its first live desk. Other Broward municipality paths use one shared “coming soon” template without dates or coverage promises.
@@ -52,10 +51,15 @@ Open the newsletter front door at `http://127.0.0.1:4173/`, the preserved resear
 
 The token is kept in that tab's `sessionStorage`; it disappears when the browser session ends. Never place it in public HTML, `app.js`, a screenshot or a committed `.env` file. The CMS starts empty on purpose and only approved, source-linked packets reach the public site.
 
+This lock is Newsroom authentication only. It is unrelated to PDMR record availability: the studied
+PDMR records are public, while their historical first-public timestamps remain unresolved.
+
 The local server provides same-origin meeting, storm, CMS, agenda-recon and subscriber endpoints. Copy `.env.example` into your private runtime environment and supply credentials there; never commit secrets.
 
 ## Operating handoff
 
+- [`SYSTEM_STATE_2026-08-30.md`](SYSTEM_STATE_2026-08-30.md) — current branch-only desk/Data Room,
+  source-clock, Accela-safeguard, test and production-gate receipt.
 - [`NIGHT_HANDOFF_2026-08-11.md`](NIGHT_HANDOFF_2026-08-11.md) — tonight's implementation,
   scheduled-task audit, same-day Broward ownership, tests and exact next work.
 - [`NEWSLETTER_LAUNCH_HANDOFF_2026-08-15.md`](NEWSLETTER_LAUNCH_HANDOFF_2026-08-15.md) — the

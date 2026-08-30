@@ -1,12 +1,10 @@
 # Florida Signal — AI Handoff
 
-Last verified: August 11, 2026
+Last verified: August 30, 2026
 
-> ## START HERE FIRST: `NIGHT_HANDOFF_2026-08-11.md`
-> It records the August 11–12 implementation, scheduled-task dispositions, same-day Broward
-> ownership, tests and next exact work. Then read `SYSTEM_STATE_2026-08-11.md`; it is the current
-> verified authority for production health, the data estate, deployed database
-> changes, local-only site corrections, Mailchimp, analytics and remaining work. Use
+> ## START HERE FIRST: `SYSTEM_STATE_2026-08-30.md`
+> It records the current branch-only Newsroom/Data Room build, source clocks, Accela safeguards,
+> tests and production gates. The August 11 handoffs remain historical. Use
 > `EDITORIAL_LOOP_RUNBOOK.md` for the live Candidate schedules and recovery steps. The July
 > checkpoint remains historical evidence, not current operational state.
 >
@@ -84,6 +82,20 @@ The Data Room is investigation-first, not a gallery. Its order is:
 
 Every diagram has a visible date window, a direct destination to the underlying surface, Florida Signal branding, share/embed controls where appropriate and a Field Brief add action. The centered full-color emblem is branding; the document-plus icon is the report builder. Do not interchange them.
 
+The public Data Room refreshes permits, meetings, storms and source health together. Manual refresh,
+five-minute visible refresh and focus/visibility return all use the same deduplicated path. A failed
+query is unavailable—not zero—and must not borrow a green state from another card. Preserve a last
+good map through a later failed refresh while labeling the current source unavailable. Keep
+preliminary and verified Clerk clocks separate.
+
+## Private Newsroom discovery contract
+
+The private Data Explorer starts with Preliminary Development Meeting Request (PDMR) planning
+intent, then explicitly unconnected research sensors, ownership/capital, regulatory evidence and
+permit execution. This order does not change the public map-first Data Room. PDMR is local/manual,
+the studied records are public, and the frozen research roster does not mean access-locked records.
+Connection, source health, automation mode and detector coverage are independent claims.
+
 ## Storm Watch contract
 
 Storm Watch uses official NOAA/NHC material for weather context and clearly says Florida Signal is not an official warning service. Local permit classifications show recorded preparation/recovery-type applications; they do not prove storm damage, completed work or a forecast. When no named storm is active, the status is standby. Publisher-controlled activation can change the visual system and prominence, but it cannot change data definitions.
@@ -111,7 +123,10 @@ Before publishing any AI-assisted change:
 
 ## Current production caveats
 
-As of the verification date, the local health endpoint reports that CMS and Mailchimp production integrations are not configured. Some aggregate and Broward clocks are stale and Sunbiz does not expose enough source-health metadata to claim live status. See `LIVE_DATA_OPERATIONS_HANDOFF.md` for the exact snapshot and remediation sequence.
+The August 30 work is pushed but not deployed. Planned early sensors remain unconnected; PDMR is
+local/manual. Accela false-green/canary safeguards also remain branch-only. Supabase Edge-secret
+rotation, database grant/RPC hardening and durable per-run receipts are production gates. See
+`SYSTEM_STATE_2026-08-30.md` for the verified snapshot and explicit non-deployment boundary.
 
 
 

@@ -69,15 +69,18 @@ the content width before the mobile navigation breakpoint. Source-stage labels, 
 independent clocks must reflow at that state; the browser regression suite checks the 1,110-pixel
 viewport where those columns previously collided.
 
-Data Explorer opens with a plain-English working discovery sequence before any record table. PDMR
-planning intent is the first built lane; sewer/utility capacity, engineering intake, assemblage +
+Data Explorer opens with a plain-English working discovery sequence before any record table.
+Preliminary Development Meeting Request (PDMR) planning intent is the first built lane;
+sewer/utility capacity, engineering intake, assemblage +
 new LLC, lobbyist registration and SFWMD research lanes remain visible but explicitly unconnected.
 Connected ownership/capital, regulatory and execution sources follow; permits remain later-stage
-evidence, not the page's identity. Each connected catalog option performs a real read
-check and reports `Connected`, `Connected · empty` or `Unavailable`. Checks run sequentially and
+evidence, not the page's identity. Each catalog option performs a real read check and reports
+availability separately from source health and refresh mode: `current/delayed/stale`,
+`automated/manual/snapshot`, `Connected · empty`, `Unavailable`, or `health unknown`. Checks run sequentially and
 safe reads receive one bounded retry for transient 5xx responses so concurrent probes cannot make
 healthy Clerk, FAA or Accela sources look unavailable. The default record view is the same-day
-preliminary Clerk lane, clearly separated from verified Clerk records.
+bounded PDMR evidence table. Preliminary Clerk remains clearly separated from verified Clerk
+records, and Accela detail/GIS enrichment do not borrow the permit application's health receipt.
 
 The browser stores the admin token only in the local session. Do not put it in public JavaScript,
 a screenshot or a committed file.
@@ -101,7 +104,8 @@ override the bundled paths when launching from an environment that can read anot
 
 ### If the desk says Locked
 
-The lock is deliberate. Use the exact value you supplied as `DATA_WIRE_ADMIN_TOKEN` when starting the server:
+The lock is deliberate Newsroom authentication. It does **not** mean that PDMR records are locked;
+those records are public. Use the exact value you supplied as `DATA_WIRE_ADMIN_TOKEN` when starting the server:
 
 1. Choose market `broward`.
 2. Paste the token into **Private desk token**.
@@ -123,6 +127,11 @@ Send `Authorization: Bearer $DATA_WIRE_ADMIN_TOKEN`.
 - `GET /api/admin/review-queue?status=NEW`
 - `GET /api/admin/review-summary`
 - `GET /api/admin/pipeline-schedule` — read-only upcoming production timers; it never starts a job
+- `GET /api/admin/project-state` — durable tracked state plus independent live source receipts;
+  legacy “locked PDMR” language is clarified as a frozen study roster, never access control
+- `GET /api/admin/pdmr-intent` — bounded, paged, read-only local PDMR evidence with fielded search
+- `GET /api/admin/pdmr-candidates` — bounded local shadow ranking with no production writes
+- `GET /api/admin/sunbiz-entities` — bounded private exact-match resolver; raw rows stay server-side
 - `GET /api/admin/early-intel` — source-specific clocks across decisions, companies, capital,
   regulatory filings and execution; monitored lanes are not misrepresented as completed detectors
 - `GET /api/admin/agenda-watch` — private, filtered Legistar item/attachment leads with source links,
@@ -132,7 +141,8 @@ Send `Authorization: Bearer $DATA_WIRE_ADMIN_TOKEN`.
   with date, time, place and agenda-posted state; historical packet items expose the government
   body, official agenda PDF, exact meeting item and attachment list before the reporting notes.
 - `GET /api/admin/signal-machine` — honest control-plane contract. It separates source health,
-  detector coverage and freshness; only the permit/execution family is currently shadow-ranked.
+  detector coverage and freshness; permit/execution and local PDMR are shadow-ranked, while PDMR
+  remains disconnected from the production queue.
 - `GET /api/admin/brief-bank?market=broward` — private edition selections with resolved target date,
   source receipt, SHA-256 evidence snapshot, score/gate reasons and machine/profile lineage.
 - `POST /api/admin/brief-bank` — saves or reslots one stable source item. It never approves,
