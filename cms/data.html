@@ -1041,7 +1041,7 @@
         { label: "Mapped transfers", note: "Deeds and easements linked to parcels", table: "broward_property_transfer_map", componentId: "property-transfers", refresh: "automated" },
         { label: "BCPA property cards", note: "Owners, values and property facts", table: "bcpa_property_card", componentId: "property-context", refresh: "snapshot" },
         { label: "Countywide parcel map", note: "Official parcel centroids and latest sale cross-check", table: "broward_parcel_geography", componentId: "property-context", refresh: "snapshot" },
-        { label: "GIS permit enrichment", note: "Permit-to-parcel ownership and sale context", table: "gis_enrichment", componentId: "fort-lauderdale-permits", refresh: "automated" }
+        { label: "GIS permit enrichment", note: "Permit-to-parcel ownership and sale context; independent health receipt not configured", table: "gis_enrichment", refresh: "automated" }
       ]},
       { eyebrow: "S4 · Regulatory evidence", title: "Environment + airspace", items: [
         { label: "FDEP environmental", note: "ERP projects, applicants and status", table: "fdep_erp", componentId: "fdep", refresh: "automated" },
@@ -1049,7 +1049,7 @@
       ]},
       { eyebrow: "S5 · Later execution", title: "Applications, permits + inspections", items: [
         { label: "Permit applications", note: "Fort Lauderdale Accela filings", table: "permits", componentId: "fort-lauderdale-permits", refresh: "automated" },
-        { label: "Accela detail", note: "Applicants, contractors, documents and inspections", table: "accela_details", componentId: "fort-lauderdale-permits", refresh: "automated" },
+        { label: "Accela detail", note: "Applicants, contractors, documents and inspections; independent health receipt not configured", table: "accela_details", refresh: "automated" },
         { label: "Permit workflow events", note: "FOIA task and status history", table: "foia_workflow_events", refresh: "snapshot" }
       ]},
       { eyebrow: "Context · use carefully", title: "Derived and historical layers", items: [
@@ -1140,10 +1140,10 @@
             if (refresh === "manual" || refresh === "snapshot") manualOrSnapshot += 1;
             const healthy = liveStatus === "current";
             const warning = ["delayed", "stale", "error", "unavailable", "suppressed", "unverified"].includes(liveStatus);
-            const text = liveStatus !== "unknown" ? `${liveStatus} · ${refresh}` : `connected · ${refresh}`;
+            const text = liveStatus !== "unknown" ? `${liveStatus} · ${refresh}` : `connected · ${refresh} · health unknown`;
             labels.forEach(label => {
               label.textContent = text;
-              label.dataset.state = healthy ? "connected" : warning ? "warning" : refresh === "automated" ? "connected" : "manual";
+              label.dataset.state = healthy ? "connected" : warning || liveStatus === "unknown" ? "warning" : "manual";
               label.title = receipt ? `Event ${receipt.event_through || "not exposed"}; system ${receipt.system_time || "not exposed"}. ${receipt.detail || ""}` : `Rows are available; no live freshness receipt is configured. Refresh mode: ${refresh}.`;
             });
           } else {

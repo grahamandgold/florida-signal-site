@@ -78,8 +78,8 @@ class DataWireServerTests(unittest.TestCase):
         self.assertEqual(receipts["broward"]["status"], "DELAYED")
         rendered_state = json.dumps(payload["project_state"])
         self.assertNotIn("locked PDMRs", rendered_state)
-        self.assertIn("first-public-timing metadata request", rendered_state)
-        self.assertIn("frozen 27-record PDMR research cohort", rendered_state)
+        self.assertIn("historical publication metadata", rendered_state)
+        self.assertIn("27 public Preliminary Development Meeting Request records", rendered_state)
         self.assertIn("all 27 records in the frozen PDMR research cohort", rendered_state)
         self.assertIn("never inherit", payload["contract"])
 

@@ -161,6 +161,8 @@ test.describe("private Florida Signal Newsroom", () => {
         await expect(page.locator('.source-option[data-source-table="permits"]')).toBeVisible();
         await expect(page.locator("#library-summary")).toContainText(/connected · .*empty · .*unavailable/i, { timeout: 15_000 });
         await expect(page.locator('.source-option[data-source-table="sunbiz_entities"] .source-option__status')).toContainText(/(current|connected) · automated/i, { timeout: 15_000 });
+        await expect(page.locator('.source-option[data-source-table="accela_details"] .source-option__status')).toContainText(/connected · automated · health unknown/i, { timeout: 15_000 });
+        await expect(page.locator('.source-option[data-source-table="gis_enrichment"] .source-option__status')).toContainText(/connected · automated · health unknown/i, { timeout: 15_000 });
         await page.locator('.source-option[data-source-table="sunbiz_entities"]').click();
         await expect(page.locator("#count-note")).toContainText("private resolver row", { timeout: 15_000 });
         await expect(page.locator("#data-table tbody tr[data-i]").first()).toBeVisible();
