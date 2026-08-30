@@ -53,11 +53,18 @@
   const numberFormat = new Intl.NumberFormat("en-US");
   const compactFormat = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
   const moneyFormat = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-  const now = new Date();
-  const CURRENT_MONTH_START = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-01";
-  const applicationWindowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13);
-  const APPLICATION_WINDOW_START = applicationWindowDate.getFullYear() + "-" + String(applicationWindowDate.getMonth() + 1).padStart(2, "0") + "-" + String(applicationWindowDate.getDate()).padStart(2, "0");
-  const state = { dashboard: null, records: [], featured: [], applicationDates: [], cms: { configured: false, connected: false, stories: [] }, storms: [], stormPayload: null, siteMode: { storm_watch: "off" }, meetings: [], neighborhoods: null, zipBoundaries: null, map: null, markerLayer: null, polygonLayer: null, searchMarker: null, searchResults: [], leadResults: [], spotlightMaps: {}, overlayLayers: {}, overlayVisibility: { points: true, neighborhoods: true }, lens: "all", leadLens: "new" };
+  let now;
+  let CURRENT_MONTH_START;
+  let applicationWindowDate;
+  let APPLICATION_WINDOW_START;
+  function refreshDateWindows() {
+    now = new Date();
+    CURRENT_MONTH_START = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-01";
+    applicationWindowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13);
+    APPLICATION_WINDOW_START = applicationWindowDate.getFullYear() + "-" + String(applicationWindowDate.getMonth() + 1).padStart(2, "0") + "-" + String(applicationWindowDate.getDate()).padStart(2, "0");
+  }
+  refreshDateWindows();
+  const state = { dashboard: null, records: [], featured: [], applicationDates: [], publicRecordAvailability: { dashboard: null, records: null, featured: null, applicationDates: null, meetings: null, storms: null }, cms: { configured: false, connected: false, stories: [] }, storms: [], stormPayload: null, siteMode: { storm_watch: "off" }, meetings: [], neighborhoods: null, zipBoundaries: null, map: null, markerLayer: null, polygonLayer: null, searchMarker: null, searchResults: [], leadResults: [], spotlightMaps: {}, overlayLayers: {}, overlayVisibility: { points: true, neighborhoods: true }, lens: "all", leadLens: "new" };
   let stormTickerTimer = null;
 
   function el(selector, root) { return (root || document).querySelector(selector); }
@@ -77,6 +84,7 @@
     return new Intl.DateTimeFormat("en-US", options || { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }).format(date);
   }
   function formatNumber(value, compact) {
+    if (value == null || value === "") return "—";
     const num = Number(value);
     if (!Number.isFinite(num)) return "—";
     return compact ? compactFormat.format(num) : numberFormat.format(num);
@@ -86,9 +94,16 @@
   }
   function setCountStat(name, value, options) {
     const settings = options || {};
-    const prefix = settings.estimated && Number.isFinite(Number(value)) ? "≈" : "";
+    const available = value != null && value !== "" && Number.isFinite(Number(value));
+    const prefix = settings.estimated && available ? "≈" : "";
     els('[data-stat="' + name + '"]').forEach(function (node) {
-      node.textContent = prefix + formatNumber(value);
+      node.textContent = available ? prefix + formatNumber(value) : "—";
+      if (!available) {
+        node.dataset.countQuality = "unavailable";
+        node.title = "Live count unavailable; no zero was inferred.";
+        node.setAttribute("aria-label", "Live count unavailable");
+        return;
+      }
       node.dataset.countQuality = settings.estimated ? "estimated" : "exact";
       if (settings.estimated) {
         node.title = "Approximate database planner count; verify against the source snapshot before citation.";
@@ -285,7 +300,8 @@
     return rows.map(function (row) { return row.applied_date; }).filter(Boolean);
   }
 
-  async function loadPublicRecord() {
+  async function loadPublicRecordOnce() {
+    refreshDateWindows();
     const results = await Promise.allSettled([
       supabase("dashboard_cache", { select: "payload,updated_at", id: "eq.1" }).then(function (r) { return r.json(); }),
       fastCount("permits"),
@@ -296,7 +312,13 @@
       fetchApplicationDates()
     ]);
 
-    if (results[0].status === "fulfilled" && results[0].value[0]) state.dashboard = results[0].value[0];
+    Object.assign(state.publicRecordAvailability, {
+      dashboard: results[0].status === "fulfilled" && Boolean(results[0].value[0]),
+      records: results[4].status === "fulfilled",
+      featured: results[5].status === "fulfilled",
+      applicationDates: results[6].status === "fulfilled"
+    });
+    if (state.publicRecordAvailability.dashboard) state.dashboard = results[0].value[0];
     state.records = results[4].status === "fulfilled" ? results[4].value.sort(function (a, b) { return String(b.applied_date || "").localeCompare(String(a.applied_date || "")) || String(b.last_seen_at || "").localeCompare(String(a.last_seen_at || "")); }) : [];
     state.featured = results[5].status === "fulfilled" ? results[5].value.sort(function (a, b) { return String(b.applied_date || "").localeCompare(String(a.applied_date || "")) || Number(permitDeclaredValue(b) || 0) - Number(permitDeclaredValue(a) || 0); }) : [];
     state.applicationDates = results[6].status === "fulfilled" ? results[6].value : [];
@@ -371,6 +393,55 @@
     initRecordSpotlights();
     const initialQuery = new URLSearchParams(window.location.search).get("q");
     if (initialQuery && el("#record-search")) await runRecordSearch(initialQuery);
+  }
+
+  let publicRecordPromise = null;
+  let publicRecordCheckedAt = 0;
+  let dataRoomRefreshPromise = null;
+  let dataRoomCheckedAt = 0;
+  let refreshPublicHealth = function () { return Promise.resolve(); };
+  function updatePublicRefreshUi(message) {
+    const button = el("#data-room-refresh");
+    const checked = el("#data-room-last-checked");
+    const loading = Boolean(dataRoomRefreshPromise || publicRecordPromise);
+    if (button) { button.disabled = loading; button.textContent = loading ? "Refreshing…" : "Refresh Data Room"; }
+    const checkedAt = dataRoomCheckedAt || publicRecordCheckedAt;
+    if (checked) checked.textContent = message || (checkedAt ? "All Data Room feeds checked " + new Date(checkedAt).toLocaleString() + " · auto-refreshes every 5 minutes while open" : "Checking Data Room feeds…");
+  }
+  function loadPublicRecord() {
+    if (publicRecordPromise) return publicRecordPromise;
+    publicRecordPromise = loadPublicRecordOnce().then(function () {
+      publicRecordCheckedAt = Date.now();
+      updatePublicRefreshUi();
+    }).finally(function () {
+      publicRecordPromise = null;
+      updatePublicRefreshUi();
+    });
+    updatePublicRefreshUi("Refreshing source queries…");
+    return publicRecordPromise;
+  }
+  function refreshDataRoom() {
+    if (dataRoomRefreshPromise) return dataRoomRefreshPromise;
+    dataRoomRefreshPromise = Promise.allSettled([loadPublicRecord(), loadStorms(), loadMeetings(), refreshPublicHealth()]).then(function () {
+      dataRoomCheckedAt = Date.now();
+    }).finally(function () {
+      dataRoomRefreshPromise = null;
+      updatePublicRefreshUi();
+    });
+    updatePublicRefreshUi("Refreshing permit, meeting and storm feeds…");
+    return dataRoomRefreshPromise;
+  }
+  function initPublicDataRefresh() {
+    const button = el("#data-room-refresh");
+    if (button) button.addEventListener("click", function () { refreshDataRoom().catch(function () {}); });
+    if (document.body.getAttribute("data-page") !== "graphics") return;
+    window.setInterval(function () { if (!document.hidden) refreshDataRoom().catch(function () {}); }, 300000);
+    function refreshWhenVisible() {
+      const checkedAt = dataRoomCheckedAt || publicRecordCheckedAt;
+      if (!document.hidden && checkedAt && Date.now() - checkedAt > 60000) refreshDataRoom().catch(function () {});
+    }
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    window.addEventListener("focus", refreshWhenVisible);
   }
 
   async function loadCmsContent() {
@@ -1471,7 +1542,24 @@
 
   async function initMaps() {
     const node = el("#home-map") || el("#full-map") || el("#data-room-map");
-    if (!node || !window.L || !state.records.length) return;
+    if (!node || !window.L) return;
+    const defaultAriaLabel = node.dataset.defaultAriaLabel || node.getAttribute("aria-label") || "Interactive map of current public-record filings";
+    node.dataset.defaultAriaLabel = defaultAriaLabel;
+    if (state.map) {
+      if (state.publicRecordAvailability.records === false) {
+        node.dataset.sourceState = "unavailable";
+        node.setAttribute("aria-label", "Last good map retained; the latest mapped-application refresh failed");
+        return;
+      }
+      delete node.dataset.sourceState;
+      node.setAttribute("aria-label", defaultAriaLabel);
+      applyMapLens(state.lens);
+      return;
+    }
+    if (!state.records.length) {
+      if (state.publicRecordAvailability.records === false) node.innerHTML = '<div class="loading-row">Mapped applications are unavailable. No zero count or substitute pins are being shown.</div>';
+      return;
+    }
     try { await buildMap(node); await initSignalLayer(); }
     catch (error) {
       node.innerHTML = '<div class="loading-row">The official neighborhood layer is temporarily unavailable. No substitute map is being shown.</div>';
@@ -1651,6 +1739,7 @@
       const storms = (data.activeStorms || []).filter(function (storm) { return String(storm.id || "").toLowerCase().startsWith("al"); });
       state.storms = storms;
       state.stormPayload = data;
+      state.publicRecordAvailability.storms = true;
       if (status) status.textContent = storms.length ? storms.map(function (storm) { return storm.name + " · " + storm.classification + " " + storm.intensity + " kt"; }).join(" · ") : "No named Atlantic storms active";
       const promiseStatus = el("#promise-storm-status");
       if (promiseStatus) promiseStatus.textContent = storms.length ? formatNumber(storms.length) + " Atlantic system" + (storms.length === 1 ? "" : "s") + " active · NHC live" : "NHC outlook live · standing by";
@@ -1662,6 +1751,7 @@
       renderGraphicDesk();
       renderStormPromo();
     } catch (error) {
+      state.publicRecordAvailability.storms = false;
       if (status) status.textContent = "Open the official NHC outlook";
       const promiseStatus = el("#promise-storm-status");
       if (promiseStatus) promiseStatus.textContent = "Official NHC outlook · open source";
@@ -1677,8 +1767,8 @@
   function renderStormPromo() {
     const active = el("[data-storm-active-count]");
     const records = el("[data-storm-record-count]");
-    if (active) active.textContent = formatNumber(state.storms.length);
-    if (records) records.textContent = formatNumber(state.records.filter(isStormRecord).length);
+    if (active) active.textContent = state.publicRecordAvailability.storms === false ? "—" : formatNumber(state.storms.length);
+    if (records) records.textContent = state.publicRecordAvailability.records === false ? "—" : formatNumber(state.records.filter(isStormRecord).length);
   }
 
   async function loadMeetings() {
@@ -1694,9 +1784,9 @@
       if (!response.ok) throw new Error("Meeting calendar unavailable");
       const payload = await response.json();
       const meetings = Array.isArray(payload.meetings) ? payload.meetings : [];
-      if (!meetings.length) throw new Error("No upcoming meetings published");
       state.meetings = meetings;
-      if (date && title && meta && agenda && video) {
+      state.publicRecordAvailability.meetings = true;
+      if (date && title && meta && agenda && video && meetings.length) {
         let meetingIndex = 0;
         function renderMeeting() {
           const meeting = meetings[meetingIndex % meetings.length];
@@ -1719,10 +1809,18 @@
         }
         renderMeeting();
         window.setInterval(renderMeeting, 12000);
+      } else if (date && title && meta && agenda && video) {
+        date.textContent = "No upcoming date";
+        title.textContent = "No upcoming meeting is currently published";
+        meta.textContent = "Successful official-calendar check";
+        agenda.href = payload.calendar_url || "https://fortlauderdale.legistar.com/Calendar.aspx";
+        agenda.textContent = "Official calendar ↗";
+        video.hidden = true;
       }
       renderMeetingPage(meetings, payload);
       renderGraphicDesk();
     } catch (error) {
+      state.publicRecordAvailability.meetings = false;
       if (date && title && meta && agenda && video) {
         date.textContent = "Source check needed";
         title.textContent = "Open the official meeting calendar";
@@ -1732,6 +1830,7 @@
         video.hidden = true;
       }
       if (meetingList) meetingList.innerHTML = '<p class="meeting-empty">Meeting feed unavailable. <a href="https://fortlauderdale.legistar.com/Calendar.aspx" target="_blank" rel="noreferrer">Open the official calendar ↗</a></p>';
+      renderGraphicDesk();
     }
   }
 
@@ -1823,6 +1922,22 @@
   }
 
   function renderStormRecords() {
+    const recordsAvailable = state.publicRecordAvailability.records !== false;
+    if (!recordsAvailable) {
+      const count = el("#storm-permit-count");
+      const mapWindow = el("#storm-map-window");
+      const preCount = el("#storm-phase-pre");
+      const recoveryCount = el("#storm-phase-recovery");
+      const openingCount = el("#storm-opening-count");
+      const list = el("#storm-records");
+      if (count) count.textContent = "—";
+      if (mapWindow) mapWindow.textContent = "Mapped-application query unavailable; no zero count inferred.";
+      if (preCount) preCount.textContent = "unavailable";
+      if (recoveryCount) recoveryCount.textContent = "unavailable";
+      if (openingCount) openingCount.textContent = "—";
+      if (list) list.innerHTML = '<p class="muted">Storm-relevant filings are unavailable. No empty result was inferred.</p>';
+      return;
+    }
     const records = state.records.filter(isStormRecord);
     const count = el("#storm-permit-count");
     if (count) count.textContent = formatNumber(records.length);
@@ -1851,8 +1966,12 @@
   function renderGraphicDesk() {
     const root = el("#graphic-desk");
     if (!root) return;
-    const payload = state.dashboard && state.dashboard.payload ? state.dashboard.payload : null;
-    if (!payload && !state.records.length) return;
+    const dashboardAvailable = state.publicRecordAvailability.dashboard === true && Boolean(state.dashboard && state.dashboard.payload);
+    const recordsAvailable = state.publicRecordAvailability.records === true;
+    const featuredAvailable = state.publicRecordAvailability.featured === true;
+    const applicationsAvailable = state.publicRecordAvailability.applicationDates === true;
+    const meetingsAvailable = state.publicRecordAvailability.meetings === true;
+    const payload = dashboardAvailable ? state.dashboard.payload : null;
     const stats = payload && payload.stats ? payload.stats : {};
     const ptypes = payload && Array.isArray(payload.ptypes) ? payload.ptypes.slice(0, 6) : [];
     const values = payload && Array.isArray(payload.valdist) ? payload.valdist : [];
@@ -1865,7 +1984,7 @@
       const key = day.getFullYear() + "-" + String(day.getMonth() + 1).padStart(2, "0") + "-" + String(day.getDate()).padStart(2, "0");
       applicationDays.push({ label: key.slice(5), value: applicationCounts[key] || 0 });
     }
-    const applicationTotal = applicationDays.reduce(function (sum, day) { return sum + day.value; }, 0);
+    const applicationTotal = applicationsAvailable ? applicationDays.reduce(function (sum, day) { return sum + day.value; }, 0) : null;
     const applicationMax = Math.max.apply(null, applicationDays.map(function (day) { return day.value; }).concat([1]));
 
     const streetCounts = state.records.reduce(function (result, record) {
@@ -1875,8 +1994,8 @@
     }, {});
     const streets = Object.keys(streetCounts).map(function (name) { return { label: titleCase(name), value: streetCounts[name] }; }).sort(function (a, b) { return b.value - a.value; }).slice(0, 5);
 
-    const neighborhoodItems = state.neighborhoods ? neighborhoodCounts(state.neighborhoods.features || [], state.records).slice(0, 7).map(function (item) { return { label: item.name, value: item.count }; }) : streets;
-    const zipItems = state.zipBoundaries ? (state.zipBoundaries.features || []).map(function (feature) {
+    const neighborhoodItems = recordsAvailable && state.neighborhoods ? neighborhoodCounts(state.neighborhoods.features || [], state.records).slice(0, 7).map(function (item) { return { label: item.name, value: item.count }; }) : recordsAvailable ? streets : [];
+    const zipItems = recordsAvailable && state.zipBoundaries ? (state.zipBoundaries.features || []).map(function (feature) {
       const hits = state.records.filter(function (record) { return pointInFeature([Number(record.lon), Number(record.lat)], feature); });
       return { label: String((feature.properties || {}).ZCTA5 || (feature.properties || {}).NAME || "ZIP"), value: hits.length };
     }).filter(function (item) { return item.value > 0; }).sort(function (a, b) { return b.value - a.value || a.label.localeCompare(b.label); }).slice(0, 5) : [];
@@ -1893,24 +2012,24 @@
       return { label: family.label, value: state.records.filter(function (record) { return family.test.test([record.permit_type, record.permit_category, record.description].join(" ")); }).length };
     }).sort(function (a, b) { return b.value - a.value; }).slice(0, 5);
 
-    const highValue = state.featured.filter(function (record) { return Number(permitDeclaredValue(record) || 0) > 0; });
+    const highValue = featuredAvailable ? state.featured.filter(function (record) { return Number(permitDeclaredValue(record) || 0) > 0; }) : [];
     const highValueTotal = highValue.reduce(function (sum, record) { return sum + Number(permitDeclaredValue(record) || 0); }, 0);
     const highValueTop = highValue.slice().sort(function (a, b) { return Number(permitDeclaredValue(b) || 0) - Number(permitDeclaredValue(a) || 0); })[0];
-    const stormRecords = state.records.filter(isStormRecord);
-    const nextMeeting = state.meetings[0];
-    const applicationThrough = state.applicationDates.concat(state.records.map(function (record) { return record.applied_date; })).filter(Boolean).sort().slice(-1)[0];
+    const stormRecords = recordsAvailable ? state.records.filter(isStormRecord) : [];
+    const nextMeeting = meetingsAvailable ? state.meetings[0] : null;
+    const applicationThrough = (applicationsAvailable ? state.applicationDates : []).concat(recordsAvailable ? state.records.map(function (record) { return record.applied_date; }) : []).filter(Boolean).sort().slice(-1)[0];
     const stampDate = function (value) { return value ? formatDate(value, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "source date pending"; };
     const spanDate = function (start, end) { return start && end ? stampDate(start) + "–" + stampDate(end) : "span pending"; };
-    const mappedDates = state.records.map(function (record) { return record.applied_date; }).filter(Boolean).sort();
-    const featuredDates = state.featured.map(function (record) { return record.applied_date; }).filter(Boolean).sort();
-    const meetingDates = state.meetings.map(function (meeting) { return meeting.date; }).filter(Boolean).sort();
-    const applicationWindowStamp = "Window " + spanDate(APPLICATION_WINDOW_START, now.toISOString().slice(0, 10));
-    const mappedStamp = "Newest " + formatNumber(state.records.length) + " mapped · " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]);
-    const featuredStamp = formatNumber(state.featured.length) + "-record queue · " + spanDate(featuredDates[0], featuredDates.slice(-1)[0]);
-    const cacheStamp = "Snapshot updated " + stampDate(state.dashboard && state.dashboard.updated_at);
-    const browardStamp = "Cumulative · through " + stampDate(stats.broward_fresh);
+    const mappedDates = recordsAvailable ? state.records.map(function (record) { return record.applied_date; }).filter(Boolean).sort() : [];
+    const featuredDates = featuredAvailable ? state.featured.map(function (record) { return record.applied_date; }).filter(Boolean).sort() : [];
+    const meetingDates = meetingsAvailable ? state.meetings.map(function (meeting) { return meeting.date; }).filter(Boolean).sort() : [];
+    const applicationWindowStamp = applicationsAvailable ? "Window " + spanDate(APPLICATION_WINDOW_START, now.toISOString().slice(0, 10)) : "Application query unavailable";
+    const mappedStamp = recordsAvailable ? "Newest " + formatNumber(state.records.length) + " mapped · " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) : "Mapped query unavailable";
+    const featuredStamp = featuredAvailable ? formatNumber(state.featured.length) + "-record queue · " + spanDate(featuredDates[0], featuredDates.slice(-1)[0]) : "High-value query unavailable";
+    const cacheStamp = dashboardAvailable ? "Snapshot updated " + stampDate(state.dashboard && state.dashboard.updated_at) : "Dashboard snapshot unavailable";
+    const browardStamp = dashboardAvailable ? "Cumulative · through " + stampDate(stats.broward_fresh) : "Broward snapshot unavailable";
     const sourceCheckStamp = "Source checked " + stampDate(now.toISOString());
-    const meetingStamp = "Meetings " + spanDate(meetingDates[0], meetingDates.slice(-1)[0]);
+    const meetingStamp = meetingsAvailable ? "Meetings " + spanDate(meetingDates[0], meetingDates.slice(-1)[0]) : "Meeting feed unavailable";
 
     function bars(items, colorClass) {
       const maximum = Math.max.apply(null, items.map(function (item) { return Number(item.value || item.n || 0); }).concat([1]));
@@ -1980,23 +2099,24 @@
         '<button type="button" data-report-add data-report-id="graphic:' + escapeHtml(slug) + '" data-report-title="' + escapeHtml(shareTitle) + '" data-report-meta="' + escapeHtml(settings.stamp || applicationWindowStamp) + '" data-report-url="' + escapeHtml(settings.href || pageUrl) + '" data-report-tags="' + taxonomyAttribute(tags) + '" aria-label="Add graphic to Field Brief" title="Add to Field Brief">＋</button></div></div></article>';
     }
 
-    const pulseBody = '<div class="graphic-pulse">' + applicationDays.map(function (day, index) {
+    const unavailableBody = function (label) { return '<div class="graphic-empty">' + escapeHtml(label) + ' unavailable. No zero or empty result is being inferred.</div>'; };
+    const pulseBody = applicationsAvailable ? '<div class="graphic-pulse">' + applicationDays.map(function (day, index) {
       return '<div title="' + escapeHtml(day.label + ': ' + formatNumber(day.value) + ' applications') + '"><span>' + escapeHtml(formatNumber(day.value)) + '</span><i style="--graphic-height:' + Math.max(day.value ? 3 : 0, Math.round(day.value / applicationMax * 100)) + '%;--graphic-delay:' + (index * .04) + 's"></i><small>' + escapeHtml(day.label) + '</small></div>';
-    }).join("") + '</div>';
-    const parcelCoverage = Number(stats.permits_total || 0) > 0 ? Math.round(Number(stats.p_parcel || 0) / Number(stats.permits_total) * 100) : 0;
-    const recordRings = rings([
+    }).join("") + '</div>' : '<div class="graphic-empty">Application-date query unavailable. No zero-filled chart is being shown.</div>';
+    const parcelCoverage = dashboardAvailable && Number(stats.permits_total || 0) > 0 ? Math.round(Number(stats.p_parcel || 0) / Number(stats.permits_total) * 100) : null;
+    const recordRings = dashboardAvailable ? rings([
       { label: "Broward instruments", value: Number(stats.broward_docs || 0) },
       { label: "Parcel-linked permits", value: Number(stats.p_parcel || 0) },
       { label: "Ownership changes", value: Number(stats.owner_chg || 0) },
       { label: "Flip signals", value: Number(stats.flip || 0) }
-    ]);
-    const placeBody = '<div class="graphic-geo"><section><p>NEIGHBORHOOD CONSTELLATION</p>' + bubbles(neighborhoodItems) + '</section><section><p>ZIP SIGNAL RINGS</p>' + (zipItems.length ? rings(zipItems) : '<div class="graphic-empty">ZIP boundary match loading…</div>') + '</section></div>';
-    const companyNetwork = network([
+    ]) : unavailableBody("Broward dashboard snapshot");
+    const placeBody = recordsAvailable ? '<div class="graphic-geo"><section><p>NEIGHBORHOOD CONSTELLATION</p>' + bubbles(neighborhoodItems) + '</section><section><p>ZIP SIGNAL RINGS</p>' + (zipItems.length ? rings(zipItems) : '<div class="graphic-empty">ZIP boundary match loading…</div>') + '</section></div>' : unavailableBody("Mapped-application query");
+    const companyNetwork = dashboardAvailable ? network([
       { value: formatNumber(stats.owner_chg), label: "Owner changes" },
       { value: formatNumber(stats.eff_owner), label: "Owners resolved" },
       { value: formatNumber(stats.eff_value), label: "Values joined" },
       { value: formatNumber(stats.p_parcel), label: "Parcel links" }
-    ]);
+    ]) : unavailableBody("Ownership snapshot");
     const stormFamilies = [
       { label: "Roofs", test: /roof/i },
       { label: "Windows + shutters", test: /(window|door|glazing|shutter|opening)/i },
@@ -2007,17 +2127,21 @@
     const stormMix = stormFamilies.map(function (family) {
       return { label: family.label, value: stormRecords.filter(function (record) { return family.test.test([record.permit_type, record.permit_category, record.description, record.work_type].join(" ")); }).length };
     }).filter(function (item) { return item.value > 0; });
+    const tradesBody = recordsAvailable ? bars(trades) : unavailableBody("Mapped work-mix query");
+    const highValueBody = featuredAvailable ? tiles([{ value: formatNumber(highValue.length), label: "valued records returned" }, { value: highValueTotal ? compactFormat.format(highValueTotal) : "$0", label: "declared value in returned queue" }]) : unavailableBody("High-value filing query");
+    const stormBody = recordsAvailable ? (stormMix.length ? bars(stormMix, "graphic-bar--storm") : '<div class="graphic-empty">No classified hardening filings are present in this mapped application window.</div>') : unavailableBody("Mapped hardening query");
+    const meetingBody = meetingsAvailable ? (state.meetings.length ? meetingTimeline(state.meetings) : '<div class="graphic-empty">No upcoming meeting is present in the successful official-calendar response.</div>') : unavailableBody("Official meeting feed");
     const cards = [
-      card("application-pulse", "APPLICATION DATES · 14 CALENDAR DAYS", formatNumber(applicationTotal) + " <em>FILED</em>", "Fort Lauderdale permit applications grouped by the date the public application was filed—not by the day a batch arrived.", pulseBody, { tone: "navy", wide: true, status: "LIVE QUERY", stamp: applicationWindowStamp, clock: "City permit table · applied_date · window " + spanDate(APPLICATION_WINDOW_START, now.toISOString().slice(0, 10)) + " · latest filing present " + stampDate(applicationThrough) + " · zero days retained", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Explore these filings on the live map" }),
-      card("place-lens", "HYPERLOCAL · OFFICIAL BOUNDARIES", "PLACE <em>LENS</em>", "The newest geocoded application sample resolved into official City neighborhoods and Census ZIP areas. Circle size expresses relative filing count inside this sample.", placeBody, { wide: true, status: "CITY + CENSUS", stamp: mappedStamp, clock: "Newest " + formatNumber(state.records.length) + " geocoded permit applications returned · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · City neighborhoods + Census ZCTAs", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Open the neighborhood and ZIP map" }),
-      card("trades-pulse", "DIAGRAM OF THE DAY · LIVE WORK MIX", "WHAT FORT LAUDERDALE IS <em>BUILDING</em>", "Permit categories become momentum intelligence when trade mix, place and filing time are read together.", bars(trades), { tone: "navy", wide: true, status: "LIVE QUERY", stamp: mappedStamp, clock: "Newest " + formatNumber(state.records.length) + " geocoded applications · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · categories may overlap when one filing names more than one trade", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Investigate the work mix on the map" }),
-      card("high-value", "CAPPED HIGH-VALUE FILING QUEUE", highValueTop ? escapeHtml(moneyFormat.format(Number(permitDeclaredValue(highValueTop)))) + " <em>TOP FILING</em>" : "VALUE <em>PENDING</em>", highValueTop ? escapeHtml(recordHeadline(highValueTop)) : "No valued high-dollar filing is available in the current query.", tiles([{ value: highValue.length ? formatNumber(highValue.length) : "0", label: "valued records returned" }, { value: highValueTotal ? compactFormat.format(highValueTotal) : "$0", label: "declared value in returned queue" }]), { stamp: featuredStamp, clock: "First " + formatNumber(state.featured.length) + " records in ordered current-month $100K+ query · applied_date span " + spanDate(featuredDates[0], featuredDates.slice(-1)[0]) + " · native permit valuation only · not a complete monthly total", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Open the exact high-value filings" }),
-      card("value-universe", "ENRICHED PROPERTY CONTEXT", "VALUE <em>LADDER</em>", "Where parcel-linked permit records sit across the best-available property-value universe.", bars(values), { tone: "navy", stamp: cacheStamp, clock: "Verified dashboard snapshot · enriched property values · update time shown", href: PUBLIC_ROUTES.broward, linkLabel: "Open the Broward property record" }),
-      card("operator-board", "NORMALIZED CONTRACTOR NAMES", "OPERATOR <em>BOARD</em>", "Names appearing most often in the normalized public record set. This measures filing activity—not quality or performance.", ranks(contractors), { stamp: cacheStamp, clock: "Verified dashboard snapshot · normalized contractor names · not a performance ranking", href: PUBLIC_ROUTES.broward, linkLabel: "Open the operator evidence" }),
-      card("records-desk", "BROWARD RECORD · COVERAGE", "RECORDS <em>DESK</em>", "Recorded instruments, parcel links, ownership changes and permit joins—shown with their separate scales and source dates.", recordRings + '<p class="graphic-inline-stat"><strong>' + formatNumber(parcelCoverage) + '%</strong> of tracked permit records parcel-linked</p>', { tone: "navy", stamp: browardStamp, clock: "Broward records · latest recording date " + (stats.broward_fresh ? formatDate(stats.broward_fresh, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "pending"), href: PUBLIC_ROUTES.broward, linkLabel: "Open deeds, liens and ownership intelligence" }),
-      card("company-lens", "SUNBIZ + OWNERSHIP RESOLUTION", "WHO IS <em>BEHIND IT</em>", "An address becomes an entity trail through public company filings, parcel joins and recorded instruments.", companyNetwork, { stamp: cacheStamp, clock: "Verified data snapshot · state registration/filing dates drive company movement; pull time shows freshness only", href: PUBLIC_ROUTES.broward, linkLabel: "Follow the ownership trail" }),
-      card("storm-window", "ROOFS · WINDOWS · DRAINAGE · GENERATORS", formatNumber(stormRecords.length) + " <em>LOCAL FILINGS</em>", "What the current permit sample says people are hardening. These are applications—not completed installations or evidence of storm damage.", stormMix.length ? bars(stormMix, "graphic-bar--storm") : '<div class="graphic-empty">No classified hardening filings are present in this mapped application window.</div>', { tone: "navy", stamp: mappedStamp, status: "STORM WATCH DATA", clock: "Mapped hardening applications · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · categories may overlap", href: PUBLIC_ROUTES.storm, linkLabel: "Open the filings and official outlook on Storm Watch" }),
-      card("meetings-watch", "PUBLIC + INDUSTRY ROOMS", nextMeeting ? escapeHtml(formatDate(nextMeeting.date, { month: "short", day: "numeric", timeZone: "America/New_York" })) + " <em>ON DECK</em>" : "ROOMS <em>WATCHED</em>", nextMeeting ? escapeHtml(nextMeeting.title) : "The official calendar is being checked; no meeting is inferred from stale data.", state.meetings.length ? meetingTimeline(state.meetings) : '<div class="graphic-empty">Official calendar check in progress…</div>', { stamp: meetingStamp, clock: "Scheduled meeting span " + spanDate(meetingDates[0], meetingDates.slice(-1)[0]) + " · official/public and named industry calendars · refreshed every 15 minutes", href: PUBLIC_ROUTES.meetings, linkLabel: "Open agendas, rooms and stream links" })
+      card("application-pulse", "APPLICATION DATES · 14 CALENDAR DAYS", applicationsAvailable ? formatNumber(applicationTotal) + " <em>FILED</em>" : "APPLICATIONS <em>UNAVAILABLE</em>", "Fort Lauderdale permit applications grouped by the date the public application was filed—not by the day a batch arrived.", pulseBody, { tone: "navy", wide: true, status: applicationsAvailable ? "LIVE QUERY" : "UNAVAILABLE", stamp: applicationWindowStamp, clock: applicationsAvailable ? "City permit table · applied_date · window " + spanDate(APPLICATION_WINDOW_START, now.toISOString().slice(0, 10)) + " · latest filing present " + stampDate(applicationThrough) + " · zero days retained" : "Application query failed · no zero count inferred", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Explore these filings on the live map" }),
+      card("place-lens", "HYPERLOCAL · OFFICIAL BOUNDARIES", "PLACE <em>LENS</em>", "The newest geocoded application sample resolved into official City neighborhoods and Census ZIP areas. Circle size expresses relative filing count inside this sample.", placeBody, { wide: true, status: recordsAvailable ? "CITY + CENSUS" : "UNAVAILABLE", stamp: mappedStamp, clock: recordsAvailable ? "Newest " + formatNumber(state.records.length) + " geocoded permit applications returned · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · City neighborhoods + Census ZCTAs" : "Mapped-application query failed · last good map, if present, is retained", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Open the neighborhood and ZIP map" }),
+      card("trades-pulse", "DIAGRAM OF THE DAY · LIVE WORK MIX", "WHAT FORT LAUDERDALE IS <em>BUILDING</em>", "Permit categories become momentum intelligence when trade mix, place and filing time are read together.", tradesBody, { tone: "navy", wide: true, status: recordsAvailable ? "LIVE QUERY" : "UNAVAILABLE", stamp: mappedStamp, clock: recordsAvailable ? "Newest " + formatNumber(state.records.length) + " geocoded applications · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · categories may overlap when one filing names more than one trade" : "Mapped work-mix query failed · no zero categories inferred", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Investigate the work mix on the map" }),
+      card("high-value", "CAPPED HIGH-VALUE FILING QUEUE", featuredAvailable ? (highValueTop ? escapeHtml(moneyFormat.format(Number(permitDeclaredValue(highValueTop)))) + " <em>TOP FILING</em>" : "NO VALUED <em>FILINGS</em>") : "VALUE <em>UNAVAILABLE</em>", featuredAvailable ? (highValueTop ? escapeHtml(recordHeadline(highValueTop)) : "No valued high-dollar filing is present in the current successful query.") : "The high-value filing query failed; no empty queue was inferred.", highValueBody, { status: featuredAvailable ? "LIVE QUERY" : "UNAVAILABLE", stamp: featuredStamp, clock: featuredAvailable ? "First " + formatNumber(state.featured.length) + " records in ordered current-month $100K+ query · applied_date span " + spanDate(featuredDates[0], featuredDates.slice(-1)[0]) + " · native permit valuation only · not a complete monthly total" : "High-value query failed · no zero value inferred", href: PUBLIC_ROUTES.neighborhoods + "#full-map", linkLabel: "Open the exact high-value filings" }),
+      card("value-universe", "ENRICHED PROPERTY CONTEXT", "VALUE <em>LADDER</em>", "Where parcel-linked permit records sit across the best-available property-value universe.", dashboardAvailable ? bars(values) : unavailableBody("Dashboard value snapshot"), { tone: "navy", status: dashboardAvailable ? "VERIFIED SNAPSHOT" : "UNAVAILABLE", stamp: cacheStamp, clock: dashboardAvailable ? "Verified dashboard snapshot · enriched property values · update time shown" : "Dashboard snapshot query failed · no empty distribution inferred", href: PUBLIC_ROUTES.broward, linkLabel: "Open the Broward property record" }),
+      card("operator-board", "NORMALIZED CONTRACTOR NAMES", "OPERATOR <em>BOARD</em>", "Names appearing most often in the normalized public record set. This measures filing activity—not quality or performance.", dashboardAvailable ? ranks(contractors) : unavailableBody("Dashboard operator snapshot"), { status: dashboardAvailable ? "VERIFIED SNAPSHOT" : "UNAVAILABLE", stamp: cacheStamp, clock: dashboardAvailable ? "Verified dashboard snapshot · normalized contractor names · not a performance ranking" : "Dashboard snapshot query failed · no empty ranking inferred", href: PUBLIC_ROUTES.broward, linkLabel: "Open the operator evidence" }),
+      card("records-desk", "BROWARD RECORD · COVERAGE", "RECORDS <em>DESK</em>", "Recorded instruments, parcel links, ownership changes and permit joins—shown with their separate scales and source dates.", dashboardAvailable ? recordRings + '<p class="graphic-inline-stat"><strong>' + formatNumber(parcelCoverage) + '%</strong> of tracked permit records parcel-linked</p>' : recordRings, { tone: "navy", status: dashboardAvailable ? "VERIFIED SNAPSHOT" : "UNAVAILABLE", stamp: browardStamp, clock: dashboardAvailable ? "Broward records · latest recording date " + (stats.broward_fresh ? formatDate(stats.broward_fresh, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "pending") : "Broward snapshot query failed · no zero coverage inferred", href: PUBLIC_ROUTES.broward, linkLabel: "Open deeds, liens and ownership intelligence" }),
+      card("company-lens", "SUNBIZ + OWNERSHIP RESOLUTION", "WHO IS <em>BEHIND IT</em>", "An address becomes an entity trail through public company filings, parcel joins and recorded instruments.", companyNetwork, { status: dashboardAvailable ? "VERIFIED SNAPSHOT" : "UNAVAILABLE", stamp: cacheStamp, clock: dashboardAvailable ? "Verified data snapshot · state registration/filing dates drive company movement; pull time shows freshness only" : "Ownership snapshot query failed · no empty entity trail inferred", href: PUBLIC_ROUTES.broward, linkLabel: "Follow the ownership trail" }),
+      card("storm-window", "ROOFS · WINDOWS · DRAINAGE · GENERATORS", recordsAvailable ? formatNumber(stormRecords.length) + " <em>LOCAL FILINGS</em>" : "LOCAL FILINGS <em>UNAVAILABLE</em>", "What the current permit sample says people are hardening. These are applications—not completed installations or evidence of storm damage.", stormBody, { tone: "navy", stamp: mappedStamp, status: recordsAvailable ? "STORM WATCH DATA" : "UNAVAILABLE", clock: recordsAvailable ? "Mapped hardening applications · applied_date span " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · categories may overlap" : "Mapped hardening query failed · no zero count inferred", href: PUBLIC_ROUTES.storm, linkLabel: "Open the filings and official outlook on Storm Watch" }),
+      card("meetings-watch", "PUBLIC + INDUSTRY ROOMS", nextMeeting ? escapeHtml(formatDate(nextMeeting.date, { month: "short", day: "numeric", timeZone: "America/New_York" })) + " <em>ON DECK</em>" : meetingsAvailable ? "NO MEETINGS <em>PUBLISHED</em>" : "MEETINGS <em>UNAVAILABLE</em>", nextMeeting ? escapeHtml(nextMeeting.title) : meetingsAvailable ? "No upcoming meeting is present in the successful official-calendar response." : "The official meeting feed failed; no empty calendar was inferred.", meetingBody, { status: meetingsAvailable ? "OFFICIAL CALENDAR" : "UNAVAILABLE", stamp: meetingStamp, clock: meetingsAvailable ? "Scheduled meeting span " + spanDate(meetingDates[0], meetingDates.slice(-1)[0]) + " · official/public and named industry calendars · refreshed every 15 minutes" : "Meeting feed failed · open the official calendar for direct verification", href: PUBLIC_ROUTES.meetings, linkLabel: "Open agendas, rooms and stream links" })
     ];
 
     const embedSlug = new URLSearchParams(window.location.search).get("embed");
@@ -2027,10 +2151,10 @@
     const mapCount = el("#data-room-map-count");
     const stormCount = el("#data-room-storm-count");
     const mapWindow = el("#data-room-map-window");
-    if (applicationCount) applicationCount.textContent = formatNumber(applicationTotal);
-    if (mapCount) mapCount.textContent = formatNumber(state.records.length);
-    if (stormCount) stormCount.textContent = formatNumber(stormRecords.length);
-    if (mapWindow) mapWindow.textContent = "Application window · " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · " + formatNumber(state.records.length) + " mapped filings";
+    if (applicationCount) applicationCount.textContent = applicationsAvailable ? formatNumber(applicationTotal) : "—";
+    if (mapCount) mapCount.textContent = recordsAvailable ? formatNumber(state.records.length) : "—";
+    if (stormCount) stormCount.textContent = recordsAvailable ? formatNumber(stormRecords.length) : "—";
+    if (mapWindow) mapWindow.textContent = recordsAvailable ? "Application window · " + spanDate(mappedDates[0], mappedDates.slice(-1)[0]) + " · " + formatNumber(state.records.length) + " mapped filings" : "Mapped application query unavailable · no zero count inferred";
     function cardWithId(slug) { return cards.find(function (html) { return html.includes('id="' + slug + '"'); }) || ""; }
     function group(id, kicker, title, dek, slugs, featured) {
       return '<section class="graphic-group' + (featured ? ' graphic-group--featured' : '') + '" id="' + id + '"><header class="graphic-group__head"><div><p>' + escapeHtml(kicker) + '</p><h2>' + escapeHtml(title) + '</h2></div><span>' + escapeHtml(dek) + '</span></header><div class="graphic-group__grid">' + slugs.map(cardWithId).join("") + '</div></section>';
@@ -2591,40 +2715,70 @@
     }
   }
 
-  async function initDataHealth() {
+  function initDataHealth() {
     const page = document.body.getAttribute("data-page") || "home";
-    if (page !== "method" || el("#source-health")) return;
+    if (["method", "graphics"].indexOf(page) === -1 || el("#source-health")) return;
     const details = document.createElement("details");
     details.className = "source-health";
     details.id = "source-health";
     if (page === "method") details.open = true;
     details.innerHTML = '<summary><span><i aria-hidden="true"></i>Source clocks</span><strong>Checking each feed…</strong><small>Event dates ≠ pull times</small></summary><div class="shell source-health__grid"><p>Reading separate source, sync and event clocks…</p></div>';
     const operations = el("#storm-operations");
+    const dataRoomIntro = el(".data-room-intro");
     const header = el(".site-header");
     if (operations) operations.insertAdjacentElement("afterend", details);
+    else if (dataRoomIntro) dataRoomIntro.insertAdjacentElement("afterend", details);
     else if (header) header.insertAdjacentElement("afterend", details);
-    details.addEventListener("toggle", function () { if (details.open) trackEvent("source_health_open", { placement: page }); });
-    try {
-      const response = await fetch(apiUrl("/api/data-health"), { cache: "no-store", headers: { Accept: "application/json" } });
-      if (!response.ok) throw new Error("Data health unavailable");
-      const payload = await response.json();
-      const sources = Array.isArray(payload.sources) ? payload.sources : [];
-      const counts = sources.reduce(function (result, source) { result[source.status] = (result[source.status] || 0) + 1; return result; }, {});
-      const summary = el("summary strong", details);
-      if (summary) summary.textContent = [counts.current ? counts.current + " current" : "", counts.delayed ? counts.delayed + " delayed" : "", counts.stale ? counts.stale + " stale" : "", counts.suppressed ? counts.suppressed + " suppressed" : "", counts.error ? counts.error + " error" : "", counts.unavailable ? counts.unavailable + " unavailable" : "", counts.unverified ? counts.unverified + " unverified" : ""].filter(Boolean).join(" · ") || "Source clocks unavailable";
-      const grid = el(".source-health__grid", details);
-      grid.innerHTML = sources.map(function (source) {
-        const eventClock = source.event_through ? "Event through " + formatDate(source.event_through, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "Event date varies by item";
-        const systemClock = source.system_time ? "System " + formatDate(source.system_time, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "System timestamp not exposed";
-        const verification = source.verification ? '<span class="source-health__evidence source-health__evidence--' + escapeHtml(source.verification) + '">' + escapeHtml(source.verification) + '</span>' : '';
-        return '<article><div><span class="source-health__status source-health__status--' + escapeHtml(source.status) + '">' + escapeHtml(source.status) + '</span><strong>' + escapeHtml(source.label) + '</strong>' + verification + '</div><p>' + escapeHtml(eventClock) + '</p><p>' + escapeHtml(systemClock) + '</p><small>' + escapeHtml(source.cadence || "") + ' · ' + escapeHtml(source.detail || "") + '</small></article>';
-      }).join("") || '<p>Source health is unavailable. The site will not substitute an inferred green status.</p>';
-    } catch (error) {
-      const summary = el("summary strong", details);
-      if (summary) summary.textContent = "Health manifest unavailable";
-      const grid = el(".source-health__grid", details);
-      grid.innerHTML = '<p>Separate source clocks could not be loaded. No green status is being inferred.</p>';
+    let healthLoading = false;
+    let healthCheckedAt = 0;
+    async function refreshHealth() {
+      if (healthLoading) return;
+      healthLoading = true;
+      try {
+        let response = null;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          try {
+            response = await fetch(apiUrl("/api/data-health"), { cache: "no-store", headers: { Accept: "application/json" } });
+            if (response.ok || attempt === 1) break;
+          } catch (error) { if (attempt === 1) throw error; }
+          await new Promise(function (resolve) { window.setTimeout(resolve, 650); });
+        }
+        if (!response || !response.ok) throw new Error("Data health unavailable");
+        const payload = await response.json();
+        const sources = Array.isArray(payload.sources) ? payload.sources : [];
+        const counts = sources.reduce(function (result, source) { result[source.status] = (result[source.status] || 0) + 1; return result; }, {});
+        const summary = el("summary strong", details);
+        if (summary) summary.textContent = [counts.current ? counts.current + " current" : "", counts.delayed ? counts.delayed + " delayed" : "", counts.stale ? counts.stale + " stale" : "", counts.suppressed ? counts.suppressed + " suppressed" : "", counts.error ? counts.error + " error" : "", counts.unavailable ? counts.unavailable + " unavailable" : "", counts.unverified ? counts.unverified + " unverified" : ""].filter(Boolean).join(" · ") || "Source clocks unavailable";
+        const grid = el(".source-health__grid", details);
+        grid.innerHTML = sources.map(function (source) {
+          const eventClock = source.event_through ? "Event through " + formatDate(source.event_through, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "Event date varies by item";
+          const systemClock = source.system_time ? "System " + formatDate(source.system_time, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "System timestamp not exposed";
+          const verification = source.verification ? '<span class="source-health__evidence source-health__evidence--' + escapeHtml(source.verification) + '">' + escapeHtml(source.verification) + '</span>' : '';
+          return '<article><div><span class="source-health__status source-health__status--' + escapeHtml(source.status) + '">' + escapeHtml(source.status) + '</span><strong>' + escapeHtml(source.label) + '</strong>' + verification + '</div><p>' + escapeHtml(eventClock) + '</p><p>' + escapeHtml(systemClock) + '</p><small>' + escapeHtml(source.cadence || "") + ' · ' + escapeHtml(source.detail || "") + '</small></article>';
+        }).join("") || '<p>Source health is unavailable. The site will not substitute an inferred green status.</p>';
+        healthCheckedAt = Date.now();
+        const clockNote = el("summary small", details);
+        if (clockNote) clockNote.textContent = "Event dates ≠ pull times · checked " + new Date(healthCheckedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      } catch (error) {
+        const summary = el("summary strong", details);
+        if (summary) summary.textContent = "Health manifest unavailable";
+        const grid = el(".source-health__grid", details);
+        grid.innerHTML = '<p>Separate source clocks could not be loaded. No green status is being inferred.</p>';
+      } finally {
+        healthLoading = false;
+      }
     }
+    refreshPublicHealth = refreshHealth;
+    details.addEventListener("toggle", function () {
+      if (details.open) {
+        trackEvent("source_health_open", { placement: page });
+        if (Date.now() - healthCheckedAt > 60000) refreshHealth();
+      }
+    });
+    if (page === "method") refreshHealth();
+    window.setInterval(function () { if (!document.hidden) refreshHealth(); }, 300000);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden && Date.now() - healthCheckedAt > 60000) refreshHealth(); });
+    window.addEventListener("focus", function () { if (Date.now() - healthCheckedAt > 60000) refreshHealth(); });
   }
 
   function analyticsSessionId() {
@@ -3192,13 +3346,17 @@
     initMobileFieldTest();
     initLensSwitch();
     initMapOverlayTools();
+    initPublicDataRefresh();
     initRecordSearch();
     initLeadDesk();
-    loadStorms();
-    loadMeetings();
+    const isDataRoom = document.body.getAttribute("data-page") === "graphics";
+    if (!isDataRoom) {
+      loadStorms();
+      loadMeetings();
+    }
     loadAgendaRecon();
     loadCmsContent();
-    loadPublicRecord().catch(function () {
+    (isDataRoom ? refreshDataRoom() : loadPublicRecord()).catch(function () {
       const ticker = el("#live-bar-story");
       if (ticker) ticker.textContent = "The public feed is temporarily unavailable; no fallback data is being substituted.";
       renderSignals();

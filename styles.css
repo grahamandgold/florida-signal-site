@@ -967,6 +967,10 @@ body.brief-prompt-open { overflow: hidden; }
 .data-room-intro .eyebrow { display: flex; align-items: center; gap: 9px; }
 .data-room-intro h1 { max-width: 750px; margin: 12px 0 0; font-family: var(--serif); font-size: clamp(54px, 6.8vw, 104px); font-weight: 500; letter-spacing: -.062em; line-height: .86; }
 .data-room-intro__grid > div:first-child > p:last-child { max-width: 660px; margin: 22px 0 0; color: #29445a; font-size: 16px; line-height: 1.55; }
+.data-room-refresh { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+.data-room-refresh button { min-height: 42px; padding: 0 14px; border: 1px solid var(--ink); background: var(--ink); color: #fff; font: 800 10px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+.data-room-refresh button:disabled { cursor: wait; opacity: .62; }
+.data-room-refresh span { color: #526a7c; font-size: 10px; font-weight: 700; line-height: 1.4; }
 .data-room-now { display: grid; grid-template-columns: repeat(3, 1fr); overflow: hidden; border: 1px solid rgba(7,27,50,.14); background: rgba(255,255,255,.84); box-shadow: 0 20px 55px rgba(7,27,50,.1); }
 .data-room-now a { min-width: 0; min-height: 142px; display: grid; align-content: center; padding: 22px 20px; border-right: 1px solid var(--line); color: var(--ink); text-decoration: none; }
 .data-room-now a:last-child { border-right: 0; }

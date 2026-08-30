@@ -345,6 +345,17 @@ body.dw-newsroom-ready > .status-strip { display: none !important; }
 .dw-source-row b { display: block; margin-bottom: 3px; font-size: 13px; }
 .dw-source-row p { min-width: 0; margin: 0; color: var(--dw-muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
 .dw-source-clock { min-width: 160px; color: var(--dw-muted); text-align: right; font: 10px/1.45 var(--dw-mono); }
+.dw-source-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.dw-source-tags i { padding: 3px 6px; border: 1px solid var(--dw-line); border-radius: 999px; color: var(--dw-muted); background: #f5f7fa; font: 800 9px/1 var(--dw-mono); font-style: normal; text-transform: uppercase; }
+.dw-source-tags i[data-health="current"] { color: #08765f; border-color: #a8ddcf; background: #eaf8f3; }
+.dw-source-tags i[data-health="delayed"] { color: #8a6100; border-color: #ead38b; background: #fff8df; }
+.dw-source-tags i[data-health="stale"],
+.dw-source-tags i[data-health="error"],
+.dw-source-tags i[data-health="unavailable"],
+.dw-source-tags i[data-health="suppressed"] { color: #9f3128; border-color: #e7b9b2; background: #fff2f0; }
+.dw-status-checked { margin: 14px 0 0; color: var(--dw-muted); font: 10px/1.4 var(--dw-mono); text-align: right; }
+.dw-status-button[data-state="attention"] .dw-status-dot { background: #ff806d; }
+.dw-status-button[data-state="delayed"] .dw-status-dot { background: #f4c94e; }
 
 @media (max-width: 640px) {
   .dw-source-row { grid-template-columns: 96px minmax(0, 1fr); gap: 8px 14px; }

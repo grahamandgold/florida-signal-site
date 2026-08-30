@@ -58,7 +58,7 @@ test.describe("private Florida Signal Newsroom", () => {
     await expect(page.locator('#weight-form input[type="range"]').first()).toHaveAttribute('max', '2');
     await expect(page.locator('#weight-form input[type="range"]:disabled')).toHaveCount(4);
     await expect(page.locator('#weight-form input[type="range"]').last()).toBeEnabled();
-    await expect(page.getByRole("button", { name: /5 lanes ingesting · 2 shadow-scored/i })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: /current.*shadow-scored/i })).toBeVisible({ timeout: 15_000 });
     await expect(page.locator("#agenda-window")).toContainText("not scored");
     await expect(page.locator("#lead-story h2")).not.toContainText(/follows/i, { timeout: 15_000 });
     await expect(page.locator("#lead-story .eyebrow")).toContainText("Newest raw Candidate pattern", { timeout: 15_000 });
@@ -68,7 +68,7 @@ test.describe("private Florida Signal Newsroom", () => {
     const decisionTop = await page.getByRole("heading", { name: "Latest items to confirm" }).evaluate(node => node.getBoundingClientRect().top + window.scrollY);
     const protocolTop = await page.getByRole("heading", { name: "Signal Machine pipeline" }).evaluate(node => node.getBoundingClientRect().top + window.scrollY);
     expect(decisionTop).toBeLessThan(protocolTop);
-    await page.getByRole("button", { name: /lanes ingesting/i }).click();
+    await page.getByRole("button", { name: /shadow-scored/i }).click();
     await expect(page.getByRole("dialog", { name: "Newsroom source status" })).toBeVisible();
     await expect(page.getByRole("dialog", { name: "Newsroom source status" })).not.toContainText("1969");
     expect(await page.evaluate(() => document.body.scrollWidth)).toBe(390);
@@ -94,7 +94,7 @@ test.describe("private Florida Signal Newsroom", () => {
     expect(sequenceLayout.every(row => row.inside && row.columnsClear)).toBe(true);
     expect(await page.evaluate(() => document.body.scrollWidth)).toBe(1110);
 
-    await page.getByRole("button", { name: /lanes ingesting/i }).click();
+    await page.getByRole("button", { name: /shadow-scored/i }).click();
     const dialog = page.getByRole("dialog", { name: "Newsroom source status" });
     await expect(dialog).toBeVisible();
     const sourceLayout = await dialog.locator(".dw-source-row").evaluateAll(rows => rows.map(row => {
@@ -147,11 +147,20 @@ test.describe("private Florida Signal Newsroom", () => {
         await expect(page.locator(".source-group").first()).toContainText("PDMR planning intent");
         await expect(page.locator(".source-group").nth(1)).toContainText("Sewer + utility capacity");
         await expect(page.locator(".source-group").nth(1)).toContainText("Research only");
-        await expect(page.locator('[data-source-status="pdmr-local"]')).toHaveText("Connected", { timeout: 15_000 });
+        await expect(page.locator('[data-source-status="pdmr-local"]')).toContainText(/connected.*manual/i, { timeout: 15_000 });
+        await expect(page.locator("#table-select")).toHaveValue("pdmr_intent");
+        const pdmrRow = page.locator("#data-table tbody tr[data-i]").first();
+        await expect(pdmrRow).toContainText(/UDP-PDMR-/i, { timeout: 15_000 });
+        await pdmrRow.focus();
+        await pdmrRow.press("Enter");
+        await expect(page.getByRole("dialog", { name: /PDMR · UDP-PDMR-/i })).toBeVisible();
+        await page.locator("#drawer-close").click();
+        await expect(page.locator("#drawer")).toBeHidden();
+        await expect(pdmrRow).toBeFocused();
         await expect(page.locator('.source-option[data-source-table="broward_clerk_preliminary"]')).toBeVisible();
         await expect(page.locator('.source-option[data-source-table="permits"]')).toBeVisible();
         await expect(page.locator("#library-summary")).toContainText(/connected · .*empty · .*unavailable/i, { timeout: 15_000 });
-        await expect(page.locator('.source-option[data-source-table="sunbiz_entities"] .source-option__status')).toHaveText("Connected", { timeout: 15_000 });
+        await expect(page.locator('.source-option[data-source-table="sunbiz_entities"] .source-option__status')).toContainText(/(current|connected) · automated/i, { timeout: 15_000 });
         await page.locator('.source-option[data-source-table="sunbiz_entities"]').click();
         await expect(page.locator("#count-note")).toContainText("private resolver row", { timeout: 15_000 });
         await expect(page.locator("#data-table tbody tr[data-i]").first()).toBeVisible();

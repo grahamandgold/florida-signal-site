@@ -137,6 +137,10 @@
     .library__head h3 { margin: 0; font: 700 clamp(1.35rem,2.2vw,1.8rem)/1.1 var(--serif); letter-spacing: -.025em; }
     .library__head p { margin: 5px 0 0; color: var(--muted); font-size: .85rem; }
     .library__summary { flex: 0 0 auto; padding: 7px 10px; border: 1px solid var(--line); background: var(--paper); color: var(--muted); font: 700 .7rem/1.2 var(--mono); }
+    .library__tools { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+    .library__tools button { min-height: 36px; padding: 7px 11px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font-weight: 800; font-size: .72rem; }
+    .library__tools button:hover { border-color: var(--teal-dark); }
+    .library__checked { flex-basis: 100%; color: var(--muted); font: 600 .64rem/1.3 var(--mono); text-align: right; }
     .library-grid { display: grid; gap: 8px; }
     .source-group { min-width: 0; display: grid; grid-template-columns: minmax(220px,.55fr) minmax(0,2.45fr); border: 1px solid var(--line); background: var(--paper); box-shadow: var(--shadow); }
     .source-group__head { min-height: 76px; padding: 14px 15px 12px; border-right: 1px solid var(--line); background: #f8fafc; }
@@ -149,8 +153,9 @@
     .source-option__copy { min-width: 0; }
     .source-option__copy b { display: block; font-size: .82rem; line-height: 1.2; }
     .source-option__copy small { display: block; margin-top: 3px; color: var(--muted); font-size: .69rem; line-height: 1.35; }
-    .source-option__status { max-width: 88px; color: var(--muted); font: 700 .61rem/1.25 var(--mono); text-align: right; text-transform: uppercase; }
+    .source-option__status { max-width: 118px; color: var(--muted); font: 700 .61rem/1.25 var(--mono); text-align: right; text-transform: uppercase; }
     .source-option__status[data-state="connected"] { color: #08765f; }
+    .source-option__status[data-state="warning"], .source-option__status[data-state="manual"] { color: #9a6a00; }
     .source-option__status[data-state="research"] { color: #9a6a00; }
     .source-option__status[data-state="empty"], .source-option__status[data-state="blocked"] { color: #9a4a32; }
     .source-option--blocked { cursor: default; background: #fbf8f5; }
@@ -245,13 +250,14 @@
     .health-details > summary span { color: var(--muted); font-size: .75rem; font-weight: 500; }
     .health-details__body { padding: 0 16px 18px; border-top: 1px solid var(--line); }
 
-    .drawer-veil { position: fixed; inset: 0; background: rgba(6,27,51,.42); z-index: 40; display: none; }
+    .drawer-veil { position: fixed; inset: 0; background: rgba(6,27,51,.42); z-index: 40; }
     .drawer {
       position: fixed; top: 0; right: 0; bottom: 0; width: min(660px, 100vw); z-index: 41;
       background: var(--paper); box-shadow: -18px 0 50px rgba(6,27,51,.25);
       transform: translateX(102%); transition: transform .22s ease; display: flex; flex-direction: column;
     }
     .drawer[data-open="true"] { transform: translateX(0); }
+    .drawer[hidden], .drawer-veil[hidden] { display: none; }
     .drawer__head { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
     .drawer__head h4 { margin: 0; font: 600 1.15rem/1.2 var(--serif); flex: 1; min-width: 0; overflow-wrap: anywhere; }
     .drawer__body { overflow-y: auto; padding: 16px 20px 40px; }
@@ -303,7 +309,7 @@
     <section class="library" aria-labelledby="library-title">
       <div class="library__head">
         <div><div class="eyebrow">Built + planned early-warning lanes</div><h3 id="library-title">Working discovery sequence</h3><p>PDMR planning intent comes first. Proposed earlier-signal sensors stay visible and are marked research-only until a collector and evidence contract exist; permits remain later execution evidence.</p></div>
-        <span class="library__summary" id="library-summary">Checking connections…</span>
+        <div class="library__tools"><button type="button" id="refresh-sources">Refresh source receipts</button><span class="library__summary" id="library-summary">Checking connections…</span><span class="library__checked" id="library-checked">Not checked yet</span></div>
       </div>
       <div class="library-grid" id="library-grid"></div>
     </section>
@@ -318,13 +324,13 @@
         <label>Table
           <select id="table-select"></select>
         </label>
-        <label>Exact search
+        <label>Fielded search
           <input id="search-input" type="search" placeholder="permit:, folio:, instrument:, addr:…" autocomplete="off" aria-describedby="search-help">
         </label>
         <button class="button button--teal" id="refresh-btn" type="button">Search records</button>
         <span class="count-note" id="count-note">—</span>
       </div>
-      <p class="foot-note" id="search-help" style="margin:0 18px 12px">Choose a source above or use an exact, indexed lookup: <code>permit:</code> <code>folio:</code> <code>instrument:</code> <code>addr:</code> <code>license:</code> <code>asn:</code>. Broad text research will be a separate, explicitly slower tool.</p>
+      <p class="foot-note" id="search-help" style="margin:0 18px 12px">Choose a source above or use a fielded lookup: PDMR supports <code>id:</code> <code>folio:</code> <code>addr:</code> <code>owner:</code> <code>project:</code>; other sources support <code>permit:</code> <code>instrument:</code> <code>license:</code> <code>asn:</code>. Broad text research remains separate.</p>
       <div class="table-wrap">
         <table id="data-table">
           <thead></thead>
@@ -350,8 +356,8 @@
     <p class="foot-note">Data Explorer is a private viewer over public-record tables; subscriber and product tables remain locked. Row clicks open a case file joining permits, ownership, geographic enrichment, Candidates and Clerk parties. Nothing viewed here publishes anywhere.</p>
   </main>
 
-  <div class="drawer-veil" id="drawer-veil"></div>
-  <aside class="drawer" id="drawer" aria-label="Record case file">
+  <div class="drawer-veil" id="drawer-veil" hidden></div>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden>
     <div class="drawer__head">
       <h4 id="drawer-title">Record</h4>
       <button class="button button--ghost" id="drawer-close" type="button">Close</button>
@@ -397,7 +403,8 @@
       foia_workflow_events: "permit", broward_property_transfer_map: "instrument",
       owner_resolution: "permit"
     };
-    const PREFIX_TABLE = { permit: "permits", folio: "bcpa_property_card", instrument: "broward_clerk_records_doc", addr: "permits", license: "lp_licenses", asn: "faa_oeaaa", project: "fdep_erp" };
+    const PREFIX_TABLE = { id: "pdmr_intent", permit: "permits", folio: "bcpa_property_card", instrument: "broward_clerk_records_doc", addr: "permits", license: "lp_licenses", asn: "faa_oeaaa", project: "fdep_erp" };
+    const PDMR_PREFIXES = new Set(["id", "folio", "addr", "owner", "project"]);
 
     function exactSearch(value, table) {
       const cleaned = cleanSearch(value);
@@ -498,10 +505,8 @@
     // Newest value of one column, used for both event clocks and collection clocks.
     async function newestValue(table, col) {
       if (!col) return null;
-      try {
-        const r = await rows(table, { select: col, order: col + ".desc.nullslast", limit: "1" });
-        return r.length ? r[0][col] : null;
-      } catch (e) { return null; }
+      const r = await rows(table, { select: col, order: col + ".desc.nullslast", limit: "1" });
+      return r.length ? r[0][col] : null;
     }
 
     // ---------- feed health ----------
@@ -528,7 +533,7 @@
     const FEEDS = [
       { name: "Permit applications", table: "permits",
         event: "applied_date", collected: "last_seen_at", countCol: "permit_number",
-        eventDelayDays: 4, note: "City of Fort Lauderdale (Accela). Droplet collector." },
+        eventDelayDays: 4, collectionDelayDays: 3, note: "City of Fort Lauderdale (Accela). Droplet collector." },
 
       { name: "Official Clerk recordings", table: "broward_clerk_records_doc",
         event: "recording_date_iso", collected: null,
@@ -537,16 +542,16 @@
 
       { name: "Preliminary Clerk recordings", table: "broward_clerk_preliminary",
         event: "record_date", collected: "fetched_at",
-        eventDelayDays: 4, preliminary: true,
+        eventDelayDays: 4, collectionDelayDays: 3, preliminary: true,
         note: "AcclaimWeb same-day public search. PRELIMINARY / NOT YET VERIFIED — runs ahead of the official feed and is reconciled to it later." },
 
       { name: "FAA obstruction cases", table: "faa_oeaaa",
         event: "date_entered", collected: "last_fetched_at",
-        eventDelayDays: 10, note: "FAA OE/AAA. Supabase pg_cron edge function." },
+        eventDelayDays: 10, collectionDelayDays: 2, note: "FAA OE/AAA. Supabase pg_cron edge function." },
 
       { name: "FDEP environmental permits", table: "fdep_erp",
         event: "received_date", collected: "last_fetched_at",
-        eventDelayDays: 21, note: "Florida DEP Environmental Resource Permits. Supabase pg_cron edge function." },
+        eventDelayDays: 21, collectionDelayDays: 2, note: "Florida DEP Environmental Resource Permits. Supabase pg_cron edge function." },
 
       { name: "County parcel authority", table: "broward_parcel_geography",
         event: null, collected: "fetched_at", countCol: "parcel_id_normalized",
@@ -594,13 +599,23 @@
       </div>`;
     }
 
+    let healthPainting = false;
+    let healthCheckedAt = 0;
     async function paintHealth() {
+      if (healthPainting) return;
+      healthPainting = true;
       const grid = q("#health-grid");
       const bar = q("#health-actions");
       if (bar && !bar.dataset.wired) {
         bar.dataset.wired = "1";
-        bar.innerHTML = '<button class="button" type="button" id="exact-counts">Get exact counts</button>' +
-          '<span class="hint">Row counts are planner estimates by default. Exact counts are a full table scan and this database is IO-constrained, so they run only when you ask.</span>';
+        bar.innerHTML = '<button class="button" type="button" id="refresh-health">Refresh clocks</button>' +
+          '<button class="button" type="button" id="exact-counts">Get exact counts</button>' +
+          '<span class="hint" id="health-checked">Row counts are planner estimates by default. Exact counts are a full table scan and run only when you ask.</span>';
+        bar.querySelector("#refresh-health").addEventListener("click", async (ev) => {
+          ev.target.disabled = true; ev.target.textContent = "Refreshing…";
+          await paintHealth();
+          ev.target.disabled = false; ev.target.textContent = "Refresh clocks";
+        });
         bar.querySelector("#exact-counts").addEventListener("click", async (ev) => {
           ev.target.disabled = true; ev.target.textContent = "Counting…";
           window.EXACT_COUNTS = true;
@@ -653,7 +668,7 @@
           let key = "HEALTHY", label = null;
 
           if (total && total.n === 0) key = "EMPTY";
-          else if (f.authority) { key = "MANUAL"; label = "COMPLETE / CURRENT — MANUAL REFRESH"; }
+          else if (f.authority) { key = "MANUAL"; label = "MANUAL SNAPSHOT — NOT SCHEDULED"; }
           else if (f.event) {
             const d = daysSince(eventVal);
             if (d == null) key = "EMPTY";
@@ -668,6 +683,15 @@
           } else {
             const d = daysSince(collectedVal);
             key = (d == null) ? "EMPTY" : (d <= f.eventDelayDays ? "HEALTHY" : "STALE");
+          }
+
+          if (!f.authority && f.collected) {
+            const collectorDays = daysSince(collectedVal);
+            if (collectorDays == null) { key = "FAILED"; label = "COLLECTOR CLOCK UNAVAILABLE"; }
+            else if (collectorDays > (f.collectionDelayDays || f.eventDelayDays || 2)) {
+              key = "STALE";
+              label = "COLLECTOR STALE — LAST SUCCESS " + dateish(collectedVal).toUpperCase();
+            }
           }
 
           if (f.preliminary && key === "HEALTHY") label = "PRELIMINARY / NOT YET VERIFIED";
@@ -686,10 +710,33 @@
         const total = await tableCount(n.table, n.countCol).catch(() => null);
         setRows(card, total);
       }
+      healthCheckedAt = Date.now();
+      const checked = q("#health-checked");
+      if (checked) checked.textContent = "Last checked " + new Date(healthCheckedAt).toLocaleString() + ". Counts are estimates unless you request exact counts.";
+      healthPainting = false;
     }
 
     // ---------- explorer config ----------
     const TABLES = {
+      pdmr_intent: {
+        label: "PDMR planning intent · local evidence",
+        privatePath: "/api/admin/pdmr-intent",
+        privateLabel: "PDMR source record",
+        privateSearchRaw: true,
+        select: "event_date,source_record_id,address,owner_name,folio,project_name,development_type,units_text,record_status,last_seen_at,source_url",
+        order: "event_date.desc.nullslast,source_record_id.desc",
+        cols: [
+          ["event_date", "Filed", dateish],
+          ["source_record_id", "PDMR #", v => `<span class="pill">${esc(v)}</span>`],
+          ["address", "Address"],
+          ["owner_name", "Owner / applicant"],
+          ["folio", "Folio"],
+          ["project_name", "Project"],
+          ["development_type", "Type"],
+          ["units_text", "Units"]
+        ],
+        drawer: "generic"
+      },
       sunbiz_entities: {
         label: "Sunbiz entity matches · private",
         privatePath: "/api/admin/sunbiz-entities",
@@ -758,7 +805,7 @@
       fdep_erp: {
         label: "FDEP environmental (ERP)",
         select: "received_date,permitting_program,permit_type,project_name,applicant_company,applicant_name,city,permit_status,documents_url,street_address",
-        order: null,
+        order: "received_date.desc.nullslast,project_name.asc",
         cols: [
           ["received_date", "Received", dateish],
           ["project_name", "Project"],
@@ -809,7 +856,7 @@
       gis_enrichment: {
         label: "GIS parcel enrichment",
         select: "permit_number,folio,gis_owner,gis_property_value,gis_last_sale_date,gis_last_sale_amount,flip_flag,owner_changed_since_permit,enriched_at",
-        order: "permit_number.desc",
+        order: "enriched_at.desc.nullslast,permit_number.desc",
         cols: [
           ["permit_number", "Permit #", v => `<span class="pill">${esc(v)}</span>`],
           ["gis_owner", "GIS owner"],
@@ -975,7 +1022,7 @@
 
     const SOURCE_GROUPS = [
       { eyebrow: "S1 · Earliest built lane", title: "Planning intent before application", items: [
-        { label: "PDMR planning intent", note: "LauderBuild pre-application narratives, owners, folios and concept stage", href: "/#planning-intent", privatePath: "/api/admin/pdmr-intent?limit=1", connection: "pdmr-local" },
+        { label: "PDMR planning intent", note: "LauderBuild pre-application narratives, owners, folios and concept stage", table: "pdmr_intent", connection: "pdmr-local", componentId: "pdmr", refresh: "manual" },
         { label: "Agenda Watch", note: "Legistar items, staff reports and attachments; timing varies by project", href: "/agenda.html", status: "Open view", state: "private" }
       ]},
       { eyebrow: "S2 · Next sensors", title: "Early clues to research + connect", items: [
@@ -986,31 +1033,31 @@
         { label: "SFWMD filings", note: "Regional water-management applications separate from the current FDEP feed", href: "/#project-control", status: "Research only", state: "research" }
       ]},
       { eyebrow: "S3 · Site control + actors", title: "Ownership, companies + capital", items: [
-        { label: "Sunbiz entity matches", note: "Private exact matches from the state SFTP corpus", table: "sunbiz_entities" },
-        { label: "Owner resolution", note: "Owner identities joined to permits", table: "owner_resolution" },
-        { label: "Contractor licenses", note: "Businesses, qualifiers and expiration", table: "lp_licenses" },
-        { label: "Same-day recordings", note: "Preliminary Acclaim records; later reconciled", table: "broward_clerk_preliminary" },
-        { label: "Verified Clerk recordings", note: "Deeds, mortgages, liens, NOCs and judgments", table: "broward_clerk_records_doc" },
-        { label: "Mapped transfers", note: "Deeds and easements linked to parcels", table: "broward_property_transfer_map" },
-        { label: "BCPA property cards", note: "Owners, values and property facts", table: "bcpa_property_card" },
-        { label: "Countywide parcel map", note: "Official parcel centroids and latest sale cross-check", table: "broward_parcel_geography" },
-        { label: "GIS permit enrichment", note: "Permit-to-parcel ownership and sale context", table: "gis_enrichment" }
+        { label: "Sunbiz entity matches", note: "Private exact matches from the state SFTP corpus", table: "sunbiz_entities", componentId: "sunbiz", refresh: "automated" },
+        { label: "Owner resolution", note: "Owner identities joined to permits", table: "owner_resolution", refresh: "snapshot" },
+        { label: "Contractor licenses", note: "Businesses, qualifiers and expiration", table: "lp_licenses", refresh: "snapshot" },
+        { label: "Same-day recordings", note: "Preliminary Acclaim records; later reconciled", table: "broward_clerk_preliminary", componentId: "broward-clerk", refresh: "automated" },
+        { label: "Verified Clerk recordings", note: "Deeds, mortgages, liens, NOCs and judgments", table: "broward_clerk_records_doc", componentId: "broward-clerk", refresh: "automated" },
+        { label: "Mapped transfers", note: "Deeds and easements linked to parcels", table: "broward_property_transfer_map", componentId: "property-transfers", refresh: "automated" },
+        { label: "BCPA property cards", note: "Owners, values and property facts", table: "bcpa_property_card", componentId: "property-context", refresh: "snapshot" },
+        { label: "Countywide parcel map", note: "Official parcel centroids and latest sale cross-check", table: "broward_parcel_geography", componentId: "property-context", refresh: "snapshot" },
+        { label: "GIS permit enrichment", note: "Permit-to-parcel ownership and sale context", table: "gis_enrichment", componentId: "fort-lauderdale-permits", refresh: "automated" }
       ]},
       { eyebrow: "S4 · Regulatory evidence", title: "Environment + airspace", items: [
-        { label: "FDEP environmental", note: "ERP projects, applicants and status", table: "fdep_erp" },
-        { label: "FAA obstruction cases", note: "Cranes, height cases and sponsors", table: "faa_oeaaa" }
+        { label: "FDEP environmental", note: "ERP projects, applicants and status", table: "fdep_erp", componentId: "fdep", refresh: "automated" },
+        { label: "FAA obstruction cases", note: "Cranes, height cases and sponsors", table: "faa_oeaaa", componentId: "faa", refresh: "automated" }
       ]},
       { eyebrow: "S5 · Later execution", title: "Applications, permits + inspections", items: [
-        { label: "Permit applications", note: "Fort Lauderdale Accela filings", table: "permits" },
-        { label: "Accela detail", note: "Applicants, contractors, documents and inspections", table: "accela_details" },
-        { label: "Permit workflow events", note: "FOIA task and status history", table: "foia_workflow_events" }
+        { label: "Permit applications", note: "Fort Lauderdale Accela filings", table: "permits", componentId: "fort-lauderdale-permits", refresh: "automated" },
+        { label: "Accela detail", note: "Applicants, contractors, documents and inspections", table: "accela_details", componentId: "fort-lauderdale-permits", refresh: "automated" },
+        { label: "Permit workflow events", note: "FOIA task and status history", table: "foia_workflow_events", refresh: "snapshot" }
       ]},
       { eyebrow: "Context · use carefully", title: "Derived and historical layers", items: [
         { label: "Signals v2 context", note: "Historical April 2026 scoring pilot", table: "signals_v2_context", state: "historical" }
       ]}
     ];
 
-    const state = { table: "broward_clerk_preliminary", offset: 0, extra: {}, search: "", rows: [] };
+    const state = { table: "pdmr_intent", offset: 0, extra: {}, search: "", rows: [] };
 
     function sourceOption(item) {
       const active = item.table && item.table === state.table ? "true" : "false";
@@ -1032,6 +1079,7 @@
         q("#table-select").value = state.table; q("#search-input").value = ""; clearChips(); markActiveSource(); loadTable();
         q("#explorer").scrollIntoView({ behavior: "smooth", block: "start" });
       });
+      q("#refresh-sources").addEventListener("click", checkLibraryConnections);
       checkLibraryConnections();
     }
 
@@ -1039,7 +1087,16 @@
       document.querySelectorAll("[data-source-table]").forEach(button => { button.dataset.active = button.dataset.sourceTable === state.table ? "true" : "false"; });
     }
 
+    let libraryChecking = false;
+    let libraryCheckedAt = 0;
     async function checkLibraryConnections() {
+      if (libraryChecking) return;
+      libraryChecking = true;
+      const refreshButton = q("#refresh-sources");
+      refreshButton.disabled = true;
+      refreshButton.textContent = "Checking…";
+      const projectState = await window.FloridaSignalNewsroom.admin("/api/admin/project-state").catch(() => ({}));
+      const componentHealth = new Map((projectState.operational_health || []).map(row => [String(row.id), row]));
       const checks = [];
       const seen = new Set();
       SOURCE_GROUPS.forEach(group => group.items.forEach(item => {
@@ -1048,10 +1105,12 @@
         if (!seen.has(key)) { seen.add(key); checks.push(Object.assign({ key }, item)); }
       }));
       let connected = 0, empty = 0, blocked = 0, completed = 0, cursor = 0;
+      const freshness = {};
+      let manualOrSnapshot = 0;
       const updateSummary = () => {
         q("#library-summary").textContent = completed < checks.length
           ? `${completed}/${checks.length} sources checked…`
-          : `${connected} connected · ${empty} empty · ${blocked} unavailable`;
+          : `${connected} connected · ${freshness.current || 0} current · ${(freshness.delayed || 0) + (freshness.stale || 0) + (freshness.error || 0) + (freshness.unavailable || 0)} delayed/stale · ${manualOrSnapshot} manual/snapshot · ${empty} empty · ${blocked} unavailable`;
       };
       async function checkNext() {
         const current = cursor++;
@@ -1069,10 +1128,27 @@
             ? (Number(payload.record_count || 0) > 0 ? [payload] : [])
             : cfg && cfg.privatePath
               ? payload.items
-              : await (await sbFetch(item.table, Object.assign({ select: cfg.select, limit: "1" }, cfg.order ? { order: cfg.order } : {}))).json();
+              : await (await sbFetch(item.table, { select: cfg.probe || cfg.select.split(",")[0], limit: "1" })).json();
           const hasRows = Array.isArray(data) && data.length > 0;
-          labels.forEach(label => { label.textContent = hasRows ? "Connected" : "Connected · empty"; label.dataset.state = hasRows ? "connected" : "empty"; });
-          if (hasRows) connected += 1; else empty += 1;
+          const receipt = item.componentId ? componentHealth.get(item.componentId) : null;
+          const liveStatus = String(receipt && receipt.status || "UNKNOWN").toLowerCase();
+          const refresh = String(item.refresh || "connected").toLowerCase();
+          if (hasRows) {
+            connected += 1;
+            if (liveStatus !== "unknown") freshness[liveStatus] = (freshness[liveStatus] || 0) + 1;
+            if (refresh === "manual" || refresh === "snapshot") manualOrSnapshot += 1;
+            const healthy = liveStatus === "current";
+            const warning = ["delayed", "stale", "error", "unavailable", "suppressed", "unverified"].includes(liveStatus);
+            const text = liveStatus !== "unknown" ? `${liveStatus} · ${refresh}` : `connected · ${refresh}`;
+            labels.forEach(label => {
+              label.textContent = text;
+              label.dataset.state = healthy ? "connected" : warning ? "warning" : refresh === "automated" ? "connected" : "manual";
+              label.title = receipt ? `Event ${receipt.event_through || "not exposed"}; system ${receipt.system_time || "not exposed"}. ${receipt.detail || ""}` : `Rows are available; no live freshness receipt is configured. Refresh mode: ${refresh}.`;
+            });
+          } else {
+            labels.forEach(label => { label.textContent = "Connected · empty"; label.dataset.state = "empty"; });
+            empty += 1;
+          }
         } catch (error) {
           labels.forEach(label => { label.textContent = "Unavailable"; label.dataset.state = "blocked"; label.title = error.message; });
           blocked += 1;
@@ -1086,13 +1162,20 @@
       // return transient gateway/database errors when several ordered probes arrive at
       // once; that made healthy sources appear unavailable in the operator desk.
       await checkNext();
+      libraryChecking = false;
+      libraryCheckedAt = Date.now();
+      refreshButton.disabled = false;
+      refreshButton.textContent = "Refresh source receipts";
+      q("#library-checked").textContent = "Last checked " + new Date(libraryCheckedAt).toLocaleString() + " · auto-check every 10 minutes while open";
     }
 
     function commitSearch() {
       const value = q("#search-input").value.trim();
       const match = value.match(/^([a-z]+)\s*:/i);
-      if (match && PREFIX_TABLE[match[1].toLowerCase()]) {
-        state.table = PREFIX_TABLE[match[1].toLowerCase()];
+      const prefix = match ? match[1].toLowerCase() : "";
+      const pdmrLookup = state.table === "pdmr_intent" && PDMR_PREFIXES.has(prefix);
+      if (!pdmrLookup && match && PREFIX_TABLE[prefix]) {
+        state.table = PREFIX_TABLE[prefix];
         state.extra = {};
         q("#table-select").value = state.table;
         clearChips();
@@ -1124,7 +1207,17 @@
       q("#next-btn").addEventListener("click", () => { state.offset += PAGE; loadTable(); });
       q("#drawer-close").addEventListener("click", closeDrawer);
       q("#drawer-veil").addEventListener("click", closeDrawer);
-      document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+      document.addEventListener("keydown", e => {
+        const drawer = q("#drawer");
+        if (drawer.hidden) return;
+        if (e.key === "Escape") { e.preventDefault(); closeDrawer(); return; }
+        if (e.key !== "Tab") return;
+        const focusable = Array.from(drawer.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'));
+        if (!focusable.length) return;
+        const first = focusable[0], last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      });
       const initialSearch = new URLSearchParams(location.search).get("search") || "";
       if (initialSearch) {
         q("#search-input").value = initialSearch;
@@ -1153,7 +1246,7 @@
         let data, privateResult = null;
         if (cfg.privatePath) {
           const privateParams = new URLSearchParams({ limit: String(PAGE), offset: String(state.offset) });
-          if (term) privateParams.set("search", term.replace(/^[a-z]+\s*:/i, ""));
+          if (term) privateParams.set("search", cfg.privateSearchRaw ? term : term.replace(/^[a-z]+\s*:/i, ""));
           privateResult = await window.FloridaSignalNewsroom.admin(cfg.privatePath + "?" + privateParams.toString());
           data = Array.isArray(privateResult.items) ? privateResult.items : [];
         } else {
@@ -1164,12 +1257,18 @@
         if (!data.length) {
           tbody.innerHTML = `<tr class="empty-row"><td colspan="${cfg.cols.length}">No rows for this view.</td></tr>`;
         } else {
-          tbody.innerHTML = data.map((r, i) => "<tr data-i=\"" + i + "\">" + cfg.cols.map(c => {
-            const [field, , fmt, cls] = c;
-            const raw = r[field];
-            const val = fmt ? fmt(raw) : esc(raw == null ? "" : raw);
-            return `<td class="${cls || ""}">${val === "" || val == null ? "<span style='color:var(--muted)'>—</span>" : val}</td>`;
-          }).join("") + "</tr>").join("");
+          tbody.innerHTML = data.map((r, i) => {
+            const identity = r.source_record_id || r.permit_number || r.instrument_number || r.folio || r.license_number || r.asn || "record " + (state.offset + i + 1);
+            const context = r.address || r.site_address || r.project_name || r.owner_name || r.business_name || "";
+            const accessibleName = ["Open", cfg.label, identity, context].filter(Boolean).join(" · ");
+            const rowAria = String(accessibleName).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+            return `<tr data-i="${i}" tabindex="0" role="button" aria-label="${rowAria}">` + cfg.cols.map(c => {
+              const [field, , fmt, cls] = c;
+              const raw = r[field];
+              const val = fmt ? fmt(raw) : esc(raw == null ? "" : raw);
+              return `<td class="${cls || ""}">${val === "" || val == null ? "<span style='color:var(--muted)'>—</span>" : val}</td>`;
+            }).join("") + "</tr>";
+          }).join("");
         }
         q("#page-note").textContent = "rows " + (state.offset + 1) + "–" + (state.offset + data.length);
         q("#prev-btn").disabled = state.offset === 0;
@@ -1177,12 +1276,19 @@
         if (term) {
           q("#count-note").textContent = data.length + (data.length === PAGE ? "+" : "") + " exact match" + (data.length === 1 ? "" : "es") + " shown";
         } else if (cfg.privatePath) {
-          q("#count-note").textContent = data.length + (privateResult.has_more ? "+" : "") + " private resolver row" + (data.length === 1 ? "" : "s") + " shown";
+          const rowLabel = cfg.privateLabel || "private resolver row";
+          q("#count-note").textContent = data.length + (privateResult.has_more ? "+" : "") + " " + rowLabel + (data.length === 1 ? "" : "s") + " shown";
         } else {
           const countCol = cfg.select.split(",")[0];
           tableCount(state.table, countCol).then(c => { q("#count-note").textContent = rowsLabel(c); }).catch(() => { q("#count-note").textContent = "—"; });
         }
-        tbody.querySelectorAll("tr[data-i]").forEach(tr => tr.addEventListener("click", () => openDrawer(state.rows[Number(tr.dataset.i)], cfg)));
+        tbody.querySelectorAll("tr[data-i]").forEach(tr => {
+          const open = () => openDrawer(state.rows[Number(tr.dataset.i)], cfg, tr);
+          tr.addEventListener("click", open);
+          tr.addEventListener("keydown", event => {
+            if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(); }
+          });
+        });
       } catch (e) {
         tbody.innerHTML = `<tr class="empty-row"><td colspan="${cfg.cols.length}">Could not load: ${esc(e.message)}</td></tr>`;
       }
@@ -1198,14 +1304,18 @@
       return '<table class="mini"><thead><tr>' + fields.map(f => `<th>${esc(f)}</th>`).join("") + "</tr></thead><tbody>" +
         list.map(r => "<tr>" + fields.map(f => `<td>${esc(r[f] == null ? "" : r[f])}</td>`).join("") + "</tr>").join("") + "</tbody></table>";
     }
-    function openDrawer(row, cfg) {
+    let drawerTrigger = null;
+    function openDrawer(row, cfg, trigger) {
       const drawer = q("#drawer");
       const body = q("#drawer-body");
-      q("#drawer-veil").style.display = "block";
-      drawer.dataset.open = "true";
+      drawerTrigger = trigger || document.activeElement;
+      q("#drawer-veil").hidden = false;
+      drawer.hidden = false;
+      window.requestAnimationFrame(() => { drawer.dataset.open = "true"; q("#drawer-close").focus(); });
       const permitNo = row.permit_number;
       const instrument = row.instrument_number;
-      q("#drawer-title").textContent = permitNo ? "Case file · " + permitNo : instrument ? "Instrument · " + instrument : (cfg.label + " record");
+      const sourceRecordId = row.source_record_id;
+      q("#drawer-title").textContent = permitNo ? "Case file · " + permitNo : instrument ? "Instrument · " + instrument : sourceRecordId ? "PDMR · " + sourceRecordId : (cfg.label + " record");
       body.innerHTML = "<h5>This record</h5>" + kvHTML(row) + '<div id="drawer-extra"><p class="loading">Weaving cross-source context…</p></div>';
       const extra = () => q("#drawer-extra");
       if ((cfg.drawer === "permit" || cfg.drawer === "permitByField") && permitNo) {
@@ -1242,8 +1352,13 @@
       }
     }
     function closeDrawer() {
-      q("#drawer").dataset.open = "false";
-      q("#drawer-veil").style.display = "none";
+      const drawer = q("#drawer");
+      if (drawer.hidden) return;
+      drawer.dataset.open = "false";
+      q("#drawer-veil").hidden = true;
+      window.setTimeout(() => { if (drawer.dataset.open !== "true") drawer.hidden = true; }, 230);
+      if (drawerTrigger && drawerTrigger.focus) drawerTrigger.focus();
+      drawerTrigger = null;
     }
 
     buildControls();
@@ -1251,6 +1366,17 @@
     q("#source-health").addEventListener("toggle", function () {
       if (this.open && !this.dataset.loaded) { this.dataset.loaded = "1"; paintHealth(); }
     });
+    window.setInterval(function () {
+      if (!document.hidden && Date.now() - libraryCheckedAt > 600000) checkLibraryConnections();
+      if (!document.hidden && q("#source-health").open && healthCheckedAt && Date.now() - healthCheckedAt > 600000) paintHealth();
+    }, 60000);
+    function refreshExplorerWhenVisible() {
+      if (document.hidden) return;
+      if (Date.now() - libraryCheckedAt > 60000) checkLibraryConnections();
+      if (q("#source-health").open && healthCheckedAt && Date.now() - healthCheckedAt > 60000) paintHealth();
+    }
+    document.addEventListener("visibilitychange", refreshExplorerWhenVisible);
+    window.addEventListener("focus", refreshExplorerWhenVisible);
     loadTable();
   </script>
 </body>

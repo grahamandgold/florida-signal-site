@@ -144,13 +144,25 @@ class DataWireServerTests(unittest.TestCase):
             with mock.patch.object(cms_server, "PDMR_DB_PATH", db_path), \
                     mock.patch.object(cms_server, "now_iso", return_value="2026-08-23T20:00:00+00:00"):
                 code, payload = cms_server.pdmr_intent_payload(limit=1)
+                offset_code, offset_payload = cms_server.pdmr_intent_payload(limit=1, offset=1)
+                id_code, id_payload = cms_server.pdmr_intent_payload(search="id:UDP-PDMR-26130")
+                address_code, address_payload = cms_server.pdmr_intent_payload(search="addr:125 N Birch")
             self.assertEqual(code, 200)
             self.assertEqual(payload["record_count"], 2)
+            self.assertEqual(payload["matched_count"], 2)
+            self.assertTrue(payload["has_more"])
             self.assertEqual(len(payload["items"]), 1)
             self.assertEqual(payload["items"][0]["source_record_id"], "UDP-PDMR-26131")
             self.assertEqual(payload["items"][0]["development_stage"], "Conceptual Plan")
             self.assertEqual(payload["items"][0]["editorial_state"], "source_record_only")
             self.assertIn("does not nominate a Candidate", payload["contract"])
+            self.assertEqual(offset_code, 200)
+            self.assertEqual(offset_payload["items"][0]["source_record_id"], "UDP-PDMR-26130")
+            self.assertEqual(id_code, 200)
+            self.assertEqual(id_payload["matched_count"], 1)
+            self.assertEqual(id_payload["items"][0]["source_record_id"], "UDP-PDMR-26130")
+            self.assertEqual(address_code, 200)
+            self.assertEqual(address_payload["items"][0]["address"], "125 N Birch RD")
             with sqlite3.connect(db_path) as db:
                 self.assertEqual(db.execute("select count(*) from parcel_events").fetchone()[0], 2)
 
@@ -271,21 +283,26 @@ class DataWireServerTests(unittest.TestCase):
                     "category": "government", "date": "2026-08-18", "agenda_available": False,
                 }]}
             return {"sources": [
-                {"id": "clerk-preliminary", "event_through": "2026-08-11", "system_time": "2026-08-12T00:00:00Z"},
-                {"id": "broward", "event_through": "2026-08-06"},
+                {"id": "clerk-preliminary", "status": "current", "event_through": "2026-08-11", "system_time": "2026-08-12T00:00:00Z"},
+                {"id": "broward", "status": "delayed", "event_through": "2026-08-06"},
                 {"id": "sunbiz", "status": "unavailable"},
-                {"id": "fdep", "event_through": "2026-08-06"},
-                {"id": "faa", "event_through": "2026-08-10"},
-                {"id": "permits", "event_through": "2026-08-10"},
+                {"id": "fdep", "status": "current", "event_through": "2026-08-06"},
+                {"id": "faa", "status": "current", "event_through": "2026-08-10"},
+                {"id": "permits", "status": "current", "event_through": "2026-08-10"},
             ]}
 
         with mock.patch.object(cms_server, "public_json", side_effect=public_payload), \
+                mock.patch.object(cms_server, "now_iso", return_value="2026-08-12T03:00:00+00:00"), \
                 mock.patch.object(cms_server, "pdmr_intent_payload", return_value=(200, {
-                    "newest_event": "2026-08-12", "last_collected": "2026-08-12T02:00:00Z",
+                    "record_count": 1, "newest_event": "2026-08-12", "last_collected": "2026-08-12T02:00:00Z",
                 })):
             payload = cms_server.early_intel_payload()
         self.assertEqual(payload["lanes"][0]["phase"], "01 · Planning intent")
         self.assertEqual(payload["lanes"][0]["label"], "PDMR planning intent + agenda packets")
+        self.assertEqual(payload["lanes"][0]["automation"], "mixed")
+        self.assertEqual(payload["lanes"][0]["status"], "current")
+        self.assertEqual(payload["lanes"][1]["connection"], "unavailable")
+        self.assertEqual(payload["lanes"][2]["status"], "delayed")
         self.assertEqual(payload["lanes"][-1]["phase"], "05 · Execution")
         self.assertIn("PDMR reaches 2026-08-12", payload["lanes"][0]["headline"])
         self.assertIn("first-public timing remains unresolved", payload["lanes"][0]["note"])

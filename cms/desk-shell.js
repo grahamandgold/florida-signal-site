@@ -102,13 +102,20 @@
     var opts = options || {};
     var headers = Object.assign({}, opts.headers || {}, { Authorization: "Bearer " + await getToken() });
     if (opts.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
-    var response = await fetch(path, Object.assign({}, opts, { headers: headers }));
+    var response = await fetch(path, Object.assign({ cache: "no-store" }, opts, { headers: headers }));
     var body = await response.json().catch(function () { return {}; });
     if (!response.ok) throw new Error(body.error || "Request unavailable");
     return body;
   }
 
+  var pipelineLoading = false;
+  var statusLoading = false;
+  var lastPipelineLoad = 0;
+  var lastStatusLoad = 0;
+
   async function loadPipeline() {
+    if (pipelineLoading) return;
+    pipelineLoading = true;
     var target = mount.querySelector("[data-pipeline-jobs]");
     try {
       var body = await admin("/api/admin/pipeline-schedule");
@@ -122,10 +129,15 @@
       target.title = body.contract || "A timer proves scheduling only; source clocks prove usable data.";
     } catch (error) {
       target.innerHTML = '<span class="dw-pipeline__loading">Schedule unavailable — no run inferred.</span>';
+    } finally {
+      pipelineLoading = false;
+      lastPipelineLoad = Date.now();
     }
   }
 
   async function loadStatus() {
+    if (statusLoading) return;
+    statusLoading = true;
     var label = mount.querySelector("[data-status-label]");
     var target = mount.querySelector("[data-status-body]");
     try {
@@ -137,13 +149,31 @@
       var machine = responses[1];
       var lanes = Array.isArray(body.lanes) ? body.lanes : [];
       var scored = machine && Array.isArray(machine.lanes) ? machine.lanes.filter(function (lane) { return lane.coverage === "shadow_ranked"; }).length : null;
-      label.textContent = lanes.length + " lane" + (lanes.length === 1 ? "" : "s") + " ingesting · " + (scored == null ? "scoring status unavailable" : scored + " shadow-scored");
+      var counts = lanes.reduce(function (result, lane) {
+        var status = String(lane.status || "unavailable").toLowerCase();
+        result[status] = (result[status] || 0) + 1;
+        return result;
+      }, {});
+      var pieces = [];
+      if (counts.current) pieces.push(counts.current + " current");
+      if (counts.delayed) pieces.push(counts.delayed + " delayed");
+      var attention = (counts.stale || 0) + (counts.suppressed || 0) + (counts.error || 0) + (counts.unavailable || 0) + (counts.unverified || 0);
+      if (attention) pieces.push(attention + " need attention");
+      if (scored != null) pieces.push(scored + " shadow-scored");
+      label.textContent = pieces.join(" · ") || "Source status unavailable";
+      mount.querySelector(".dw-status-button").dataset.state = attention ? "attention" : counts.delayed ? "delayed" : "current";
       target.innerHTML = lanes.length ? lanes.map(function (lane) {
-        return '<article class="dw-source-row"><span class="dw-source-stage">' + esc(lane.phase || "—") + '</span><div><b>' + esc(lane.label || "Unnamed source") + '</b><p>' + esc(lane.headline || lane.note || "No source note exposed.") + '</p></div><span class="dw-source-clock">Event ' + esc(lane.event_through || "not exposed") + '<br>System ' + esc(dateTime(lane.system_time)) + '</span></article>';
-      }).join("") : '<p>No monitored lane responded. No source state was inferred.</p>';
+        var status = String(lane.status || "unavailable").toLowerCase();
+        var automation = String(lane.automation || "unknown").toLowerCase();
+        return '<article class="dw-source-row" data-health="' + esc(status) + '"><span class="dw-source-stage">' + esc(lane.phase || "—") + '</span><div><b>' + esc(lane.label || "Unnamed source") + '</b><p>' + esc(lane.headline || lane.note || "No source note exposed.") + '</p><span class="dw-source-tags"><i data-health="' + esc(status) + '">' + esc(status) + '</i><i>' + esc(automation) + ' refresh</i></span></div><span class="dw-source-clock">Event ' + esc(lane.event_through || "not exposed") + '<br>System ' + esc(dateTime(lane.system_time)) + '</span></article>';
+      }).join("") + '<p class="dw-status-checked">Last checked on this device · ' + esc(new Date().toLocaleString()) + '</p>' : '<p>No monitored lane responded. No source state was inferred.</p>';
     } catch (error) {
       label.textContent = "Source status unavailable";
+      mount.querySelector(".dw-status-button").dataset.state = "attention";
       target.innerHTML = '<p>Source status could not be opened. No freshness state was inferred.</p>';
+    } finally {
+      statusLoading = false;
+      lastStatusLoad = Date.now();
     }
   }
 
@@ -157,7 +187,10 @@
   });
 
   var dialog = mount.querySelector("[data-status-dialog]");
-  mount.querySelector("[data-status-open]").addEventListener("click", function () { dialog.showModal(); });
+  mount.querySelector("[data-status-open]").addEventListener("click", function () {
+    if (Date.now() - lastStatusLoad > 60000) loadStatus();
+    dialog.showModal();
+  });
   mount.querySelector("[data-status-close]").addEventListener("click", function () { dialog.close(); });
   dialog.addEventListener("click", function (event) { if (event.target === dialog) dialog.close(); });
 
@@ -165,4 +198,12 @@
   loadPipeline();
   loadStatus();
   window.setInterval(loadPipeline, 60000);
+  window.setInterval(function () { if (!document.hidden) loadStatus(); }, 300000);
+  function refreshVisibleDesk() {
+    if (document.hidden) return;
+    if (Date.now() - lastPipelineLoad > 60000) loadPipeline();
+    if (Date.now() - lastStatusLoad > 60000) loadStatus();
+  }
+  document.addEventListener("visibilitychange", refreshVisibleDesk);
+  window.addEventListener("focus", refreshVisibleDesk);
 })();

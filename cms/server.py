@@ -252,9 +252,13 @@ def project_state_payload() -> tuple[int, dict[str, Any]]:
     }
 
 
-def pdmr_intent_payload(limit: int = 6) -> tuple[int, dict[str, Any]]:
+def pdmr_intent_payload(
+    limit: int = 6, offset: int = 0, search: str = "",
+) -> tuple[int, dict[str, Any]]:
     """Read the local LauderBuild evidence mirror without mutating or promoting records."""
-    bounded_limit = bounded_int(limit, 6, 1, 20)
+    bounded_limit = bounded_int(limit, 6, 1, 100)
+    bounded_offset = bounded_int(offset, 0, 0, 1_000_000)
+    search = re.sub(r"[\x00-\x1f\x7f]", "", str(search or "")).strip()[:180]
     path = PDMR_DB_PATH.expanduser()
     unavailable = {
         "status": "unavailable",
@@ -268,10 +272,39 @@ def pdmr_intent_payload(limit: int = 6) -> tuple[int, dict[str, Any]]:
     source = "fort_lauderdale_lauderbuild_planning"
     event_type = "planning_preapplication"
     recent_since = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
+    def normalized(value: Any) -> str:
+        return re.sub(r"[^A-Z0-9]", "", str(value or "").upper())
+
+    match = re.match(r"^(id|folio|addr|owner|project)\s*:\s*(.+)$", search, re.I) if search else None
+    prefix = match.group(1).lower() if match else ""
+    needle = (match.group(2) if match else search).strip()
+    where_sql = "source=? and event_type=?"
+    where_params: list[Any] = [source, event_type]
+    if search:
+        if prefix == "id":
+            where_sql += " and upper(coalesce(source_record_id,''))=upper(?)"
+            where_params.append(needle)
+        elif prefix == "folio":
+            where_sql += " and fs_norm(json_extract(payload_json,'$.fields.folio'))=?"
+            where_params.append(normalized(needle))
+        elif prefix in {"addr", "owner", "project"}:
+            column = {"addr": "address", "owner": "owner_name", "project": "project_name"}[prefix]
+            where_sql += f" and instr(upper(coalesce({column},'')),upper(?))>0"
+            where_params.append(needle)
+        else:
+            where_sql += """ and instr(upper(
+                coalesce(source_record_id,'') || ' ' || coalesce(address,'') || ' ' ||
+                coalesce(owner_name,'') || ' ' || coalesce(project_name,'') || ' ' ||
+                coalesce(summary,'') || ' ' ||
+                coalesce(json_extract(payload_json,'$.fields.folio'),'') || ' ' ||
+                coalesce(json_extract(payload_json,'$.fields.development_type'),'')
+            ),upper(?))>0"""
+            where_params.append(needle)
     try:
         connection_uri = path.resolve().as_uri() + "?mode=ro"
         with sqlite3.connect(connection_uri, uri=True, timeout=5) as db:
             db.row_factory = sqlite3.Row
+            db.create_function("fs_norm", 1, normalized)
             db.execute("pragma query_only=on")
             if db.execute("pragma query_only").fetchone()[0] != 1:
                 raise sqlite3.OperationalError("read-only guard unavailable")
@@ -291,17 +324,23 @@ def pdmr_intent_payload(limit: int = 6) -> tuple[int, dict[str, Any]]:
                 """,
                 (recent_since, source, event_type),
             ).fetchone()
+            matched_count = int(summary["record_count"] or 0)
+            if search:
+                matched_count = int(db.execute(
+                    f"select count(*) from parcel_events where {where_sql}",
+                    where_params,
+                ).fetchone()[0])
             rows = db.execute(
-                """
+                f"""
                 select source_record_id, event_date, address, owner_name, project_name, summary,
                        source_url, source_record_hash, detector_version, first_seen_at, last_seen_at,
                        payload_json
                 from parcel_events
-                where source=? and event_type=?
+                where {where_sql}
                 order by event_date desc, source_record_id desc
-                limit ?
+                limit ? offset ?
                 """,
-                (source, event_type, bounded_limit),
+                (*where_params, bounded_limit, bounded_offset),
             ).fetchall()
     except (OSError, sqlite3.Error):
         return 503, unavailable
@@ -348,6 +387,11 @@ def pdmr_intent_payload(limit: int = 6) -> tuple[int, dict[str, Any]]:
         "newest_event": summary["newest_event"],
         "last_collected": summary["last_collected"],
         "items": items,
+        "matched_count": matched_count,
+        "limit": bounded_limit,
+        "offset": bounded_offset,
+        "has_more": bounded_offset + len(items) < matched_count,
+        "search": search or None,
         "generated_at": now_iso(),
         "contract": "Public pre-application source records only. Collection does not nominate a Candidate, verify a Signal or publish a claim.",
     }
@@ -410,10 +454,30 @@ def early_intel_payload() -> dict[str, Any]:
         "sunbiz_entities?select=fetched_at,date_filed,source,match_type"
         "&source=eq.sunbiz-sftp-corpus&order=fetched_at.desc.nullslast&limit=1"
     )
+    def status_from_clock(value: Any, current_hours: int, delayed_hours: int) -> str:
+        if not value:
+            return "unavailable"
+        try:
+            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            current = datetime.fromisoformat(now_iso().replace("Z", "+00:00"))
+            if current.tzinfo is None:
+                current = current.replace(tzinfo=timezone.utc)
+            age_hours = (current.astimezone(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds() / 3600
+        except (TypeError, ValueError):
+            return "unavailable"
+        if age_hours <= current_hours:
+            return "current"
+        if age_hours <= delayed_hours:
+            return "delayed"
+        return "stale"
+
     if private_sunbiz_code < 400 and isinstance(private_sunbiz_rows, list) and private_sunbiz_rows:
         latest_sunbiz = private_sunbiz_rows[0]
         sunbiz = {
-            "status": "current", "system_time": latest_sunbiz.get("fetched_at"),
+            "status": status_from_clock(latest_sunbiz.get("fetched_at"), 72, 336),
+            "system_time": latest_sunbiz.get("fetched_at"),
             "event_through": latest_sunbiz.get("date_filed"), "private": True,
         }
     fdep = sources.get("fdep", {})
@@ -421,11 +485,40 @@ def early_intel_payload() -> dict[str, Any]:
     permits = sources.get("permits", {})
     pdmr_code, pdmr = pdmr_intent_payload(limit=1)
     pdmr = pdmr if pdmr_code == 200 else {}
+    pdmr_receipt = ({
+        "status": status_from_clock(pdmr.get("last_collected"), 72, 168),
+        "event_through": pdmr.get("newest_event"),
+        "system_time": pdmr.get("last_collected"),
+    } if pdmr and int(pdmr.get("record_count") or 0) > 0 else ({"status": "unverified"} if pdmr else {}))
+    meeting_receipt = ({
+        "status": status_from_clock(meetings.get("updated_at"), 24, 72),
+        "event_through": next_meeting.get("date"),
+        "system_time": meetings.get("updated_at"),
+    } if isinstance(meetings, dict) and meetings.get("updated_at") else {})
+
+    def receipt_status(receipt: dict[str, Any], default: str = "unavailable") -> str:
+        value = str(receipt.get("status") or default).lower()
+        return value if value in {"current", "delayed", "stale", "suppressed", "error", "unavailable", "unverified"} else default
+
+    def combined_status(*receipts: dict[str, Any]) -> str:
+        statuses = [receipt_status(receipt) for receipt in receipts if receipt]
+        if not statuses:
+            return "unavailable"
+        for value in ("error", "unavailable", "stale", "suppressed", "delayed", "unverified"):
+            if value in statuses:
+                return value
+        return "current"
+
+    def connection_state(*receipts: dict[str, Any]) -> str:
+        statuses = [receipt_status(receipt) for receipt in receipts if receipt]
+        return "connected" if any(value not in {"error", "unavailable", "suppressed"} for value in statuses) else "unavailable"
 
     lanes = [
         {
             "phase": "01 · Planning intent", "label": "PDMR planning intent + agenda packets",
-            "status": "available" if pdmr else "watching" if next_meeting else "unavailable",
+            "status": combined_status(pdmr_receipt, meeting_receipt),
+            "connection": connection_state(pdmr_receipt, meeting_receipt),
+            "automation": "mixed" if pdmr_receipt and meeting_receipt else "manual" if pdmr_receipt else "automated" if meeting_receipt else "none",
             "event_through": pdmr.get("newest_event") or next_meeting.get("date"),
             "system_time": pdmr.get("last_collected") or meetings.get("updated_at"),
             "headline": ((f"PDMR reaches {pdmr.get('newest_event')} · {len(agendas)} posted agenda(s)"
@@ -436,9 +529,10 @@ def early_intel_payload() -> dict[str, Any]:
         },
         {
             "phase": "02 · Formation", "label": "Companies + principals",
-            "status": "available" if sunbiz.get("status") == "current" else "blocked",
+            "status": receipt_status(sunbiz),
+            "connection": connection_state(sunbiz), "automation": "automated",
             "event_through": sunbiz.get("event_through"), "system_time": sunbiz.get("system_time"),
-            "headline": ("Sunbiz exact-match resolver has private rows" if sunbiz.get("private")
+            "headline": (("Sunbiz exact-match resolver has private rows · " + receipt_status(sunbiz)) if sunbiz.get("private")
                          else "Sunbiz exact-match lane is current" if sunbiz.get("status") == "current"
                          else "Sunbiz has no usable public event clock"),
             "note": "Only exact entity matches may connect a company, officer or registered agent. Resolver rows remain private and source-linked.",
@@ -446,7 +540,8 @@ def early_intel_payload() -> dict[str, Any]:
         },
         {
             "phase": "03 · Capital", "label": "Ownership, deeds, debt + liens",
-            "status": "preliminary-ahead" if preliminary else "verified",
+            "status": combined_status(official_clerk, preliminary),
+            "connection": connection_state(official_clerk, preliminary), "automation": "automated",
             "event_through": preliminary.get("event_through") or official_clerk.get("event_through"),
             "system_time": preliminary.get("system_time"),
             "headline": ("Preliminary Clerk reaches " + str(preliminary.get("event_through"))
@@ -456,7 +551,8 @@ def early_intel_payload() -> dict[str, Any]:
         },
         {
             "phase": "04 · Regulatory", "label": "Environmental + airspace",
-            "status": "available" if (fdep or faa) else "unavailable",
+            "status": combined_status(fdep, faa),
+            "connection": connection_state(fdep, faa), "automation": "automated",
             "event_through": max(str(fdep.get("event_through") or ""), str(faa.get("event_through") or "")) or None,
             "system_time": max(str(fdep.get("system_time") or ""), str(faa.get("system_time") or "")) or None,
             "headline": f"FDEP through {fdep.get('event_through') or 'unknown'} · FAA through {faa.get('event_through') or 'unknown'}",
@@ -465,15 +561,20 @@ def early_intel_payload() -> dict[str, Any]:
         },
         {
             "phase": "05 · Execution", "label": "Applications, permits + inspections",
-            "status": "available" if permits else "unavailable",
+            "status": receipt_status(permits),
+            "connection": connection_state(permits), "automation": "automated",
             "event_through": permits.get("event_through"), "system_time": permits.get("system_time"),
             "headline": "Permit applications through " + str(permits.get("event_through") or "unknown"),
             "note": "Later-stage confirmation and workflow detail—not the definition of a Signal and not the only candidate source.",
             "href": "/data.html?search=permit:",
         },
     ]
+    summary = {}
+    for lane in lanes:
+        status = str(lane.get("status") or "unavailable")
+        summary[status] = summary.get(status, 0) + 1
     return {
-        "lanes": lanes, "generated_at": now_iso(),
+        "lanes": lanes, "summary": summary, "generated_at": now_iso(),
         "contract": "These are monitored source lanes, not five complete candidate detectors. Evidence and event clocks remain source-specific.",
     }
 
@@ -1332,8 +1433,10 @@ class Handler(SimpleHTTPRequestHandler):
             if not self.require_admin():
                 return
             params = parse_qs(urlparse(self.path).query)
-            limit = bounded_int(params.get("limit", [6])[0], 6, 1, 20)
-            code, payload = pdmr_intent_payload(limit)
+            limit = bounded_int(params.get("limit", [6])[0], 6, 1, 100)
+            offset = bounded_int(params.get("offset", [0])[0], 0, 0, 1_000_000)
+            search = params.get("search", [""])[0]
+            code, payload = pdmr_intent_payload(limit, offset, search)
             self.reply(payload, HTTPStatus.OK if code == 200 else HTTPStatus.SERVICE_UNAVAILABLE)
             return
         if route == "/api/admin/pdmr-candidates":
