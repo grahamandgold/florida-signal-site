@@ -392,12 +392,20 @@ def is_public_http_url(value: Any) -> bool:
 
 
 def supabase_public_rows(path: str) -> list[dict[str, Any]]:
-    request = urllib.request.Request(
-        f"{SUPABASE_URL}/rest/v1/{path}",
-        headers={"Accept": "application/json", "apikey": SUPABASE_PUBLISHABLE_KEY, "User-Agent": "FloridaSignalDataHealth/1.0"},
-    )
-    with urllib.request.urlopen(request, timeout=10) as response:
-        payload = json.loads(response.read(2_000_000).decode("utf-8"))
+    url = f"{SUPABASE_URL}/rest/v1/{path}"
+    for attempt in range(2):
+        request = urllib.request.Request(
+            url,
+            headers={"Accept": "application/json", "apikey": SUPABASE_PUBLISHABLE_KEY, "User-Agent": "FloridaSignalDataHealth/1.0"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                payload = json.loads(response.read(2_000_000).decode("utf-8"))
+            break
+        except urllib.error.HTTPError as error:
+            if attempt or error.code not in {500, 502, 503, 504}:
+                raise
+            time.sleep(0.15)
     if not isinstance(payload, list):
         raise ValueError("Supabase health response must be a list")
     return [row for row in payload if isinstance(row, dict)]

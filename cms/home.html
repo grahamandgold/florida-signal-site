@@ -66,7 +66,7 @@
     .change-card b { display: block; margin-top: 7px; font-size: 12px; }
     .change-card span { display: block; margin-top: 3px; color: var(--dw-muted); font-size: 10px; }
     .lead { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 24px; align-items: end; padding: clamp(24px,3.5vw,44px); border: 1px solid var(--dw-line); border-radius: 12px; background: var(--dw-paper); box-shadow: var(--dw-shadow); }
-    .lead h2 { max-width: 980px; margin: 9px 0 12px; font: 600 clamp(28px,4vw,52px)/1.08 var(--dw-serif); letter-spacing: -.025em; }
+    .lead h2 { max-width: 980px; margin: 9px 0 12px; font: 800 clamp(28px,4vw,52px)/1.08 var(--dw-font); letter-spacing: -.025em; }
     .lead p { max-width: 78ch; margin: 0; color: var(--dw-muted); font-size: 15px; }
     .lead__proof { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 21px; padding-top: 17px; border-top: 1px solid var(--dw-line); color: var(--dw-muted); font-size: 12px; }
     .lead__proof b { color: var(--dw-ink); }
@@ -85,6 +85,81 @@
     .sequence-row h3 { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
     .sequence-row p { margin: 0; color: var(--dw-muted); font-size: 12px; overflow-wrap: anywhere; }
     .sequence-row__clock { color: var(--dw-muted); text-align: right; font: 10px/1.45 var(--dw-mono); }
+    .intent-panel { border: 1px solid #8eb9b1; border-radius: 12px; background: linear-gradient(135deg,#effaf7 0,#fff 44%); box-shadow: var(--dw-shadow); overflow: hidden; }
+    .intent-panel__head { display: grid; grid-template-columns: minmax(0,1fr) repeat(3,minmax(100px,auto)); gap: 18px; align-items: end; padding: 22px 24px; border-bottom: 1px solid #c5ded8; }
+    .intent-panel__head h3 { margin: 4px 0 5px; font: 600 clamp(23px,3vw,34px)/1.08 var(--dw-serif); letter-spacing: -.025em; }
+    .intent-panel__head p { max-width: 710px; margin: 0; color: var(--dw-muted); font-size: 12px; }
+    .intent-stat { padding-left: 17px; border-left: 1px solid #c5ded8; }
+    .intent-stat strong { display: block; color: var(--dw-teal); font: 800 22px/1 var(--dw-mono); }
+    .intent-stat span { display: block; margin-top: 6px; color: var(--dw-muted); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
+    .intent-list { display: grid; }
+    .intent-card { display: grid; grid-template-columns: 112px minmax(0,1fr) minmax(190px,.38fr) auto; gap: 18px; align-items: start; padding: 19px 24px; border-top: 1px solid var(--dw-line); color: inherit; background: rgba(255,255,255,.76); text-decoration: none; }
+    .intent-card:first-child { border-top: 0; }
+    .intent-card:hover { background: #fff; }
+    .intent-card__id { color: var(--dw-teal); font: 800 11px/1.45 var(--dw-mono); }
+    .intent-card__id span { display: block; margin-top: 5px; color: var(--dw-muted); font-size: 9px; font-weight: 500; }
+    .intent-card h4 { margin: 0 0 5px; font-size: 16px; line-height: 1.3; }
+    .intent-card p { margin: 0; color: var(--dw-muted); font-size: 12px; }
+    .intent-card__facts { display: grid; gap: 4px; color: var(--dw-muted); font-size: 10px; }
+    .intent-card__facts b { color: var(--dw-ink); }
+    .intent-card__action { color: var(--dw-blue); font-size: 11px; font-weight: 800; white-space: nowrap; }
+    .intent-contract { margin: 0; padding: 11px 24px; border-top: 1px solid #c5ded8; color: #42645e; background: #e7f5f1; font-size: 10px; }
+    .shadow-panel { border: 1px solid var(--dw-line); border-radius: 12px; background: var(--dw-paper); box-shadow: var(--dw-shadow); overflow: hidden; }
+    .shadow-panel__head { display: grid; grid-template-columns: minmax(0,1fr) repeat(2,minmax(110px,auto)); gap: 20px; align-items: end; padding: 21px 24px; color: #fff; background: var(--dw-navy); }
+    .shadow-panel__head .eyebrow { color: #70d9c5; }
+    .shadow-panel__head h3 { margin: 4px 0 5px; font: 600 clamp(23px,3vw,34px)/1.08 var(--dw-serif); }
+    .shadow-panel__head p { max-width: 760px; margin: 0; color: #b8c7d8; font-size: 12px; }
+    .shadow-stat { padding-left: 18px; border-left: 1px solid rgba(255,255,255,.2); }
+    .shadow-stat strong { display: block; color: #70d9c5; font: 800 23px/1 var(--dw-mono); }
+    .shadow-stat span { display: block; margin-top: 6px; color: #b8c7d8; font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
+    .shadow-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .shadow-card { min-width: 0; padding: 21px 24px; border-top: 1px solid var(--dw-line); border-left: 1px solid var(--dw-line); }
+    .shadow-card:nth-child(odd) { border-left: 0; }
+    .shadow-card h4 { margin: 4px 0 7px; font-size: 18px; line-height: 1.25; }
+    .shadow-card > p { margin: 0; color: var(--dw-muted); font-size: 12px; }
+    .axis-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 7px; margin: 15px 0 13px; }
+    .axis-grid span { min-width: 0; padding: 8px; border: 1px solid var(--dw-line); background: #f7f9fb; }
+    .axis-grid strong { display: block; color: var(--dw-teal); font: 800 15px/1 var(--dw-mono); }
+    .axis-grid small { display: block; margin-top: 4px; color: var(--dw-muted); font-size: 8px; text-transform: uppercase; }
+    .rule-list { min-height: 34px; margin: 0; padding-left: 17px; color: var(--dw-muted); font-size: 10px; }
+    .shadow-context { display: grid; gap: 8px; margin-top: 14px; padding: 12px 13px; border: 1px solid #cad8e6; border-radius: 7px; background: #f6f9fc; }
+    .shadow-context__row { display: grid; grid-template-columns: 112px minmax(0,1fr); gap: 10px; margin: 0; color: var(--dw-muted); font-size: 10px; line-height: 1.45; }
+    .shadow-context__row dt { color: var(--dw-ink); font-weight: 800; }
+    .shadow-context__row dd { margin: 0; }
+    .shadow-context__row--warning { padding-top: 8px; border-top: 1px solid #dce5ee; }
+    .shadow-context__row--stale dd { color: #8b4a12; font-weight: 700; }
+    .shadow-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 15px; }
+    .shadow-actions a, .shadow-actions button { min-height: 37px; display: inline-flex; align-items: center; border: 1px solid var(--dw-line); border-radius: 6px; padding: 8px 11px; color: var(--dw-blue); background: #fff; font-size: 10px; font-weight: 800; text-decoration: none; }
+    .shadow-actions button { border-color: var(--dw-navy); color: #fff; background: var(--dw-navy); cursor: pointer; }
+    .shadow-actions button:disabled { opacity: .58; cursor: default; }
+    .bank-status { flex-basis: 100%; min-height: 16px; color: var(--dw-muted); font-size: 9px; }
+    .shadow-contract { margin: 0; padding: 11px 24px; border-top: 1px solid var(--dw-line); color: var(--dw-muted); background: #f5f7fa; font-size: 10px; }
+    .machine-grid { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(320px,.65fr); gap: 16px; }
+    .machine-panel { border: 1px solid var(--dw-line); border-radius: 10px; background: var(--dw-paper); box-shadow: var(--dw-shadow); overflow: hidden; }
+    .machine-panel__head { padding: 18px 20px 15px; border-bottom: 1px solid var(--dw-line); }
+    .machine-panel__head h3 { margin: 3px 0 4px; font-size: 18px; }
+    .machine-panel__head p { margin: 0; color: var(--dw-muted); font-size: 11px; }
+    .agent-stage { display: grid; grid-template-columns: 88px minmax(160px,.8fr) minmax(210px,1fr) auto; gap: 12px; align-items: start; padding: 13px 20px; border-top: 1px solid var(--dw-line); }
+    .agent-stage:first-child { border-top: 0; }
+    .agent-stage b { font-size: 12px; }
+    .agent-stage p { margin: 0; color: var(--dw-muted); font-size: 11px; }
+    .agent-stage__owner { color: var(--dw-ink) !important; }
+    .status-pill { padding: 4px 7px; border: 1px solid var(--dw-line); color: var(--dw-muted); font: 800 9px/1.2 var(--dw-mono); text-transform: uppercase; white-space: nowrap; }
+    .status-pill[data-status="coverage_gap"], .status-pill[data-status="not_connected"] { color: #8b1e10; border-color: #e5a89f; background: #fff0ed; }
+    .status-pill[data-status="shadow"], .status-pill[data-status="partial"], .status-pill[data-status="source_dependent"] { color: #775500; border-color: #e5c86d; background: #fff9dc; }
+    .machine-warning { margin: 0 0 14px; padding: 12px 14px; border: 2px solid #c64935; border-radius: 8px; color: #7b1d12; background: #fff1ee; font-size: 11px; font-weight: 800; }
+    .weight-list { display: grid; gap: 13px; padding: 18px 20px; }
+    .weight-row { display: grid; grid-template-columns: minmax(0,1fr) 46px; gap: 7px 12px; align-items: center; }
+    .weight-row label { font-size: 11px; font-weight: 800; }
+    .weight-row output { color: var(--dw-teal); font: 800 15px/1 var(--dw-mono); text-align: right; }
+    .weight-row input { grid-column: 1 / -1; width: 100%; accent-color: var(--dw-teal); }
+    .weight-row input:disabled { opacity: .42; cursor: not-allowed; }
+    .weight-row small { grid-column: 1 / -1; color: var(--dw-muted); font-size: 9px; }
+    .weight-actions { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; margin-top: 4px; }
+    .weight-actions input { min-width: 0; border: 1px solid var(--dw-line); padding: 10px; }
+    .weight-rationale { min-height: 74px; width: 100%; resize: vertical; border: 1px solid var(--dw-line); padding: 10px; font: inherit; }
+    .weight-actions button { border: 0; padding: 10px 12px; color: #fff; background: var(--dw-navy); font-weight: 800; }
+    .profile-note { margin: 0; color: var(--dw-muted); font-size: 10px; }
     .work-grid { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(280px,.6fr); gap: 18px; }
     .lead-list { display: grid; gap: 10px; }
     .candidate-card { display: grid; grid-template-columns: 42px minmax(0,1fr) auto; gap: 15px; align-items: start; padding: 18px; border: 1px solid var(--dw-line); border-radius: 10px; color: inherit; background: var(--dw-paper); text-decoration: none; }
@@ -110,7 +185,7 @@
       .sequence-row__stage { grid-row: 1 / span 3; }
       .sequence-row h3, .sequence-row p, .sequence-row__clock { grid-column: 2; text-align: left; }
     }
-    @media (max-width: 1050px) { .changes { grid-template-columns: repeat(2,1fr); } .work-grid, .project-control__body { grid-template-columns: 1fr; } .project-block + .project-block { border-left: 0; border-top: 1px solid var(--dw-line); } }
+    @media (max-width: 1050px) { .changes { grid-template-columns: repeat(2,1fr); } .work-grid, .machine-grid, .project-control__body { grid-template-columns: 1fr; } .project-block + .project-block { border-left: 0; border-top: 1px solid var(--dw-line); } .intent-panel__head { grid-template-columns: 1fr repeat(3,minmax(90px,1fr)); } .intent-panel__head > div:first-child { grid-column: 1 / -1; } .intent-card { grid-template-columns: 100px minmax(0,1fr) auto; } .intent-card__facts { grid-column: 2; } .shadow-list { grid-template-columns: 1fr; } .shadow-card { border-left: 0; } }
     @media (max-width: 760px) {
       main { padding-top: 18px !important; }
       .view-head { align-items: flex-start; flex-direction: column; }
@@ -127,6 +202,16 @@
       .lead__action { justify-self: start; }
       .section-head { align-items: flex-start; flex-direction: column; }
       .section-head p { text-align: left; }
+      .intent-panel__head { grid-template-columns: repeat(3,1fr); padding: 19px; }
+      .intent-stat { padding-left: 10px; }
+      .intent-card { grid-template-columns: 1fr auto; padding: 17px 19px; }
+      .intent-card__id, .intent-card__facts { grid-column: 1 / -1; }
+      .intent-contract { padding-inline: 19px; }
+      .shadow-panel__head { grid-template-columns: 1fr 1fr; padding: 19px; }
+      .shadow-panel__head > div:first-child { grid-column: 1 / -1; }
+      .shadow-stat { padding-left: 10px; }
+      .shadow-card { padding: 19px; }
+      .shadow-contract { padding-inline: 19px; }
     }
     @media (max-width: 480px) {
       .changes { grid-template-columns: 1fr 1fr; }
@@ -141,6 +226,8 @@
       .sequence-row h3, .sequence-row p, .sequence-row__clock { grid-column: 1; }
       .candidate-card { grid-template-columns: 32px minmax(0,1fr); padding: 15px; }
       .candidate-card__action { grid-column: 2; }
+      .agent-stage { grid-template-columns: 1fr auto; }
+      .agent-stage__owner, .agent-stage p { grid-column: 1 / -1; }
     }
   </style>
 </head>
@@ -156,45 +243,78 @@
       <div class="empty">Opening the canonical Early Radar project state and independent live health receipts…</div>
     </section>
 
-    <section class="stage-rail" aria-label="Editorial stages">
+    <section aria-labelledby="changes-title">
+      <div class="section-head"><div><div class="eyebrow">Since you last looked</div><h2 id="changes-title">What needs attention now</h2></div><p id="shift-note">Counts come from the private decision queue and source indexes.</p></div>
+      <div class="changes">
+        <article class="change-card"><strong id="ready-count">—</strong><b>Ready for human review</b><span>Packet present · completeness not assessed</span></article>
+        <article class="change-card"><strong id="blocked-count">—</strong><b>Need evidence</b><span>Quarantined from approval</span></article>
+        <article class="change-card"><strong id="agenda-count">—</strong><b>Agenda leads indexed</b><span id="agenda-window">Historical window loading · not scored</span></article>
+        <article class="change-card"><strong id="source-count">—</strong><b>Source lanes ingesting</b><span>1 source-indexed (PDMR) · 1 shadow-scored (execution)</span></article>
+      </div>
+    </section>
+
+    <section class="section" id="planning-intent" aria-labelledby="intent-title">
+      <div class="section-head"><div><div class="eyebrow">Early Detector · planning intent</div><h2 id="intent-title">See the project before the formal application</h2></div><p>LauderBuild preliminary-development meeting requests are public pre-application records. They are shown as source evidence—not yet Candidates, Signals or stories.</p></div>
+      <div class="intent-panel" id="intent-panel">
+        <div class="empty">Opening the read-only PDMR evidence index…</div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="pdmr-candidate-title">
+      <div class="section-head"><div><div class="eyebrow">Ranked locally · shadow only</div><h2 id="pdmr-candidate-title">Strongest current planning Candidates</h2></div><p>Deterministic importance, evidence, recency and early-stage axes. Shortlisting starts newsletter evidence review; it never publishes or sends.</p></div>
+      <div class="shadow-panel" id="pdmr-candidate-panel"><div class="empty">Ranking the current PDMR evidence window…</div></div>
+    </section>
+
+    <section class="section work-grid" aria-label="Latest newsroom decisions">
+      <div>
+        <div class="section-head"><div><div class="eyebrow">Newest evidence-ready leads first</div><h2>Latest items to confirm</h2></div><p>Sorted by source-event date. <a href="/review.html">Open full triage queue →</a></p></div>
+        <div class="lead-list" id="lead-list"><div class="empty">Loading the latest source-gated Candidates…</div></div>
+      </div>
+      <aside class="action-panel">
+        <div class="eyebrow" style="color:#70d9c5">Decision queue</div><h2>Confirm, hold or reject one lead</h2>
+        <div class="action-row"><span><b>Ready to review</b><span>Evidence packet present</span></span><strong id="action-ready">—</strong></div>
+        <div class="action-row"><span><b>Blocked</b><span>Needs evidence before a decision</span></span><strong id="action-blocked">—</strong></div>
+        <div class="action-row"><span><b>Brief modules</b><span>Human-cleared only</span></span><strong>0</strong></div>
+        <a class="primary-link" href="/review.html">Review latest item</a>
+      </aside>
+    </section>
+
+    <article class="lead" id="lead-story" aria-live="polite">
+      <div><div class="eyebrow">Newest raw Candidate pattern · not a Signal</div><h2>Opening the newest reviewable lead…</h2><p>No claim will be shown here until its evidence packet passes the server gate.</p></div>
+    </article>
+
+    <section class="stage-rail section" aria-label="Editorial stages">
       <div class="stage-step"><b>Record</b><span>Immutable source item</span></div>
       <div class="stage-step is-active"><b>Candidate</b><span>Machine-nominated lead</span></div>
       <div class="stage-step"><b>Signal</b><span>Editor-verified change</span></div>
       <div class="stage-step"><b>Story</b><span>Context and impact</span></div>
     </section>
 
-    <section aria-labelledby="changes-title">
-      <div class="section-head"><div><div class="eyebrow">Since you last looked</div><h2 id="changes-title">What needs attention now</h2></div><p id="shift-note">Counts come from the private decision queue and source indexes.</p></div>
-      <div class="changes">
-        <article class="change-card"><strong id="ready-count">—</strong><b>Ready for human review</b><span>Complete evidence packet</span></article>
-        <article class="change-card"><strong id="blocked-count">—</strong><b>Need evidence</b><span>Quarantined from approval</span></article>
-        <article class="change-card"><strong id="agenda-count">—</strong><b>Agenda leads indexed</b><span id="agenda-window">Historical window loading</span></article>
-        <article class="change-card"><strong id="source-count">—</strong><b>Source lanes reporting</b><span>Event and system clocks kept separate</span></article>
-      </div>
-    </section>
-
-    <article class="lead" id="lead-story" aria-live="polite">
-      <div><div class="eyebrow">Top evidence-ready Candidate</div><h2>Opening the strongest current lead…</h2><p>No claim will be shown here until its evidence packet passes the server gate.</p></div>
-    </article>
-
     <section class="section" aria-labelledby="sequence-title">
       <div class="section-head"><div><div class="eyebrow">Early-intelligence sequence</div><h2 id="sequence-title">Follow the project before the permit</h2></div><p>Agenda and entity clues can reveal intent. Permits are later evidence of execution—not the beginning of every story.</p></div>
       <div class="sequence" id="sequence"><div class="empty">Checking each monitored source lane…</div></div>
     </section>
 
-    <section class="section work-grid" aria-label="Current newsroom work">
-      <div>
-        <div class="section-head"><div><div class="eyebrow">Highest-value leads</div><h2>Evidence-ready Candidates</h2></div><p><a href="/review.html">Open full triage queue →</a></p></div>
-        <div class="lead-list" id="lead-list"><div class="empty">Loading source-gated Candidates…</div></div>
+    <section class="section" aria-labelledby="machine-title">
+      <div class="section-head"><div><div class="eyebrow">Control room</div><h2 id="machine-title">Signal Machine pipeline</h2></div><p>Every stage names its real owner. Weight experiments are draft-only until a backtest and explicit activation gate exist.</p></div>
+      <p class="machine-warning">SHADOW ONLY: PERMITS / EXECUTION AND LOCAL PDMR PLANNING INTENT. PDMR Candidate ranking is read-only and disconnected from the production queue. Agenda, Sunbiz, capital and regulatory Candidate detectors are not connected. A green source receipt does not mean scoring coverage.</p>
+      <div class="machine-grid">
+        <div class="machine-panel">
+          <div class="machine-panel__head"><h3>Who is responsible for what</h3><p id="machine-baseline">Loading the deterministic baseline and coverage gaps…</p></div>
+          <div id="machine-stages"><div class="empty">Loading pipeline ownership…</div></div>
+        </div>
+        <div class="machine-panel">
+          <div class="machine-panel__head"><h3>Discovery multiplier preview</h3><p><strong>DRAFT ONLY · NO PRODUCTION EFFECT.</strong> Bounded 1.00×–2.00× multipliers can simulate triage order only; they never change evidence confidence, eligibility or publication.</p></div>
+          <form class="weight-list" id="weight-form">
+            <div id="weight-controls"><div class="empty">Loading source lanes…</div></div>
+            <div class="weight-actions"><input id="profile-name" required maxlength="120" placeholder="Draft profile name"><button type="submit">Save draft</button></div>
+            <textarea class="weight-rationale" id="profile-rationale" required maxlength="1000" placeholder="Why are you testing these multipliers?"></textarea>
+            <p class="profile-note" id="profile-note">Saving records a versioned simulation profile only. Backtest status begins “not run.”</p>
+          </form>
+        </div>
       </div>
-      <aside class="action-panel">
-        <div class="eyebrow" style="color:#70d9c5">Action queue</div><h2>One next step</h2>
-        <div class="action-row"><span><b>Review Candidates</b><span>Evidence ready</span></span><strong id="action-ready">—</strong></div>
-        <div class="action-row"><span><b>Repair evidence</b><span>Approval blocked</span></span><strong id="action-blocked">—</strong></div>
-        <div class="action-row"><span><b>Build Brief</b><span>Human-cleared only</span></span><strong>0</strong></div>
-        <a class="primary-link" href="/review.html">Start triage</a>
-      </aside>
     </section>
+
   </main>
 
   <script src="/desk-shell.js"></script>
@@ -202,21 +322,34 @@
   (function () {
     "use strict";
     var newsroom = window.FloridaSignalNewsroom;
+    var pdmrCandidateItems = {};
     function esc(value) { return String(value == null ? "" : value).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
     function human(value) { return String(value || "Candidate").toLowerCase().replace(/_/g," ").replace(/\b\w/g,function(c){return c.toUpperCase();}); }
-    function formatDate(value) { if(value==null||value===""||value===0||value==="0")return "not exposed";var d=new Date(value);return Number.isNaN(d.getTime())||d.getFullYear()<2000?"not exposed":d.toLocaleDateString(); }
+    function formatDate(value) { if(value==null||value===""||value===0||value==="0")return "not exposed";var text=String(value),plain=/^(\d{4})-(\d{2})-(\d{2})$/.exec(text),d=plain?new Date(Number(plain[1]),Number(plain[2])-1,Number(plain[3])):new Date(value);return Number.isNaN(d.getTime())||d.getFullYear()<2000?"not exposed":d.toLocaleDateString(); }
     function formatDateTime(value) { if(!value)return "not exposed";var d=new Date(value);return Number.isNaN(d.getTime())?"not exposed":d.toLocaleString(); }
     function projectHealthHtml(row) { var status=String(row.status||"UNKNOWN").toUpperCase(),clock=row.event_through?"event through "+row.event_through:row.system_time?"system "+formatDateTime(row.system_time):"no live clock";return '<article class="project-health__row" data-health="'+esc(status)+'"><b>'+esc(row.label||row.id)+'</b><span><strong>'+esc(status)+'</strong> · '+esc(clock)+'</span><span>'+esc(row.deployment_status||"status unknown")+' · '+esc(row.touch_policy||"touch policy unknown")+'</span></article>'; }
-    function projectStateHtml(data) { var state=data.project_state||{},now=state.now||{},next=state.next||{},research=state.active_research||{},decision=state.latest_material_decision||{},health=Array.isArray(data.operational_health)?data.operational_health:[],sensors=Array.isArray(state.sensor_status)?state.sensor_status:[],claims=Array.isArray(state.blocked_claims)?state.blocked_claims:[],risks=Array.isArray(state.risks)?state.risks:[],runtimeRisk=risks.find(function(risk){return risk.id==="runtime-drift";})||{},sourceRevision=state.source_revision||{};return '<div class="project-control__head"><div><div class="eyebrow">Operator truth · Early Radar control</div><h2 id="project-control-title">Project state</h2><p>'+esc(state.product||"Canonical product description unavailable.")+'</p></div><div class="project-control__mode">'+esc(state.current_mode||"MODE UNKNOWN")+'</div></div><div class="project-control__tasks"><div class="project-task"><b>NOW · current task</b><strong>'+esc(now.title||"UNKNOWN")+'</strong><span>'+esc(now.status||"UNKNOWN")+'</span></div><div class="project-task"><b>NEXT · ready when authorized</b><strong>'+esc(next.title||"UNKNOWN")+'</strong><span>'+esc(next.status||"UNKNOWN")+'</span></div></div>'+(runtimeRisk.detail?'<p class="project-risk">RUNTIME DRIFT / NEEDS SEPARATE RECONCILIATION · '+esc(runtimeRisk.detail)+'</p>':'')+'<div class="project-control__body"><div class="project-block"><h3>Production pipeline health</h3><p class="project-block__intro">Independent live receipts only. UNKNOWN means no current health contract answered; a tracked manifest never supplies a green check.</p><div class="project-health">'+(health.length?health.map(projectHealthHtml).join(""):'<div class="empty">Live pipeline health unavailable. Every lane remains UNKNOWN.</div>')+'</div></div><div class="project-block"><h3>Sensor status</h3><p class="project-block__intro">Researched, built, automated, deployed and validated are separate states.</p><ul class="project-list">'+sensors.map(function(sensor){return '<li><b>'+esc(sensor.sensor)+' · '+esc(sensor.status)+'</b>'+esc(sensor.detail||"")+'</li>';}).join("")+'</ul><div class="project-research"><h4>Active research · '+esc(research.status||"UNKNOWN")+'</h4><p><b>'+esc(research.study||"Study unavailable")+'</b><br>'+esc(research.cohort||"")+'</p><p>'+esc(research.current_gate||"")+'</p><p><b>Descriptive only:</b> '+esc(research.descriptive_result||"No result authorized")+'</p><p><b>Not proven:</b> '+esc(research.not_proven||"Unknown")+'</p><h4 style="margin-top:14px">Claims blocked</h4><ul class="blocked-claims">'+claims.map(function(claim){return '<li>'+esc(claim)+'</li>';}).join("")+'</ul><p><b>Latest decision:</b> '+esc(decision.decision||"UNKNOWN")+'</p></div></div></div><p class="project-control__foot"><span>Project state reconciled '+esc(formatDateTime(state.verified_at))+' · base '+esc(sourceRevision.base_head||sourceRevision.head||"revision unknown")+'</span><span>Live health generated '+esc(formatDateTime(data.live_health_generated_at))+'</span></p>'; }
-    async function loadProjectState() { var target=document.getElementById("project-control");try{var data=await newsroom.admin("/api/admin/project-state");target.innerHTML=projectStateHtml(data);}catch(error){target.innerHTML='<div class="empty error"><b>Project state unavailable.</b> No status was inferred. Open the tracked canonical front door before continuing.</div>';}}
+    function projectStateHtml(data) { var state=data.project_state||{},now=state.now||{},next=state.next||{},research=state.active_research||{},decision=state.latest_material_decision||{},health=Array.isArray(data.operational_health)?data.operational_health:[],sensors=Array.isArray(state.sensor_status)?state.sensor_status:[],claims=Array.isArray(state.blocked_claims)?state.blocked_claims:[],risks=Array.isArray(state.risks)?state.risks:[],runtimeRisk=risks.find(function(risk){return risk.id==="runtime-drift";})||{};return '<div class="project-control__head"><div><div class="eyebrow">Operator truth · Early Radar control</div><h2 id="project-control-title">Project state</h2><p>'+esc(state.product||"Canonical product description unavailable.")+'</p></div><div class="project-control__mode">'+esc(state.current_mode||"MODE UNKNOWN")+'</div></div><div class="project-control__tasks"><div class="project-task"><b>NOW · one active task</b><strong>'+esc(now.title||"UNKNOWN")+'</strong><span>'+esc(now.status||"UNKNOWN")+'</span></div><div class="project-task"><b>NEXT · frozen until NOW closes</b><strong>'+esc(next.title||"UNKNOWN")+'</strong><span>'+esc(next.status||"UNKNOWN")+'</span></div></div>'+(runtimeRisk.detail?'<p class="project-risk">RUNTIME DRIFT / NEEDS SEPARATE RECONCILIATION · '+esc(runtimeRisk.detail)+'</p>':'')+'<div class="project-control__body"><div class="project-block"><h3>Production pipeline health</h3><p class="project-block__intro">Independent live receipts only. UNKNOWN means no current health contract answered; a tracked manifest never supplies a green check.</p><div class="project-health">'+(health.length?health.map(projectHealthHtml).join(""):'<div class="empty">Live pipeline health unavailable. Every lane remains UNKNOWN.</div>')+'</div></div><div class="project-block"><h3>Sensor status</h3><p class="project-block__intro">Researched, built, automated, deployed and validated are separate states.</p><ul class="project-list">'+sensors.map(function(sensor){return '<li><b>'+esc(sensor.sensor)+' · '+esc(sensor.status)+'</b>'+esc(sensor.detail||"")+'</li>';}).join("")+'</ul><div class="project-research"><h4>Active research · '+esc(research.status||"UNKNOWN")+'</h4><p><b>'+esc(research.study||"Study unavailable")+'</b><br>'+esc(research.cohort||"")+'</p><p>'+esc(research.current_gate||"")+'</p><p><b>Descriptive only:</b> '+esc(research.descriptive_result||"No result authorized")+'</p><p><b>Not proven:</b> '+esc(research.not_proven||"Unknown")+'</p><h4 style="margin-top:14px">Claims blocked</h4><ul class="blocked-claims">'+claims.map(function(claim){return '<li>'+esc(claim)+'</li>';}).join("")+'</ul><p><b>Latest decision:</b> '+esc(decision.decision||"UNKNOWN")+'</p></div></div></div><p class="project-control__foot"><span>Project state reconciled '+esc(formatDateTime(state.verified_at))+' · '+esc((state.source_revision||{}).head||"revision unknown")+'</span><span>Live health generated '+esc(formatDateTime(data.live_health_generated_at))+'</span></p>'; }
+    async function loadProjectState() { var target=document.getElementById("project-control");try{var data=await newsroom.admin("/api/admin/project-state");target.innerHTML=projectStateHtml(data);}catch(error){target.innerHTML='<div class="empty error"><b>Project state unavailable.</b> No status was inferred. Open the tracked START_HERE document before continuing.</div>';}}
+    function pdmrFacts(item) { var rows=[["Stage",item.development_stage],["Type",item.development_type],["Units / use",item.units_text],["Parking",item.parking_spaces],["Folio",item.folio],["Owner",item.owner_name]];return rows.filter(function(row){return row[1]!=null&&row[1]!=="";}).map(function(row){return '<span><b>'+esc(row[0])+':</b> '+esc(row[1])+'</span>';}).join(""); }
+    function pdmrHtml(item) { var href=/^https:\/\/aca-prod\.accela\.com\/FTL\//.test(String(item.source_url||""))?item.source_url:"#";return '<a class="intent-card" href="'+esc(href)+'" target="_blank" rel="noreferrer"><div class="intent-card__id">'+esc(item.source_record_id)+'<span>'+esc(formatDate(item.event_date))+' · '+esc(item.record_status||"status unavailable")+'</span></div><div><div class="eyebrow">Source record · not a Signal</div><h4>'+esc(item.project_name||item.address||item.source_record_id)+'</h4><p>'+esc(item.project_description||"No public project narrative was extracted.")+'</p></div><div class="intent-card__facts">'+pdmrFacts(item)+'</div><span class="intent-card__action">Official record ↗</span></a>'; }
+    function candidateSource(item) { var records=item&&item.evidence_packet&&Array.isArray(item.evidence_packet.records)?item.evidence_packet.records:[];return records[0]||{}; }
+    function axisHtml(item) { var axes=item.axes||{};return [["Evidence",axes.evidence_confidence],["Importance",axes.editorial_importance],["Recency",axes.recency],["Early stage",axes.early_stage_priority]].map(function(axis){return '<span><strong>'+esc(axis[1])+'</strong><small>'+esc(axis[0])+'</small></span>';}).join(""); }
+    function candidateContextHtml(item) { var principal=item&&item.principal_context&&typeof item.principal_context==="object"?item.principal_context:{},parcel=item&&item.parcel_context&&typeof item.parcel_context==="object"?item.parcel_context:{},provenance=parcel.provenance&&typeof parcel.provenance==="object"?parcel.provenance:{},sources=Array.isArray(provenance.sources)?provenance.sources:[],rows=[],owner=principal.source_owner_name||item.owner_name,folio=parcel.exact_folio||item.verified_parcel_id,status=String(parcel.status||"").toUpperCase(),resolution=String(parcel.parcel_resolution_state||"UNRESOLVED").toUpperCase(),exactCount=Number(parcel.exact_folio_permit_count),exactComplete=parcel.exact_folio_permit_coverage_complete===true,addressCount=Number(parcel.address_only_permit_count),addressComplete=parcel.address_context_coverage_complete===true,otherFolios=Array.isArray(parcel.address_only_folios)?parcel.address_only_folios.filter(Boolean):[],masterFolios=Array.isArray(parcel.master_folios)?parcel.master_folios.filter(Boolean):[];if(owner)rows.push('<div class="shadow-context__row"><dt>Owner</dt><dd>Source-listed — '+esc(owner)+'</dd></div>');if(principal.decision_maker_status==="not_independently_verified")rows.push('<div class="shadow-context__row"><dt>Principal</dt><dd>Not independently verified</dd></div>');if(status!=="AVAILABLE")rows.push('<div class="shadow-context__row shadow-context__row--warning"><dt>Parcel context</dt><dd>Unavailable — Candidate ranking unchanged</dd></div>');if(status==="AVAILABLE"&&resolution==="EXACT")rows.push('<div class="shadow-context__row"><dt>Parcel resolution</dt><dd>Exact parcel resolved for '+esc(folio)+'</dd></div>');if(status==="AVAILABLE"&&resolution==="MASTER_ONLY")rows.push('<div class="shadow-context__row shadow-context__row--warning"><dt>Parcel resolution</dt><dd>Exact parcel '+esc(folio)+' was not resolved in the parcel index; master/building context only'+(masterFolios.length?' ('+esc(masterFolios.join(", "))+')':'')+'</dd></div>');if(status==="AVAILABLE"&&resolution==="UNRESOLVED")rows.push('<div class="shadow-context__row shadow-context__row--warning"><dt>Parcel resolution</dt><dd>Unresolved in the stated context sources</dd></div>');if(status==="AVAILABLE"&&folio){if(exactComplete&&Number.isFinite(exactCount))rows.push('<div class="shadow-context__row"><dt>Exact-folio activity</dt><dd>'+esc(exactCount)+' permit record'+(exactCount===1?'':'s')+' observed in the complete stated lookup for '+esc(folio)+(exactCount===0?' — not proof that no permit exists':'')+'</dd></div>');else rows.push('<div class="shadow-context__row shadow-context__row--warning"><dt>Exact-folio activity</dt><dd>Coverage incomplete for '+esc(folio)+'; no zero conclusion is available</dd></div>');}if(status==="AVAILABLE"&&Number.isFinite(addressCount)&&addressCount>0)rows.push('<div class="shadow-context__row shadow-context__row--warning"><dt>Address-only context</dt><dd>'+(addressComplete?'':'At least ')+esc(addressCount)+' record'+(addressCount===1?'':'s')+' share this street address'+(otherFolios.length?' on different folio '+esc(otherFolios.join(", ")):' on a different folio')+'; <b>no project linkage was established by this lookup</b></dd></div>');else if(status==="AVAILABLE"&&!addressComplete)rows.push('<div class="shadow-context__row shadow-context__row--warning"><dt>Address-only context</dt><dd>Coverage incomplete; no absence conclusion is available</dd></div>');if(sources.length){var sourceText=sources.map(function(source){var text=String(source.label||source.source||"Context source")+(source.source_as_of?' through '+formatDate(source.source_as_of):' · source date unknown')+(source.coverage_state==="PARTIAL"?' · partial coverage':source.coverage_state==="UNKNOWN"?' · coverage unknown':'')+(source.freshness_state==="STALE"?' · stale':source.freshness_state==="UNKNOWN"?' · freshness unknown':'');return esc(text);}).join(' · '),hasSourceWarning=sources.some(function(source){return source&&(source.freshness_state==="STALE"||source.freshness_state==="UNKNOWN"||source.coverage_state!=="COMPLETE");});rows.push('<div class="shadow-context__row'+(hasSourceWarning?' shadow-context__row--stale':'')+'"><dt>Context provenance</dt><dd>'+sourceText+(provenance.contract_version?' · '+esc(provenance.contract_version):'')+'</dd></div>');}return rows.length?'<dl class="shadow-context" aria-label="Candidate evidence context">'+rows.join("")+'</dl>':""; }
+    function shadowCandidateHtml(item) { var source=candidateSource(item),rules=Array.isArray(item.rules_fired)?item.rules_fired:[],href=/^https:\/\//.test(String(source.source_url||""))?source.source_url:"#";return '<article class="shadow-card"><div class="eyebrow">Shadow Candidate · '+esc(item.source_record_id)+'</div><h4>'+esc(item.generated_headline||item.source_record_id)+'</h4><p>'+esc(item.generated_summary||"Open the source evidence before deciding whether this belongs in a Brief.")+'</p><div class="axis-grid">'+axisHtml(item)+'</div><ul class="rule-list">'+rules.slice(0,4).map(function(rule){return '<li>'+esc(rule.label)+'</li>';}).join("")+'</ul>'+candidateContextHtml(item)+'<div class="shadow-actions"><a href="'+esc(href)+'" target="_blank" rel="noreferrer">Open source ↗</a><button type="button" data-pdmr-bank="'+esc(item.signal_id)+'">Shortlist for Brief</button><span class="bank-status" data-bank-status="'+esc(item.signal_id)+'"></span></div></article>'; }
     function packet(item) { return item && item.evidence_packet && Array.isArray(item.evidence_packet.records) ? item.evidence_packet : {records:[],supported_claims:[],unknowns:[]}; }
-    function itemHtml(item,index) { var p=packet(item);var claims=Array.isArray(p.supported_claims)?p.supported_claims:[];var unknowns=Array.isArray(p.unknowns)?p.unknowns:[];return '<a class="candidate-card" href="/review.html"><span class="candidate-card__number">'+String(index+1).padStart(2,"0")+'</span><div><div class="eyebrow">'+esc(human(item.candidate_type||item.signal_type))+'</div><h3>'+esc(item.editor_headline||item.generated_headline||item.signal_id||"Untitled Candidate")+'</h3><p>'+esc(item.editor_summary||item.generated_summary||"Open the evidence packet for the supported facts and unknowns.")+'</p><div class="candidate-card__meta"><span><b>'+p.records.length+'</b> source records</span><span><b>'+claims.length+'</b> supported facts</span><span><b>'+unknowns.length+'</b> unknowns</span><span>latest event '+esc(formatDate(item.source_record_date))+'</span></div></div><span class="candidate-card__action">Read evidence →</span></a>'; }
+    function candidateTitle(item) { var p=packet(item);var record=(p.records||[]).find(function(row){return row&&row.address;});var kind=human(item.candidate_type||item.signal_type||"Candidate");return kind+(record&&record.address?" · "+record.address:item.signal_id?" · "+item.signal_id:""); }
+    function itemHtml(item,index) { var p=packet(item);var claims=Array.isArray(p.supported_claims)?p.supported_claims:[];var unknowns=Array.isArray(p.unknowns)?p.unknowns:[];return '<a class="candidate-card" href="/review.html"><span class="candidate-card__number">'+String(index+1).padStart(2,"0")+'</span><div><div class="eyebrow">Raw Candidate pattern · not a Signal</div><h3>'+esc(candidateTitle(item))+'</h3><p>'+esc(item.editor_summary||item.generated_summary||"Open the evidence packet for the extracted assertions and unknowns.")+'</p><div class="candidate-card__meta"><span><b>'+p.records.length+'</b> source records</span><span><b>'+claims.length+'</b> extracted assertions</span><span><b>'+unknowns.length+'</b> unknowns</span><span>latest event '+esc(formatDate(item.source_record_date))+'</span></div></div><span class="candidate-card__action">Read evidence →</span></a>'; }
     async function loadSummary() { try { var data=await newsroom.admin("/api/admin/review-summary");["ready-count","action-ready"].forEach(function(id){document.getElementById(id).textContent=data.ready;});["blocked-count","action-blocked"].forEach(function(id){document.getElementById(id).textContent=data.blocked;}); } catch(error) { document.getElementById("shift-note").textContent="Decision queue unavailable. No count was inferred.";document.getElementById("shift-note").classList.add("error"); } }
-    async function loadAgenda() { try { var data=await newsroom.admin("/api/admin/agenda-watch");document.getElementById("agenda-count").textContent=data.actionable_rows;document.getElementById("agenda-window").textContent="Events "+(data.event_start||"unknown")+"–"+(data.event_through||"unknown"); } catch(error) { document.getElementById("agenda-count").textContent="—";document.getElementById("agenda-window").textContent="Agenda index unavailable"; } }
+    async function loadAgenda() { try { var data=await newsroom.admin("/api/admin/agenda-watch");document.getElementById("agenda-count").textContent=data.actionable_rows;document.getElementById("agenda-window").textContent="Events "+(data.event_start||"unknown")+"–"+(data.event_through||"unknown")+" · not scored"; } catch(error) { document.getElementById("agenda-count").textContent="—";document.getElementById("agenda-window").textContent="Agenda index unavailable · not scored"; } }
     async function loadSequence() { var target=document.getElementById("sequence");try { var data=await newsroom.admin("/api/admin/early-intel");var lanes=Array.isArray(data.lanes)?data.lanes:[];document.getElementById("source-count").textContent=lanes.length;target.innerHTML=lanes.length?lanes.map(function(lane){return '<a class="sequence-row" href="'+esc(lane.href||"/data.html")+'"><span class="sequence-row__stage">'+esc(lane.phase)+'</span><h3>'+esc(lane.label)+'</h3><p><b>'+esc(lane.headline)+'</b><br>'+esc(lane.note)+'</p><span class="sequence-row__clock">Event '+esc(lane.event_through||"not exposed")+'<br>System '+esc(formatDate(lane.system_time))+'</span></a>';}).join(""):'<div class="empty">No monitored source lane responded.</div>'; } catch(error) { target.innerHTML='<div class="empty error">Source sequence unavailable. No state was inferred.</div>'; } }
-    async function loadLeads() { var target=document.getElementById("lead-list"),hero=document.getElementById("lead-story");try { var data=await newsroom.admin("/api/admin/review-queue?status=ALL&readiness=ready&limit=3&offset=0");var items=Array.isArray(data.items)?data.items:[];target.innerHTML=items.length?items.map(itemHtml).join(""):'<div class="empty">No Candidate currently has a complete evidence packet.</div>';if(!items.length){hero.innerHTML='<div><div class="eyebrow">Top evidence-ready Candidate</div><h2>No Candidate has cleared the evidence gate.</h2><p>Raw records remain available in Data Explorer. Nothing is being promoted merely to fill this space.</p></div><a class="primary-link lead__action" href="/data.html">Explore records</a>';return;}var item=items[0],p=packet(item),claims=Array.isArray(p.supported_claims)?p.supported_claims:[],unknowns=Array.isArray(p.unknowns)?p.unknowns:[];hero.innerHTML='<div><div class="eyebrow">Top evidence-ready Candidate</div><h2>'+esc(item.editor_headline||item.generated_headline||item.signal_id)+'</h2><p>'+esc(item.editor_summary||item.generated_summary||"Open the source packet before deciding whether this change matters.")+'</p><div class="lead__proof"><span><b>'+p.records.length+'</b> source records</span><span><b>'+claims.length+'</b> supported facts</span><span><b>'+unknowns.length+'</b> open questions</span><span>Candidate—not yet a Signal</span></div></div><a class="primary-link lead__action" href="/review.html">Open the evidence →</a>'; } catch(error) { target.innerHTML='<div class="empty error">Candidate queue unavailable.</div>';hero.innerHTML='<div><div class="eyebrow">Top evidence-ready Candidate</div><h2>Decision queue unavailable.</h2><p>No lead was inferred from missing data.</p></div>'; } }
-    var prior=localStorage.getItem("fs-newsroom:last-visit");document.getElementById("since-line").textContent=prior?"Last opened "+new Date(prior).toLocaleString():"First visit recorded on this device";localStorage.setItem("fs-newsroom:last-visit",new Date().toISOString());
-    Promise.all([loadProjectState(),loadSummary(),loadAgenda(),loadSequence(),loadLeads()]);
+    async function loadPdmr() { var target=document.getElementById("intent-panel");try { var data=await newsroom.admin("/api/admin/pdmr-intent?limit=6"),items=Array.isArray(data.items)?data.items:[];target.innerHTML='<div class="intent-panel__head"><div><div class="eyebrow">Live source index · read only</div><h3>Fort Lauderdale planning intent</h3><p>Developer-submitted project narratives, owners, folios and concept stage—captured before a formal development application may exist.</p></div><div class="intent-stat"><strong>'+esc(data.record_count)+'</strong><span>records indexed</span></div><div class="intent-stat"><strong>'+esc(data.recent_count)+'</strong><span>past 7 days</span></div><div class="intent-stat"><strong>'+esc(formatDate(data.newest_event))+'</strong><span>newest filing</span></div></div><div class="intent-list">'+(items.length?items.map(pdmrHtml).join(""):'<div class="empty">No PDMR source records are indexed.</div>')+'</div><p class="intent-contract">'+esc(data.contract)+' Last collector observation: '+esc(formatDate(data.last_collected))+'.</p>'; } catch(error) { target.innerHTML='<div class="empty error">PDMR evidence index unavailable. No planning-intent state was inferred.</div>'; } }
+    async function shortlistPdmr(item,button) { var source=candidateSource(item),axes=item.axes||{},status=document.querySelector('[data-bank-status="'+item.signal_id+'"]');button.disabled=true;button.textContent="Shortlisting…";try { var result=await newsroom.admin("/api/admin/brief-bank",{method:"POST",body:JSON.stringify({market:"broward",county:"broward-county",city:"fort-lauderdale",source_kind:"pdmr_candidate",source_stage:"decisions",source_id:item.signal_id,source_url:source.source_url,source_title:item.generated_headline,event_date:item.source_record_date,entity_name:item.owner_name,body_name:"Fort Lauderdale preliminary development",why_it_matters:item.generated_summary,candidate_id:item.signal_id,machine_version:item.detector_version,evidence_confidence:Number(axes.evidence_confidence||0)/100,evidence_confidence_reason:"computed",importance_score:axes.editorial_importance,recency_score:axes.recency,gates_passed:["source_record_complete","pdmr_shadow_eligible"],score_reasons:{evidence_confidence:"computed",editorial_importance:"computed",recency:"computed",early_stage_priority:"computed"},rules_fired:(item.rules_fired||[]).map(function(rule){return rule.rule_id;}),evidence:item.evidence_packet,added_by:"desk editor"})});button.textContent="In Brief bank";status.textContent=result.note||"Shortlisted. Nothing was published.";} catch(error) { button.disabled=false;button.textContent="Shortlist for Brief";status.textContent="Not shortlisted: "+error.message;status.classList.add("error"); } }
+    async function loadPdmrCandidates() { var target=document.getElementById("pdmr-candidate-panel");try { var data=await newsroom.admin("/api/admin/pdmr-candidates?limit=8"),items=Array.isArray(data.items)?data.items:[];pdmrCandidateItems={};items.forEach(function(item){pdmrCandidateItems[item.signal_id]=item;});target.innerHTML='<div class="shadow-panel__head"><div><div class="eyebrow">PDMR shadow detector · no production effect</div><h3>Rank the strongest early planning records</h3><p>'+esc(data.rank_contract||"")+'</p></div><div class="shadow-stat"><strong>'+esc(data.eligible_candidates)+'</strong><span>current Candidates</span></div><div class="shadow-stat"><strong>'+esc(data.records_in_window)+'</strong><span>records since '+esc(formatDate(data.window_start))+'</span></div></div><div class="shadow-list">'+(items.length?items.map(shadowCandidateHtml).join(""):'<div class="empty">No PDMR record cleared the shadow evidence and importance gates.</div>')+'</div><p class="shadow-contract">'+esc(data.contract||"")+'</p>';target.querySelectorAll("[data-pdmr-bank]").forEach(function(button){button.addEventListener("click",function(){var item=pdmrCandidateItems[button.dataset.pdmrBank];if(item)shortlistPdmr(item,button);});}); } catch(error) { target.innerHTML='<div class="empty error">PDMR shadow ranking unavailable. No Candidate state was inferred.</div>'; } }
+    async function loadMachine() { var stages=document.getElementById("machine-stages"),controls=document.getElementById("weight-controls");try { var data=await newsroom.admin("/api/admin/signal-machine");document.getElementById("machine-baseline").textContent=data.baseline+" · cross-source expansion is staged, not implied";stages.innerHTML=(data.stages||[]).map(function(stage){return '<div class="agent-stage"><b>'+esc(stage.label)+'</b><p class="agent-stage__owner">'+esc(stage.owner)+'</p><p>'+esc(stage.may)+'</p><span class="status-pill" data-status="'+esc(stage.status)+'">'+esc(stage.status.replace(/_/g," "))+'</span></div>';}).join("");controls.innerHTML=(data.lanes||[]).map(function(lane){var enabled=lane.id==="execution"&&lane.coverage==="shadow_ranked",note=enabled?'Preview affects the permit shadow replay only.':lane.id==="decisions"?'PDMR has a fixed, backtested local shadow rule set; multiplier simulation is not connected. ':'No simulatable effect until this detector exists. ';return '<div class="weight-row"><label for="weight-'+esc(lane.id)+'">'+esc(lane.label)+'</label><output for="weight-'+esc(lane.id)+'">'+Number(lane.default_multiplier).toFixed(2)+'×</output><input id="weight-'+esc(lane.id)+'" name="'+esc(lane.id)+'" type="range" min="1" max="2" step="0.05" value="'+esc(lane.default_multiplier)+'"'+(enabled?'':' disabled aria-disabled="true"')+'><small><b>Coverage: '+esc(lane.coverage.replace(/_/g," "))+'.</b> '+note+esc(lane.note)+'</small></div>';}).join("");controls.querySelectorAll('input[type="range"]').forEach(function(input){input.addEventListener("input",function(){input.previousElementSibling.textContent=Number(input.value).toFixed(2)+"×";});}); } catch(error) { stages.innerHTML='<div class="empty error">Machine contract unavailable.</div>';controls.innerHTML='<div class="empty error">Weight preview unavailable.</div>'; } }
+    document.getElementById("weight-form").addEventListener("submit",async function(event){event.preventDefault();var form=event.currentTarget,name=document.getElementById("profile-name").value.trim(),rationale=document.getElementById("profile-rationale").value.trim(),note=document.getElementById("profile-note");if(!name||!rationale||!form.reportValidity())return;var weights={};form.querySelectorAll('input[type="range"]').forEach(function(input){weights[input.name]=Number(input.value);});var button=form.querySelector("button");button.disabled=true;button.textContent="Saving…";try{var result=await newsroom.admin("/api/admin/scoring-profiles",{method:"POST",body:JSON.stringify({market:"broward",name:name,rationale:rationale,weights:weights,created_by:"desk editor"})});note.textContent=result.note+" Profile "+result.id+" · backtest "+result.backtest_status+".";document.getElementById("profile-name").value="";document.getElementById("profile-rationale").value="";}catch(error){note.textContent="Draft not saved: "+error.message;}finally{button.disabled=false;button.textContent="Save draft";}});
+    async function loadLeads() { var target=document.getElementById("lead-list"),hero=document.getElementById("lead-story");try { var data=await newsroom.admin("/api/admin/review-queue?status=ALL&readiness=ready&limit=5&offset=0");var items=Array.isArray(data.items)?data.items:[];target.innerHTML=items.length?items.map(itemHtml).join(""):'<div class="empty">No Candidate currently has a source packet ready for review.</div>';if(!items.length){hero.innerHTML='<div><div class="eyebrow">Newest reviewable Candidate</div><h2>No Candidate has cleared the evidence gate.</h2><p>Raw records remain available in Data Explorer. Nothing is being promoted merely to fill this space.</p></div><a class="primary-link lead__action" href="/data.html">Explore records</a>';return;}var item=items[0],p=packet(item),claims=Array.isArray(p.supported_claims)?p.supported_claims:[],unknowns=Array.isArray(p.unknowns)?p.unknowns:[];hero.innerHTML='<div><div class="eyebrow">Newest raw Candidate pattern · not a Signal</div><h2>'+esc(candidateTitle(item))+'</h2><p>'+esc(item.editor_summary||item.generated_summary||"Open the source packet before deciding whether this change matters.")+'</p><div class="lead__proof"><span><b>'+p.records.length+'</b> source records</span><span><b>'+claims.length+'</b> extracted assertions</span><span><b>'+unknowns.length+'</b> unknowns</span><span>Candidate—not yet a Signal</span></div></div><a class="primary-link lead__action" href="/review.html">Open the evidence →</a>'; } catch(error) { target.innerHTML='<div class="empty error">Candidate queue unavailable.</div>';hero.innerHTML='<div><div class="eyebrow">Newest reviewable Candidate</div><h2>Decision queue unavailable.</h2><p>No lead was inferred from missing data.</p></div>'; } }
+    var prior=localStorage.getItem("fs-newsroom:last-visit");document.getElementById("since-line").textContent=prior?"Last opened on this device · "+new Date(prior).toLocaleString():"No prior visit is stored on this device";localStorage.setItem("fs-newsroom:last-visit",new Date().toISOString());
+    Promise.all([loadProjectState(),loadSummary(),loadAgenda(),loadSequence(),loadPdmr(),loadPdmrCandidates(),loadMachine(),loadLeads()]);
   })();
   </script>
 </body>

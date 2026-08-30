@@ -267,6 +267,22 @@
       gap: 22px;
       align-items: start;
     }
+    .bank-panel { margin-bottom: 22px; }
+    .bank-panel__body { padding: 20px 26px 26px; }
+    .bank-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+    .bank-list { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 11px; margin-top: 16px; }
+    .bank-card { min-width: 0; display: grid; align-content: start; gap: 9px; padding: 16px; border: 1px solid var(--line); border-top: 4px solid var(--teal); background: #fff; }
+    .bank-card[data-stage="decisions"] { border-top-color: #12a07e; }
+    .bank-card__top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .bank-card h4 { margin: 0; font-size: 1rem; line-height: 1.28; }
+    .bank-card p { margin: 0; color: var(--muted); font-size: .78rem; }
+    .bank-card__meta { display: flex; flex-wrap: wrap; gap: 5px 12px; color: var(--muted); font-size: .69rem; }
+    .bank-card__meta b { color: var(--ink); }
+    .bank-card__actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 3px; }
+    .bank-contract { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); border: 1px solid var(--line); margin-top: 15px; }
+    .bank-contract span { min-width: 0; padding: 9px 11px; border-left: 1px solid var(--line); color: var(--muted); font-size: .68rem; }
+    .bank-contract span:first-child { border-left: 0; }
+    .bank-contract b { display: block; color: var(--ink); font-size: .73rem; }
     .panel {
       background: rgba(255,255,255,.96);
       border: 1px solid var(--line);
@@ -305,6 +321,12 @@
     .span-2 { grid-column: span 2; }
     .span-3 { grid-column: span 3; }
     .field-help { display: block; margin-top: 5px; color: var(--muted); font-size: .76rem; }
+    .writing-profile { padding: 18px; border: 1px solid #b9c9db; border-radius: 10px; background: #f6f9fc; }
+    .writing-profile__promise { margin: 0 0 14px; color: var(--ink); font-size: .83rem; }
+    .ethics-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-top: 14px; }
+    .ethics-list label { min-height: 46px; display: flex; gap: 9px; align-items: flex-start; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font-size: .78rem; font-weight: 650; }
+    .ethics-list input { width: auto; margin-top: 3px; }
+    @media (max-width: 640px) { .ethics-list { grid-template-columns: 1fr; } }
     .required { color: var(--danger); }
     .form-footer {
       margin: 30px -26px -26px;
@@ -457,6 +479,7 @@
       .field--compact, .field--token { width: auto; flex: 1 1 190px; }
       .workspace { grid-template-columns: 1fr; }
       .queue-panel { order: -1; }
+      .bank-list { grid-template-columns: repeat(2,minmax(0,1fr)); }
     }
 
     @media (max-width: 720px) {
@@ -479,6 +502,9 @@
       .wire-card__actions .button { flex: 1 1 120px; }
       .dialog__footer { flex-direction: column-reverse; }
       .dialog__footer .button { width: 100%; }
+      .bank-list, .bank-contract { grid-template-columns: 1fr; }
+      .bank-contract span { border-left: 0; border-top: 1px solid var(--line); }
+      .bank-contract span:first-child { border-top: 0; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -497,6 +523,8 @@
     .brief-stage__step span { color: var(--muted); font-size: .68rem; }
     .brief-stage__step.is-active { color: white; background: var(--ink); }
     .brief-stage__step.is-active span { color: #b7c7d8; }
+    .brief-stage__step[aria-disabled="true"] { color: #7b1d12; background: #fff1ee; }
+    .brief-stage__step[aria-disabled="true"] span { color: #8b4b43; }
     @media (max-width: 620px) { .brief-stage { grid-template-columns: repeat(2,1fr); } .brief-stage__step:nth-child(3) { border-left: 0; border-top: 1px solid var(--line); } .brief-stage__step:nth-child(4) { border-top: 1px solid var(--line); } }
   </style>
 </head>
@@ -545,7 +573,39 @@
       <div class="brief-stage__step is-active"><b>Draft</b><span>Build sourced modules</span></div>
       <div class="brief-stage__step"><b>Review</b><span>Verify every claim</span></div>
       <div class="brief-stage__step"><b>Schedule</b><span>Choose the edition time</span></div>
-      <div class="brief-stage__step"><b>Sent</b><span>Immutable edition receipt</span></div>
+      <div class="brief-stage__step" aria-disabled="true"><b>Send · not connected</b><span>No sending path in this build</span></div>
+    </section>
+
+    <section class="panel bank-panel" id="brief-bank" aria-labelledby="bank-title">
+      <div class="panel__accent" aria-hidden="true"></div>
+      <header class="panel__header">
+        <div>
+          <div class="eyebrow">Selected leads · nothing sends from here</div>
+          <h3 id="bank-title">Brief bank</h3>
+          <p id="bank-summary">Open the desk to see items you saved for a future edition.</p>
+        </div>
+        <div class="bank-tools" id="bank-tools" aria-label="Filter Brief bank by edition day">
+          <button class="filter" type="button" data-bank-day="all" aria-pressed="true">All</button>
+          <button class="filter" type="button" data-bank-day="unscheduled" aria-pressed="false">Unscheduled</button>
+          <button class="filter" type="button" data-bank-day="monday" aria-pressed="false">Mon</button>
+          <button class="filter" type="button" data-bank-day="tuesday" aria-pressed="false">Tue</button>
+          <button class="filter" type="button" data-bank-day="wednesday" aria-pressed="false">Wed</button>
+          <button class="filter" type="button" data-bank-day="thursday" aria-pressed="false">Thu</button>
+          <button class="filter" type="button" data-bank-day="friday" aria-pressed="false">Fri</button>
+          <button class="filter" type="button" data-bank-day="saturday" aria-pressed="false">Sat</button>
+          <button class="filter" type="button" data-bank-day="sunday" aria-pressed="false">Sun</button>
+        </div>
+      </header>
+      <div class="bank-panel__body">
+        <div class="bank-contract" aria-label="Brief bank workflow">
+          <span><b>1 · Selected</b>You choose the lead and edition.</span>
+          <span><b>2 · Evidence check</b>Manual source review. AI consistency check: not connected.</span>
+          <span><b>3 · Assemble</b>Eligible items become draft modules.</span>
+          <span><b>4 · Edit</b>A human clears claims and context.</span>
+          <span><b>5 · Send</b>Not connected. No sending path exists in this build.</span>
+        </div>
+        <div class="bank-list" id="bank-list" aria-live="polite"><div class="empty"><div><strong>Desk is locked</strong>No Brief bank data is loaded until the private API authorizes this tab.</div></div></div>
+      </div>
     </section>
 
     <div class="workspace">
@@ -606,6 +666,45 @@
                 <input name="event_date" type="date" required>
                 <span class="field-help">The event or filing date, not the batch-pull time.</span>
               </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="form-section writing-profile">
+            <legend>01A · Brief writing profile</legend>
+            <p class="writing-profile__promise"><strong>Compelling, never inflated.</strong> These controls guide the draft and remain visible in its packet. They cannot override evidence, attribution or the human approval gate.</p>
+            <div class="grid">
+              <label>
+                <span class="label">Style guide</span>
+                <select name="writing_style" required>
+                  <option value="ap_florida_signal" selected>AP style + Florida Signal house voice</option>
+                  <option value="ap_straight_news">Strict AP straight news</option>
+                </select>
+              </label>
+              <label>
+                <span class="label">Headline approach</span>
+                <select name="headline_mode" required>
+                  <option value="compelling_precise" selected>Catchy but precise</option>
+                  <option value="straight_news">Straight news</option>
+                  <option value="analysis_explainer">Analysis / explainer</option>
+                </select>
+                <span class="field-help">No clickbait, unsupported superlatives or certainty beyond the records.</span>
+              </label>
+              <label class="span-2">
+                <span class="label">Jargon treatment</span>
+                <select name="jargon_mode" required>
+                  <option value="plain_english" selected>Plain English; translate acronyms</option>
+                  <option value="industry_with_definitions">Industry terms with first-use definitions</option>
+                </select>
+              </label>
+            </div>
+            <div class="ethics-list" aria-label="Required journalism ethics rules">
+              <label><input type="checkbox" name="ethics_rules" value="attribute_material_claims" checked required>Attribute every material claim to a source.</label>
+              <label><input type="checkbox" name="ethics_rules" value="label_uncertainty" checked required>Label uncertainty, preliminary data and inference.</label>
+              <label><input type="checkbox" name="ethics_rules" value="avoid_sensationalism" checked required>Do not sensationalize or overstate the headline.</label>
+              <label><input type="checkbox" name="ethics_rules" value="seek_response_when_criticized" checked required>Seek response when a person or entity is criticized.</label>
+              <label><input type="checkbox" name="ethics_rules" value="disclose_conflicts" checked required>Disclose conflicts, sponsorship and material relationships.</label>
+              <label><input type="checkbox" name="ethics_rules" value="no_invented_context" checked required>Never invent background, quotes, motives or connections.</label>
+              <label><input type="checkbox" name="ethics_rules" value="role_based_byline_until_launch" checked>Keep the public byline role-based until explicitly changed.</label>
             </div>
           </fieldset>
 
@@ -708,7 +807,7 @@
             <legend>05 · Editorial checks</legend>
             <div class="grid">
               <label>
-                <span class="label">Claims check <span class="required" aria-hidden="true">*</span></span>
+                <span class="label">Claims check (editor attestation) <span class="required" aria-hidden="true">*</span></span>
                 <select name="claims_status" required>
                   <option value="pending">Pending review</option>
                   <option value="passed">Passed by editor</option>
@@ -716,7 +815,7 @@
                 </select>
               </label>
               <label>
-                <span class="label">Taxonomy check <span class="required" aria-hidden="true">*</span></span>
+                <span class="label">Taxonomy check (editor attestation) <span class="required" aria-hidden="true">*</span></span>
                 <select name="tags_status" required>
                   <option value="pending">Pending review</option>
                   <option value="passed">Passed by editor</option>
@@ -724,10 +823,10 @@
                 </select>
               </label>
               <label>
-                <span class="label">Claim-slot validator <span class="required" aria-hidden="true">*</span></span>
+                <span class="label">Claim-slot check (self-attested) <span class="required" aria-hidden="true">*</span></span>
                 <select name="validator_status" required>
-                  <option value="pending">Pending validation</option>
-                  <option value="passed">Passed validation</option>
+                  <option value="pending">Pending editor check</option>
+                  <option value="passed">Attested by editor</option>
                   <option value="failed">Failed / needs work</option>
                 </select>
               </label>
@@ -799,15 +898,15 @@
             </select>
           </label>
           <label>
-            <span class="label">Claim-slot validator</span>
+            <span class="label">Claim-slot check (self-attested)</span>
             <select name="validator_status">
-              <option value="pending">Pending validation</option>
-              <option value="passed">Passed validation</option>
+              <option value="pending">Pending editor check</option>
+              <option value="passed">Attested by editor</option>
               <option value="failed">Failed / needs work</option>
             </select>
           </label>
           <label>
-            <span class="label">Claims check</span>
+            <span class="label">Claims check (editor attestation)</span>
             <select name="claims_status">
               <option value="pending">Pending review</option>
               <option value="passed">Passed by editor</option>
@@ -815,7 +914,7 @@
             </select>
           </label>
           <label>
-            <span class="label">Taxonomy check</span>
+            <span class="label">Taxonomy check (editor attestation)</span>
             <select name="tags_status">
               <option value="pending">Pending review</option>
               <option value="passed">Passed by editor</option>
@@ -848,7 +947,7 @@
 
       const SESSION_TOKEN_KEY = 'dataWireAdminToken';
       const SESSION_MARKET_KEY = 'dataWireMarket';
-      const state = { stories: [], filter: 'all', cityFilter: 'all', connected: false };
+      const state = { stories: [], bank: [], filter: 'all', cityFilter: 'all', bankDay: 'all', connected: false };
 
       const connectionForm = document.querySelector('#connection-form');
       const storyForm = document.querySelector('#story-form');
@@ -861,6 +960,8 @@
       const deskStatus = document.querySelector('#desk-status');
       const queueSummary = document.querySelector('#queue-summary');
       const queueCityFilter = document.querySelector('#queue-city-filter');
+      const bankList = document.querySelector('#bank-list');
+      const bankSummary = document.querySelector('#bank-summary');
       const alertBox = document.querySelector('#alert');
 
       function currentMarket() {
@@ -955,7 +1056,7 @@
         })) {
           blocks.push('Every claim slot requires claim text and a public source URL');
         }
-        if (story.validator_status !== 'passed') blocks.push('Claim-slot validator must pass');
+        if (story.validator_status !== 'passed') blocks.push('Claim-slot editor attestation must pass');
         if (story.claims_status !== 'passed') blocks.push('Claims check must pass');
         if (story.tags_status !== 'passed') blocks.push('Taxonomy check must pass');
         if (!String(story.editor_name || '').trim()) blocks.push('A named human editor is required');
@@ -974,6 +1075,91 @@
         if (className) element.className = className;
         if (text !== undefined) element.textContent = text;
         return element;
+      }
+
+      function titleCase(value) {
+        return String(value || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+      }
+
+      function renderBank() {
+        bankList.replaceChildren();
+        const visible = state.bank.filter(item => state.bankDay === 'all' || item.edition_day === state.bankDay);
+        bankSummary.textContent = `${state.bank.length} saved ${state.bank.length === 1 ? 'lead' : 'leads'} · ${visible.length} shown · evidence checks and sending remain separate`;
+        if (!visible.length) {
+          const empty = makeElement('div', 'empty');
+          const copy = makeElement('div');
+          copy.append(makeElement('strong', '', state.bank.length ? 'No leads in this edition slot' : 'Brief bank is empty'));
+          copy.append(document.createTextNode(state.bank.length ? 'Choose another weekday or add an item from Agenda Watch or Triage.' : 'Use “Save to Brief bank” on a source-backed lead, then choose a weekday or exact date.'));
+          empty.append(copy); bankList.append(empty); return;
+        }
+        visible.forEach(item => {
+          const card = makeElement('article', 'bank-card');
+          card.dataset.stage = item.source_stage || 'record';
+          const top = makeElement('div', 'bank-card__top');
+          const titleWrap = makeElement('div');
+          titleWrap.append(makeElement('div', 'eyebrow', `${titleCase(item.source_stage || 'record')} source lane · discovery order ${item.source_stage_order ?? 'not set'}`));
+          titleWrap.append(makeElement('h4', '', item.source_title || 'Untitled lead'));
+          top.append(titleWrap, makeElement('span', 'badge', titleCase(item.edition_day || 'unscheduled')));
+          card.append(top);
+          if (item.why_it_matters) card.append(makeElement('p', '', item.why_it_matters));
+          const meta = makeElement('div', 'bank-card__meta');
+          meta.append(makeElement('span', '', item.target_date ? `Edition ${item.target_date}` : `Event ${item.event_date || 'date not exposed'}`));
+          meta.append(makeElement('span', '', `Evidence check: ${titleCase(item.cross_check_status)}`));
+          meta.append(makeElement('span', '', Number.isFinite(item.evidence_confidence) ? `Evidence confidence ${item.evidence_confidence}` : `Evidence confidence not computed · ${titleCase(item.evidence_confidence_reason)}`));
+          meta.append(makeElement('span', '', `${Array.isArray(item.gates_passed) ? item.gates_passed.length : 0} recorded gates passed`));
+          if (item.evidence_hash) meta.append(makeElement('span', '', `Packet ${item.evidence_hash.slice(0, 12)}…`));
+          if (item.machine_version) meta.append(makeElement('span', '', `Machine ${item.machine_version}`));
+          if (item.scoring_profile_id) meta.append(makeElement('span', '', `Profile ${item.scoring_profile_id}`));
+          if (Number.isFinite(item.importance_score)) meta.append(makeElement('span', '', `Importance ${item.importance_score}`));
+          card.append(meta);
+          const actions = makeElement('div', 'bank-card__actions');
+          const draft = makeElement('button', 'button button--teal button--small', 'Open unverified draft');
+          draft.type = 'button'; draft.dataset.bankDraft = item.id;
+          const source = makeElement('a', 'button button--ghost button--small', 'Open source ↗');
+          source.href = item.source_url; source.target = '_blank'; source.rel = 'noopener noreferrer';
+          actions.append(draft, source); card.append(actions); bankList.append(card);
+        });
+      }
+
+      async function loadBank() {
+        if (!currentToken()) return;
+        try {
+          const data = await api(`/api/admin/brief-bank?market=${encodeURIComponent(currentMarket())}`);
+          state.bank = Array.isArray(data.items) ? data.items : [];
+          renderBank();
+        } catch (error) {
+          state.bank = [];
+          bankSummary.textContent = 'Brief bank unavailable; no state was inferred.';
+          bankList.innerHTML = '<div class="empty"><div><strong>Could not open the Brief bank</strong>'+String(error.message).replace(/[&<>"']/g, '')+'</div></div>';
+        }
+      }
+
+      function loadBankItemIntoDraft(item) {
+        const evidence = item.evidence && typeof item.evidence === 'object' ? item.evidence : {};
+        const sourceLocator = evidence.agenda_number || evidence.matter_file || item.source_id;
+        const topic = item.source_stage === 'decisions' ? 'planning, meetings' : titleCase(item.source_stage || 'development').toLowerCase();
+        storyForm.elements.headline.value = item.source_title || '';
+        storyForm.elements.dek.value = item.why_it_matters || '';
+        storyForm.elements.body.value = '';
+        storyForm.elements.event_date.value = String(item.event_date || '').slice(0, 10);
+        storyForm.elements.source_url.value = item.source_url || '';
+        storyForm.elements.source_title.value = item.body_name ? `${item.body_name} · ${item.source_title}` : item.source_title || '';
+        storyForm.elements.source_published_at.value = String(item.event_date || '').slice(0, 10);
+        storyForm.elements.current_trigger.value = item.source_title || '';
+        storyForm.elements.project_identity_basis.value = 'Not yet established. Cross-check the entity, parcel, project and source links before approval.';
+        storyForm.elements.claim_slots.value = JSON.stringify([{ claim: item.source_title || 'Source record exists', source_url: item.source_url, locator: sourceLocator }], null, 2);
+        storyForm.elements.unresolved_issues.value = 'Why does this matter now?\nWhat entity or parcel does it affect?\nWhat corroborating source confirms the project identity?';
+        storyForm.elements.topic_tags.value = topic;
+        storyForm.elements.geography_tags.value = item.city || 'fort-lauderdale';
+        storyForm.elements.entity_tags.value = [item.entity_name, item.body_name].filter(Boolean).join(', ');
+        storyForm.elements.urgency_tags.value = [item.edition_day && item.edition_day !== 'unscheduled' ? item.edition_day : '', item.source_stage === 'decisions' ? 'early-intelligence' : ''].filter(Boolean).join(', ');
+        storyForm.elements.verification_status.value = 'needs_verification';
+        storyForm.elements.claims_status.value = 'pending';
+        storyForm.elements.tags_status.value = 'pending';
+        storyForm.elements.validator_status.value = 'pending';
+        document.querySelector('.compose-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        storyForm.elements.headline.focus({ preventScroll: true });
+        notify('Lead loaded as an unverified draft template. Nothing was saved, published or sent.');
       }
 
       function renderQueue() {
@@ -1019,6 +1205,8 @@
           const verification = makeElement('div', 'verification', story.verification_status === 'verified' ? 'Verified story packet' : 'Needs verification');
           verification.dataset.verified = String(story.verification_status === 'verified');
           packetMeta.append(verification);
+          const writingLine = makeElement('p');
+          writingLine.append(makeElement('strong', '', 'Writing profile: '), document.createTextNode(`${titleCase(story.writing_style || 'not set')} · ${titleCase(story.headline_mode || 'not set')} · ${titleCase(story.jargon_mode || 'not set')}`));
           const triggerLine = makeElement('p');
           triggerLine.append(makeElement('strong', '', 'Current trigger: '), document.createTextNode(story.current_trigger || 'Not recorded'));
           const identityLine = makeElement('p');
@@ -1030,7 +1218,7 @@
           const issueCount = unresolvedIssues.length;
           counts.append(makeElement('span', '', `${claimCount} sourced claim ${claimCount === 1 ? 'slot' : 'slots'}`));
           counts.append(makeElement('span', '', issueCount ? `${issueCount} unresolved ${issueCount === 1 ? 'issue' : 'issues'}` : 'No unresolved issues'));
-          packetMeta.append(triggerLine, identityLine, counts);
+          packetMeta.append(writingLine, triggerLine, identityLine, counts);
           if (claimCount) {
             const claimsLine = makeElement('p');
             claimsLine.append(makeElement('strong', '', 'Claim slots: '), document.createTextNode(claimSlots.slice(0, 3).map(slot => slot.claim || 'Unnamed claim').join(' · ')));
@@ -1084,6 +1272,7 @@
           state.stories = Array.isArray(data.stories) ? data.stories : [];
           setConnection('ready', `${currentMarket()} desk connected · private editorial API`);
           renderQueue();
+          await loadBank();
         } catch (error) {
           state.stories = [];
           setConnection('error', error.status === 401 ? 'Authorization failed · check the admin token' : 'Desk unavailable · check the local CMS server');
@@ -1102,6 +1291,7 @@
       function formPayload(form) {
         const data = new FormData(form);
         const payload = Object.fromEntries(data.entries());
+        payload.ethics_rules = Array.from(form.querySelectorAll('input[name="ethics_rules"]:checked')).map(input => input.value);
         ['topic_tags', 'geography_tags', 'entity_tags', 'audience_tags', 'urgency_tags'].forEach(key => { payload[key] = listValues(payload[key]); });
         const claimInput = form.elements.claim_slots;
         claimInput.setCustomValidity('');
@@ -1137,9 +1327,12 @@
         sessionStorage.removeItem(SESSION_TOKEN_KEY);
         tokenInput.value = '';
         state.stories = [];
+        state.bank = [];
         setConnection('locked', 'Desk locked · token removed from this tab');
         queueSummary.textContent = 'Open the desk to load the live editorial queue.';
         queue.innerHTML = '<div class="empty"><div><strong>Desk is locked</strong>The session token has been cleared from this tab.</div></div>';
+        bankSummary.textContent = 'Open the desk to see items you saved for a future edition.';
+        bankList.innerHTML = '<div class="empty"><div><strong>Desk is locked</strong>The session token has been cleared from this tab.</div></div>';
         notify('Desk locked. Session token cleared.');
       });
 
@@ -1183,6 +1376,21 @@
       });
 
       document.querySelector('#refresh-queue').addEventListener('click', loadQueue);
+
+      document.querySelector('#bank-tools').addEventListener('click', event => {
+        const filter = event.target.closest('[data-bank-day]');
+        if (!filter) return;
+        state.bankDay = filter.dataset.bankDay;
+        document.querySelectorAll('[data-bank-day]').forEach(button => button.setAttribute('aria-pressed', String(button === filter)));
+        renderBank();
+      });
+
+      bankList.addEventListener('click', event => {
+        const trigger = event.target.closest('[data-bank-draft]');
+        if (!trigger) return;
+        const item = state.bank.find(entry => entry.id === trigger.dataset.bankDraft);
+        if (item) loadBankItemIntoDraft(item);
+      });
 
       queue.addEventListener('click', event => {
         const trigger = event.target.closest('button[data-action][data-story-id]');

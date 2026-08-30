@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import sqlite3
 import subprocess
 import tempfile
 import unittest
@@ -14,50 +15,48 @@ SPEC.loader.exec_module(cms_server)
 
 
 class DataWireServerTests(unittest.TestCase):
-    def test_project_state_keeps_tracked_state_separate_from_live_health(self):
+    def test_project_state_separates_git_state_from_live_health(self):
         manifest = {
             "schema_version": "FloridaSignalProjectStateV1",
-            "state_contract": "Tracked state is not live health.",
+            "state_contract": "Durable state only",
             "current_mode": "STATE RECONCILIATION",
-            "product": "A verified early-warning radar.",
-            "now": {"title": "Reconcile state", "status": "IN_PROGRESS"},
-            "next": {"title": "Adjudicate PDMRs", "status": "PAUSED_UNTIL_NOW_APPROVED"},
-            "active_research": {"status": "PAUSED_NEXT"},
-            "blocked_claims": ["93-day proven lead"],
-            "sensor_status": [],
-            "latest_material_decision": {"decision": "Reconcile first."},
-            "source_revision": {"head": "85341f1"},
             "verified_at": "2026-08-23T18:48:52-04:00",
+            "now": {"title": "Reconcile", "status": "IN_PROGRESS"},
+            "next": {"title": "Adjudicate", "status": "PAUSED"},
+            "active_research": {"study": "PDMR", "status": "PAUSED_NEXT"},
+            "blocked_claims": ["93-day proven lead"],
+            "sensor_status": [{"sensor": "PDMR", "status": "LOCAL_ONLY"}],
+            "latest_material_decision": {"decision": "Repository is institutional memory"},
             "production_pipeline_registry": [
                 {
                     "id": "permits", "label": "Permits", "deployment_status": "PROD",
+                    "authority": "DigitalOcean", "touch_policy": "PRESERVE",
                     "health_source": {"type": "public_data_health", "id": "permits"},
-                    "touch_policy": "PRESERVE", "authority": "production",
                 },
                 {
                     "id": "pdmr", "label": "PDMR", "deployment_status": "LOCAL_ONLY",
+                    "authority": "local Python", "touch_policy": "EXPERIMENTAL",
                     "health_source": {"type": "none", "id": None},
-                    "touch_policy": "DO_NOT_DEPLOY", "authority": "local",
                 },
             ],
         }
+        health = {"generated_at": "2026-08-23T22:00:00Z", "sources": [{
+            "id": "permits", "status": "current", "event_through": "2026-08-22",
+            "system_time": "2026-08-23T21:40:00Z", "detail": "Live receipt",
+        }]}
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "project-state.json"
-            path.write_text(json.dumps(manifest), encoding="utf-8")
-            with mock.patch.object(cms_server, "PROJECT_STATE_PATH", path), \
-                    mock.patch.object(cms_server, "public_json", return_value={
-                        "generated_at": "2026-08-23T22:00:00Z",
-                        "sources": [{
-                            "id": "permits", "status": "current", "event_through": "2026-08-22",
-                        }],
-                    }):
+            state_path = Path(directory) / "state.json"
+            state_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with mock.patch.object(cms_server, "PROJECT_STATE_PATH", state_path), \
+                    mock.patch.object(cms_server, "public_json", return_value=health):
                 code, payload = cms_server.project_state_payload()
+        rows = {row["id"]: row for row in payload["operational_health"]}
         self.assertEqual(code, 200)
-        self.assertEqual(payload["project_state"]["current_mode"], "STATE RECONCILIATION")
-        self.assertEqual(payload["operational_health"][0]["status"], "CURRENT")
-        self.assertEqual(payload["operational_health"][1]["status"], "UNKNOWN")
-        self.assertEqual(payload["operational_health"][1]["deployment_status"], "LOCAL_ONLY")
-        self.assertIn("never inherit a manifest status", payload["contract"])
+        self.assertEqual(rows["permits"]["status"], "CURRENT")
+        self.assertEqual(rows["permits"]["event_through"], "2026-08-22")
+        self.assertEqual(rows["pdmr"]["deployment_status"], "LOCAL_ONLY")
+        self.assertEqual(rows["pdmr"]["status"], "UNKNOWN")
+        self.assertIn("never inherit", payload["contract"])
 
     def test_project_state_fails_closed_when_manifest_is_missing(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -67,6 +66,153 @@ class DataWireServerTests(unittest.TestCase):
         self.assertEqual(code, 503)
         self.assertEqual(payload["status"], "UNKNOWN")
         self.assertIn("No project state was inferred", payload["contract"])
+
+    def test_early_radar_card_separates_exact_folio_from_address_context(self):
+        html = (ROOT / "cms" / "home.html").read_text(encoding="utf-8")
+        self.assertIn("Candidate evidence context", html)
+        self.assertIn("Exact-folio activity", html)
+        self.assertIn("Address-only context", html)
+        self.assertIn("Coverage incomplete; no absence conclusion is available", html)
+        self.assertIn("no project linkage was established by this lookup", html)
+        self.assertNotIn("not linked to this project", html)
+        self.assertIn("Not independently verified", html)
+        self.assertIn("no zero conclusion is available", html)
+        self.assertIn("Candidate ranking unchanged", html)
+        self.assertIn("Context provenance", html)
+        self.assertIn("source date unknown", html)
+        self.assertIn("coverage unknown", html)
+        self.assertIn("freshness unknown", html)
+
+    def test_pdmr_shadow_detector_is_bounded_and_never_receives_output_path(self):
+        payload = {
+            "mode": "shadow", "items": [], "publication_effect": "none",
+            "records_evaluated": 324, "records_in_window": 69, "eligible_candidates": 53,
+        }
+        completed = subprocess.CompletedProcess([], 0, stdout=json.dumps(payload), stderr="")
+        with tempfile.TemporaryDirectory() as directory:
+            script = Path(directory) / "detector.py"
+            database = Path(directory) / "pdmr.sqlite"
+            script.touch()
+            database.touch()
+            with mock.patch.object(cms_server, "PDMR_CANDIDATE_SCRIPT", script), \
+                    mock.patch.object(cms_server, "PDMR_DB_PATH", database), \
+                    mock.patch.object(cms_server.subprocess, "run", return_value=completed) as run:
+                code, result = cms_server.pdmr_shadow_candidate_payload(limit=999)
+        command = run.call_args.args[0]
+        self.assertEqual(code, 200)
+        self.assertEqual(command[command.index("--limit") + 1], "20")
+        self.assertNotIn("--output", command)
+        self.assertEqual(run.call_args.kwargs["timeout"], 10)
+        self.assertEqual(result["publication_effect"], "none")
+        self.assertIn("does not approve", result["contract"])
+
+    def test_pdmr_intent_is_a_bounded_read_only_source_lane(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "pdmr.sqlite"
+            with sqlite3.connect(db_path) as db:
+                db.executescript("""
+                    create table parcel_events (
+                      event_id text primary key, parcel_id text, event_type text not null,
+                      event_date text, address text, owner_name text, project_name text, summary text,
+                      source text not null, source_record_id text not null, source_url text not null,
+                      source_record_hash text not null, payload_json text not null,
+                      observed_mode text not null, detector_version text not null,
+                      first_seen_at text not null, last_seen_at text not null
+                    );
+                """)
+                fields = json.dumps({"fields": {
+                    "status": "In Process", "folio": "504212BD0010",
+                    "development_stage": "Conceptual Plan", "development_type": "Residential",
+                    "units_text": "36", "parking_spaces": "40",
+                    "staff_questions": "Confirm streetscape requirements",
+                }})
+                rows = [
+                    ("one", "2026-08-19", "125 N Birch RD", "OWNER ONE", "125 N Birch Road"),
+                    ("two", "2026-08-18", "1150 NW 55 ST", "OWNER TWO", "1150 NW 55 Street"),
+                ]
+                for event_id, event_date, address, owner, project in rows:
+                    db.execute("""
+                        insert into parcel_events values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    """, (
+                        event_id, "504212BD0010", "planning_preapplication", event_date,
+                        address, owner, project, "A public pre-application narrative",
+                        "fort_lauderdale_lauderbuild_planning", "UDP-PDMR-26131" if event_id == "one" else "UDP-PDMR-26130",
+                        "https://aca-prod.accela.com/FTL/Cap/CapDetail.aspx?record=" + event_id,
+                        "hash-" + event_id, fields, "backfill", "pdmr-v1.0.0",
+                        "2026-08-23T18:00:00+00:00", "2026-08-23T18:22:00+00:00",
+                    ))
+            with mock.patch.object(cms_server, "PDMR_DB_PATH", db_path), \
+                    mock.patch.object(cms_server, "now_iso", return_value="2026-08-23T20:00:00+00:00"):
+                code, payload = cms_server.pdmr_intent_payload(limit=1)
+            self.assertEqual(code, 200)
+            self.assertEqual(payload["record_count"], 2)
+            self.assertEqual(len(payload["items"]), 1)
+            self.assertEqual(payload["items"][0]["source_record_id"], "UDP-PDMR-26131")
+            self.assertEqual(payload["items"][0]["development_stage"], "Conceptual Plan")
+            self.assertEqual(payload["items"][0]["editorial_state"], "source_record_only")
+            self.assertIn("does not nominate a Candidate", payload["contract"])
+            with sqlite3.connect(db_path) as db:
+                self.assertEqual(db.execute("select count(*) from parcel_events").fetchone()[0], 2)
+
+    def test_pdmr_intent_does_not_infer_state_when_evidence_db_is_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing.sqlite"
+            with mock.patch.object(cms_server, "PDMR_DB_PATH", missing):
+                code, payload = cms_server.pdmr_intent_payload()
+        self.assertEqual(code, 503)
+        self.assertEqual(payload["items"], [])
+        self.assertIn("No PDMR state was inferred", payload["contract"])
+
+    def test_brief_bank_and_weight_profiles_are_versioned_private_workflow_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "wire.sqlite"
+            with mock.patch.object(cms_server, "DB_PATH", db_path):
+                cms_server.init_db()
+            with sqlite3.connect(db_path) as db:
+                brief_columns = {row[1] for row in db.execute("pragma table_info(brief_bank)")}
+                profile_columns = {row[1] for row in db.execute("pragma table_info(scoring_profiles)")}
+                story_columns = {row[1] for row in db.execute("pragma table_info(stories)")}
+            self.assertTrue({"edition_day", "target_date", "target_date_source", "candidate_id", "machine_version",
+                             "importance_score", "recency_score", "source_stage",
+                             "rules_fired_json", "evidence_hash", "evidence_confidence",
+                             "evidence_confidence_reason", "gates_passed_json",
+                             "score_reasons_json", "scoring_profile_id"}.issubset(brief_columns))
+            self.assertTrue({"weights_json", "status", "backtest_status", "rationale",
+                             "parent_profile_id", "created_by"}.issubset(profile_columns))
+            self.assertTrue({"writing_style", "headline_mode", "jargon_mode",
+                             "ethics_rules_json"}.issubset(story_columns))
+
+    def test_brief_writing_profile_is_part_of_the_publication_gate(self):
+        base = {
+            "county": "broward-county", "city": "fort-lauderdale", "headline": "A filing changed",
+            "dek": "A sourced summary", "body": "A sourced body", "event_date": "2026-08-11",
+            "source_title": "Official record", "source_url": "https://example.test/record",
+            "topic_tags": ["development"], "geography_tags": ["fort-lauderdale"],
+            "claims_status": "passed", "verification_status": "verified", "current_trigger": "Filed Aug. 11",
+            "project_identity_basis": "Exact public record ID", "claim_slots": [{"claim": "Filed", "source_url": "https://example.test/record"}],
+            "validator_status": "passed", "tags_status": "passed", "editor_name": "Desk editor",
+            "writing_style": "ap_florida_signal", "headline_mode": "compelling_precise",
+            "jargon_mode": "plain_english", "ethics_rules": sorted(cms_server.REQUIRED_ETHICS_RULES),
+        }
+        self.assertEqual(cms_server.story_blocks(base), [])
+        base["ethics_rules"] = ["attribute_material_claims"]
+        self.assertTrue(any("ethics checklist" in block.lower() for block in cms_server.story_blocks(base)))
+
+    def test_signal_machine_contract_is_cross_source_and_honest_about_gaps(self):
+        payload = cms_server.signal_machine_payload()
+        lanes = payload["lanes"]
+        self.assertEqual([lane["id"] for lane in lanes], [
+            "decisions", "formation", "capital", "regulatory", "execution",
+        ])
+        self.assertGreater(lanes[0]["default_multiplier"], lanes[-1]["default_multiplier"])
+        self.assertTrue(all(1 <= lane["default_multiplier"] <= 2 for lane in lanes))
+        self.assertEqual(lanes[0]["coverage"], "shadow_ranked")
+        self.assertEqual(lanes[-1]["coverage"], "shadow_ranked")
+        self.assertTrue(all(lane["coverage"] != "shadow_ranked" for lane in lanes[1:-1]))
+        self.assertIn("cannot rescue weak evidence", payload["score_contract"]["rule"])
+        self.assertEqual(payload["stages"][-3]["label"], "AI consistency check")
+        self.assertIn("cannot add sources", payload["stages"][-3]["may"])
+        self.assertEqual(payload["stages"][-2]["owner"], "Human desk editor")
 
     def test_review_queue_defaults_to_ready_and_bounds_paging(self):
         path, limit, offset, readiness = cms_server.review_queue_path({
@@ -118,7 +264,7 @@ class DataWireServerTests(unittest.TestCase):
         self.assertEqual(code, 502)
         self.assertIn("No timer status was inferred", payload["contract"])
 
-    def test_early_intel_orders_decisions_before_permits_and_exposes_packet_gap(self):
+    def test_early_intel_orders_pdmr_planning_intent_before_permits(self):
         def public_payload(url):
             if url.endswith("/api/meetings"):
                 return {"updated_at": "2026-08-12T01:20:00Z", "meetings": [{
@@ -133,11 +279,16 @@ class DataWireServerTests(unittest.TestCase):
                 {"id": "permits", "event_through": "2026-08-10"},
             ]}
 
-        with mock.patch.object(cms_server, "public_json", side_effect=public_payload):
+        with mock.patch.object(cms_server, "public_json", side_effect=public_payload), \
+                mock.patch.object(cms_server, "pdmr_intent_payload", return_value=(200, {
+                    "newest_event": "2026-08-12", "last_collected": "2026-08-12T02:00:00Z",
+                })):
             payload = cms_server.early_intel_payload()
-        self.assertEqual(payload["lanes"][0]["phase"], "01 · Decisions")
+        self.assertEqual(payload["lanes"][0]["phase"], "01 · Planning intent")
+        self.assertEqual(payload["lanes"][0]["label"], "PDMR planning intent + agenda packets")
         self.assertEqual(payload["lanes"][-1]["phase"], "05 · Execution")
-        self.assertIn("0 posted agenda", payload["lanes"][0]["headline"])
+        self.assertIn("PDMR reaches 2026-08-12", payload["lanes"][0]["headline"])
+        self.assertIn("first-public timing remains unresolved", payload["lanes"][0]["note"])
         self.assertIn("not five complete candidate detectors", payload["contract"])
 
     def test_agenda_watch_filters_boilerplate_and_preserves_public_receipts(self):
@@ -208,6 +359,20 @@ class DataWireServerTests(unittest.TestCase):
         self.assertEqual(len(payload["items"]), 1)
         self.assertTrue(payload["has_more"])
         self.assertIn("no fuzzy identity claim", payload["contract"])
+
+    def test_desktop_launcher_wires_external_project_state_and_pdmr_paths(self):
+        launcher = (ROOT / "ops" / "datawire-app-launcher.zsh").read_text(encoding="utf-8")
+        self.assertIn('florida_source="${FL_SIGNAL_SOURCE_ROOT:-$resources/florida-signal}"', launcher)
+        self.assertIn('FL_SIGNAL_PROJECT_STATE_PATH="$project_state_path"', launcher)
+        self.assertIn('FL_SIGNAL_PDMR_DB_PATH="$pdmr_db_path"', launcher)
+        self.assertIn('FL_SIGNAL_PDMR_CANDIDATE_SCRIPT="$pdmr_candidate_script"', launcher)
+
+    def test_desktop_updater_bundles_verified_local_source_snapshot(self):
+        updater = (ROOT / "ops" / "update_datawire_desktop_app.sh").read_text(encoding="utf-8")
+        self.assertIn("florida_signal_project_state.json", updater)
+        self.assertIn("florida_signal_v1.sqlite", updater)
+        self.assertIn("nominate_pdmr_candidates.py", updater)
+        self.assertIn("pragma quick_check;", updater)
 
 
 if __name__ == "__main__":

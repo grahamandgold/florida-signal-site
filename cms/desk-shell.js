@@ -98,8 +98,11 @@
     })();
     return tokenPromise;
   }
-  async function admin(path) {
-    var response = await fetch(path, { headers: { Authorization: "Bearer " + await getToken() } });
+  async function admin(path, options) {
+    var opts = options || {};
+    var headers = Object.assign({}, opts.headers || {}, { Authorization: "Bearer " + await getToken() });
+    if (opts.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+    var response = await fetch(path, Object.assign({}, opts, { headers: headers }));
     var body = await response.json().catch(function () { return {}; });
     if (!response.ok) throw new Error(body.error || "Request unavailable");
     return body;
@@ -126,9 +129,15 @@
     var label = mount.querySelector("[data-status-label]");
     var target = mount.querySelector("[data-status-body]");
     try {
-      var body = await admin("/api/admin/early-intel");
+      var responses = await Promise.all([
+        admin("/api/admin/early-intel"),
+        admin("/api/admin/signal-machine").catch(function () { return null; })
+      ]);
+      var body = responses[0];
+      var machine = responses[1];
       var lanes = Array.isArray(body.lanes) ? body.lanes : [];
-      label.textContent = lanes.length + " source lane" + (lanes.length === 1 ? "" : "s") + " reported";
+      var scored = machine && Array.isArray(machine.lanes) ? machine.lanes.filter(function (lane) { return lane.coverage === "shadow_ranked"; }).length : null;
+      label.textContent = lanes.length + " lane" + (lanes.length === 1 ? "" : "s") + " ingesting · " + (scored == null ? "scoring status unavailable" : scored + " shadow-scored");
       target.innerHTML = lanes.length ? lanes.map(function (lane) {
         return '<article class="dw-source-row"><span class="dw-source-stage">' + esc(lane.phase || "—") + '</span><div><b>' + esc(lane.label || "Unnamed source") + '</b><p>' + esc(lane.headline || lane.note || "No source note exposed.") + '</p></div><span class="dw-source-clock">Event ' + esc(lane.event_through || "not exposed") + '<br>System ' + esc(dateTime(lane.system_time)) + '</span></article>';
       }).join("") : '<p>No monitored lane responded. No source state was inferred.</p>';

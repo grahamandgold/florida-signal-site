@@ -10,8 +10,8 @@ test.describe("private Florida Signal Newsroom", () => {
     await page.goto(`${dataWireBase}/`);
     const control = page.locator("#project-control");
     await expect(control.getByRole("heading", { name: "Project state" })).toBeVisible({ timeout: 15_000 });
-    await expect(control).toContainText("NOW · current task");
-    await expect(control).toContainText("NEXT · ready when authorized");
+    await expect(control).toContainText("NOW · one active task");
+    await expect(control).toContainText("NEXT · frozen until NOW closes");
     await expect(control).toContainText("Production pipeline health");
     await expect(control).toContainText("UNKNOWN means no current health contract answered");
     await expect(control).toContainText("PDMR · LOCAL_ONLY");
@@ -32,6 +32,7 @@ test.describe("private Florida Signal Newsroom", () => {
     await expect(page.getByRole("link", { name: "Latest news coverage" })).toHaveAttribute("href", /news\.google\.com/);
     await expect(page.getByRole("link", { name: "Search the open web" })).toHaveAttribute("href", /google\.com\/search/);
     await expect(page.getByRole("link", { name: "Search Sunbiz" })).toHaveAttribute("href", /search\.sunbiz\.org/);
+    await expect(page.getByRole("button", { name: "Save to Brief bank" })).toBeVisible();
     await expect(page.locator(".dw-pipeline__job").first()).toBeVisible();
     await expect(page.locator('[data-status="APPROVED"]')).toBeHidden();
     expect(await page.evaluate(() => document.body.scrollWidth)).toBe(390);
@@ -41,14 +42,33 @@ test.describe("private Florida Signal Newsroom", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${dataWireBase}/`);
     await expect(page.getByRole("heading", { name: "Live Desk" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Latest items to confirm" })).toBeVisible();
+    await expect(page.getByText("Packet present · completeness not assessed")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Follow the project before the permit" })).toBeVisible();
     // The first private source read after the desk has been idle can be a cold
     // file-system pass. Keep the placeholder visible, but allow the five
     // independently clocked lanes enough time to replace it.
     await expect(page.locator(".sequence-row")).toHaveCount(5, { timeout: 15_000 });
-    await expect(page.locator(".sequence-row").first()).toContainText("Zoning, planning + agenda packets");
+    await expect(page.locator(".sequence-row").first()).toContainText("PDMR planning intent + agenda packets");
     await expect(page.locator(".sequence-row").last()).toContainText("Applications, permits + inspections");
-    await page.getByRole("button", { name: /source lane/i }).click();
+    await expect(page.getByRole("heading", { name: "Signal Machine pipeline" })).toBeVisible();
+    await expect(page.getByText("Who is responsible for what")).toBeVisible();
+    await expect(page.locator('#weight-form input[type="range"]')).toHaveCount(5);
+    await expect(page.locator('#weight-form input[type="range"]').first()).toHaveAttribute('min', '1');
+    await expect(page.locator('#weight-form input[type="range"]').first()).toHaveAttribute('max', '2');
+    await expect(page.locator('#weight-form input[type="range"]:disabled')).toHaveCount(4);
+    await expect(page.locator('#weight-form input[type="range"]').last()).toBeEnabled();
+    await expect(page.getByRole("button", { name: /5 lanes ingesting · 2 shadow-scored/i })).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator("#agenda-window")).toContainText("not scored");
+    await expect(page.locator("#lead-story h2")).not.toContainText(/follows/i, { timeout: 15_000 });
+    await expect(page.locator("#lead-story .eyebrow")).toContainText("Newest raw Candidate pattern", { timeout: 15_000 });
+    await expect(page.locator("#lead-story")).toContainText("extracted assertions", { timeout: 15_000 });
+    await expect(page.getByText(/shadow only: permits \/ execution and local PDMR planning intent/i)).toBeVisible();
+    await expect(page.getByText(/cross-source expansion is staged, not implied/i)).toBeVisible();
+    const decisionTop = await page.getByRole("heading", { name: "Latest items to confirm" }).evaluate(node => node.getBoundingClientRect().top + window.scrollY);
+    const protocolTop = await page.getByRole("heading", { name: "Signal Machine pipeline" }).evaluate(node => node.getBoundingClientRect().top + window.scrollY);
+    expect(decisionTop).toBeLessThan(protocolTop);
+    await page.getByRole("button", { name: /lanes ingesting/i }).click();
     await expect(page.getByRole("dialog", { name: "Newsroom source status" })).toBeVisible();
     await expect(page.getByRole("dialog", { name: "Newsroom source status" })).not.toContainText("1969");
     expect(await page.evaluate(() => document.body.scrollWidth)).toBe(390);
@@ -74,7 +94,7 @@ test.describe("private Florida Signal Newsroom", () => {
     expect(sequenceLayout.every(row => row.inside && row.columnsClear)).toBe(true);
     expect(await page.evaluate(() => document.body.scrollWidth)).toBe(1110);
 
-    await page.getByRole("button", { name: /source lane/i }).click();
+    await page.getByRole("button", { name: /lanes ingesting/i }).click();
     const dialog = page.getByRole("dialog", { name: "Newsroom source status" });
     await expect(dialog).toBeVisible();
     const sourceLayout = await dialog.locator(".dw-source-row").evaluateAll(rows => rows.map(row => {
@@ -123,7 +143,11 @@ test.describe("private Florida Signal Newsroom", () => {
       await expect(page.getByRole("heading", { name: heading }).first()).toBeVisible();
       await expect(page.getByLabel("Florida Signal Newsroom — Live Desk home")).toHaveAttribute("href", "/");
       if (path === "/data.html") {
-        await expect(page.getByRole("heading", { name: "Choose what you want to investigate" })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Working discovery sequence" })).toBeVisible();
+        await expect(page.locator(".source-group").first()).toContainText("PDMR planning intent");
+        await expect(page.locator(".source-group").nth(1)).toContainText("Sewer + utility capacity");
+        await expect(page.locator(".source-group").nth(1)).toContainText("Research only");
+        await expect(page.locator('[data-source-status="pdmr-local"]')).toHaveText("Connected", { timeout: 15_000 });
         await expect(page.locator('.source-option[data-source-table="broward_clerk_preliminary"]')).toBeVisible();
         await expect(page.locator('.source-option[data-source-table="permits"]')).toBeVisible();
         await expect(page.locator("#library-summary")).toContainText(/connected · .*empty · .*unavailable/i, { timeout: 15_000 });
@@ -141,9 +165,30 @@ test.describe("private Florida Signal Newsroom", () => {
         await expect(page.locator(".meeting-card").first()).toContainText(/\d{1,2}:\d{2}\s*(AM|PM)/i);
         await expect(page.getByRole("heading", { name: "Past meeting decisions and packet evidence" })).toBeVisible();
         await expect(page.locator(".agenda-item").first()).toContainText("City of Fort Lauderdale");
+        await expect(page.locator(".agenda-item").first()).toContainText("Raw public record · not scored · not a Signal");
         await expect(page.locator(".agenda-item").first().getByRole("link", { name: /official agenda PDF/i })).toBeVisible();
         await expect(page.getByLabel("Government body")).toBeVisible();
         await expect(page.getByLabel("Search agenda items")).toBeVisible();
+        const bankButton = page.getByRole("button", { name: /Save to Brief bank|Saved/i }).first();
+        await expect(bankButton).toBeVisible();
+        await bankButton.click();
+        await expect(page.getByRole("dialog", { name: /Save to Brief bank|Change Brief edition slot/i })).toBeVisible();
+        await expect(page.getByLabel("Edition day")).toBeVisible();
+        await page.getByLabel("Edition day").selectOption("friday");
+        await expect(page.getByLabel(/Exact edition date/i)).not.toHaveValue("");
+        await page.getByRole("button", { name: "Cancel" }).click();
+      }
+      if (path === "/index.html") {
+        await expect(page.getByRole("heading", { name: "Brief bank" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Wed" })).toBeVisible();
+        await expect(page.getByText("AI consistency check: not connected.")).toBeVisible();
+        await expect(page.getByText("Not connected. No sending path exists in this build.")).toBeVisible();
+        await expect(page.getByText("Send · not connected")).toBeVisible();
+        await expect(page.getByText(/Claim-slot check \(self-attested\)/).first()).toBeVisible();
+        await expect(page.getByText(/Claims check \(editor attestation\)/).first()).toBeVisible();
+        await expect(page.getByText("01A · Brief writing profile")).toBeVisible();
+        await expect(page.getByLabel("Style guide")).toHaveValue("ap_florida_signal");
+        await expect(page.locator('input[name="ethics_rules"]:checked')).toHaveCount(7);
       }
       expect(await page.evaluate(() => document.body.scrollWidth), `${path} page width`).toBe(390);
     }

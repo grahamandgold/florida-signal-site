@@ -151,9 +151,11 @@
     .source-option__copy small { display: block; margin-top: 3px; color: var(--muted); font-size: .69rem; line-height: 1.35; }
     .source-option__status { max-width: 88px; color: var(--muted); font: 700 .61rem/1.25 var(--mono); text-align: right; text-transform: uppercase; }
     .source-option__status[data-state="connected"] { color: #08765f; }
+    .source-option__status[data-state="research"] { color: #9a6a00; }
     .source-option__status[data-state="empty"], .source-option__status[data-state="blocked"] { color: #9a4a32; }
     .source-option--blocked { cursor: default; background: #fbf8f5; }
     .source-option--blocked:hover { background: #fbf8f5; }
+    .source-option--research { background: #fffbef; }
 
     .popular { margin: 0 0 18px; padding: 14px 16px; border: 1px solid var(--line); background: var(--paper); }
     .popular__head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
@@ -300,7 +302,7 @@
 
     <section class="library" aria-labelledby="library-title">
       <div class="library__head">
-        <div><div class="eyebrow">Every connected source</div><h3 id="library-title">Choose what you want to investigate</h3><p>Start with the question—not with permits. Every option below opens its real records or its dedicated newsroom view.</p></div>
+        <div><div class="eyebrow">Built + planned early-warning lanes</div><h3 id="library-title">Working discovery sequence</h3><p>PDMR planning intent comes first. Proposed earlier-signal sensors stay visible and are marked research-only until a collector and evidence contract exist; permits remain later execution evidence.</p></div>
         <span class="library__summary" id="library-summary">Checking connections…</span>
       </div>
       <div class="library-grid" id="library-grid"></div>
@@ -417,10 +419,30 @@
       Object.entries(params || {}).forEach(([k, v]) => url.searchParams.set(k, v));
       // Operational counts must never come from a cached response. Note: do NOT add a
       // cache-busting query parameter — PostgREST parses unknown params as column filters.
-      const r = await fetch(url, Object.assign(
-        { cache: "no-store", headers: { apikey: KEY, Accept: "application/json" } }, opts || {}));
-      if (!r.ok) throw new Error(path + " HTTP " + r.status);
-      return r;
+      const request = Object.assign(
+        { cache: "no-store", headers: { apikey: KEY, Accept: "application/json" } }, opts || {});
+      const method = String(request.method || "GET").toUpperCase();
+      const safeRead = method === "GET" || method === "HEAD";
+      const attempts = safeRead ? 2 : 1;
+      for (let attempt = 0; attempt < attempts; attempt++) {
+        try {
+          const r = await fetch(url, request);
+          if (r.ok) return r;
+          const transient = [500, 502, 503, 504, 520].includes(r.status);
+          if (!transient || attempt === attempts - 1) {
+            let detail = "";
+            try {
+              const body = await r.clone().json();
+              detail = body && body.message ? " · " + String(body.message).slice(0, 180) : "";
+            } catch (error) { /* preserve the HTTP status when no JSON detail exists */ }
+            throw new Error(path + " HTTP " + r.status + detail);
+          }
+        } catch (error) {
+          if (attempt === attempts - 1) throw error;
+        }
+        await new Promise(resolve => setTimeout(resolve, 650));
+      }
+      throw new Error(path + " request failed");
     }
     async function rows(path, params) { return (await sbFetch(path, params)).json(); }
     // Row counts must be EXACT on the health cards.
@@ -952,15 +974,21 @@
     ];
 
     const SOURCE_GROUPS = [
-      { eyebrow: "S1 · Earliest clues", title: "Decisions, meetings + agendas", items: [
-        { label: "Agenda Watch", note: "Legistar items, staff reports and attachments", href: "/agenda.html", state: "private" }
+      { eyebrow: "S1 · Earliest built lane", title: "Planning intent before application", items: [
+        { label: "PDMR planning intent", note: "LauderBuild pre-application narratives, owners, folios and concept stage", href: "/#planning-intent", privatePath: "/api/admin/pdmr-intent?limit=1", connection: "pdmr-local" },
+        { label: "Agenda Watch", note: "Legistar items, staff reports and attachments; timing varies by project", href: "/agenda.html", status: "Open view", state: "private" }
       ]},
-      { eyebrow: "S2 · Organizations", title: "Companies, people + licenses", items: [
+      { eyebrow: "S2 · Next sensors", title: "Early clues to research + connect", items: [
+        { label: "Sewer + utility capacity", note: "Capacity inquiries and availability letters before formal application", href: "/#project-control", status: "Research only", state: "research" },
+        { label: "Engineering intake", note: "ENG-CR, ENG-OAA and TMP workflows; source contract not built", href: "/#project-control", status: "Research only", state: "research" },
+        { label: "Assemblage + new LLC", note: "Join deed assemblage to newly formed entities; detector not connected", href: "/#project-control", status: "Planned join", state: "research" },
+        { label: "Lobbyist registrations", note: "Actor and client filings that may precede a public application", href: "/#project-control", status: "Research only", state: "research" },
+        { label: "SFWMD filings", note: "Regional water-management applications separate from the current FDEP feed", href: "/#project-control", status: "Research only", state: "research" }
+      ]},
+      { eyebrow: "S3 · Site control + actors", title: "Ownership, companies + capital", items: [
         { label: "Sunbiz entity matches", note: "Private exact matches from the state SFTP corpus", table: "sunbiz_entities" },
+        { label: "Owner resolution", note: "Owner identities joined to permits", table: "owner_resolution" },
         { label: "Contractor licenses", note: "Businesses, qualifiers and expiration", table: "lp_licenses" },
-        { label: "Owner resolution", note: "Owner identities joined to permits", table: "owner_resolution" }
-      ]},
-      { eyebrow: "S3 · Ownership + capital", title: "Property, deeds + financing", items: [
         { label: "Same-day recordings", note: "Preliminary Acclaim records; later reconciled", table: "broward_clerk_preliminary" },
         { label: "Verified Clerk recordings", note: "Deeds, mortgages, liens, NOCs and judgments", table: "broward_clerk_records_doc" },
         { label: "Mapped transfers", note: "Deeds and easements linked to parcels", table: "broward_property_transfer_map" },
@@ -968,11 +996,11 @@
         { label: "Countywide parcel map", note: "Official parcel centroids and latest sale cross-check", table: "broward_parcel_geography" },
         { label: "GIS permit enrichment", note: "Permit-to-parcel ownership and sale context", table: "gis_enrichment" }
       ]},
-      { eyebrow: "S4 · Regulatory", title: "Environment + infrastructure", items: [
+      { eyebrow: "S4 · Regulatory evidence", title: "Environment + airspace", items: [
         { label: "FDEP environmental", note: "ERP projects, applicants and status", table: "fdep_erp" },
         { label: "FAA obstruction cases", note: "Cranes, height cases and sponsors", table: "faa_oeaaa" }
       ]},
-      { eyebrow: "S5 · Execution", title: "Applications, permits + inspections", items: [
+      { eyebrow: "S5 · Later execution", title: "Applications, permits + inspections", items: [
         { label: "Permit applications", note: "Fort Lauderdale Accela filings", table: "permits" },
         { label: "Accela detail", note: "Applicants, contractors, documents and inspections", table: "accela_details" },
         { label: "Permit workflow events", note: "FOIA task and status history", table: "foia_workflow_events" }
@@ -988,9 +1016,11 @@
       const active = item.table && item.table === state.table ? "true" : "false";
       const tag = item.table ? "button" : "a";
       const attrs = item.table ? `type="button" data-source-table="${esc(item.table)}"` : `href="${esc(item.href)}"${/^https?:/.test(item.href || "") ? ' target="_blank" rel="noopener"' : ""}`;
-      const status = item.state === "empty" ? "Unavailable" : item.state === "historical" ? "Historical" : item.table ? "Checking…" : "Open view";
-      const klass = item.state === "empty" ? " source-option--blocked" : "";
-      return `<${tag} class="source-option${klass}" ${attrs} data-active="${active}"><span class="source-option__copy"><b>${esc(item.label)}</b><small>${esc(item.reason || item.note)}</small></span><span class="source-option__status" data-source-status="${esc(item.table || item.state || "view")}" data-state="${esc(item.state || "checking")}">${esc(status)}</span></${tag}>`;
+      const checkable = Boolean(item.table || item.privatePath);
+      const status = item.status || (item.state === "empty" ? "Unavailable" : item.state === "historical" ? "Historical" : checkable ? "Checking…" : "Open view");
+      const klass = item.state === "empty" ? " source-option--blocked" : item.state === "research" ? " source-option--research" : "";
+      const statusKey = item.connection || item.table || item.state || "view";
+      return `<${tag} class="source-option${klass}" ${attrs} data-active="${active}"><span class="source-option__copy"><b>${esc(item.label)}</b><small>${esc(item.reason || item.note)}</small></span><span class="source-option__status" data-source-status="${esc(statusKey)}" data-state="${esc(item.state || (checkable ? "checking" : "view"))}">${esc(status)}</span></${tag}>`;
     }
 
     function buildLibrary() {
@@ -1010,23 +1040,36 @@
     }
 
     async function checkLibraryConnections() {
-      const tables = Array.from(new Set(SOURCE_GROUPS.flatMap(group => group.items.map(item => item.table).filter(Boolean))));
+      const checks = [];
+      const seen = new Set();
+      SOURCE_GROUPS.forEach(group => group.items.forEach(item => {
+        if (!item.table && !item.privatePath) return;
+        const key = item.connection || item.table || item.privatePath;
+        if (!seen.has(key)) { seen.add(key); checks.push(Object.assign({ key }, item)); }
+      }));
       let connected = 0, empty = 0, blocked = 0, completed = 0, cursor = 0;
       const updateSummary = () => {
-        q("#library-summary").textContent = completed < tables.length
-          ? `${completed}/${tables.length} sources checked…`
+        q("#library-summary").textContent = completed < checks.length
+          ? `${completed}/${checks.length} sources checked…`
           : `${connected} connected · ${empty} empty · ${blocked} unavailable`;
       };
       async function checkNext() {
         const current = cursor++;
-        if (current >= tables.length) return;
-        const table = tables[current];
-        const labels = document.querySelectorAll(`[data-source-status="${table}"]`);
+        if (current >= checks.length) return;
+        const item = checks[current];
+        const labels = document.querySelectorAll(`[data-source-status="${item.key}"]`);
         try {
-          const cfg = TABLES[table];
-          const data = cfg && cfg.privatePath
-            ? (await window.FloridaSignalNewsroom.admin(cfg.privatePath + "?limit=1&offset=0")).items
-            : await (await sbFetch(table, Object.assign({ select: cfg.select, limit: "1" }, cfg.order ? { order: cfg.order } : {}))).json();
+          const cfg = item.table ? TABLES[item.table] : null;
+          const payload = item.privatePath
+            ? await window.FloridaSignalNewsroom.admin(item.privatePath)
+            : cfg && cfg.privatePath
+              ? await window.FloridaSignalNewsroom.admin(cfg.privatePath + "?limit=1&offset=0")
+              : null;
+          const data = item.privatePath
+            ? (Number(payload.record_count || 0) > 0 ? [payload] : [])
+            : cfg && cfg.privatePath
+              ? payload.items
+              : await (await sbFetch(item.table, Object.assign({ select: cfg.select, limit: "1" }, cfg.order ? { order: cfg.order } : {}))).json();
           const hasRows = Array.isArray(data) && data.length > 0;
           labels.forEach(label => { label.textContent = hasRows ? "Connected" : "Connected · empty"; label.dataset.state = hasRows ? "connected" : "empty"; });
           if (hasRows) connected += 1; else empty += 1;
@@ -1039,7 +1082,10 @@
         await checkNext();
       }
       updateSummary();
-      await Promise.all([checkNext(), checkNext(), checkNext()]);
+      // These checks are intentionally sequential. The largest Clerk/Accela tables can
+      // return transient gateway/database errors when several ordered probes arrive at
+      // once; that made healthy sources appear unavailable in the operator desk.
+      await checkNext();
     }
 
     function commitSearch() {

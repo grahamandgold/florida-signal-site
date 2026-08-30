@@ -69,6 +69,18 @@ class PublicApiTests(unittest.TestCase):
         self.assertEqual((parsed.hour, parsed.minute, parsed.second), (23, 40, 15))
         self.assertEqual(parsed.microsecond, 618190)
 
+    def test_supabase_health_read_retries_one_transient_server_error(self):
+        transient = urllib.error.HTTPError("https://example.invalid", 500, "timeout", {}, None)
+        response = mock.MagicMock()
+        response.__enter__.return_value = response
+        response.read.return_value = b'[{"last_fetched_at":"2026-08-30T09:21:10Z"}]'
+        with mock.patch.object(urllib.request, "urlopen", side_effect=[transient, response]) as open_url, \
+                mock.patch.object(server_module.time, "sleep") as pause:
+            rows = server_module.supabase_public_rows("fdep_erp?select=last_fetched_at&limit=1")
+        self.assertEqual(rows[0]["last_fetched_at"], "2026-08-30T09:21:10Z")
+        self.assertEqual(open_url.call_count, 2)
+        pause.assert_called_once_with(0.15)
+
     def test_data_health_keeps_preliminary_and_verified_clerk_clocks_separate(self):
         def rows(path):
             if path.startswith("_meta_sync_runs"):

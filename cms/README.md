@@ -39,7 +39,7 @@ python3 server.py --port 4173
 
 Open `http://127.0.0.1:8788/` for the **Live Desk** home. The shared Newsroom shell links to:
 
-- **Live Desk** — what needs attention now;
+- **Live Desk** — newest evidence-ready decisions first, followed by source/model protocols;
 - **Agenda Watch** — public decisions, packets, attachments and early clues;
 - **Brief** — build and clear a sourced newsletter edition;
 - **Data Explorer** — exact record search and investigation;
@@ -48,6 +48,11 @@ Open `http://127.0.0.1:8788/` for the **Live Desk** home. The shared Newsroom sh
 The production-timer strip shows what is scheduled next. The schedule is
 read-only and comes from the production host; a scheduled timer is never presented as proof that
 the source advanced. Use Feed health for source-event, collection and row-count clocks.
+
+The Live Desk sorts its first working list by `source_record_date DESC` (then amount) and shows up
+to five `evidence_ready=true` Candidates immediately below the attention counts. Operating-model
+explainers and Signal Machine controls follow the decision work. Raw Candidate summaries are labeled
+as extracted assertions, not supported facts or verified Signals.
 
 The interface is a production translation of the reviewed Claude Design direction. Claude's
 illustrative records, scores, model labels and clocks were not copied. The real Newsroom reads the
@@ -64,11 +69,15 @@ the content width before the mobile navigation breakpoint. Source-stage labels, 
 independent clocks must reflow at that state; the browser regression suite checks the 1,110-pixel
 viewport where those columns previously collided.
 
-Data Explorer opens with a plain-English source catalog before any record table. It groups the
-available sources by decisions, organizations, ownership/capital, regulatory filings and execution;
-permits are one source, not the page's default identity. Each catalog option performs a real read
-check and reports `Connected`, `Connected · empty` or `Unavailable`. The default record view is the
-same-day preliminary Clerk lane, clearly separated from verified Clerk records.
+Data Explorer opens with a plain-English working discovery sequence before any record table. PDMR
+planning intent is the first built lane; sewer/utility capacity, engineering intake, assemblage +
+new LLC, lobbyist registration and SFWMD research lanes remain visible but explicitly unconnected.
+Connected ownership/capital, regulatory and execution sources follow; permits remain later-stage
+evidence, not the page's identity. Each connected catalog option performs a real read
+check and reports `Connected`, `Connected · empty` or `Unavailable`. Checks run sequentially and
+safe reads receive one bounded retry for transient 5xx responses so concurrent probes cannot make
+healthy Clerk, FAA or Accela sources look unavailable. The default record view is the same-day
+preliminary Clerk lane, clearly separated from verified Clerk records.
 
 The browser stores the admin token only in the local session. Do not put it in public JavaScript,
 a screenshot or a committed file.
@@ -82,7 +91,13 @@ from `127.0.0.1` and never prints the token.
 The Finder app is refreshed from the tracked source with
 `bash ops/update_datawire_desktop_app.sh`. The updater validates the bundle identifier, stages and
 signs a complete copy, and restores the prior app if verification fails. Its local editorial
-SQLite data remains in Application Support and is not replaced with the app bundle.
+SQLite data remains in Application Support and is not replaced with the app bundle. The launcher
+reads durable project state, the private PDMR evidence database and the read-only PDMR Candidate
+script from a verified snapshot inside the generated app. This avoids macOS privacy failures when
+a Finder-launched app is denied Documents access. Re-run the updater after a local PDMR collection
+to refresh the snapshot. `FL_SIGNAL_SITE_REPO` and `FL_SIGNAL_SOURCE_ROOT` select the source at
+build time; `FL_SIGNAL_SOURCE_ROOT` and the three specific `FL_SIGNAL_*_PATH` variables may still
+override the bundled paths when launching from an environment that can read another checkout.
 
 ### If the desk says Locked
 
@@ -116,6 +131,16 @@ Send `Authorization: Bearer $DATA_WIRE_ADMIN_TOKEN`.
   explicitly **City of Fort Lauderdale only**. It also carries the official upcoming city calendar
   with date, time, place and agenda-posted state; historical packet items expose the government
   body, official agenda PDF, exact meeting item and attachment list before the reporting notes.
+- `GET /api/admin/signal-machine` — honest control-plane contract. It separates source health,
+  detector coverage and freshness; only the permit/execution family is currently shadow-ranked.
+- `GET /api/admin/brief-bank?market=broward` — private edition selections with resolved target date,
+  source receipt, SHA-256 evidence snapshot, score/gate reasons and machine/profile lineage.
+- `POST /api/admin/brief-bank` — saves or reslots one stable source item. It never approves,
+  publishes, schedules or sends.
+- `GET /api/admin/scoring-profiles?market=broward` — draft simulation profiles. The active
+  production profile is explicitly `null` because no activation path exists.
+- `POST /api/admin/scoring-profiles` — records a named, rationale-backed 1.00×–2.00× multiplier
+  experiment with `status=draft` and `backtest_status=not_run`; it has zero production effect.
 - `POST /api/admin/review-queue/{queue_id}` — records APPROVE/HOLD/REJECT/NEEDS_MORE_REPORTING;
   it never publishes
 - `POST /api/admin/stories`
@@ -147,6 +172,20 @@ Data Explorer search is exact and indexed. Use prefixes such as `permit:`, `foli
 previously caused database timeouts.
 
 A brief cannot publish until it is a complete **VERIFIED Story Packet**: required city, headline, dek, body, event date, dated current trigger, defensible project identity, public source URL/title, at least one source-bound claim slot, topic and geography tags, `claims_status: passed`, `validator_status: passed`, `tags_status: passed`, and a named human editor. Needs-verification packets remain private. The CMS computes a source hash and records approval history.
+
+Agenda Watch cards are raw public records. They are labeled `not scored · not a Signal` and can be
+saved to the Brief bank for a weekday/date without becoming a Candidate or receiving a fabricated
+score. Brief-bank dates cannot disagree: an exact date determines the weekday, while a weekday-only
+selection resolves to its next calendar occurrence. Loading a bank item opens an unverified draft;
+the AI consistency-check stage is optional, currently unconnected and can never add evidence or
+clear a claim.
+
+Every Brief draft also stores a visible writing profile. The defaults are AP style plus the Florida
+Signal house voice, `Catchy but precise` headlines and plain-English acronym translation. The
+required ethics checklist covers attribution, uncertainty/preliminary labels, anti-sensationalism,
+right of reply when criticism is material, conflict disclosure and a ban on invented context,
+quotes, motives or connections. These settings guide writing; they never weaken source, claim,
+identity or human-approval gates. Public bylines remain role-based until explicitly changed.
 
 An agenda-property item cannot publish until it has a required city, official packet URL, meeting title/date, item number, property address, coordinates, proposed action, source page and a named human editor.
 
