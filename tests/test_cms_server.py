@@ -22,7 +22,7 @@ class DataWireServerTests(unittest.TestCase):
             "current_mode": "STATE RECONCILIATION",
             "verified_at": "2026-08-23T18:48:52-04:00",
             "now": {
-                "title": "Submit the records request for the 27 locked PDMRs",
+                "title": "Submit the prepared City of Fort Lauderdale records request for the 27 locked PDMRs and preserve the receipt",
                 "status": "IN_PROGRESS",
             },
             "next": {"title": "Adjudicate", "status": "PAUSED"},
@@ -78,6 +78,7 @@ class DataWireServerTests(unittest.TestCase):
         self.assertEqual(receipts["broward"]["status"], "DELAYED")
         rendered_state = json.dumps(payload["project_state"])
         self.assertNotIn("locked PDMRs", rendered_state)
+        self.assertIn("first-public-timing metadata request", rendered_state)
         self.assertIn("frozen 27-record PDMR research cohort", rendered_state)
         self.assertIn("all 27 records in the frozen PDMR research cohort", rendered_state)
         self.assertIn("never inherit", payload["contract"])

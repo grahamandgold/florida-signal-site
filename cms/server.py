@@ -214,6 +214,8 @@ def project_state_payload() -> tuple[int, dict[str, Any]]:
         if isinstance(value, list):
             return [clarify_frozen_pdmr_cohort(item) for item in value]
         if isinstance(value, str):
+            if value == "Submit the prepared City of Fort Lauderdale records request for the 27 locked PDMRs and preserve the receipt":
+                return "Submit the prepared City of Fort Lauderdale first-public-timing metadata request for the frozen 27-record PDMR research cohort and preserve the receipt"
             return value.replace(
                 "all 27 locked PDMRs",
                 "all 27 records in the frozen PDMR research cohort",
