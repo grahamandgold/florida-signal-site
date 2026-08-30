@@ -239,9 +239,21 @@ def project_state_payload() -> tuple[int, dict[str, Any]]:
             "touch_policy": component.get("touch_policy"),
         })
 
+    source_receipts = [{
+        "id": str(row.get("id")),
+        "label": row.get("label"),
+        "status": str(row.get("status") or "UNKNOWN").upper(),
+        "event_through": row.get("event_through"),
+        "system_time": row.get("system_time"),
+        "detail": row.get("detail") or "Public source receipt supplied no detail.",
+    } for row in health.get("sources", [])
+        if isinstance(row, dict) and row.get("id")
+    ] if isinstance(health, dict) else []
+
     return 200, {
         "project_state": state,
         "operational_health": operational_health,
+        "source_receipts": source_receipts,
         "live_health_generated_at": health.get("generated_at") if isinstance(health, dict) else None,
         "live_health_errors": health.get("errors", []) if isinstance(health, dict) else [],
         "generated_at": now_iso(),
@@ -515,7 +527,7 @@ def early_intel_payload() -> dict[str, Any]:
 
     lanes = [
         {
-            "phase": "01 · Planning intent", "label": "PDMR planning intent + agenda packets",
+            "phase": "01 · Planning intent", "label": "Preliminary Development Meeting Request (PDMR) + agenda packets",
             "status": combined_status(pdmr_receipt, meeting_receipt),
             "connection": connection_state(pdmr_receipt, meeting_receipt),
             "automation": "mixed" if pdmr_receipt and meeting_receipt else "manual" if pdmr_receipt else "automated" if meeting_receipt else "none",
@@ -524,7 +536,7 @@ def early_intel_payload() -> dict[str, Any]:
             "headline": ((f"PDMR reaches {pdmr.get('newest_event')} · {len(agendas)} posted agenda(s)"
                           if pdmr else f"{len(agendas)} posted agenda(s) among {len(government)} upcoming government meetings")
                          if government or pdmr else "Planning-intent sources unavailable"),
-            "note": "Earliest built lane in the current desk. PDMR portal dates precede the matched formal applications, but first-public timing remains unresolved; agenda timing varies by project.",
+            "note": "Earliest built lane in the current desk. The City's Preliminary Development Meeting Request portal dates precede matched formal applications, but first-public timing remains unresolved; agenda timing varies by project.",
             "href": "/#planning-intent",
         },
         {
@@ -757,7 +769,7 @@ def pipeline_schedule() -> tuple[int, dict[str, Any]]:
 def signal_machine_payload() -> dict[str, Any]:
     """Describe the real cross-source control plane without pretending missing detectors exist."""
     lanes = [
-        {"id": "decisions", "label": "PDMR + agenda packets · early discovery", "discovery_order": 1,
+        {"id": "decisions", "label": "Preliminary Development Meeting Request (PDMR) + agenda packets · early discovery", "discovery_order": 1,
          "default_multiplier": 1.50, "health": "source_reporting", "coverage": "shadow_ranked",
          "freshness": "see_source_receipt", "note": "LauderBuild PDMRs have a deterministic local shadow Candidate detector; production queue writes remain disconnected."},
         {"id": "formation", "label": "Entity formation · Sunbiz", "discovery_order": 2,

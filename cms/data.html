@@ -308,7 +308,7 @@
 
     <section class="library" aria-labelledby="library-title">
       <div class="library__head">
-        <div><div class="eyebrow">Built + planned early-warning lanes</div><h3 id="library-title">Working discovery sequence</h3><p>PDMR planning intent comes first. Proposed earlier-signal sensors stay visible and are marked research-only until a collector and evidence contract exist; permits remain later execution evidence.</p></div>
+        <div><div class="eyebrow">Built + planned early-warning lanes</div><h3 id="library-title">Working discovery sequence</h3><p>Fort Lauderdale's Preliminary Development Meeting Request (PDMR) planning-intent records come first. Proposed earlier-signal sensors stay visible and are marked research-only until a collector and evidence contract exist; permits remain later execution evidence.</p></div>
         <div class="library__tools"><button type="button" id="refresh-sources">Refresh source receipts</button><span class="library__summary" id="library-summary">Checking connections…</span><span class="library__checked" id="library-checked">Not checked yet</span></div>
       </div>
       <div class="library-grid" id="library-grid"></div>
@@ -330,7 +330,7 @@
         <button class="button button--teal" id="refresh-btn" type="button">Search records</button>
         <span class="count-note" id="count-note">—</span>
       </div>
-      <p class="foot-note" id="search-help" style="margin:0 18px 12px">Choose a source above or use a fielded lookup: PDMR supports <code>id:</code> <code>folio:</code> <code>addr:</code> <code>owner:</code> <code>project:</code>; other sources support <code>permit:</code> <code>instrument:</code> <code>license:</code> <code>asn:</code>. Broad text research remains separate.</p>
+      <p class="foot-note" id="search-help" style="margin:0 18px 12px">Choose a source above or use a fielded lookup. Preliminary Development Meeting Request (PDMR) records support <code>id:</code> <code>folio:</code> <code>addr:</code> <code>owner:</code> <code>project:</code>; other sources support <code>permit:</code> <code>instrument:</code> <code>license:</code> <code>asn:</code>. Broad text research remains separate.</p>
       <div class="table-wrap">
         <table id="data-table">
           <thead></thead>
@@ -719,15 +719,15 @@
     // ---------- explorer config ----------
     const TABLES = {
       pdmr_intent: {
-        label: "PDMR planning intent · local evidence",
+        label: "Preliminary Development Meeting Request (PDMR) · local evidence",
         privatePath: "/api/admin/pdmr-intent",
-        privateLabel: "PDMR source record",
+        privateLabel: "Preliminary Development Meeting Request source record",
         privateSearchRaw: true,
         select: "event_date,source_record_id,address,owner_name,folio,project_name,development_type,units_text,record_status,last_seen_at,source_url",
         order: "event_date.desc.nullslast,source_record_id.desc",
         cols: [
           ["event_date", "Filed", dateish],
-          ["source_record_id", "PDMR #", v => `<span class="pill">${esc(v)}</span>`],
+          ["source_record_id", "PDMR request #", v => `<span class="pill">${esc(v)}</span>`],
           ["address", "Address"],
           ["owner_name", "Owner / applicant"],
           ["folio", "Folio"],
@@ -1022,7 +1022,7 @@
 
     const SOURCE_GROUPS = [
       { eyebrow: "S1 · Earliest built lane", title: "Planning intent before application", items: [
-        { label: "PDMR planning intent", note: "LauderBuild pre-application narratives, owners, folios and concept stage", table: "pdmr_intent", connection: "pdmr-local", componentId: "pdmr", refresh: "manual" },
+        { label: "Preliminary Development Meeting Request (PDMR)", note: "LauderBuild pre-application narratives, owners, folios and concept stage", table: "pdmr_intent", connection: "pdmr-local", componentId: "pdmr", refresh: "manual" },
         { label: "Agenda Watch", note: "Legistar items, staff reports and attachments; timing varies by project", href: "/agenda.html", status: "Open view", state: "private" }
       ]},
       { eyebrow: "S2 · Next sensors", title: "Early clues to research + connect", items: [
@@ -1036,8 +1036,8 @@
         { label: "Sunbiz entity matches", note: "Private exact matches from the state SFTP corpus", table: "sunbiz_entities", componentId: "sunbiz", refresh: "automated" },
         { label: "Owner resolution", note: "Owner identities joined to permits", table: "owner_resolution", refresh: "snapshot" },
         { label: "Contractor licenses", note: "Businesses, qualifiers and expiration", table: "lp_licenses", refresh: "snapshot" },
-        { label: "Same-day recordings", note: "Preliminary Acclaim records; later reconciled", table: "broward_clerk_preliminary", componentId: "broward-clerk", refresh: "automated" },
-        { label: "Verified Clerk recordings", note: "Deeds, mortgages, liens, NOCs and judgments", table: "broward_clerk_records_doc", componentId: "broward-clerk", refresh: "automated" },
+        { label: "Same-day recordings", note: "Preliminary Acclaim records; later reconciled", table: "broward_clerk_preliminary", receiptId: "clerk-preliminary", refresh: "automated" },
+        { label: "Verified Clerk recordings", note: "Deeds, mortgages, liens, NOCs and judgments", table: "broward_clerk_records_doc", receiptId: "broward", refresh: "automated" },
         { label: "Mapped transfers", note: "Deeds and easements linked to parcels", table: "broward_property_transfer_map", componentId: "property-transfers", refresh: "automated" },
         { label: "BCPA property cards", note: "Owners, values and property facts", table: "bcpa_property_card", componentId: "property-context", refresh: "snapshot" },
         { label: "Countywide parcel map", note: "Official parcel centroids and latest sale cross-check", table: "broward_parcel_geography", componentId: "property-context", refresh: "snapshot" },
@@ -1097,6 +1097,7 @@
       refreshButton.textContent = "Checking…";
       const projectState = await window.FloridaSignalNewsroom.admin("/api/admin/project-state").catch(() => ({}));
       const componentHealth = new Map((projectState.operational_health || []).map(row => [String(row.id), row]));
+      const sourceHealth = new Map((projectState.source_receipts || []).map(row => [String(row.id), row]));
       const checks = [];
       const seen = new Set();
       SOURCE_GROUPS.forEach(group => group.items.forEach(item => {
@@ -1130,7 +1131,7 @@
               ? payload.items
               : await (await sbFetch(item.table, { select: cfg.probe || cfg.select.split(",")[0], limit: "1" })).json();
           const hasRows = Array.isArray(data) && data.length > 0;
-          const receipt = item.componentId ? componentHealth.get(item.componentId) : null;
+          const receipt = item.receiptId ? sourceHealth.get(item.receiptId) : item.componentId ? componentHealth.get(item.componentId) : null;
           const liveStatus = String(receipt && receipt.status || "UNKNOWN").toLowerCase();
           const refresh = String(item.refresh || "connected").toLowerCase();
           if (hasRows) {

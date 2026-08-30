@@ -49,7 +49,7 @@ test.describe("private Florida Signal Newsroom", () => {
     // file-system pass. Keep the placeholder visible, but allow the five
     // independently clocked lanes enough time to replace it.
     await expect(page.locator(".sequence-row")).toHaveCount(5, { timeout: 15_000 });
-    await expect(page.locator(".sequence-row").first()).toContainText("PDMR planning intent + agenda packets");
+    await expect(page.locator(".sequence-row").first()).toContainText("Preliminary Development Meeting Request (PDMR) + agenda packets");
     await expect(page.locator(".sequence-row").last()).toContainText("Applications, permits + inspections");
     await expect(page.getByRole("heading", { name: "Signal Machine pipeline" })).toBeVisible();
     await expect(page.getByText("Who is responsible for what")).toBeVisible();
@@ -63,7 +63,7 @@ test.describe("private Florida Signal Newsroom", () => {
     await expect(page.locator("#lead-story h2")).not.toContainText(/follows/i, { timeout: 15_000 });
     await expect(page.locator("#lead-story .eyebrow")).toContainText("Newest raw Candidate pattern", { timeout: 15_000 });
     await expect(page.locator("#lead-story")).toContainText("extracted assertions", { timeout: 15_000 });
-    await expect(page.getByText(/shadow only: permits \/ execution and local PDMR planning intent/i)).toBeVisible();
+    await expect(page.getByText(/shadow only: permits \/ execution and local preliminary development meeting request \(PDMR\) planning intent/i)).toBeVisible();
     await expect(page.getByText(/cross-source expansion is staged, not implied/i)).toBeVisible();
     const decisionTop = await page.getByRole("heading", { name: "Latest items to confirm" }).evaluate(node => node.getBoundingClientRect().top + window.scrollY);
     const protocolTop = await page.getByRole("heading", { name: "Signal Machine pipeline" }).evaluate(node => node.getBoundingClientRect().top + window.scrollY);
@@ -144,7 +144,7 @@ test.describe("private Florida Signal Newsroom", () => {
       await expect(page.getByLabel("Florida Signal Newsroom — Live Desk home")).toHaveAttribute("href", "/");
       if (path === "/data.html") {
         await expect(page.getByRole("heading", { name: "Working discovery sequence" })).toBeVisible();
-        await expect(page.locator(".source-group").first()).toContainText("PDMR planning intent");
+        await expect(page.locator(".source-group").first()).toContainText("Preliminary Development Meeting Request (PDMR)");
         await expect(page.locator(".source-group").nth(1)).toContainText("Sewer + utility capacity");
         await expect(page.locator(".source-group").nth(1)).toContainText("Research only");
         await expect(page.locator('[data-source-status="pdmr-local"]')).toContainText(/connected.*manual/i, { timeout: 15_000 });

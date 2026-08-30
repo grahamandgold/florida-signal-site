@@ -40,10 +40,20 @@ class DataWireServerTests(unittest.TestCase):
                 },
             ],
         }
-        health = {"generated_at": "2026-08-23T22:00:00Z", "sources": [{
-            "id": "permits", "status": "current", "event_through": "2026-08-22",
-            "system_time": "2026-08-23T21:40:00Z", "detail": "Live receipt",
-        }]}
+        health = {"generated_at": "2026-08-23T22:00:00Z", "sources": [
+            {
+                "id": "permits", "status": "current", "event_through": "2026-08-22",
+                "system_time": "2026-08-23T21:40:00Z", "detail": "Live receipt",
+            },
+            {
+                "id": "clerk-preliminary", "status": "current", "event_through": "2026-08-22",
+                "system_time": "2026-08-23T20:00:00Z", "detail": "Preliminary receipt",
+            },
+            {
+                "id": "broward", "status": "delayed", "event_through": "2026-08-19",
+                "system_time": "2026-08-23T18:00:00Z", "detail": "Verified receipt",
+            },
+        ]}
         with tempfile.TemporaryDirectory() as directory:
             state_path = Path(directory) / "state.json"
             state_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -56,6 +66,10 @@ class DataWireServerTests(unittest.TestCase):
         self.assertEqual(rows["permits"]["event_through"], "2026-08-22")
         self.assertEqual(rows["pdmr"]["deployment_status"], "LOCAL_ONLY")
         self.assertEqual(rows["pdmr"]["status"], "UNKNOWN")
+        receipts = {row["id"]: row for row in payload["source_receipts"]}
+        self.assertEqual(receipts["clerk-preliminary"]["event_through"], "2026-08-22")
+        self.assertEqual(receipts["broward"]["event_through"], "2026-08-19")
+        self.assertEqual(receipts["broward"]["status"], "DELAYED")
         self.assertIn("never inherit", payload["contract"])
 
     def test_project_state_fails_closed_when_manifest_is_missing(self):
@@ -298,7 +312,7 @@ class DataWireServerTests(unittest.TestCase):
                 })):
             payload = cms_server.early_intel_payload()
         self.assertEqual(payload["lanes"][0]["phase"], "01 · Planning intent")
-        self.assertEqual(payload["lanes"][0]["label"], "PDMR planning intent + agenda packets")
+        self.assertEqual(payload["lanes"][0]["label"], "Preliminary Development Meeting Request (PDMR) + agenda packets")
         self.assertEqual(payload["lanes"][0]["automation"], "mixed")
         self.assertEqual(payload["lanes"][0]["status"], "current")
         self.assertEqual(payload["lanes"][1]["connection"], "unavailable")
