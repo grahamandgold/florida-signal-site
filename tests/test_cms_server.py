@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import sqlite3
 import subprocess
 import tempfile
@@ -9,12 +10,209 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
+DESK_SERVICE_TARGET = f"gui/{os.getuid()}/com.floridasignal.datawire.server"
 SPEC = importlib.util.spec_from_file_location("florida_signal_cms_server", ROOT / "cms" / "server.py")
 cms_server = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(cms_server)
 
 
 class DataWireServerTests(unittest.TestCase):
+    @staticmethod
+    def _write_executable(path, body):
+        path.write_text(body, encoding="utf-8")
+        path.chmod(0o755)
+
+    def _desk_command_fixture(self, directory, scenario):
+        root = Path(directory)
+        state = root / "state"
+        fake_bin = root / "bin"
+        home = root / "home"
+        state.mkdir()
+        fake_bin.mkdir()
+        home.mkdir()
+        log_path = root / "events.log"
+
+        self._write_executable(fake_bin / "launchctl", r'''#!/bin/bash
+set -u
+action="${1:-}"
+job="$FAKE_DESK_STATE/job"
+removing="$FAKE_DESK_STATE/removing"
+log() { printf '%s\n' "$*" >> "$FAKE_DESK_LOG"; }
+case "$action" in
+  print)
+    if [[ -f "$removing" ]]; then
+      count="$(<"$removing")"
+      if (( count > 0 )); then
+        printf '%s\n' "$((count - 1))" > "$removing"
+        log "launchctl print ${2:-} loaded"
+        exit 0
+      fi
+      /bin/rm -f "$removing" "$job"
+      log "launchctl print ${2:-} absent"
+      exit 1
+    fi
+    if [[ -f "$job" ]]; then
+      log "launchctl print ${2:-} loaded"
+      exit 0
+    fi
+    log "launchctl print ${2:-} absent"
+    exit 1
+    ;;
+  bootout)
+    log "launchctl bootout ${2:-}"
+    if [[ -f "$job" && ( "$FAKE_DESK_SCENARIO" == "launcher_async" || "$FAKE_DESK_SCENARIO" == "updater_managed" ) ]]; then
+      printf '2\n' > "$removing"
+    else
+      /bin/rm -f "$job" "$removing"
+    fi
+    exit 0
+    ;;
+  submit)
+    if [[ "$FAKE_DESK_SCENARIO" == "submit_fail" ]]; then
+      log "launchctl submit failed"
+      exit 64
+    fi
+    : > "$job"
+    log "launchctl submit success"
+    exit 0
+    ;;
+esac
+log "launchctl unexpected $*"
+exit 65
+''')
+        self._write_executable(fake_bin / "lsof", r'''#!/bin/bash
+set -u
+log() { printf '%s\n' "$*" >> "$FAKE_DESK_LOG"; }
+case "$FAKE_DESK_SCENARIO" in
+  occupied)
+    log "lsof busy unrelated"
+    printf '999\n'
+    exit 0
+    ;;
+  launcher_async)
+    counter="$FAKE_DESK_STATE/port_count"
+    if [[ -f "$counter" ]]; then
+      count="$(<"$counter")"
+      if (( count > 0 )); then
+        printf '%s\n' "$((count - 1))" > "$counter"
+        log "lsof busy old-desk"
+        printf '777\n'
+        exit 0
+      fi
+      /bin/rm -f "$counter"
+    fi
+    ;;
+  updater_legacy|updater_unverified)
+    if [[ -f "$FAKE_DESK_STATE/listener" ]]; then
+      log "lsof busy candidate"
+      printf '321\n'
+      exit 0
+    fi
+    ;;
+esac
+log "lsof free"
+exit 1
+''')
+        self._write_executable(fake_bin / "curl", r'''#!/bin/bash
+set -u
+if [[ "$FAKE_DESK_SCENARIO" == "health_wrong" ]]; then
+  printf '%s\n' "curl wrong-service" >> "$FAKE_DESK_LOG"
+  printf '{"ok":true,"service":"not-the-data-wire"}\n'
+else
+  printf '%s\n' "curl expected-service" >> "$FAKE_DESK_LOG"
+  printf '{"ok":true,"service":"the-data-wire","admin_writes_enabled":true}\n'
+  if [[ "$FAKE_DESK_SCENARIO" == "curl_exit_fail" ]]; then
+    exit 28
+  fi
+fi
+''')
+        self._write_executable(fake_bin / "sleep", r'''#!/bin/bash
+printf '%s\n' "sleep $*" >> "$FAKE_DESK_LOG"
+''')
+        self._write_executable(fake_bin / "open", r'''#!/bin/bash
+printf '%s\n' "open $*" >> "$FAKE_DESK_LOG"
+''')
+        self._write_executable(fake_bin / "osascript", r'''#!/bin/bash
+printf '%s\n' "alert" >> "$FAKE_DESK_LOG"
+''')
+        self._write_executable(fake_bin / "ps", r'''#!/bin/bash
+printf '%s\n' "ps $*" >> "$FAKE_DESK_LOG"
+if [[ "$*" == *"uid="* ]]; then
+  /usr/bin/id -u
+  exit 0
+fi
+if [[ "$FAKE_DESK_SCENARIO" == "updater_legacy" ]]; then
+  printf '%s\n' "$FAKE_EXPECTED_COMMAND"
+else
+  printf '%s\n' "/usr/bin/python3 /tmp/unrelated/server.py --port 8788"
+fi
+''')
+        self._write_executable(fake_bin / "kill", r'''#!/bin/bash
+printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
+/bin/rm -f "$FAKE_DESK_STATE/listener"
+''')
+
+        if scenario in {"launcher_async", "updater_managed"}:
+            (state / "job").touch()
+        if scenario == "launcher_async":
+            (state / "port_count").write_text("2\n", encoding="utf-8")
+        if scenario in {"updater_legacy", "updater_unverified"}:
+            (state / "listener").touch()
+
+        env = os.environ.copy()
+        env.update({
+            "HOME": str(home),
+            "FAKE_DESK_LOG": str(log_path),
+            "FAKE_DESK_STATE": str(state),
+            "FAKE_DESK_SCENARIO": scenario,
+            "FL_SIGNAL_DESK_LAUNCHCTL_BIN": str(fake_bin / "launchctl"),
+            "FL_SIGNAL_DESK_LSOF_BIN": str(fake_bin / "lsof"),
+            "FL_SIGNAL_DESK_CURL_BIN": str(fake_bin / "curl"),
+            "FL_SIGNAL_DESK_SLEEP_BIN": str(fake_bin / "sleep"),
+            "FL_SIGNAL_DESK_OPEN_BIN": str(fake_bin / "open"),
+            "FL_SIGNAL_DESK_OSASCRIPT_BIN": str(fake_bin / "osascript"),
+            "FL_SIGNAL_DESK_PS_BIN": str(fake_bin / "ps"),
+            "FL_SIGNAL_DESK_KILL_BIN": str(fake_bin / "kill"),
+        })
+        env["FAKE_EXPECTED_COMMAND"] = (
+            "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/"
+            "Versions/3.9/Resources/Python.app/Contents/MacOS/Python "
+            f"{home}/Desktop/Florida Signal Data Wire.app/"
+            "Contents/MacOS/../Resources/cms/server.py --port 8788"
+        )
+        env["FL_SIGNAL_DESK_PYTHON_ARGV0"] = env["FAKE_EXPECTED_COMMAND"].split(" ", 1)[0]
+        return env, log_path
+
+    def _run_launcher_scenario(self, scenario):
+        with tempfile.TemporaryDirectory() as directory:
+            env, log_path = self._desk_command_fixture(directory, scenario)
+            result = subprocess.run(
+                ["/bin/zsh", str(ROOT / "ops" / "datawire-app-launcher.zsh")],
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            events = log_path.read_text(encoding="utf-8").splitlines()
+        return result, events
+
+    def _run_updater_restart_scenario(self, scenario):
+        with tempfile.TemporaryDirectory() as directory:
+            env, log_path = self._desk_command_fixture(directory, scenario)
+            result = subprocess.run(
+                [
+                    "/bin/bash", "-c",
+                    'source "$1"; coordinate_desk_restart_after_update',
+                    "desk-restart-test", str(ROOT / "ops" / "update_datawire_desktop_app.sh"),
+                ],
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            events = log_path.read_text(encoding="utf-8").splitlines()
+        return result, events
+
     def test_project_state_separates_git_state_from_live_health(self):
         manifest = {
             "schema_version": "FloridaSignalProjectStateV1",
@@ -404,17 +602,152 @@ class DataWireServerTests(unittest.TestCase):
 
     def test_desktop_launcher_wires_external_project_state_and_pdmr_paths(self):
         launcher = (ROOT / "ops" / "datawire-app-launcher.zsh").read_text(encoding="utf-8")
+        self.assertIn('resources="${launcher_path:h:h}/Resources"', launcher)
         self.assertIn('florida_source="${FL_SIGNAL_SOURCE_ROOT:-$resources/florida-signal}"', launcher)
         self.assertIn('FL_SIGNAL_PROJECT_STATE_PATH="$project_state_path"', launcher)
         self.assertIn('FL_SIGNAL_PDMR_DB_PATH="$pdmr_db_path"', launcher)
         self.assertIn('FL_SIGNAL_PDMR_CANDIDATE_SCRIPT="$pdmr_candidate_script"', launcher)
+        self.assertIn('job_label="com.floridasignal.datawire.server"', launcher)
+        self.assertIn('if [[ "${1:-}" == "--serve" ]]', launcher)
+        self.assertIn('exec /usr/bin/python3 "$resources/cms/server.py" --port 8788', launcher)
+        self.assertIn('service_target="gui/$(/usr/bin/id -u)/$job_label"', launcher)
+        self.assertIn('"$launchctl_bin" bootout "$service_target"', launcher)
+        self.assertIn('"$launchctl_bin" submit -l "$job_label"', launcher)
+        self.assertNotIn('/bin/kill "$process_id"', launcher)
+        self.assertIn('payload.get("ok") is True', launcher)
+        self.assertIn('payload.get("service") == "the-data-wire"', launcher)
+        self.assertIn('payload.get("admin_writes_enabled") is True', launcher)
+
+    def test_desktop_launcher_waits_for_async_removal_and_port_release(self):
+        result, events = self._run_launcher_scenario("launcher_async")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        loaded = f"launchctl print {DESK_SERVICE_TARGET} loaded"
+        absent = f"launchctl print {DESK_SERVICE_TARGET} absent"
+        bootout = f"launchctl bootout {DESK_SERVICE_TARGET}"
+        self.assertGreaterEqual(events.count(loaded), 3)
+        self.assertGreaterEqual(events.count("lsof busy old-desk"), 2)
+        self.assertLess(events.index(bootout), events.index(absent))
+        self.assertLess(events.index(absent), events.index("lsof free"))
+        self.assertLess(events.index("lsof free"), events.index("launchctl submit success"))
+        self.assertLess(events.index("launchctl submit success"),
+                        next(index for index, event in enumerate(events) if event.startswith("open ")))
+
+    def test_desktop_launcher_fails_closed_when_submit_fails(self):
+        result, events = self._run_launcher_scenario("submit_fail")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("launchctl submit failed", events)
+        self.assertIn("alert", events)
+        self.assertFalse(any(event.startswith("open ") for event in events))
+
+    def test_desktop_launcher_does_not_kill_an_unrelated_port_owner(self):
+        result, events = self._run_launcher_scenario("occupied")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("lsof busy unrelated", events)
+        self.assertFalse(any(event.startswith("launchctl submit") for event in events))
+        self.assertFalse(any(event.startswith("kill ") for event in events))
+        self.assertFalse(any(event.startswith("open ") for event in events))
+
+    def test_desktop_launcher_rejects_wrong_health_service(self):
+        result, events = self._run_launcher_scenario("health_wrong")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("launchctl submit success", events)
+        self.assertIn("curl wrong-service", events)
+        self.assertGreaterEqual(events.count(f"launchctl bootout {DESK_SERVICE_TARGET}"), 2)
+        self.assertFalse(any(event.startswith("open ") for event in events))
+
+    def test_desktop_launcher_rejects_json_from_failed_curl(self):
+        result, events = self._run_launcher_scenario("curl_exit_fail")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("launchctl submit success", events)
+        self.assertIn("curl expected-service", events)
+        self.assertFalse(any(event.startswith("open ") for event in events))
 
     def test_desktop_updater_bundles_verified_local_source_snapshot(self):
         updater = (ROOT / "ops" / "update_datawire_desktop_app.sh").read_text(encoding="utf-8")
         self.assertIn("florida_signal_project_state.json", updater)
         self.assertIn("florida_signal_v1.sqlite", updater)
         self.assertIn("nominate_pdmr_candidates.py", updater)
+        self.assertIn("FL_SIGNAL_PROJECT_STATE_SOURCE", updater)
+        self.assertIn("FL_SIGNAL_PDMR_DB_SOURCE", updater)
+        self.assertIn("FL_SIGNAL_PDMR_CANDIDATE_SOURCE", updater)
         self.assertIn("pragma quick_check;", updater)
+        self.assertIn("coordinate_desk_restart_after_update", updater)
+        self.assertIn("is_expected_legacy_desk_pid", updater)
+        self.assertIn('service_target="gui/$(/usr/bin/id -u)/$job_label"', updater)
+        self.assertIn('"$launchctl_bin" bootout "$service_target"', updater)
+        self.assertIn('/usr/bin/cmp -s "$project_state_source"', updater)
+
+    def test_desktop_updater_removes_managed_job_before_reopen(self):
+        result, events = self._run_updater_restart_scenario("updater_managed")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        remove_index = events.index(f"launchctl bootout {DESK_SERVICE_TARGET}")
+        absent_index = events.index(f"launchctl print {DESK_SERVICE_TARGET} absent")
+        open_index = next(index for index, event in enumerate(events) if event.startswith("open "))
+        self.assertLess(remove_index, absent_index)
+        self.assertLess(absent_index, open_index)
+        self.assertFalse(any(event.startswith("kill ") for event in events))
+
+    def test_desktop_updater_kills_only_verified_legacy_app_listener(self):
+        verified, verified_events = self._run_updater_restart_scenario("updater_legacy")
+        self.assertEqual(verified.returncode, 0, verified.stderr)
+        remove_index = verified_events.index(f"launchctl bootout {DESK_SERVICE_TARGET}")
+        ps_index = next(index for index, event in enumerate(verified_events) if event.startswith("ps "))
+        kill_index = verified_events.index("kill 321")
+        open_index = next(index for index, event in enumerate(verified_events) if event.startswith("open "))
+        self.assertLess(remove_index, ps_index)
+        self.assertLess(ps_index, kill_index)
+        self.assertLess(kill_index, open_index)
+
+        unverified, unverified_events = self._run_updater_restart_scenario("updater_unverified")
+        self.assertNotEqual(unverified.returncode, 0)
+        self.assertTrue(any(event.startswith("ps ") for event in unverified_events))
+        self.assertFalse(any(event.startswith("kill ") for event in unverified_events))
+        self.assertFalse(any(event.startswith("open ") for event in unverified_events))
+
+    def test_desktop_updater_preserves_separate_override_provenance_with_spaces(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_dir = root / "three separate sources"
+            source_dir.mkdir()
+            project_state = source_dir / "canonical project state.json"
+            pdmr_db = source_dir / "pdmr evidence.sqlite"
+            candidate = source_dir / "candidate source.py"
+            project_payload = {"schema_version": "FloridaSignalProjectStateV1", "marker": "canonical"}
+            project_state.write_text(json.dumps(project_payload), encoding="utf-8")
+            with sqlite3.connect(pdmr_db) as db:
+                db.execute("create table provenance (marker text not null)")
+                db.execute("insert into provenance values ('pdmr-override')")
+            candidate.write_text("# candidate-override\n", encoding="utf-8")
+            destination = root / "staged app resources" / "florida-signal"
+            env = os.environ.copy()
+            env.update({
+                "HOME": str(root / "home"),
+                "FL_SIGNAL_PROJECT_STATE_SOURCE": str(project_state),
+                "FL_SIGNAL_PDMR_DB_SOURCE": str(pdmr_db),
+                "FL_SIGNAL_PDMR_CANDIDATE_SOURCE": str(candidate),
+            })
+            result = subprocess.run(
+                [
+                    "/bin/bash", "-c",
+                    'source "$1"; copy_verified_source_snapshot "$2"',
+                    "snapshot-test", str(ROOT / "ops" / "update_datawire_desktop_app.sh"),
+                    str(destination),
+                ],
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            bundled_state = destination / "data/reference/florida_signal_project_state.json"
+            bundled_db = destination / "data/pdmr/florida_signal_v1.sqlite"
+            bundled_candidate = destination / "scripts/nominate_pdmr_candidates.py"
+            self.assertEqual(bundled_state.read_bytes(), project_state.read_bytes())
+            self.assertEqual(bundled_db.read_bytes(), pdmr_db.read_bytes())
+            self.assertEqual(bundled_candidate.read_bytes(), candidate.read_bytes())
+            with sqlite3.connect(bundled_db) as db:
+                marker = db.execute("select marker from provenance").fetchone()[0]
+            self.assertEqual(marker, "pdmr-override")
 
     def test_pdmr_dates_are_labeled_as_portal_dates_not_filing_dates(self):
         explorer = (ROOT / "cms" / "data.html").read_text(encoding="utf-8")
