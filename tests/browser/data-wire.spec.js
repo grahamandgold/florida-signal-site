@@ -14,7 +14,7 @@ test.describe("private Florida Signal Newsroom", () => {
     await expect(control).toContainText("NEXT · frozen until NOW closes");
     await expect(control).toContainText("Production pipeline health");
     await expect(control).toContainText("UNKNOWN means no current health contract answered");
-    await expect(control).toContainText("PDMR · LOCAL_ONLY");
+    await expect(control).toContainText(/Preliminary Development Meeting Request \(PDMR\) · LOCAL_ONLY/);
     await expect(control).toContainText("93-day proven lead");
     await expect(control).toContainText("RUNTIME DRIFT / NEEDS SEPARATE RECONCILIATION");
     await expect(control.locator(".project-health__row")).toHaveCount(13);
