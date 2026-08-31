@@ -102,10 +102,19 @@
     var opts = options || {};
     var headers = Object.assign({}, opts.headers || {}, { Authorization: "Bearer " + await getToken() });
     if (opts.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
-    var response = await fetch(path, Object.assign({ cache: "no-store" }, opts, { headers: headers }));
-    var body = await response.json().catch(function () { return {}; });
-    if (!response.ok) throw new Error(body.error || "Request unavailable");
-    return body;
+    var controller = new AbortController();
+    var timeout = window.setTimeout(function () { controller.abort(); }, 12000);
+    try {
+      var response = await fetch(path, Object.assign({ cache: "no-store" }, opts, { headers: headers, signal: opts.signal || controller.signal }));
+      var body = await response.json().catch(function () { return {}; });
+      if (!response.ok) throw new Error(body.error || "Request unavailable");
+      return body;
+    } catch (error) {
+      if (error && error.name === "AbortError") throw new Error("Request timed out after 12 seconds");
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
+    }
   }
 
   var pipelineLoading = false;

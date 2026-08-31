@@ -148,7 +148,9 @@ test.describe("private Florida Signal Newsroom", () => {
         await expect(page.locator(".source-group").nth(1)).toContainText("Sewer + utility capacity");
         await expect(page.locator(".source-group").nth(1)).toContainText("Research only");
         await expect(page.locator(".source-group").nth(1)).toContainText("generic TMP records are downstream/mixed and explicitly excluded");
-        await expect(page.locator(".source-group").nth(1)).toContainText("Next collector · JSON");
+        await expect(page.locator(".source-group").nth(1)).toContainText("Shadow observed · not connected");
+        await expect(page.locator(".source-group").nth(1)).toContainText("two manual observations each saved receipts for 1,100 official rows");
+        await expect(page.locator(".source-group").nth(1)).toContainText("No natural timer, stage, database mirror or detector is connected");
         await expect(page.locator('[data-source-status="pdmr-local"]')).toContainText(/(current|connected).*manual/i, { timeout: 15_000 });
         await expect(page.locator("#table-select")).toHaveValue("pdmr_intent");
         await expect(page.locator("#count-note")).toContainText(/public PDMR records · event through .* · source checked /i, { timeout: 15_000 });

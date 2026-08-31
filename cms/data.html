@@ -421,6 +421,7 @@
       return { prefix, params: { [column]: "eq." + term } };
     }
 
+    const SOURCE_REQUEST_TIMEOUT_MS = 12000;
     async function sbFetch(path, params, opts) {
       const url = new URL(SB + path);
       Object.entries(params || {}).forEach(([k, v]) => url.searchParams.set(k, v));
@@ -432,8 +433,10 @@
       const safeRead = method === "GET" || method === "HEAD";
       const attempts = safeRead ? 2 : 1;
       for (let attempt = 0; attempt < attempts; attempt++) {
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), SOURCE_REQUEST_TIMEOUT_MS);
         try {
-          const r = await fetch(url, request);
+          const r = await fetch(url, Object.assign({}, request, { signal: request.signal || controller.signal }));
           if (r.ok) return r;
           const transient = [500, 502, 503, 504, 520].includes(r.status);
           if (!transient || attempt === attempts - 1) {
@@ -445,7 +448,12 @@
             throw new Error(path + " HTTP " + r.status + detail);
           }
         } catch (error) {
-          if (attempt === attempts - 1) throw error;
+          if (attempt === attempts - 1) {
+            if (error && error.name === "AbortError") throw new Error(path + " timed out after 12 seconds");
+            throw error;
+          }
+        } finally {
+          window.clearTimeout(timeout);
         }
         await new Promise(resolve => setTimeout(resolve, 650));
       }
@@ -1126,7 +1134,7 @@
         { label: "Engineering intake", note: "Use exact ENG-OAA outside-agency records; generic TMP records are downstream/mixed and explicitly excluded", href: "https://aca-prod.accela.com/FTL/Cap/CapHome.aspx?module=Permits", status: "Research only · HTML", state: "research" },
         { label: "Assemblage + new LLC", note: "Join deed assemblage to newly formed entities; detector not connected", href: "/#project-control", status: "Planned join", state: "research" },
         { label: "Lobbyist registrations", note: "Official registration and client HTML can be snapshotted, but the City exposes no durable row ID or API", href: "https://www.fortlauderdale.gov/Government/Departments/City-Clerks-Office/Lobbyist-Information", status: "Research only · HTML", state: "research" },
-        { label: "SFWMD filings", note: "Official pending-ERP ArcGIS JSON has stable GlobalID + application numbers; safest next collector, still unconnected", href: "https://geoweb.sfwmd.gov/agsext1/rest/services/Regulation_ApplicationPermits/EnvironmentalResourceApplications_RegPermitting/MapServer/14", status: "Next collector · JSON", state: "research" }
+        { label: "SFWMD filings", note: "File-only shadow collector is pushed; two manual observations each saved receipts for 1,100 official rows, three Fort Lauderdale intersections and zero rejected/duplicate identities. No natural timer, stage, database mirror or detector is connected", href: "https://geoweb.sfwmd.gov/agsext1/rest/services/Regulation_ApplicationPermits/EnvironmentalResourceApplications_RegPermitting/MapServer/14", status: "Shadow observed · not connected", state: "research" }
       ]},
       { eyebrow: "S3 · Site control + actors", title: "Ownership, companies + capital", items: [
         { label: "Sunbiz entity matches", note: "Private exact matches from the state SFTP corpus", table: "sunbiz_entities", componentId: "sunbiz", refresh: "automated" },
@@ -1259,12 +1267,15 @@
       // These checks are intentionally sequential. The largest Clerk/Accela tables can
       // return transient gateway/database errors when several ordered probes arrive at
       // once; that made healthy sources appear unavailable in the operator desk.
-      await checkNext();
-      libraryChecking = false;
-      libraryCheckedAt = Date.now();
-      refreshButton.disabled = false;
-      refreshButton.textContent = "Refresh source receipts";
-      q("#library-checked").textContent = "Last checked " + new Date(libraryCheckedAt).toLocaleString() + " · auto-check every 10 minutes while open";
+      try {
+        await checkNext();
+      } finally {
+        libraryChecking = false;
+        libraryCheckedAt = Date.now();
+        refreshButton.disabled = false;
+        refreshButton.textContent = "Refresh source receipts";
+        q("#library-checked").textContent = "Last checked " + new Date(libraryCheckedAt).toLocaleString() + " · auto-check every 10 minutes while open";
+      }
     }
 
     function commitSearch() {
