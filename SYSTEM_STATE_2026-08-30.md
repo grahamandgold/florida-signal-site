@@ -1,6 +1,6 @@
 # Florida Signal site + Data Wire checkpoint — 2026-08-30
 
-**Verified:** 2026-08-30 23:10 ET
+**Verified:** 2026-08-30 23:31 ET
 **Scope:** private Newsroom/Data Explorer, public Data Room behavior, local Finder app, and the
 cross-repository Acclaim, Accela/permit-normalization and PDMR evidence audits.
 **Release state:** the explicitly approved bounded Acclaim receipt deployment and exactly-25 permit
@@ -53,6 +53,13 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
   `da33d3adca53582e2e363d49a7fdd63af106bb4b44f975b6123d1d89abef342e`. Two unresolved
   attempts still fail as
   `timeout_no_result_state_after_retry`. No manual post-patch run or cadence change occurred.
+- The first natural post-retry observation, run `6a783924-47b3-46ca-a49b-566658f9d681`, advanced
+  the LaunchAgent run count from 89 to 90. It started at 23:30:37 ET and completed at 23:31:14
+  with exit 0, status `source_wait`, reason `source_not_authoritative_yet`, source result
+  `empty_unverified_date` and 0 observed/0 new rows. The exact-timeout retry was exercised once in
+  its fresh process and recovered; exact local/Supabase receipt parity was verified. This is the
+  first of the two required successful ordinary scheduled observations. The second remains pending
+  on the unchanged cadence.
 - Before the permit write, SQLite backup
   `/srv/grahamandgold/florida-signal/backups/permits.pre_owner_normalized_canary_20260831T012956Z.sqlite`
   was created at 11,945,189,376 bytes, SHA-256
@@ -74,17 +81,24 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
   ended `BUDGET_EXHAUSTED` with inner rc 124, queue before 92,489, selected 150, attempted 49,
   completed useful 0, `not_found` 49, failed 0 and remaining 92,489. Its wrapper intentionally maps
   budget exhaustion to systemd success under ADR-008. The overdue 23:00 pass started at 23:05:19
-  while enrichment and Supabase sync remained queued, so exact cloud readback is delayed behind
-  the recurrent detail backlog. No full backfill, wet manual mirror, timer change or unrelated
-  production write is authorized or implied by this canary.
+  while enrichment and Supabase sync remained queued. That follow-up pass ended at 23:14:18 with
+  wrapper status `SUCCESS_WITH_WORK`, queue before 92,492, selected/attempted 150, completed useful
+  0, `not_found` 150, failed 0 and remaining 92,492. It ended early enough for enrichment and the
+  waiting normal sync to run; `florida-sync.service` exited successfully at
+  23:15:23 ET. Exact Supabase readback then returned 25 expected rows, 25 cloud rows, 25 normalized
+  matches, 25 canary-clock matches and an empty mismatch set. A separate global stamp query found
+  exactly 25 rows with the canary clock, all 25 expected and zero unexpected. No full backfill, wet
+  manual mirror, timer change, rollback or unrelated production write occurred.
 - Production `tools/fs_health_report.py` previously lacked the pushed false-green parser and
   incorrectly reported GREEN. The reviewed health-only file was backed up to
   `/srv/grahamandgold/florida-signal/backups/fs_health_report.pre_false_green_20260831T0310Z.py`
   (old SHA-256 `49e2fae3a2db5cb95cc0d8331a0662fbb3ce8652b5dd6dd106afb4fa98362a9f`) and atomically
   replaced with SHA-256 `019556e9317e9361338eccf1f1a357cf912316fdda699bc8ac91ed39e91ff5d6`.
-  A read-only dry run now reports YELLOW with `FALSE GREEN ... 0/49`, status-aware useful Accela
-  coverage 75.3%, 12 `ok` and 1,950 `not_found` outcomes in 24 hours. No data, collector, timer,
-  restart, public-search diagnostic or report send occurred.
+  The first read-only dry run reported YELLOW with `FALSE GREEN ... 0/49`; after the follow-up pass,
+  a second read-only run remained YELLOW and named the latest false green as 0/150 with 150
+  `not_found`. The status-aware report initially measured useful Accela coverage at 75.3%, with 12
+  `ok` and 1,950 `not_found` outcomes in the preceding 24 hours. No data, collector, timer, restart,
+  public-search diagnostic or report send occurred.
 
 ## Agent entry points
 
@@ -154,7 +168,8 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
   `BUDGET_EXHAUSTED`, but systemd remained success by the standing ADR while useful completion was
   0/49. Before the reviewed parser was installed, the production report still rendered GREEN.
   After the health-only atomic deploy, the same read-only report renders YELLOW and names the exact
-  false green. This fixes observability, not the underlying 92,489-row retry backlog.
+  false green; it remained YELLOW after the next 0/150 run. This fixes observability, not the
+  underlying roughly 92,000-row retry backlog.
 - The tracked public-search canary is dry-run only, bounded to 1–25 records, refuses recurring
   systemd invocation, shares the production lock, writes a separate `accela-canary` receipt and
   fails closed on zero successes, hard blocks, incomplete accounting or timeout.
@@ -167,8 +182,8 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
   remains the required ingestion path.
 - The approved canary used the protected backup and receipts above to update exactly 25 rows. The
   missing-normalization count is now 97,628, not evidence that a full cleanup occurred. Targeted
-  rollback is available and unrun. Do not run a full backfill; wait for the pending Supabase cloud
-  readback and a separate owner decision.
+  rollback is available and unrun. Exact normal-mirror Supabase readback and the global clock check
+  are complete. Do not run a full backfill without a separate owner decision.
 
 ## Acclaim collector health
 
@@ -184,9 +199,13 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
 - Manual canary `6ae86e78-0771-4224-a6f4-e09d30ffc833` proved exact local/Supabase receipt
   parity for a zero-row `source_wait` poll. It did not prove scheduled execution. The 22:03 and
   22:30 ordinary runs also reached exact local/Supabase parity but failed truthfully on the same
-  transient result-state timeout; they do not satisfy the release gate. Observe two successful
-  ordinary scheduled runs after `2f77630` before declaring the receipt release healthy; until then
-  use `CANARY_RECEIPT_PATH_VERIFIED / RELEASE_OBSERVATION_PENDING`.
+  transient result-state timeout; they do not satisfy the release gate. Natural run
+  `6a783924-47b3-46ca-a49b-566658f9d681` then exited 0 after its one exact-timeout retry recovered,
+  recording `source_wait` / `source_not_authoritative_yet`, source result `empty_unverified_date`,
+  0 observed/0 new rows and exact local/Supabase parity. It is the first of two required successful
+  ordinary observations. Observe one more successful ordinary scheduled run after `2f77630`
+  before declaring the receipt release healthy; until then use
+  `CANARY_RECEIPT_PATH_VERIFIED / RELEASE_OBSERVATION_PENDING`.
 - The Finder Desk was rebuilt and opened locally from site head
   `0a72f53e3a717020eb7d30755c5a559bbb208458` so its separate run, event, verified and
   attempted-through clocks can be inspected. Its exact user-scoped launchd lifecycle, serialized
@@ -198,10 +217,11 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
 - BCPA property coverage is sparse/stale and countywide parcel coverage is partial/stale. FDEP and
   FAA are deterministic sources but still lack durable versioned run ledgers and raw-evidence
   receipts. Verified Clerk also lacks an end-to-end atomic parent/child mirror receipt.
-- Stabilize the existing lanes first: observe two successful ordinary scheduled Acclaim receipt
-  runs, resolve the zero-useful-work Accela backlog without hiding it as systemd success, and
-  complete the pending Supabase readback for the exact 25-row permit cohort. Do not expand the
-  permit repair into a full backfill from this evidence alone. After those gates, repair property/
+- Stabilize the existing lanes first: observe one more successful ordinary scheduled Acclaim
+  receipt run and resolve the zero-useful-work Accela backlog without hiding it as systemd
+  success. The exact 25-row permit cohort is now closed with authoritative SQLite and normal-mirror
+  Supabase parity; do not expand that bounded success into a full backfill without a separate decision.
+  After those gates, repair property/
   parcel coverage and add FDEP/FAA receipts before admitting PDMR or building sewer/SFWMD/
   engineering/lobbyist collectors.
 - Hold Grok/agent wiring into the Newsroom until the deterministic source contracts and receipts
@@ -209,12 +229,13 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
 
 ## Production gates still open
 
-- Observe and verify two successful ordinary scheduled Acclaim runs after the bounded retry patch;
-  neither the manual parity canary nor the two truthful pre-patch scheduled failures establishes
-  release health. Keep the existing LaunchAgent plist and cadence unchanged.
-- Verify the exact 25-row permit postimage in Supabase after the normal dependency chain gets a
-  sync window. The current chain is delayed behind recurrent budget-exhausted Accela passes. Do not
-  trigger a wet manual mirror, alter the timer/dependency chain, run a full backfill or roll back
+- Observe and verify one more successful ordinary scheduled Acclaim run after the bounded retry
+  patch. The first natural post-retry success is verified, but neither the manual parity canary nor
+  the two truthful pre-patch scheduled failures establishes release health. Keep the existing
+  LaunchAgent plist and cadence unchanged.
+- The exact 25-row permit postimage is verified in Supabase through the normal dependency chain;
+  this gate is closed. Keep the corrected Accela health state YELLOW until useful-work receipts
+  improve, and do not alter the timer/dependency chain, run the remaining full backfill or roll back
   unless a separate decision explicitly requires it.
 - Rotate the shared Edge query secret that appeared in request logs; move scheduled calls to named
   secret/header authentication and Vault-backed configuration.
@@ -236,7 +257,8 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
 - Accela/permit: wrapper suite passed, 43 alert-semantic tests passed, and shell syntax/Python
   compile/diff checks were clean. The final owner-normalization safety patch passed 26 focused and
   45 related Python tests plus the pipeline and Accela wrapper suites. The production backup,
-  dry-run, exactly-25 execute, exact readback and post-write `quick_check` are recorded above.
+  dry-run, exactly-25 execute, exact SQLite/Supabase readback and post-write `quick_check` are
+  recorded above.
   The health-only deployment retained a byte-for-byte rollback copy; its read-only production
   verification changed the truthful report from GREEN to YELLOW and exposed 0/49 useful work.
 - Acclaim receipt work through `2f77630` passed the full 55-test Python suite, 14 resilience tests,
@@ -246,8 +268,9 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
 - PDMR reconciliation passed 99 relevant tests, including plan snapshot integrity, dry-run and
   approval gates, bounded resumable exact-ID fetch behavior, malformed/ambiguous-folio blocking,
   receipt validation and whole-stage admission parity.
-- Acclaim migration/manual parity, two truthful pre-patch scheduled failure receipts, the permit
-  local canary and the corrected YELLOW Accela health report are confirmed. Acclaim's two-success
-  scheduled observation, resolution of the Accela zero-useful-work backlog and the permit Supabase
-  cloud readback remain pending. This documentation checkpoint itself remains a separate,
+- Acclaim migration/manual parity, two truthful pre-patch scheduled failure receipts, the first
+  successful natural post-retry scheduled receipt with exact local/Supabase parity, the complete
+  local-to-Supabase permit canary and the corrected YELLOW Accela health report are confirmed.
+  Acclaim's second-success scheduled observation and resolution of the Accela zero-useful-work
+  backlog remain pending. This documentation checkpoint itself remains a separate,
   not-yet-committed worktree change.
