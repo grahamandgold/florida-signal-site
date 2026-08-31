@@ -416,6 +416,14 @@ class DataWireServerTests(unittest.TestCase):
         self.assertIn("nominate_pdmr_candidates.py", updater)
         self.assertIn("pragma quick_check;", updater)
 
+    def test_pdmr_dates_are_labeled_as_portal_dates_not_filing_dates(self):
+        explorer = (ROOT / "cms" / "data.html").read_text(encoding="utf-8")
+        home = (ROOT / "cms" / "home.html").read_text(encoding="utf-8")
+        self.assertIn('["event_date", "Portal date", dateish]', explorer)
+        self.assertNotIn('["event_date", "Filed", dateish]', explorer)
+        self.assertIn("newest portal date", home)
+        self.assertNotIn("newest filing", home)
+
 
 if __name__ == "__main__":
     unittest.main()
