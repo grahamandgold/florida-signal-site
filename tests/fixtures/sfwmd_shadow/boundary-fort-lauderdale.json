@@ -1,0 +1,26 @@
+{
+  "type": "FeatureCollection",
+  "crs": {"type": "name", "properties": {"name": "EPSG:4326"}},
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "OBJECTID": 44,
+        "NAME": "Fort Lauderdale",
+        "TYPE": "City",
+        "MUNIAREA": 10.0,
+        "LOCALFIPS": "12011",
+        "Acres": 6400.0,
+        "created_date": 1609459200000,
+        "last_edited_date": 1788134400000,
+        "GlobalID": "{aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa}"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]
+        ]
+      }
+    }
+  ]
+}

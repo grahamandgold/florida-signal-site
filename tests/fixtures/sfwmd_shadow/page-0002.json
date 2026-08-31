@@ -1,0 +1,63 @@
+{
+  "geometryType": "esriGeometryPolygon",
+  "spatialReference": {"wkid": 4326},
+  "fields": [
+    {"name": "OBJECTID"}, {"name": "APP_NO"}, {"name": "PERMIT_NO"},
+    {"name": "APP_PERMIT_NO"}, {"name": "PROJECT_NAME"}, {"name": "MostRecentApp"},
+    {"name": "AppType"}, {"name": "AppTypeDesc"}, {"name": "PermitFamily"},
+    {"name": "PermitSubFamilyDesc"}, {"name": "PermitType"}, {"name": "ApplicantName"},
+    {"name": "ApplicantCompanyName"}, {"name": "FullNameOrCompany"}, {"name": "AppStatus"},
+    {"name": "PermitStatus"}, {"name": "LandUse"}, {"name": "ProjectAcres"},
+    {"name": "PermitAcres"}, {"name": "AppReceivedDate"}, {"name": "AppFinalActionDate"},
+    {"name": "LegalCompDate"}, {"name": "IssueDate"}, {"name": "PermitExpirationDate"},
+    {"name": "FullAddress"}, {"name": "City"}, {"name": "State"},
+    {"name": "PostalCode"}, {"name": "Link"}, {"name": "IsSWM"},
+    {"name": "IsTestData"}, {"name": "GlobalID"}, {"name": "IsInPermitView"},
+    {"name": "Shape.STArea()"}, {"name": "Shape.STLength()"}
+  ],
+  "exceededTransferLimit": false,
+  "features": [
+    {
+      "attributes": {
+        "OBJECTID": 3,
+        "APP_NO": "ERP-2026-0003",
+        "PERMIT_NO": null,
+        "APP_PERMIT_NO": "ERP-2026-0003",
+        "PROJECT_NAME": "Explicit test row",
+        "MostRecentApp": 1,
+        "AppType": "NEW",
+        "AppTypeDesc": "New application",
+        "PermitFamily": "ERP",
+        "PermitSubFamilyDesc": "Environmental Resource",
+        "PermitType": "Individual",
+        "ApplicantName": "Test Applicant",
+        "ApplicantCompanyName": "Test Company",
+        "FullNameOrCompany": "Test Company",
+        "AppStatus": "Application Complete",
+        "PermitStatus": null,
+        "LandUse": "Test",
+        "ProjectAcres": 1,
+        "PermitAcres": 1,
+        "AppReceivedDate": 1787961600000,
+        "AppFinalActionDate": null,
+        "LegalCompDate": null,
+        "IssueDate": null,
+        "PermitExpirationDate": null,
+        "FullAddress": "3 Example Way",
+        "City": "FORT LAUDERDALE",
+        "State": "FL",
+        "PostalCode": "33301",
+        "Link": "https://example.invalid/3",
+        "IsSWM": 1,
+        "IsTestData": 1,
+        "GlobalID": "{33333333-3333-4333-8333-333333333333}",
+        "IsInPermitView": 1,
+        "Shape.STArea()": 1,
+        "Shape.STLength()": 4
+      },
+      "geometry": {
+        "rings": [[[3, 3], [4, 3], [4, 4], [3, 4], [3, 3]]]
+      }
+    }
+  ]
+}

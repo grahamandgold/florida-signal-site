@@ -1,0 +1,20 @@
+{
+  "id": 44,
+  "name": "Fort Lauderdale Municipal Boundary - Administrative Area",
+  "geometryType": "esriGeometryPolygon",
+  "objectIdField": "OBJECTID",
+  "maxRecordCount": 100000,
+  "supportedQueryFormats": "JSON, geoJSON, PBF",
+  "advancedQueryCapabilities": {"supportsOrderBy": true},
+  "fields": [
+    {"name": "OBJECTID", "type": "esriFieldTypeOID"},
+    {"name": "NAME", "type": "esriFieldTypeString"},
+    {"name": "TYPE", "type": "esriFieldTypeString"},
+    {"name": "MUNIAREA", "type": "esriFieldTypeDouble"},
+    {"name": "LOCALFIPS", "type": "esriFieldTypeString"},
+    {"name": "Acres", "type": "esriFieldTypeDouble"},
+    {"name": "created_date", "type": "esriFieldTypeDate"},
+    {"name": "last_edited_date", "type": "esriFieldTypeDate"},
+    {"name": "GlobalID", "type": "esriFieldTypeGlobalID"}
+  ]
+}
