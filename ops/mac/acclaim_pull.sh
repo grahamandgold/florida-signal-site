@@ -157,14 +157,25 @@ while IFS= read -r LINE; do
 import subprocess, sys
 timeout = int(sys.argv[1])
 command = ["/usr/bin/osascript", *sys.argv[2:]]
-try:
-    result = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
-except subprocess.TimeoutExpired:
-    print("INCOMPLETE|0|0|harvest_timeout_%ss" % timeout)
-    raise SystemExit(0)
-if result.stderr:
-    print(result.stderr, file=sys.stderr, end="")
-status = result.stdout.strip()
+status = ""
+for attempt in (1, 2):
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        print("INCOMPLETE|0|0|harvest_timeout_%ss" % timeout)
+        raise SystemExit(0)
+    if result.stderr:
+        print(result.stderr, file=sys.stderr, end="")
+    status = result.stdout.strip()
+    if status == "INCOMPLETE|0|0|timeout_no_result_state" and attempt == 1:
+        print(
+            "WARNING: Acclaim search exposed no terminal result state; retrying once",
+            file=sys.stderr,
+        )
+        continue
+    if status == "INCOMPLETE|0|0|timeout_no_result_state" and attempt == 2:
+        status = "INCOMPLETE|0|0|timeout_no_result_state_after_retry"
+    break
 if "Executing JavaScript through AppleScript is turned off" in result.stderr:
     print("SOURCE_WAIT|0|0|javascript_from_apple_events_disabled")
 elif result.returncode:
