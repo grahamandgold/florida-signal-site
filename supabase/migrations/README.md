@@ -10,10 +10,16 @@ Tracked, idempotent SQL mirroring live production. No secrets in this directory.
 | `20260811235949_label_source_delay_without_blocking_verified_candidates.sql` | separates snapshot lag from the external Clerk release delay; hardens legacy transfer view and queue trigger search path | 2026-08-11 |
 | `20260812000230_index_health_event_clocks.sql` | partial FDEP event/fetch indexes for bounded public health probes | 2026-08-11 |
 | `20260815172000_sunbiz_private_health_receipt.sql` | aggregate-only Sunbiz freshness receipt and daily post-ingest refresh; raw entity rows stay private | 2026-08-15 |
-| `20260830233000_acclaim_run_receipts.sql` | append-only `broward_clerk_preliminary_run` receipts separating event, attempted-source and system clocks; public read, service-role insert only; no schedule | **NO — code-only, approval required** |
-| `20260831052701_source_run_ledgers_and_parcel_generations.sql` | private append-only FDEP/FAA terminal run receipts; generation-bound Broward parcel range/staging receipts and locked atomic promotion gate; no collector, grant, schedule, or promotion | **NO — code-only, export-first + approval required** |
+| `20260830233000_acclaim_run_receipts.sql` | append-only `broward_clerk_preliminary_run` receipts separating event, attempted-source and system clocks; public read, service-role insert only; no schedule | **2026-08-31 — applied remotely as `20260831005904 acclaim_run_receipts`** |
+| `20260831052701_source_run_ledgers_and_parcel_generations.sql` | private append-only FDEP/FAA terminal run receipts; generation-bound Broward parcel range/staging receipts and locked atomic promotion gate; no collector, schedule, or promotion | **2026-08-31 — applied; empty/default-off** |
+| `20260831090000_external_source_atomic_commit.sql` | private RLS-forced recoverable stage plus service-role-only SECURITY INVOKER RPC that commits FDEP/FAA source rows and one immutable receipt atomically | **NO — exact production privilege approval required** |
 
-**Not tracked here (pre-existing / other work):** `fdep_erp`, `faa_oeaaa` tables + their edge functions and primary pg_cron jobs; `refresh_dashboard_cache`. The FAA transient retry schedule added on 2026-08-15 is recorded in the operations handoff. Those objects otherwise remain as originally applied.
+**Pre-existing / other work:** `fdep_erp`, `faa_oeaaa` tables and primary
+pg_cron jobs; `refresh_dashboard_cache`. The exact deployed FDEP/FAA version-1
+sources were exported and hashed before tracked atomic replacements were added
+under `supabase/functions/`; those replacements are not deployed until the
+second migration receives exact privilege approval. The FAA transient retry
+schedule added on 2026-08-15 is recorded in the operations handoff.
 
 ## 20260831052701 — source receipts + parcel generations
 
@@ -41,6 +47,28 @@ Tracked, idempotent SQL mirroring live production. No secrets in this directory.
 
 See `SOURCE_RUN_LEDGER_AND_PARCEL_PROMOTION_RUNBOOK.md` for the approval-gated
 operator sequence and recovery boundary.
+
+## 20260831090000 — atomic FDEP/FAA collector commit (pending)
+
+- `external_source_run_stage` is private, RLS-forced, recoverable staging.
+  Only `service_role` receives row privileges; client roles receive none.
+- `fs_commit_external_source_run(text, uuid, jsonb, jsonb)` is
+  `SECURITY INVOKER`, has an empty search path, is executable only by
+  `service_role`, serializes count classification by source, validates the
+  exact source/run/status-bound private Storage manifest plus every referenced
+  raw object, computes the canonical manifest hash in the database, and
+  commits source rows plus the immutable receipt in one transaction. The
+  immutable receipt retains the canonical manifest under
+  `source_metadata.raw_manifest`. The trusted service-role collector supplies
+  per-object content hashes; the RPC validates their format, run prefix, and
+  Storage existence but does not download and re-hash Storage bytes.
+- Tracked Edge replacements persist immutable raw responses and a private
+  manifest, stage a complete run, and call only the atomic RPC. They read
+  `FL_SIGNAL_SYNC_KEY` from Edge Function secrets and fail closed if it is
+  unset or still the rejected placeholder.
+- Production application/deployment is blocked until the operator explicitly
+  approves the service-role staging DML and RPC EXECUTE privilege. No collector
+  canary may precede that approval.
 
 ## 2026-08-11 — durable editorial loop
 

@@ -1,11 +1,51 @@
 # FDEP / FAA run receipts and Broward parcel generation promotion
 
-**State:** code-only foundation. Nothing in this runbook authorizes a production
-migration, Edge deployment, collector call, schedule change, parcel import, or
-promotion.
+**State (2026-08-31):** the isolated receipt/generation foundation migration is
+applied live and remains empty/default-off. It did not invoke a collector,
+change a schedule, stage a parcel, or promote a generation. The atomic
+FDEP/FAA staging/RPC migration and tracked Edge replacements remain code-only
+pending exact service-role privilege approval. Nothing here authorizes a
+parcel import or promotion.
+Nothing in this runbook authorizes the remaining atomic migration, Edge
+deployment, collector call, schedule change, parcel import, or promotion.
 
 **Migration:**
 `supabase/migrations/20260831052701_source_run_ledgers_and_parcel_generations.sql`
+
+**Pending atomic collector migration:**
+`supabase/migrations/20260831090000_external_source_atomic_commit.sql`
+
+## 2026-08-31 production evidence
+
+- Exact deployed bundles were exported before adaptation: `fdep-erp-sync` v1
+  SHA-256 `2af13893e13a1cf48cb5f0ddf33320d6f5f30f3a944a56cfaefba2309c9529db`;
+  `faa-oeaaa-sync` v1
+  `822ef83ce58a08fd9defa1ccbc4ba5ce512f879f6eec72f2ba83cbd996211a22`;
+  `broward-parcel-sync` v5
+  `124294349fe1e859e0bcb7438df71facecf649b373bdd76e0e0a962bcc49eb9d`;
+  `broward-parcel-fill` v1
+  `e60831c324ef0276e93c8811d3345566ff2b66a9a9e40bda12b73844f4b07f24`.
+- Calling cron SQL was exported with secrets redacted and hashed. FDEP runs at
+  `20 9 * * *` UTC (command SHA-256 `3158256687b833d034e795bf6d6e1d2879dc91397ca728f7112235f5038a13cf`);
+  FAA runs at `40 9 * * *` with retries at `10 10,11 * * *` (command SHA-256
+  `a97f2550fe2b2306fdeb70e3694edc5ee2a3658f24dc94ff05de58fee241f0a0`).
+  There is no active parcel cron.
+- The pre-migration parcel export contains 532,470 rows and 25 columns across
+  110 disjoint OID ranges. CSV SHA-256 is
+  `bb28e4e74c32de218348db2b7598348e3f7b9aa479857f691366d0eeb81ec169`;
+  deterministic gzip SHA-256 is
+  `7c3a27d220877a391f949299f8e1cd4009949d7e09c5202cb120cc61ea21a62c`.
+  Schema snapshot SHA-256 is
+  `ad19b2dfc0d6fe576aa2aa421538fe6e3b985c3c65eda4eaa6da075978f42f4c`.
+- Independent live set hashes after export remained
+  `3c90f331f6a590ee9e396deb0f21a839d98cb8ecc5e303ec4201dcff21e614ca`
+  for normalized folios and
+  `816cccf550590a35e98f8f49558a7d1bd48c8d45b913b3256b785b3fb5a70681`
+  for source object IDs. All 532,470 legacy rows still have a null generation
+  ID and no new generation/receipt rows existed immediately after migration.
+- The unbound legacy range ledger is not promotable: it reports 539,213
+  accepted rows, while the live unique set is 532,470. Its page/range-local
+  duplicate accounting misses 6,743 cross-page/range duplicate source rows.
 
 ## Purpose
 
@@ -58,9 +98,14 @@ insertion, but it is private:
 - raw evidence is referenced by opaque private object key, never a signed URL
   or query-secret-bearing URL.
 
-The raw evidence objects themselves require a private immutable bucket/object
-policy in a separately reviewed storage change. This migration creates no
-bucket or storage policy.
+The foundation migration creates no bucket or storage policy. The pending
+tracked Edge replacements create or verify the private
+`fl-signal-source-evidence` bucket before a run, reject a public bucket, use
+UUID-bound object keys, and upload with overwrite disabled. That storage action
+is part of the still-pending collector deployment approval. The replacements
+read `FL_SIGNAL_SYNC_KEY` only from Supabase Edge Function secrets and return
+HTTP 503 when it is unset or still contains the rejected deployment
+placeholder.
 
 ### Status meanings
 
@@ -93,8 +138,13 @@ including source waits and failures. `source_schema_sha256` separately hashes
 what the remote source actually exposed and is required for `ok`, `empty`, and
 `partial` receipts.
 `raw_manifest_sha256` and a private object key are required for every status.
-A failure with no HTTP response still needs a local manifest describing the
-attempt, timestamps, sanitized error class, and zero response bytes.
+The atomic RPC requires the exact
+`<source_id>/<run_id>/(failure-)manifest.json` key, validates that every raw
+object named by the manifest exists under that same source/run prefix, stores
+a database-owned canonical manifest copy in the immutable receipt, and
+computes `raw_manifest_sha256` from that canonical JSONB itself. A failure with
+no HTTP response still needs a local manifest describing the attempt,
+timestamps, sanitized error class, and zero response bytes.
 
 ### Collector write order
 
@@ -110,11 +160,27 @@ must use this order:
 4. Insert exactly one terminal receipt using a preallocated UUID, then retry
    delivery idempotently on `run_id`; never update an existing receipt.
 
-The schema in this change does **not** make existing source-table writes atomic
-with the new receipt insert. A collector canary is blocked until the exported
-implementation is adapted to a transactional RPC or a durable recoverable
-outbox. Committing source rows first and merely hoping the later receipt insert
-succeeds is not an admissible design.
+The RPC serializes the classify/upsert sequence by `source_id`, so concurrent
+distinct run IDs cannot both misclassify one absent source row as inserted.
+An idempotent replay must present every caller-owned immutable receipt field
+exactly as committed, including versions, reasons, clocks, input counts,
+schema hashes, outcomes, source metadata, manifest key, and manifest content.
+
+The service-role collector is a trusted evidence writer. The RPC verifies raw
+object names, source/run prefixes, hashes' format, and object existence, but it
+does not download and re-hash Storage bytes. The database-owned canonical
+manifest and its database-computed digest are the audit truth for what that
+trusted collector asserted. Compromise of `service_role` remains outside this
+receipt's proof boundary.
+
+The applied foundation schema alone does **not** make existing source-table
+writes atomic with the new receipt insert. The pending
+`20260831090000_external_source_atomic_commit.sql` adds private recoverable
+staging and a service-role-only `SECURITY INVOKER` RPC that derives write counts
+and commits source rows plus the terminal receipt together. A collector canary
+remains blocked until that exact privilege migration is approved and applied;
+committing source rows first and merely hoping the later receipt insert succeeds
+is not an admissible design.
 
 ## Parcel generation contract
 
@@ -300,9 +366,20 @@ promote parcels.
 
 Only after a separate collector-code review and deployment approval:
 
+```text
+Approved: apply the production external_source_atomic_commit migration,
+granting service_role SELECT/INSERT/UPDATE/DELETE on the private RLS-forced
+staging table and EXECUTE on the SECURITY INVOKER
+fs_commit_external_source_run RPC; configure FL_SIGNAL_SYNC_KEY from the
+existing private query secret; then deploy FDEP and FAA collectors one at a
+time and run bounded live canaries. No parcel backfill or promotion.
+```
+
 1. Start with one source and one bounded, non-overlapping canary invocation.
-2. Verify private raw object(s), manifest hash, exact count identities, schema
-   hash, terminal status, and one immutable receipt row.
+2. Verify private raw object(s), exact source/run-bound manifest key, every
+   referenced object, the database-computed canonical manifest hash/copy,
+   exact count identities, schema hash, terminal status, and one immutable
+   receipt row.
 3. Attempting to update/delete that receipt must fail.
 4. Observe two ordinary scheduled runs without changing cadence.
 5. Repeat independently for the other source.
@@ -361,7 +438,9 @@ select public.fs_promote_broward_parcel_generation(
 Static contract tests:
 
 ```bash
-python3 -m unittest tests.test_source_run_ledger_migration
+python3 -m unittest \
+  tests.test_source_run_ledger_migration \
+  tests.test_external_source_atomic_commit
 ```
 
 Database contract tests, when a disposable local Supabase/Postgres test stack
