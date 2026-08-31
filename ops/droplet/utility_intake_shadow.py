@@ -29,10 +29,10 @@ from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping, Sequence
 
 
-COLLECTOR_VERSION = "ftl-utility-intake-shadow/1.1.1"
-QUERY_VERSION = "ftl-utility-intake-query/1.1.1"
-PARSER_VERSION = "ftl-utility-intake-parser/1.1.1"
-SCHEMA_VERSION = "FloridaSignalUtilityIntakeShadowReceiptV2"
+COLLECTOR_VERSION = "ftl-utility-intake-shadow/1.4.0"
+QUERY_VERSION = "ftl-utility-intake-query/1.3.1"
+PARSER_VERSION = "ftl-utility-intake-parser/1.2.0"
+SCHEMA_VERSION = "FloridaSignalUtilityIntakeShadowReceiptV5"
 BUNDLE_SCHEMA_VERSION = "FloridaSignalUtilityIntakeObservationBundleV2"
 MANIFEST_SCHEMA_VERSION = "FloridaSignalUtilityIntakeShadowBundleManifestV2"
 
@@ -380,21 +380,6 @@ def sidecar_paths(sqlite_path: Path) -> dict[str, Path]:
     }
 
 
-def assert_no_sidecars(sqlite_path: Path) -> dict[str, bool]:
-    observed = {}
-    present = []
-    for name, path in sidecar_paths(sqlite_path).items():
-        exists = path.exists()
-        observed[name] = exists
-        if exists:
-            present.append(path.name)
-    if present:
-        raise SourceContractError(
-            "refusing a SQLite file with sidecar(s): " + ", ".join(present)
-        )
-    return observed
-
-
 def file_stat_snapshot(path: Path) -> dict[str, int]:
     stat = path.stat()
     return {
@@ -403,6 +388,84 @@ def file_stat_snapshot(path: Path) -> dict[str, int]:
         "inode": int(stat.st_ino),
         "device": int(stat.st_dev),
     }
+
+
+def sidecar_snapshot(sqlite_path: Path) -> dict[str, dict[str, Any]]:
+    observed: dict[str, dict[str, Any]] = {}
+    for name, path in sidecar_paths(sqlite_path).items():
+        try:
+            stat = file_stat_snapshot(path)
+        except FileNotFoundError:
+            observed[name] = {"exists": False, "stat": None}
+        else:
+            observed[name] = {"exists": True, "stat": stat}
+    return observed
+
+
+def validate_sidecar_preflight(sqlite_path: Path) -> dict[str, dict[str, Any]]:
+    observed = sidecar_snapshot(sqlite_path)
+    if observed["journal"]["exists"]:
+        raise SourceContractError("refusing an active SQLite rollback journal sidecar")
+    if observed["wal"]["exists"] != observed["shm"]["exists"]:
+        raise SourceContractError("refusing an incomplete SQLite WAL/SHM sidecar pair")
+    return observed
+
+
+def validate_sidecar_postflight(
+    before: Mapping[str, Mapping[str, Any]],
+    after: Mapping[str, Mapping[str, Any]],
+    journal_mode: Any,
+) -> tuple[dict[str, Any], str | None]:
+    mode = str(journal_mode or "").strip().lower()
+    wal_before = bool(before["wal"]["exists"])
+    wal_after = bool(after["wal"]["exists"])
+    shm_before = bool(before["shm"]["exists"])
+    shm_after = bool(after["shm"]["exists"])
+    journal_absent = not before["journal"]["exists"] and not after["journal"]["exists"]
+    pair_stable = wal_before == wal_after and shm_before == shm_after
+    wal_stat_stable = (
+        before["wal"]["stat"] == after["wal"]["stat"] if wal_before and wal_after else None
+    )
+    shm_identity_stable = None
+    if shm_before and shm_after:
+        shm_identity_stable = all(
+            before["shm"]["stat"][field] == after["shm"]["stat"][field]
+            for field in ("inode", "device")
+        )
+
+    errors = []
+    if not journal_absent:
+        errors.append("SQLite rollback journal appeared during the read")
+    if not pair_stable:
+        errors.append("SQLite WAL/SHM sidecar presence changed during the read")
+    if (wal_before or wal_after) and mode != "wal":
+        errors.append("SQLite WAL/SHM sidecars exist but PRAGMA journal_mode is not wal")
+    if wal_stat_stable is False:
+        errors.append("SQLite WAL changed during the read")
+    if shm_identity_stable is False:
+        errors.append("SQLite SHM file identity changed during the read")
+
+    result = {
+        "snapshot_mode": "wal_read_transaction" if wal_before else "main_database_read_transaction",
+        "journal_mode": mode or None,
+        "before": dict(before),
+        "after": dict(after),
+        "wal_shm_presence_stable": pair_stable,
+        "wal_stat_stable": wal_stat_stable,
+        "shm_identity_stable": shm_identity_stable,
+        "rollback_journal_absent": journal_absent,
+        "contract_passed": not errors,
+        "note": (
+            "A WAL-mode read is one SQLite BEGIN DEFERRED snapshot. The cooperative "
+            "writer lock, stable main database and WAL stats, stable SHM identity, "
+            "and PRAGMA data_version provide the live-read evidence boundary. SHM "
+            "mtime/size may change when SQLite registers a reader."
+            if wal_before
+            else "No SQLite sidecars were present during the read transaction."
+        ),
+    }
+    error = "; ".join(errors) if errors else None
+    return result, error
 
 
 @contextmanager
@@ -851,7 +914,7 @@ def run_collection(
             "stat_unchanged": False,
             "mode": "shared_nonblocking",
         }
-        sidecars = assert_no_sidecars(sqlite_path)
+        sidecars_before = validate_sidecar_preflight(sqlite_path)
         stat_before = file_stat_snapshot(sqlite_path)
         bundle = EvidenceBundle(output_root, run_id)
         observed_at = iso_utc(clock())
@@ -865,16 +928,17 @@ def run_collection(
             snapshot["stat_unchanged"] = False
         else:
             snapshot["stat_unchanged"] = True
-        try:
-            snapshot["sidecars"] = assert_no_sidecars(sqlite_path)
-        except SourceContractError as exc:
+        sidecars_after = sidecar_snapshot(sqlite_path)
+        sidecars, sidecar_error = validate_sidecar_postflight(
+            sidecars_before,
+            sidecars_after,
+            (snapshot.get("sqlite_metadata") or {}).get("journal_mode"),
+        )
+        snapshot["sidecars"] = sidecars
+        if sidecar_error:
             snapshot["terminal_error"] = snapshot["terminal_error"] or (
-                f"{type(exc).__name__}: {exc}"
+                f"SourceContractError: {sidecar_error}"
             )
-            snapshot["sidecars"] = {
-                name: path.exists()
-                for name, path in sidecar_paths(sqlite_path).items()
-            }
         try:
             lock_stat_after = file_stat_snapshot(writer_lock_path)
             writer_lock["stat_after"] = lock_stat_after
@@ -933,9 +997,9 @@ def _read_snapshot(sqlite_path: Path, observed_at: str) -> dict[str, Any]:
         snapshot["query_only"] = (
             int(connection.execute("PRAGMA query_only").fetchone()[0]) == 1
         )
-        connection.execute("BEGIN DEFERRED")
         data_version_start = int(connection.execute("PRAGMA data_version").fetchone()[0])
         snapshot["data_version_start"] = data_version_start
+        connection.execute("BEGIN DEFERRED")
         tables, column_meta, permit_columns = inspect_schema(connection)
         snapshot["quick_check"][PERMITS_TABLE] = table_quick_check(
             connection, PERMITS_TABLE
@@ -1026,13 +1090,16 @@ def _read_snapshot(sqlite_path: Path, observed_at: str) -> dict[str, Any]:
             )
         )
         snapshot["unknown_identities"].sort()
+        snapshot["sqlite_metadata"] = sqlite_metadata(connection, data_version_start)
+        connection.execute("COMMIT")
+        # Inside a read transaction, data_version is snapshot-stable even when a
+        # different connection commits to the WAL. Re-read only after COMMIT so
+        # equality is meaningful concurrent-write evidence.
         data_version_end = int(connection.execute("PRAGMA data_version").fetchone()[0])
         snapshot["data_version_end"] = data_version_end
-        snapshot["sqlite_metadata"] = sqlite_metadata(connection, data_version_end)
         if data_version_start != data_version_end:
             raise SourceContractError("PRAGMA data_version changed during the read")
         snapshot["data_version_stable"] = True
-        connection.execute("COMMIT")
     except (CollectorError, sqlite3.Error, OSError, ValueError) as exc:
         snapshot["terminal_error"] = f"{type(exc).__name__}: {exc}"
         if connection is not None:
@@ -1056,7 +1123,7 @@ def _write_bundle(
     observed_at: str,
     clock: Callable[[], datetime],
     snapshot: dict[str, Any],
-    sidecars: dict[str, bool],
+    sidecars: dict[str, Any],
 ) -> tuple[Path, dict[str, Any]]:
     rows = snapshot["rows"]
     rejected_rows = snapshot["rejected_rows"]
@@ -1182,6 +1249,10 @@ def _write_bundle(
             "data_version_start": snapshot["data_version_start"],
             "data_version_end": snapshot["data_version_end"],
             "data_version_stable": snapshot["data_version_stable"],
+            "data_version_contract": (
+                "start sampled before BEGIN DEFERRED; end sampled after COMMIT; "
+                "equality rejects a concurrent commit visible to this connection"
+            ),
             "quick_check": snapshot["quick_check"],
             "sidecars": snapshot.get("sidecars") or sidecars,
             "writer_lock": dict(writer_lock),
@@ -1225,14 +1296,18 @@ def _write_bundle(
             "query_only": snapshot["query_only"],
             "data_version_stable": snapshot["data_version_stable"],
             "stat_unchanged": bool(snapshot.get("stat_unchanged")),
+            "sidecar_contract_passed": bool(sidecars.get("contract_passed")),
             "quick_check_passed": terminal_error is None
             and bool(snapshot["quick_check"]),
             "schema_contract_passed": source_schema_sha is not None,
         },
         "safety": {
-            "read_only_sqlite": True,
-            "database_writes": False,
-            "production_sqlite_mutation": False,
+            "query_only_sql": True,
+            "collector_issued_source_row_writes": False,
+            "collector_issued_main_database_content_writes": False,
+            "collector_issued_wal_content_writes": False,
+            "sqlite_shm_reader_metadata_may_change": True,
+            "zero_filesystem_mutation_claimed": False,
             "supabase_writes": False,
             "queue_writes": False,
             "scoring": False,

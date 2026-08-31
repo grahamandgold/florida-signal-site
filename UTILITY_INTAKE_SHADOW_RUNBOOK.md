@@ -49,19 +49,59 @@ created by this collector. The receipt records the held lock file's path and
 requires its `stat` identity to remain unchanged; replacement or removal while
 the lock is held fails the run.
 
-While the shared lock is held, and before the read, it asserts that no `-wal`,
-`-shm`, or `-journal` sidecar exists and captures the database file `stat`.
-After the read, still under the lock, it recaptures `stat` and re-checks
-sidecars. It opens the database as `file:...?mode=ro` with
+While the shared lock is held, and before the read, it captures the database and
+sidecar file identities. A rollback `-journal` or an incomplete `-wal`/`-shm`
+pair fails closed. A real WAL pair is supported only when SQLite itself reports
+`journal_mode=wal`: the main database and WAL stats, WAL/SHM presence, and SHM
+file identity must remain stable through the read. SHM size/mtime may change as
+SQLite registers a reader and is recorded rather than misclassified as a source
+row, main-database or WAL-content write. Any sidecar presence change fails
+closed because the collector cannot attribute which process created it. The
+receipt explicitly does not claim
+zero filesystem mutation because normal SQLite readers can update transient SHM
+reader metadata. After the read, still under the lock, it recaptures all evidence. It opens
+the database as `file:...?mode=ro` with
 `PRAGMA query_only=ON`, begins one `BEGIN DEFERRED` read transaction, records
-`PRAGMA data_version` at both ends and requires them to match, and records
+`PRAGMA data_version` before the transaction and again after `COMMIT`, requires
+them to match, and records
 `PRAGMA quick_check` for `permits` (and `accela_details` when present).
-Database writes remain zero. The shared lock is released before JSON output is
-written.
+The receipt says only that this query-only collector issued zero source-row,
+main-database-content and WAL-content writes. Observed database/WAL stability is
+reported separately under `quality` and may fail if another process ignored the
+cooperative lock. Transient SHM reader metadata may change. The shared lock is
+released before JSON output is written.
 
 There is no network client and no wet-mode flag. The result always says
 `mode=shadow_file_only`, `promotion_eligible=false` and
 `connected_label_allowed=false`.
+
+## Live file-only canary — 2026-08-31
+
+The reviewed V5 collector ran against canonical production SQLite under the
+actual live application lock at 19:22:51–19:23:17 EDT. Its immutable receipt is:
+
+`/srv/grahamandgold/florida-signal/app/data/audit/utility-intake-shadow/utility-intake-shadow-20260831T1926EDT/receipt.json`
+
+It returned `status=ok`, scanned 137,942 stored permit identities, admitted 523,
+rejected 0 and classified 137,419 as unknown/non-target. Exact admitted-family
+counts were ENG-CR 166, ENG-OAA 75, PLB-SEWCP-WT 193, ROW-SEW 89 and ROW-WTR 0.
+The zero is only an observation of this complete stored-SQLite snapshot; it is
+not proof that the source system or serving utility has no ROW-WTR work.
+
+The receipt records query-only SQL, stable `data_version`, stable main-database
+stat, stable zero-byte WAL, stable SHM identity, both table quick checks `ok`,
+exact accounting and no collector-issued database/WAL content writes. Its
+logical input fingerprint is
+`69cff86fe1bfc0ddbc2bdb72bff6d6012371c336eaffb3367b18eb0186fb8477`.
+This validates the file-only evidence contract only. It does not authorize a
+timer, network collector, Supabase mirror, scoring, Desk-connected label,
+promotion or publication.
+
+An earlier V4 attempt at 19:12:58 failed closed when WAL/SHM presence changed
+during the read. Its receipt and partial evidence bundle remain preserved under
+`utility-intake-shadow-20260831T1913EDT`; the main database stat and row content
+did not change. V5 keeps that conservative fail-closed rule and scopes all write
+claims to writes issued by this collector.
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 ops/droplet/utility_intake_shadow.py \

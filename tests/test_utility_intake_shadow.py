@@ -219,7 +219,11 @@ class UtilityIntakeShadowTests(unittest.TestCase):
             )
             self.assertFalse(receipt["safety"]["promotion_eligible"])
             self.assertFalse(receipt["safety"]["connected_label_allowed"])
-            self.assertFalse(receipt["safety"]["database_writes"])
+            self.assertFalse(receipt["safety"]["collector_issued_source_row_writes"])
+            self.assertFalse(receipt["safety"]["collector_issued_main_database_content_writes"])
+            self.assertFalse(receipt["safety"]["collector_issued_wal_content_writes"])
+            self.assertTrue(receipt["safety"]["sqlite_shm_reader_metadata_may_change"])
+            self.assertFalse(receipt["safety"]["zero_filesystem_mutation_claimed"])
             self.assertFalse(receipt["safety"]["candidate_scoring"])
             self.assertFalse(receipt["timing_claims"]["earlier_than_pdmr"])
             self.assertEqual(receipt["schema_version"], shadow.SCHEMA_VERSION)
@@ -242,7 +246,10 @@ class UtilityIntakeShadowTests(unittest.TestCase):
             self.assertTrue(receipt["input_database"]["data_version_stable"])
             self.assertEqual(receipt["input_database"]["quick_check"]["permits"], "ok")
             self.assertTrue(receipt["input_database"]["stat_unchanged"])
-            self.assertEqual(receipt["input_database"]["sidecars"]["wal"], False)
+            sidecars = receipt["input_database"]["sidecars"]
+            self.assertFalse(sidecars["before"]["wal"]["exists"])
+            self.assertTrue(sidecars["contract_passed"])
+            self.assertTrue(receipt["quality"]["sidecar_contract_passed"])
             self.assertEqual(run_dir.stat().st_mode & 0o777, 0o700)
 
             records = [
@@ -455,7 +462,7 @@ class UtilityIntakeShadowTests(unittest.TestCase):
             after = hashlib.sha256(db_path.read_bytes()).hexdigest()
             self.assertEqual(before, after)
             self.assertTrue(receipt["quality"]["query_only"])
-            self.assertFalse(receipt["safety"]["database_writes"])
+            self.assertFalse(receipt["safety"]["collector_issued_source_row_writes"])
             self.assertFalse((Path(str(db_path) + "-wal")).exists())
             self.assertFalse((Path(str(db_path) + "-shm")).exists())
             self.assertFalse((Path(str(db_path) + "-journal")).exists())
@@ -479,6 +486,10 @@ class UtilityIntakeShadowTests(unittest.TestCase):
             self.assertIn("required table permits is absent", receipt["terminal_error"])
             self.assertTrue((run_dir / "receipt.json").is_file())
             self.assertFalse(receipt["quality"]["schema_contract_passed"])
+            self.assertFalse(receipt["safety"]["collector_issued_source_row_writes"])
+            self.assertFalse(receipt["safety"]["collector_issued_main_database_content_writes"])
+            self.assertFalse(receipt["safety"]["collector_issued_wal_content_writes"])
+            self.assertNotIn("source_row_writes", receipt["safety"])
 
     def test_secrets_are_redacted(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -593,7 +604,7 @@ class UtilityIntakeShadowTests(unittest.TestCase):
                 receipt["input_database"]["writer_lock"]["stat_unchanged"]
             )
 
-    def test_sidecar_files_are_rejected(self):
+    def test_incomplete_or_rollback_sidecars_are_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = _create_fixture_db(Path(tmp) / "permits.sqlite")
             (Path(str(db_path) + "-wal")).write_bytes(b"not-a-checkpoint")
@@ -607,6 +618,163 @@ class UtilityIntakeShadowTests(unittest.TestCase):
             (Path(str(db_path) + "-journal")).write_bytes(b"rollback")
             with self.assertRaises(shadow.SourceContractError):
                 self.run_fixture(Path(tmp) / "out", db_path)
+
+    def test_real_wal_pair_is_read_as_one_stable_query_only_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = _create_fixture_db(Path(tmp) / "permits.sqlite")
+            writer = sqlite3.connect(db_path)
+            try:
+                self.assertEqual(writer.execute("PRAGMA journal_mode=WAL").fetchone()[0], "wal")
+                writer.execute("PRAGMA wal_autocheckpoint=0")
+                writer.execute(
+                    "UPDATE permits SET status = ? WHERE permit_number = ?",
+                    ("WAL_ONLY_STATUS", "ENG-CR-26010001"),
+                )
+                writer.commit()
+                wal_path = Path(str(db_path) + "-wal")
+                shm_path = Path(str(db_path) + "-shm")
+                self.assertTrue(wal_path.is_file())
+                self.assertTrue(shm_path.is_file())
+                self.assertGreater(wal_path.stat().st_size, 32)
+                wal_before = shadow.file_stat_snapshot(wal_path)
+
+                run_dir, receipt = self.run_fixture(Path(tmp) / "out", db_path)
+
+                sidecars = receipt["input_database"]["sidecars"]
+                self.assertEqual(sidecars["snapshot_mode"], "wal_read_transaction")
+                self.assertEqual(sidecars["journal_mode"], "wal")
+                self.assertTrue(sidecars["before"]["wal"]["exists"])
+                self.assertTrue(sidecars["before"]["shm"]["exists"])
+                self.assertEqual(sidecars["before"]["wal"]["stat"], wal_before)
+                self.assertTrue(sidecars["wal_stat_stable"])
+                self.assertTrue(sidecars["shm_identity_stable"])
+                self.assertTrue(sidecars["rollback_journal_absent"])
+                self.assertTrue(sidecars["contract_passed"])
+                self.assertTrue(receipt["quality"]["sidecar_contract_passed"])
+                self.assertTrue(receipt["quality"]["query_only"])
+                records = [
+                    json.loads(line)
+                    for line in (run_dir / "shadow-records.jsonl").read_text().splitlines()
+                ]
+                wal_record = next(
+                    row for row in records
+                    if row["identity"]["permit_number"] == "ENG-CR-26010001"
+                )
+                self.assertEqual(wal_record["source"]["status"], "WAL_ONLY_STATUS")
+                self.assertFalse(receipt["safety"]["collector_issued_source_row_writes"])
+                self.assertFalse(receipt["safety"]["collector_issued_main_database_content_writes"])
+                self.assertFalse(receipt["safety"]["collector_issued_wal_content_writes"])
+                self.assertTrue(receipt["safety"]["sqlite_shm_reader_metadata_may_change"])
+                self.assertFalse(receipt["safety"]["zero_filesystem_mutation_claimed"])
+            finally:
+                writer.close()
+
+    def test_failed_wal_change_receipt_scopes_collector_write_claims(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = _create_fixture_db(Path(tmp) / "permits.sqlite")
+            writer = sqlite3.connect(db_path)
+            try:
+                self.assertEqual(writer.execute("PRAGMA journal_mode=WAL").fetchone()[0], "wal")
+                writer.execute("PRAGMA wal_autocheckpoint=0")
+                writer.execute(
+                    "UPDATE permits SET status = ? WHERE permit_number = ?",
+                    ("WAL_BASELINE", "ENG-CR-26010001"),
+                )
+                writer.commit()
+                before = shadow.sidecar_snapshot(db_path)
+                after = json.loads(json.dumps(before))
+                after["wal"]["stat"]["size_bytes"] += 1
+                with mock.patch.object(
+                    shadow,
+                    "sidecar_snapshot",
+                    side_effect=[before, after],
+                ):
+                    _, receipt = self.run_fixture(Path(tmp) / "out", db_path)
+
+                self.assertEqual(receipt["status"], "failed")
+                self.assertIn("SQLite WAL changed", receipt["terminal_error"])
+                self.assertFalse(receipt["quality"]["sidecar_contract_passed"])
+                self.assertFalse(receipt["safety"]["collector_issued_source_row_writes"])
+                self.assertFalse(receipt["safety"]["collector_issued_main_database_content_writes"])
+                self.assertFalse(receipt["safety"]["collector_issued_wal_content_writes"])
+                self.assertNotIn("wal_content_writes", receipt["safety"])
+            finally:
+                writer.close()
+
+    def test_postflight_rejects_every_material_sidecar_transition(self):
+        stat = {"size_bytes": 100, "mtime_ns": 10, "inode": 20, "device": 30}
+        absent = {"exists": False, "stat": None}
+        present = {"exists": True, "stat": dict(stat)}
+
+        cases = []
+        before = {"wal": present, "shm": present, "journal": absent}
+        after = json.loads(json.dumps(before))
+        after["wal"]["stat"]["size_bytes"] += 1
+        cases.append(("wal append", before, after, "SQLite WAL changed"))
+
+        before = {"wal": absent, "shm": absent, "journal": absent}
+        after = {"wal": present, "shm": present, "journal": absent}
+        cases.append(("wal pair appeared", before, after, "sidecar presence changed"))
+
+        before = {"wal": present, "shm": present, "journal": absent}
+        after = {"wal": absent, "shm": absent, "journal": absent}
+        cases.append(("wal pair disappeared", before, after, "sidecar presence changed"))
+
+        before = {"wal": present, "shm": present, "journal": absent}
+        after = json.loads(json.dumps(before))
+        after["shm"]["stat"]["inode"] += 1
+        cases.append(("shm replaced", before, after, "SHM file identity changed"))
+
+        before = {"wal": present, "shm": present, "journal": absent}
+        after = json.loads(json.dumps(before))
+        after["journal"] = present
+        cases.append(("rollback journal appeared", before, after, "rollback journal appeared"))
+
+        for label, before, after, expected_error in cases:
+            with self.subTest(label=label):
+                result, error = shadow.validate_sidecar_postflight(before, after, "wal")
+                self.assertFalse(result["contract_passed"])
+                self.assertIn(expected_error, error)
+
+    def test_data_version_is_rechecked_after_commit_and_detects_concurrent_writer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = _create_fixture_db(Path(tmp) / "permits.sqlite")
+            writer = sqlite3.connect(db_path)
+            try:
+                self.assertEqual(writer.execute("PRAGMA journal_mode=WAL").fetchone()[0], "wal")
+                writer.execute("PRAGMA wal_autocheckpoint=0")
+                writer.execute(
+                    "UPDATE permits SET status = ? WHERE permit_number = ?",
+                    ("WAL_BASELINE", "ENG-CR-26010001"),
+                )
+                writer.commit()
+                original = shadow.build_observation
+                committed = False
+
+                def build_then_commit(**kwargs):
+                    nonlocal committed
+                    if not committed:
+                        writer.execute(
+                            "UPDATE permits SET status = ? WHERE permit_number = ?",
+                            ("CONCURRENT_COMMIT", "ROW-WTR-26030001"),
+                        )
+                        writer.commit()
+                        committed = True
+                    return original(**kwargs)
+
+                with mock.patch.object(
+                    shadow, "build_observation", side_effect=build_then_commit
+                ):
+                    snapshot = shadow._read_snapshot(db_path, "2026-08-31T12:00:00Z")
+
+                self.assertTrue(committed, snapshot["terminal_error"])
+                self.assertNotEqual(
+                    snapshot["data_version_start"], snapshot["data_version_end"]
+                )
+                self.assertFalse(snapshot["data_version_stable"])
+                self.assertIn("data_version changed", snapshot["terminal_error"])
+            finally:
+                writer.close()
 
     def test_missing_writer_lock_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
