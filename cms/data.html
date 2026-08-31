@@ -346,7 +346,7 @@
     </div>
 
     <details class="health-details" id="source-health">
-      <summary>Full feed health <span>latest source event · last successful collection · row count</span></summary>
+      <summary>Full feed health <span>latest source event · collector/run clock · row count</span></summary>
       <div class="health-details__body">
         <div class="health-actions" id="health-actions"></div>
         <div class="health-grid" id="health-grid" role="status" aria-live="polite"></div>
@@ -603,6 +603,17 @@
       });
     }
 
+    function formatReceiptReason(v) {
+      const labels = {
+        source_not_authoritative_yet: "source has not published an authoritative result yet",
+        empty_unverified_date: "source returned no results for an unverified date"
+      };
+      return String(v || "").split(";").map(part => {
+        const code = part.trim();
+        return labels[code] || code.replace(/_/g, " ");
+      }).filter(Boolean).join("; ");
+    }
+
     function floridaCalendarParts(now) {
       const parts = new Intl.DateTimeFormat("en-US", {
         timeZone: "America/New_York", year: "numeric", month: "numeric", day: "numeric",
@@ -749,7 +760,7 @@
                 "; attempted through " + (receipt.attempted_through || "unknown") +
                 "; " + Number(receipt.rows_observed || 0).toLocaleString() + " rows observed / " +
                 Number(receipt.rows_new || 0).toLocaleString() + " new" +
-                (receipt.reason ? "; " + String(receipt.reason) : "") + ".";
+                (receipt.reason ? "; " + formatReceiptReason(receipt.reason) : "") + ".";
             }
           }
           else if (total && total.n === 0) key = "EMPTY";

@@ -159,11 +159,13 @@ test.describe("private Florida Signal Newsroom", () => {
         await expect(pdmrRow).toBeFocused();
         await expect(page.locator('.source-option[data-source-table="broward_clerk_preliminary"]')).toBeVisible();
         await expect(page.locator('.source-option[data-source-table="permits"]')).toBeVisible();
+        await page.locator("#source-health summary").click();
         const preliminaryHealth = page.locator('[data-feed="broward_clerk_preliminary"]');
         await expect(preliminaryHealth.locator(".clock--collected i")).toHaveText("latest collector run");
         await expect(preliminaryHealth.locator(".collected")).not.toHaveText(/not recorded|loading/i, { timeout: 30_000 });
         await expect(preliminaryHealth.locator(".badge")).toContainText(/PRELIMINARY · (CURRENT \/ RETRYING|CHECKED \/ NO NEW ROWS)|PRELIMINARY \/ NOT YET VERIFIED/, { timeout: 30_000 });
         await expect(preliminaryHealth.locator(".note")).toContainText(/Latest run (source_wait|empty|ok); attempted through \d{4}-\d{2}-\d{2}/, { timeout: 30_000 });
+        await expect(preliminaryHealth.locator(".note")).not.toContainText(/source_not_authoritative_yet|empty_unverified_date/);
         await expect(page.locator("#library-summary")).toContainText(/connected · .*empty · .*unavailable/i, { timeout: 15_000 });
         await expect(page.locator('.source-option[data-source-table="sunbiz_entities"] .source-option__status')).toContainText(/(current|connected) · automated/i, { timeout: 15_000 });
         await expect(page.locator('.source-option[data-source-table="accela_details"] .source-option__status')).toContainText(/connected · automated · health unknown/i, { timeout: 15_000 });

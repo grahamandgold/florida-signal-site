@@ -20,6 +20,7 @@ class DataWireAcclaimReceiptTests(unittest.TestCase):
         self.assertIn('"latest collector run"', html)
         self.assertIn("f.receiptTable ? dateTimeish(collectedVal)", html)
         self.assertIn("businessCalendarAge(eventVal)", html)
+        self.assertIn("formatReceiptReason(receipt.reason)", html)
         self.assertIn("PRELIMINARY · CURRENT / RETRYING", html)
 
 
