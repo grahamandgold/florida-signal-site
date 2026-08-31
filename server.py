@@ -19,7 +19,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, time as clock_time, timedelta, timezone
+from datetime import date, datetime, time as clock_time, timedelta, timezone
 from html import unescape
 from html.parser import HTMLParser
 from http import HTTPStatus
@@ -434,16 +434,98 @@ def parse_source_time(value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
-def health_status(value: Any, current_hours: float, delayed_hours: float) -> str:
+def health_status(
+    value: Any,
+    current_hours: float,
+    delayed_hours: float,
+    *,
+    now: datetime | None = None,
+) -> str:
     parsed = parse_source_time(value)
     if not parsed:
         return "unavailable"
-    age = max(0.0, (datetime.now(timezone.utc) - parsed).total_seconds() / 3600)
+    observed_now = now or datetime.now(timezone.utc)
+    if observed_now.tzinfo is None:
+        observed_now = observed_now.replace(tzinfo=timezone.utc)
+    age = max(0.0, (observed_now.astimezone(timezone.utc) - parsed).total_seconds() / 3600)
     if age <= current_hours:
         return "current"
     if age <= delayed_hours:
         return "delayed"
     return "stale"
+
+
+def business_calendar_age(
+    value: Any,
+    *,
+    now: datetime | None = None,
+    holidays: set[date] | None = None,
+    release_hour: int = 12,
+) -> int | None:
+    """Count completed Florida business dates after a source event date.
+
+    The current weekday does not count until the preliminary source's noon
+    collection window.  Weekends and caller-supplied Clerk holidays never add
+    event lag, so a Friday event remains zero business days old on Sunday.
+    """
+    if not value:
+        return None
+    try:
+        event_date = datetime.strptime(str(value).strip()[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+    observed_now = now or datetime.now(timezone.utc)
+    if observed_now.tzinfo is None:
+        observed_now = observed_now.replace(tzinfo=timezone.utc)
+    local_now = observed_now.astimezone(ZoneInfo("America/New_York"))
+    completed_through = local_now.date()
+    if local_now.hour < release_hour:
+        completed_through -= timedelta(days=1)
+    if completed_through <= event_date:
+        return 0
+    closed = holidays or set()
+    age = 0
+    cursor = event_date + timedelta(days=1)
+    while cursor <= completed_through:
+        if cursor.weekday() < 5 and cursor not in closed:
+            age += 1
+        cursor += timedelta(days=1)
+    return age
+
+
+def preliminary_clerk_status(
+    receipt: dict[str, Any],
+    event_time: Any,
+    *,
+    now: datetime | None = None,
+) -> str:
+    """Use the run receipt for system health and business days for event lag."""
+    if not receipt:
+        return "unavailable"
+    run_status = str(receipt.get("status") or "").lower()
+    if run_status not in {"ok", "empty", "source_wait", "failed"}:
+        return "unavailable"
+    system_status = health_status(
+        receipt.get("completed_at"), 2.5, 6, now=now
+    )
+    if system_status in {"unavailable", "stale"}:
+        return system_status
+    if run_status == "failed":
+        return "stale"
+    event_age = business_calendar_age(event_time, now=now)
+    if event_age is None:
+        return "unavailable"
+    # A current weekend/current-day empty grid is intentionally retryable and
+    # records source_wait, but it does not imply a missed business-day release.
+    # Keep it green while the run receipt itself is fresh and event lag is zero.
+    if run_status == "source_wait" and event_age == 0:
+        return system_status
+    event_status = "current" if event_age == 0 else "delayed" if event_age <= 2 else "stale"
+    if "stale" in {system_status, event_status}:
+        return "stale"
+    if "delayed" in {system_status, event_status}:
+        return "delayed"
+    return "current"
 
 
 def verified_clerk_status(event_time: Any, system_time: Any) -> str:
@@ -472,6 +554,7 @@ def data_health_payload() -> dict[str, Any]:
         cache_row: dict[str, Any] = {}
         verified_clerk_run: dict[str, Any] = {}
         verified_clerk_record: dict[str, Any] = {}
+        preliminary_clerk_run: dict[str, Any] = {}
         preliminary_clerk_record: dict[str, Any] = {}
         fdep_event: dict[str, Any] = {}
         fdep_fetch: dict[str, Any] = {}
@@ -512,6 +595,15 @@ def data_health_payload() -> dict[str, Any]:
             verified_clerk_record = rows[0] if rows else {}
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
             errors.append("clerk-verified:" + type(error).__name__)
+        try:
+            rows = supabase_public_rows(
+                "broward_clerk_preliminary_run?select=run_id,status,started_at,completed_at,"
+                "observed_at,attempted_through,event_through,verified_through,dates_attempted,"
+                "rows_observed,rows_new,reason&order=completed_at.desc&limit=1"
+            )
+            preliminary_clerk_run = rows[0] if rows else {}
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
+            errors.append("clerk-preliminary-run:" + type(error).__name__)
         try:
             rows = supabase_public_rows(
                 "broward_clerk_preliminary?select=record_date,fetched_at,preliminary_first_seen_at,"
@@ -563,10 +655,29 @@ def data_health_payload() -> dict[str, Any]:
             if verified_doc_count is not None
             else "Authoritative SFTP documents; recording date is separate from collection time"
         )
-        preliminary_event_time = preliminary_clerk_record.get("record_date")
-        preliminary_system_time = (
-            preliminary_clerk_record.get("preliminary_first_seen_at")
-            or preliminary_clerk_record.get("fetched_at")
+        preliminary_event_time = max(
+            filter(
+                None,
+                [
+                    preliminary_clerk_run.get("event_through"),
+                    preliminary_clerk_record.get("record_date"),
+                ],
+            ),
+            default=None,
+        )
+        preliminary_system_time = preliminary_clerk_run.get("completed_at")
+        preliminary_status = preliminary_clerk_status(
+            preliminary_clerk_run, preliminary_event_time
+        )
+        preliminary_detail = (
+            f"Run {preliminary_clerk_run.get('status')} · attempted through "
+            f"{preliminary_clerk_run.get('attempted_through') or 'unknown'} · "
+            f"{preliminary_clerk_run.get('rows_observed', 0)} rows observed / "
+            f"{preliminary_clerk_run.get('rows_new', 0)} new"
+            f"{(' · ' + str(preliminary_clerk_run.get('reason'))) if preliminary_clerk_run.get('reason') else ''}; "
+            "event and run clocks remain separate"
+            if preliminary_clerk_run
+            else "No durable Acclaim run receipt is visible; row dates cannot prove collector health"
         )
         transfer_snapshot_status = "unavailable"
         if transfer_freshness:
@@ -576,7 +687,7 @@ def data_health_payload() -> dict[str, Any]:
             {"id": "permits", "label": "Permit applications", "status": health_status(latest_seen.get("last_seen_at"), 30, 54), "system_time": latest_seen.get("last_seen_at"), "event_through": latest_application.get("applied_date"), "cadence": "source intake nightly; mirror every 30 minutes", "detail": "Analysis uses applied_date; last_seen_at is freshness metadata"},
             {"id": "aggregate-snapshot", "label": "Aggregate dashboard", "status": health_status(cache_row.get("updated_at"), 26, 54), "system_time": cache_row.get("updated_at"), "event_through": stats.get("permits_fresh"), "cadence": "refresh after successful aggregate build", "detail": "Counts retain their visible update time when this snapshot is delayed"},
             {"id": "broward", "label": "Broward verified instruments", "status": verified_clerk_status(verified_event_time, verified_system_time), "verification": "verified", "system_time": verified_system_time, "event_through": verified_event_time, "cadence": "SFTP check daily at 9:30 AM plus weekday catch-up", "detail": verified_detail},
-            {"id": "clerk-preliminary", "label": "Broward preliminary recordings", "status": health_status(preliminary_event_time, 48, 96), "verification": "preliminary", "system_time": preliminary_system_time, "event_through": preliminary_event_time, "cadence": "AcclaimWeb at 12:30 AM, noon, 7 PM and 10:30 PM", "detail": "Same-day public-search text; reconciled against the authoritative SFTP feed and never presented as verified early"},
+            {"id": "clerk-preliminary", "label": "Broward preliminary recordings", "status": preliminary_status, "verification": "preliminary", "run_status": preliminary_clerk_run.get("status"), "system_time": preliminary_system_time, "observed_at": preliminary_clerk_run.get("observed_at"), "attempted_through": preliminary_clerk_run.get("attempted_through"), "event_through": preliminary_event_time, "rows_observed": preliminary_clerk_run.get("rows_observed"), "rows_new": preliminary_clerk_run.get("rows_new"), "cadence": "hourly plus 12:30 AM, noon, 7 PM and 10:30 PM", "detail": preliminary_detail},
             {"id": "permit-enrichment", "label": "Permit enrichment", "status": health_status(latest_enriched.get("last_enriched_at"), 30, 54), "system_time": latest_enriched.get("last_enriched_at"), "event_through": None, "cadence": "continuous queue after permit intake", "detail": "This is a processing clock, not an event-coverage claim; parcel and application clocks remain separate"},
             {"id": "property-transfer-snapshot", "label": "Deed / parcel snapshot", "status": transfer_snapshot_status, "system_time": next((row.get("system_time") for row in editorial_health if row.get("component") == "property-transfer-snapshot"), None), "event_through": transfer_freshness.get("snapshot_event_through"), "cadence": "weekdays after verified Clerk catch-up", "detail": (f"snapshot lag {transfer_freshness.get('snapshot_lag_business_days')} business day(s) · verified source age {transfer_freshness.get('source_age_business_days')}" if transfer_freshness else "Freshness view unavailable; current deed modules stay suppressed")},
             {"id": "fdep", "label": "FDEP environmental permits", "status": health_status(fdep_fetch.get("last_fetched_at"), 30, 54), "system_time": fdep_fetch.get("last_fetched_at"), "event_through": fdep_event.get("received_date"), "cadence": "daily at 9:20 UTC", "detail": "State ERP record date and fetch time remain separate"},

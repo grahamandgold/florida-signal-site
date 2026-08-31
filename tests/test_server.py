@@ -8,6 +8,7 @@ import threading
 import unittest
 import urllib.error
 import urllib.request
+from datetime import date, datetime, timezone
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
@@ -69,6 +70,71 @@ class PublicApiTests(unittest.TestCase):
         self.assertEqual((parsed.hour, parsed.minute, parsed.second), (23, 40, 15))
         self.assertEqual(parsed.microsecond, 618190)
 
+    def test_preliminary_business_calendar_and_receipt_health(self):
+        sunday = datetime(2026, 8, 30, 23, 0, tzinfo=timezone.utc)  # 7 PM Florida
+        monday_after_release = datetime(2026, 8, 31, 17, 0, tzinfo=timezone.utc)
+        fresh_receipt = {
+            "status": "source_wait",
+            "completed_at": "2026-08-30T22:59:00Z",
+        }
+        empty_receipt = {
+            "status": "empty",
+            "completed_at": "2026-08-30T22:59:00Z",
+        }
+
+        self.assertEqual(
+            server_module.business_calendar_age("2026-08-28", now=sunday), 0
+        )
+        self.assertEqual(
+            server_module.business_calendar_age(
+                "2026-08-28", now=monday_after_release
+            ),
+            1,
+        )
+        self.assertEqual(
+            server_module.business_calendar_age(
+                "2026-08-28",
+                now=monday_after_release,
+                holidays={date(2026, 8, 31)},
+            ),
+            0,
+        )
+        self.assertEqual(
+            server_module.preliminary_clerk_status(
+                fresh_receipt, "2026-08-28", now=sunday
+            ),
+            "current",
+        )
+        self.assertEqual(
+            server_module.preliminary_clerk_status(
+                empty_receipt, "2026-08-28", now=sunday
+            ),
+            "current",
+        )
+        self.assertEqual(
+            server_module.preliminary_clerk_status(
+                {
+                    "status": "source_wait",
+                    "completed_at": "2026-08-31T16:59:00Z",
+                },
+                "2026-08-28",
+                now=monday_after_release,
+            ),
+            "delayed",
+        )
+        self.assertEqual(
+            server_module.preliminary_clerk_status(
+                {"status": "ok", "completed_at": "2026-08-30T15:00:00Z"},
+                "2026-08-28",
+                now=sunday,
+            ),
+            "stale",
+        )
+        self.assertEqual(
+            server_module.preliminary_clerk_status({}, "2026-08-28", now=sunday),
+            "unavailable",
+        )
+
     def test_supabase_health_read_retries_one_transient_server_error(self):
         transient = urllib.error.HTTPError("https://example.invalid", 500, "timeout", {}, None)
         response = mock.MagicMock()
@@ -93,7 +159,22 @@ class PublicApiTests(unittest.TestCase):
                 return [{"business_date": "2026-08-05", "pulled_at_utc": "2026-08-10T18:11:44Z", "parse_status": "ok", "observed_doc_count": 2446}]
             if path.startswith("broward_clerk_records_doc"):
                 return [{"recording_date_iso": "2026-08-05"}]
-            if path.startswith("broward_clerk_preliminary"):
+            if path.startswith("broward_clerk_preliminary_run"):
+                return [{
+                    "run_id": "0dff405a-2bb4-4df1-965e-854453e58925",
+                    "status": "ok",
+                    "started_at": "2026-08-11T00:55:00Z",
+                    "completed_at": "2026-08-11T00:56:30Z",
+                    "observed_at": "2026-08-11T00:56:20Z",
+                    "attempted_through": "2026-08-10",
+                    "event_through": "2026-08-10",
+                    "verified_through": "2026-08-05",
+                    "dates_attempted": 1,
+                    "rows_observed": 15,
+                    "rows_new": 3,
+                    "reason": None,
+                }]
+            if path.startswith("broward_clerk_preliminary?"):
                 return [{"record_date": "2026-08-10", "preliminary_first_seen_at": "2026-08-11T00:56:06Z", "verification_status": "preliminary", "source": "acclaimweb-public-search"}]
             if path.startswith("fdep_erp?select=received_date"):
                 return [{"received_date": "2026-08-10"}]
@@ -130,7 +211,10 @@ class PublicApiTests(unittest.TestCase):
         self.assertEqual(sources["broward"]["verification"], "verified")
         self.assertEqual(sources["clerk-preliminary"]["event_through"], "2026-08-10")
         self.assertEqual(sources["clerk-preliminary"]["verification"], "preliminary")
-        self.assertIn("never presented as verified early", sources["clerk-preliminary"]["detail"])
+        self.assertEqual(sources["clerk-preliminary"]["system_time"], "2026-08-11T00:56:30Z")
+        self.assertEqual(sources["clerk-preliminary"]["attempted_through"], "2026-08-10")
+        self.assertEqual(sources["clerk-preliminary"]["rows_observed"], 15)
+        self.assertIn("event and run clocks remain separate", sources["clerk-preliminary"]["detail"])
         self.assertEqual(sources["sunbiz"]["status"], "current")
         self.assertEqual(sources["sunbiz"]["system_time"], "2026-08-11T03:50:00Z")
         self.assertIsNone(sources["sunbiz"]["event_through"])

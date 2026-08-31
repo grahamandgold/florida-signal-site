@@ -10,6 +10,7 @@ LOG="/Users/gillfillan/Library/Logs/florida-acclaim.log"
 STATEDIR="/Users/gillfillan/Library/Application Support/FloridaSignal"
 STATE="$STATEDIR/acclaim_state.json"
 LOCKDIR="$STATEDIR/acclaim.lock"
+RECEIPT_OUTBOX="$STATEDIR/acclaim_run_receipts"
 mkdir -p "$STATEDIR"
 MAXPAGES="${ACCLAIM_MAX_PAGES:-40}"   # 40 pages x 500 rows = 20,000 rows/day capacity
 MAXDATES="${ACCLAIM_MAX_DATES:-8}"
@@ -55,22 +56,64 @@ if ! acquire_lock; then
   log "SKIP: another Acclaim pull is already running"
   exit 0
 fi
+
+utc_now(){
+  /usr/bin/python3 -c 'import datetime as d; print(d.datetime.now(d.timezone.utc).isoformat())'
+}
+RUN_ID=$(/usr/bin/python3 -c 'import uuid; print(uuid.uuid4())')
+RUN_STARTED_AT=$(utc_now)
+RECEIPT_OUTCOMES="/tmp/fs_acclaim_run_${RUN_ID}.ndjson"
+: > "$RECEIPT_OUTCOMES"
+RECEIPT_FINALIZED=0
+RECEIPT_BACKLOG=0
+VERIFIED_MAX=""
+
+finalize_receipt(){
+  local run_status="$1"
+  local run_reason="${2:-}"
+  local completed receipt_output receipt_rc
+  [ "$RECEIPT_FINALIZED" -eq 0 ] || return 0
+  completed=$(utc_now)
+  local args=(
+    record
+    --run-id "$RUN_ID"
+    --started-at "$RUN_STARTED_AT"
+    --completed-at "$completed"
+    --outcomes-file "$RECEIPT_OUTCOMES"
+    --state-file "$STATE"
+    --outbox-dir "$RECEIPT_OUTBOX"
+    --status "$run_status"
+  )
+  [ -n "$VERIFIED_MAX" ] && args+=(--verified-through "$VERIFIED_MAX")
+  [ -n "$run_reason" ] && args+=(--reason "$run_reason")
+  receipt_output=$(/usr/bin/python3 "$DIR/acclaim_run_receipt.py" "${args[@]}" 2>>"$LOG")
+  receipt_rc=$?
+  log "run receipt: ${receipt_output:-no result}"
+  RECEIPT_FINALIZED=1
+  return "$receipt_rc"
+}
+
 cleanup(){
   rm -f "$LOCKDIR/pid"
   rmdir "$LOCKDIR" 2>/dev/null || true
+  rm -f "$RECEIPT_OUTCOMES"
 }
 trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
+trap 'finalize_receipt failed signal_INT || true; exit 130' INT
+trap 'finalize_receipt failed signal_TERM || true; exit 143' TERM
 
 log "=== acclaim pull start (maxdates=$MAXDATES maxpages=$MAXPAGES) ==="
+if ! /usr/bin/python3 "$DIR/acclaim_run_receipt.py" flush --outbox-dir "$RECEIPT_OUTBOX" >>"$LOG" 2>>"$LOG"; then
+  RECEIPT_BACKLOG=1
+  log "WARNING: one or more prior Acclaim receipts remain queued for retry"
+fi
 
 # 1) Last verified SFTP business date (authoritative floor — we only pull dates AFTER this).
 # A transient query failure retains the last known floor; it must never rewind to an old
 # hard-coded date and pointlessly re-harvest an already verified week.
-VERIFIED_MAX=$(/usr/bin/python3 "$DIR/acclaim_verified_max.py" "$STATE" 2>>"$LOG")
-if [ $? -ne 0 ] || [ -z "$VERIFIED_MAX" ]; then
+if ! VERIFIED_MAX=$(/usr/bin/python3 "$DIR/acclaim_verified_max.py" "$STATE" 2>>"$LOG") || [ -z "$VERIFIED_MAX" ]; then
   log "FATAL: unable to resolve a safe verified SFTP floor"
+  finalize_receipt failed verified_floor_unavailable || true
   exit 1
 fi
 log "verified SFTP through: $VERIFIED_MAX"
@@ -79,14 +122,29 @@ log "verified SFTP through: $VERIFIED_MAX"
 #    skipped. After noon, today is deliberately re-harvested every run because the public grid
 #    can grow during the day; the per-row upsert filter inserts only new instrument numbers.
 #    One target slot is reserved for today so an offline backlog cannot starve same-day intel.
-TARGETS=$(/usr/bin/python3 "$DIR/acclaim_targets.py" "$VERIFIED_MAX" "$MAXDATES" "$STATE")
+if ! TARGETS=$(/usr/bin/python3 "$DIR/acclaim_targets.py" "$VERIFIED_MAX" "$MAXDATES" "$STATE"); then
+  log "FATAL: unable to select Acclaim target dates"
+  finalize_receipt failed target_selection_failed || true
+  exit 1
+fi
 
 if [ -z "$TARGETS" ]; then
-  log "no missing dates after verified max; backlog empty"; echo "nothing to backfill"; exit 0
+  log "no missing dates after verified max; backlog empty"
+  NO_TARGET_STATUS=ok; NO_TARGET_REASON=no_targets
+  if [ "$RECEIPT_BACKLOG" -ne 0 ]; then
+    NO_TARGET_STATUS=failed; NO_TARGET_REASON=prior_receipt_replay_failed
+  fi
+  if ! finalize_receipt "$NO_TARGET_STATUS" "$NO_TARGET_REASON"; then
+    log "FATAL: run receipt remains queued; remote receipt write failed"
+    exit 1
+  fi
+  [ "$RECEIPT_BACKLOG" -eq 0 ] || exit 1
+  echo "nothing to backfill"
+  exit 0
 fi
 
 FAIL=0; DEGRADED=0
-FIRST=""; LAST=""
+FIRST=""; LAST=""; SAW_ROWS=0
 while IFS= read -r LINE; do
   [ -z "$LINE" ] && continue
   TD="${LINE%%|*}"; ISO="${LINE##*|}"
@@ -122,13 +180,19 @@ PY
   TOTAL_SHOWN=$(echo "$RES" | cut -d'|' -f3); TOTAL_SHOWN="${TOTAL_SHOWN:-0}"
   REASON=$(echo "$RES" | cut -d'|' -f4)
   log "harvest result $ISO: status=$STATUS pages=$PAGES_DONE total=$TOTAL_SHOWN ${REASON:+reason=$REASON}"
+  SOURCE_OBSERVED_AT=$(utc_now)
   FOUND=$(wc -l < "$OUT" | tr -d ' ')
-  INS=0; SKIP=0
+  INS=0
   if [ "$FOUND" -gt 0 ]; then
-    UPOUT=$(/usr/bin/python3 "$DIR/acclaim_upsert.py" "$OUT" 2>>"$LOG")
-    log "upsert $ISO: $UPOUT"
-    INS=$(echo "$UPOUT" | grep -oE 'inserted [0-9]+' | grep -oE '[0-9]+' | head -1); INS="${INS:-0}"
-    SKIP=$(echo "$UPOUT" | grep -oE 'already present\)?' >/dev/null && echo "$UPOUT" | grep -oE '[0-9]+ already present' | grep -oE '[0-9]+' | head -1 || echo 0); SKIP="${SKIP:-0}"
+    SAW_ROWS=1
+    if UPOUT=$(/usr/bin/python3 "$DIR/acclaim_upsert.py" "$OUT" 2>>"$LOG"); then
+      log "upsert $ISO: $UPOUT"
+      INS=$(echo "$UPOUT" | grep -oE 'inserted [0-9]+' | grep -oE '[0-9]+' | head -1); INS="${INS:-0}"
+    else
+      STATUS=INCOMPLETE
+      REASON=upsert_failed
+      log "FATAL: preliminary upsert failed for $ISO"
+    fi
   fi
   # A date is COMPLETE only when every page was processed and the row count matches the
   # total Acclaim displayed (allowing rows the grid shows without an instrument number).
@@ -159,7 +223,38 @@ PY
     FAIL=1
     log "DATE INCOMPLETE $ISO: status=$STATUS found=$FOUND of $TOTAL_SHOWN ${REASON:+($REASON)}"
   fi
-  /usr/bin/python3 "$DIR/acclaim_state.py" "$STATE" "$ISO" "$DSTATUS" "$PAGES_DONE" "$FOUND" "$INS" "$VERIFIED_MAX" "$TOTAL_SHOWN" 2>>"$LOG"
+  RECEIPT_STATUS=failed
+  RECEIPT_REASON="$REASON"
+  if [ "$DSTATUS" = "done" ] && [ "$STATUS" = "EMPTY" ]; then
+    RECEIPT_STATUS=empty
+  elif [ "$DSTATUS" = "done" ]; then
+    RECEIPT_STATUS=ok
+  elif [ "$DSTATUS" = "source_wait" ]; then
+    RECEIPT_STATUS=source_wait
+    [ -n "$RECEIPT_REASON" ] || RECEIPT_REASON=empty_unverified_date
+  fi
+  if ! /usr/bin/python3 "$DIR/acclaim_state.py" "$STATE" "$ISO" "$DSTATUS" "$PAGES_DONE" "$FOUND" "$INS" "$VERIFIED_MAX" "$TOTAL_SHOWN" 2>>"$LOG"; then
+    FAIL=1
+    RECEIPT_STATUS=failed
+    RECEIPT_REASON=state_write_failed
+    log "FATAL: unable to persist local Acclaim state for $ISO"
+  fi
+  OBSERVED_AT="$SOURCE_OBSERVED_AT"
+  APPEND_ARGS=(
+    append
+    --outcomes-file "$RECEIPT_OUTCOMES"
+    --target-date "$ISO"
+    --status "$RECEIPT_STATUS"
+    --pages "$PAGES_DONE"
+    --rows-observed "$FOUND"
+    --rows-new "$INS"
+    --observed-at "$OBSERVED_AT"
+  )
+  [ -n "$RECEIPT_REASON" ] && APPEND_ARGS+=(--reason "$RECEIPT_REASON")
+  if ! /usr/bin/python3 "$DIR/acclaim_run_receipt.py" "${APPEND_ARGS[@]}" 2>>"$LOG"; then
+    FAIL=1
+    log "FATAL: unable to append Acclaim receipt outcome for $ISO"
+  fi
   log "date $DSTATUS $ISO: found=$FOUND/$TOTAL_SHOWN inserted=$INS pages=$PAGES_DONE"
   [ "$DSTATUS" = "done" ] && LAST="$ISO"
   rm -f "$OUT" "$OUT.page"
@@ -170,4 +265,19 @@ PY
 done <<< "$TARGETS"
 
 log "=== acclaim pull end (fail=$FAIL degraded=$DEGRADED first=$FIRST last=$LAST) ==="
-exit $FAIL
+RUN_STATUS=ok; RUN_REASON=""
+if [ "$RECEIPT_BACKLOG" -ne 0 ]; then
+  RUN_STATUS=failed; RUN_REASON=prior_receipt_replay_failed
+elif [ "$FAIL" -ne 0 ]; then
+  RUN_STATUS=failed; RUN_REASON=one_or_more_attempts_failed
+elif [ "$DEGRADED" -ne 0 ]; then
+  RUN_STATUS=source_wait; RUN_REASON=source_not_authoritative_yet
+elif [ "$SAW_ROWS" -eq 0 ]; then
+  RUN_STATUS=empty
+fi
+if ! finalize_receipt "$RUN_STATUS" "$RUN_REASON"; then
+  log "FATAL: run receipt remains queued; remote receipt write failed"
+  exit 1
+fi
+[ "$RECEIPT_BACKLOG" -eq 0 ] || exit 1
+exit "$FAIL"

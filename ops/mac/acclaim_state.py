@@ -48,6 +48,15 @@ def update_state(
     done = [date_text for date_text, value in state["dates"].items() if value.get("status") == "done"]
     if done:
         state["last_completed_date"] = max(done)
+    event_dates = [
+        date_text
+        for date_text, value in state["dates"].items()
+        if value.get("status") == "done" and int(value.get("found") or 0) > 0
+    ]
+    if event_dates:
+        # A successful zero-row poll advances collection coverage, not the newest
+        # real-world event.  Keep that clock separate for the durable run receipt.
+        state["last_event_date"] = max(event_dates)
 
     # Match acclaim_targets.py: before noon, today's still-forming grid is not backlog.
     base = dt.date.fromisoformat(verified_max)
