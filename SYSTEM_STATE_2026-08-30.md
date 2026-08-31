@@ -1,6 +1,6 @@
 # Florida Signal site + Data Wire checkpoint — 2026-08-30
 
-**Verified:** 2026-08-30 23:31 ET
+**Verified:** 2026-08-30 23:58 ET
 **Scope:** private Newsroom/Data Explorer, public Data Room behavior, local Finder app, and the
 cross-repository Acclaim, Accela/permit-normalization and PDMR evidence audits.
 **Release state:** the explicitly approved bounded Acclaim receipt deployment and exactly-25 permit
@@ -16,7 +16,12 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
   `476475614adf8d8850b691209c06f261146dc0d9`; the owner-normalization tool and its deterministic
   dependency were surgically installed for the approved bounded canary without replacing the
   dirty production checkout. The reviewed health-only report file from this branch was later
-  installed to close a confirmed live false-green; no collector, timer or service unit changed.
+  installed to close a confirmed live false-green. The exact pushed Accela detail scraper was
+  subsequently installed to normalize only future owner/parent NULL fills; no existing row,
+  timer, cadence or service unit changed and no restart occurred. The reviewed/pushed AI permit
+  cleaner was then installed to confine Claude's proposed owner/contractor normalized values to its
+  audit JSON and prevent writes to deterministic canonical owner/contractor fields; its allowed
+  classifications remain non-authoritative enrichment, and it was not executed.
 - Acclaim receipt/health branch `codex/acclaim-run-receipts-2026-08-30` through pushed commit
   `2f77630f60e42b64cbf8629bb0bd93bd8dd2bb44`; migration `20260831005904` was applied,
   the collector receipt runtime installed, and the exact transient-result retry installed with the
@@ -89,6 +94,29 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
   matches, 25 canary-clock matches and an empty mismatch set. A separate global stamp query found
   exactly 25 rows with the canary clock, all 25 expected and zero unexpected. No full backfill, wet
   manual mirror, timer change, rollback or unrelated production write occurred.
+- A post-canary audit found 27 newly admitted permits. Twelve had raw owner names and none of those
+  twelve had normalized owner names, so the live missing-normalization gap had risen from the
+  canary's 97,628 postimage to 97,640. Root cause was the live `scrape_accela_detail.py` path: when
+  it later filled a NULL owner/parent, it omitted the deterministic normalization used elsewhere.
+  After 45 tests and compile checks, the exact pushed scraper SHA-256
+  `ad56cc0e3435a9dcf6d45cfcca10ab9a147412420a62814e970c0fc85409b612` was atomically installed
+  at 23:55 ET with dependency SHA-256 prefix `6dce22` and mode `0664`. The byte-for-byte rollback
+  copy is
+  `/srv/grahamandgold/florida-signal/backups/scrape_accela_detail.pre_owner_normalization_future_20260831T035347Z.py`
+  (old SHA-256 prefix `800936`). The patch applies only when future detail collection fills a NULL
+  owner/parent; it did not touch any existing row, run a backfill, restart the idle service or alter
+  its timer/cadence. A read-only recount confirmed the gap remained 97,640 after installation.
+- The live preimage of
+  `/srv/grahamandgold/florida-signal/app/scripts/ai_clean_permits.py` had SHA-256
+  `999c6912f1edf5bfa5b6738af0447ab060de800116eb49dafcfd37bc4e0bffbc`, exactly matching git base
+  `85341f1`. After coverage by the 45-test focused suite and successful local and remote Python compile checks, the
+  reviewed/pushed branch file was atomically installed at about 23:58 ET; live and expected SHA-256
+  both equal `352a5ae37a85a08241d19b46b5c2d1becbdb5c1f4a6c04f02d4ee276892cf293`. Backup
+  `/srv/grahamandgold/florida-signal/backups/ai_clean_permits.pre_canonical_safety_20260831T035750Z.py`
+  retains the exact preimage SHA-256. The live file was verified at 26,699 bytes, mode `0664`,
+  owner/group `andy:andy`, with mtime 2026-08-30 23:58:18 ET. `florida-enrich.service` was
+  inactive/dead with exit 0 before and after installation, and its timer/cadence was untouched. No
+  manual AI execution, row mutation, backfill or restart occurred.
 - Production `tools/fs_health_report.py` previously lacked the pushed false-green parser and
   incorrectly reported GREEN. The reviewed health-only file was backed up to
   `/srv/grahamandgold/florida-signal/backups/fs_health_report.pre_false_green_20260831T0310Z.py`
@@ -177,13 +205,18 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
   audit-only for modeled owner/contractor fields, uses exact IDs rather than positional fallback,
   preserves deterministic values, and provides a dry-run-default repair bound by full-universe and
   selected-cohort hashes. Execute performs locked re-scan, compare-and-set writes and exact readback
-  atomically; its V2 receipt preserves exact preimages for a targeted rollback. Claude is not the
-  network permit collector; Accela collection uses Playwright/httpx and deterministic cleaning
-  remains the required ingestion path.
-- The approved canary used the protected backup and receipts above to update exactly 25 rows. The
-  missing-normalization count is now 97,628, not evidence that a full cleanup occurred. Targeted
-  rollback is available and unrun. Exact normal-mirror Supabase readback and the global clock check
-  are complete. Do not run a full backfill without a separate owner decision.
+  atomically; its V2 receipt preserves exact preimages for a targeted rollback. The deployed AI
+  cleaner now accepts only exact response IDs, writes each validated batch atomically and stores
+  Claude's proposed owner/contractor normalized values only in `ai_clean_json`; it cannot write
+  `owner_normalized` or `contractor_normalized`. Its allowed classifications remain
+  non-authoritative enrichment. Claude is not the network permit collector; Accela collection uses
+  Playwright/httpx and deterministic cleaning remains the required ingestion path.
+- The approved canary used the protected backup and receipts above to update exactly 25 rows. Its
+  immediate postimage gap was 97,628; subsequent intake and the newly discovered future-row writer
+  omission raised the live gap to 97,640. The writer omission is now patched for future
+  owner/parent NULL fills, but no existing row or backlog row was changed. Targeted canary rollback
+  is available and unrun. Exact normal-mirror Supabase readback and the global clock check are
+  complete. Do not run a full backfill without a separate owner decision.
 
 ## Acclaim collector health
 
@@ -220,7 +253,8 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
 - Stabilize the existing lanes first: observe one more successful ordinary scheduled Acclaim
   receipt run and resolve the zero-useful-work Accela backlog without hiding it as systemd
   success. The exact 25-row permit cohort is now closed with authoritative SQLite and normal-mirror
-  Supabase parity; do not expand that bounded success into a full backfill without a separate decision.
+  Supabase parity, and the future-row normalization omission is patched. The live gap is 97,640;
+  do not expand either bounded change into a full backfill without a separate decision.
   After those gates, repair property/
   parcel coverage and add FDEP/FAA receipts before admitting PDMR or building sewer/SFWMD/
   engineering/lobbyist collectors.
@@ -234,9 +268,10 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
   the two truthful pre-patch scheduled failures establishes release health. Keep the existing
   LaunchAgent plist and cadence unchanged.
 - The exact 25-row permit postimage is verified in Supabase through the normal dependency chain;
-  this gate is closed. Keep the corrected Accela health state YELLOW until useful-work receipts
-  improve, and do not alter the timer/dependency chain, run the remaining full backfill or roll back
-  unless a separate decision explicitly requires it.
+  this gate is closed. The future owner/parent NULL-fill path is patched, but the existing 97,640-row
+  gap was deliberately left unchanged. Keep the corrected Accela health state YELLOW until
+  useful-work receipts improve, and do not alter the timer/dependency chain, run the remaining full
+  backfill or roll back unless a separate decision explicitly requires it.
 - Rotate the shared Edge query secret that appeared in request logs; move scheduled calls to named
   secret/header authentication and Vault-backed configuration.
 - Revoke public execution of heavy/writing security-definer RPCs and reduce anonymous/authenticated
@@ -261,6 +296,13 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
   recorded above.
   The health-only deployment retained a byte-for-byte rollback copy; its read-only production
   verification changed the truthful report from GREEN to YELLOW and exposed 0/49 useful work.
+  The later future-row scraper fix passed 45 tests and compile checks, retained its own rollback
+  copy, and was installed while the service was idle; read-only verification confirmed it changed
+  no existing data and left the live normalization gap at 97,640.
+  The production AI-cleaner safety file was covered by the 45-test focused suite plus local and
+  remote Python compile checks and was atomically installed with exact expected hash and a byte-for-byte
+  backup. Its live size, mode, `andy:andy` ownership and mtime were verified. The enrichment service
+  remained inactive/dead with exit 0 and was not run.
 - Acclaim receipt work through `2f77630` passed the full 55-test Python suite, 14 resilience tests,
   29 focused tests and 96
   JavaScript safety checks; Bash syntax, Python compile, inline JavaScript parse and diff checks
