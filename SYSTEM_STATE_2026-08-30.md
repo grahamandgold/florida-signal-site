@@ -1,19 +1,68 @@
 # Florida Signal site + Data Wire checkpoint — 2026-08-30
 
-**Verified:** 2026-08-31 00:31 ET
+**Verified:** 2026-08-31 19:23:17 ET (checkpoint; later approval-gated actions remain pending)
 **Scope:** private Newsroom/Data Explorer, public Data Room behavior, local Finder app, and the
 cross-repository Acclaim, Accela/permit-normalization and PDMR evidence audits.
-**Release state:** the explicitly approved bounded Acclaim receipt deployment and exactly-25 permit
-normalization canary described below were applied. The public site/API was not deployed, no full
-permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
+**Release state:** the previously approved Acclaim and exactly-25 permit work remains preserved.
+In addition, the default-off Supabase source-receipt/parcel foundation is live and empty, and the
+two-file Accela useful-work recovery passed its first natural installed-code proof. No
+public site/API deployment, full permit or parcel backfill, identity mutation, PDMR production
+object/write, FDEP/FAA collector deployment, or timer/cron/LaunchAgent cadence change occurred.
+
+## 2026-08-31 evening checkpoint
+
+- Accela recovery is pushed at `d6465517b2e2ec393cba0b5c7e67f7a180acb68d`. At 18:22:49 EDT,
+  `/srv/grahamandgold/florida-signal/app/scripts/scrape_accela_detail.py` was installed at SHA-256
+  `fa18dfe3ba340f50035d2cd450ec07c743218ae61591fd0f6c0cd7c3fdb9db1d`, mode `0644`, and
+  `/srv/grahamandgold/florida-signal/tools/fs_accela.sh` at SHA-256
+  `44a08302c4fe781f54e665a5b8908ddfc47ce8e018923cd823967fd8647378a7`, mode `0755`. Exact
+  preimages `a2f793ff361848dbcf5f2ee1212704bc0edec274d88e719b36a572d2b62e261f` and
+  `650d199ff8a3a30681356fdfbc8160f9089af5d4d283cdc91b976652bf3ef874` are preserved in
+  `/srv/grahamandgold/florida-signal/backups/accela-useful-recovery-20260831T1822EDT/`. The lock and
+  30-minute timer are unchanged. The first natural installed-code run ran 18:30:04–18:40:38 EDT
+  and closed `SUCCESS_WITH_WORK`: 150 selected, 150 attempted, 15 `ok`, 135 `not_found`, zero
+  failed, elapsed 633 seconds, with locks free. This is exact proof that the installed path restored
+  useful natural work; it is not a claim of complete fresh-discovery coverage. The later 19:00 run
+  closed `150/150/13/135/2` with rc0, followed by successful normal sync at 19:09:37. Evidence
+  commit `fa6bc83eacf24e4496af2fa79b815b968d9314ea` is pushed.
+- Historical identity correction is pushed at `c6f106bb68b041881dc2a6b4c79937f5bdff49e0`.
+  Its read-only full-`quick_check` preview completed `SUCCESS` at 18:33:08 EDT with no writes.
+  Receipt `permit_identity_pre_safety_preview_20260831T222202Z.json` has SHA-256
+  `5f626189535cdcd6f818921d75039aec4dd16b498f2e17f03bab2f9ac211d3cc`; it audited 27 rows
+  in `10/10/7` clusters and proposed exactly three mutations. Candidate-manifest SHA-256
+  `57a9e31734a9009943ec256a913d5846c8c6ac3a9d7a2c4fcf469acadc8353fd` remains file-only,
+  unbound and non-executable. Execution requires its exact maximum-three approval; no full backfill.
+- Supabase migration version `20260831220548` is live as a private, RLS-forced, default-off
+  foundation for `external_source_run_receipts`, parcel import generations, generation ranges and
+  parcel staging. All four new tables are empty; durable FDEP/FAA receipts remain zero; and the
+  existing parcel mirror stayed exactly 532,470 rows. The official BCPA source reports 554,358
+  rows, so the current mirror is not complete.
+- Atomic FDEP/FAA collector/receipt code is pushed at
+  `09503e6b79b01a70dc4b8490f6c90fd2ae9cbe7e`. Its atomic-commit migration, private secret,
+  one-at-a-time deployments and bounded live canaries remain behind the exact production approval;
+  no collector was deployed and no receipt was inserted.
+- The PDMR stage remains exactly reconciled at 329 identities/current versions. Its sealed stage,
+  manifest and relocation envelope are installed under the private runtime at
+  `/srv/grahamandgold/florida-signal/app/data/pdmr/`, but the production schema preflight is
+  pending. No production PDMR object, admission row, mirror row, timer or queue write exists.
+- The sewer/utility + engineering intake shadow V5 implementation is pushed at `0febf30`. Its
+  file-only production-data canary ran 19:22:51–19:23:17 EDT and passed with 137,942 scanned, 523
+  admitted, zero rejected and 137,419 unknown; family counts were 166/75/193/89/0. The earlier V4
+  sidecar-change failure remains preserved. It remains code-only/not connected: no timer, network
+  write, persistence, detector, scoring, promotion or connected Desk label.
+- A Desk audit confirmed that recurring `8/28` text is mostly an event clock, not proof the
+  computer or collector stopped. It also found a preliminary-Clerk projection bug; its code patch
+  is pending and must be verified before the Desk freshness presentation is called complete.
 
 ## Revisions
 
 - Site branch `codex/project-state-panel-2026-08-23` through pushed UI head
   `757e827bd63b9b9b4c623e30e95cb09ff1f9e91b` and pushed local-app lifecycle head
   `0a72f53e3a717020eb7d30755c5a559bbb208458`, plus this documentation checkpoint.
-- Source/Accela branch `codex/accela-health-truth-2026-08-30` through
-  `476475614adf8d8850b691209c06f261146dc0d9`; the owner-normalization tool and its deterministic
+- Source/Accela branch `codex/accela-health-truth-2026-08-30` through pushed recovery head
+  `d6465517b2e2ec393cba0b5c7e67f7a180acb68d`; local evidence commit
+  `fa6bc83eacf24e4496af2fa79b815b968d9314ea` records the natural 15-row proof and is pushed. The
+  owner-normalization tool and its deterministic
   dependency were surgically installed for the approved bounded canary without replacing the
   dirty production checkout. The reviewed health-only report file from this branch was later
   installed to close a confirmed live false-green. The exact pushed Accela detail scraper was
@@ -30,8 +79,19 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
   the collector receipt runtime installed, and the exact transient-result retry installed with the
   existing plist/cadence unchanged.
 - PDMR reconciliation branch `codex/pdmr-reconciliation-admission-2026-08-30` through
-  `364917770f638726f653c72809e2908812040055` (not run or deployed; no staging database,
-  network fetch or production write occurred).
+  `2cecec1`. Its isolated stage is reconciled 329/329 and the sealed private artifacts are installed.
+  Safe schema/admission/mirror writer coordination is pushed; disabled systemd templates remain
+  unchanged pending a separate service-lock design approval. Production schema preflight/admission
+  remain pending; no production PDMR object or write occurred.
+- Historical identity canary branch `codex/identity-cohort-canary-2026-08-31` is pushed at
+  `c6f106bb68b041881dc2a6b4c79937f5bdff49e0`; the read-only 27-row preview passed with exactly
+  three proposed mutations and no writes, while execution remains exact-approval-gated.
+- FDEP/FAA and parcel foundation branch `codex/source-run-ledgers-2026-08-31` is pushed at
+  `09503e6b79b01a70dc4b8490f6c90fd2ae9cbe7e`. Foundation migration version `20260831220548`
+  is live/default-off/empty; the later atomic-commit migration and collector rollout are pending.
+- Utility intake shadow branch `codex/utility-intake-shadow-2026-08-31` is pushed at `0febf30`;
+  its V5 file-only canary passed exact `137942/523/0/137419` accounting, while the earlier V4
+  sidecar-change failure remains preserved. It remains code-only and not connected.
 - Canonical source-state branch `codex/state-reconciliation-2026-08-23`; `5afddac` is the
   pushed base before the August 30 reconciliation checkpoint. Read the branch's current `origin`
   head rather than hard-coding a later self-referential documentation hash.
@@ -192,24 +252,23 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
 - The 27 studied PDMR records are public. The research roster/adjudication is frozen against
   after-the-fact changes; record access is not locked. Historical first-public timing remains
   unresolved, which is the purpose of the prepared City metadata request.
-- Production Supabase currently has no PDMR table, function, cron, mirror or queue. The broader
-  research archive contains 329 unique PDMRs: 30 have current raw receipts, 299 lack current raw
-  receipts, and eight have malformed folios. Missing receipts and malformed folios are admission
-  blockers; folios must never be guessed.
-- The pushed reconciliation path is fail-closed and dry-run by default. It binds the exact 329-ID
-  source snapshot, copies only the 30 independently current receipts into a brand-new stage,
-  schedules bounded/resumable exact-ID re-observation for the other 299, and promotes a folio only
-  when current source evidence exposes one unique validated 12-character value. A final manifest
-  fails unless the stage has exact 329-ID parity, source-bound raw/version/hash receipts and a
-  fully passing ledger. The plan has not been executed: there is no stage, network pull, canonical
-  admission, Supabase mirror or other production write.
+- Production Supabase currently has no PDMR table, function, cron, mirror or queue. The isolated
+  reconciliation stage now contains all 329 unique PDMRs and all 329 current version events: 30
+  independently current receipts were copied and 299 official details were exactly re-observed,
+  with identity parity and zero issues. Malformed legacy folios were not guessed.
+- The pushed reconciliation/admission path remains fail-closed and default-off. Its sealed stage,
+  manifest and relocation envelope are installed in the private runtime, but the production schema
+  preflight is pending. No canonical admission, production PDMR table, Supabase mirror or other
+  production PDMR write has occurred.
 - The private PDMR table labels its unverified event clock `Portal date`, not `Filed`; the home
   summary says `newest portal date`. The displayed date has not been proven to be a filing date.
 - Data Explorer defaults to the bounded, read-only local PDMR evidence table. It supports paged
   fielded lookup by request ID, folio, address, owner and project.
-- Sewer/utility capacity, engineering intake, assemblage + new LLC, lobbyist registrations and
-  SFWMD remain research/planned lanes. They have no collector/evidence contract and are not shown
-  as connected.
+- Sewer/utility and engineering intake have pushed file-only shadow head `0febf30`. Its V5
+  production-data canary passed exact `137942/523/0/137419` accounting; the earlier V4
+  sidecar-change failure remains preserved. It remains unscheduled, unpersisted, unscored and not
+  connected. Assemblage + new LLC and lobbyist registrations remain planned;
+  SFWMD remains shadow-observed and not connected.
 - Availability, freshness and automation are separate. A readable table may be `connected` while
   its collector health is `unknown`; manual and snapshot sources never borrow a green automated
   receipt. Preliminary and verified Clerk cards use distinct source receipts.
@@ -263,6 +322,12 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
   updates, so it did not exercise that future-write path. Exact live counts remain 99,240 raw-owner
   rows, 1,609 normalized rows, nine normalized-without-raw rows and a 97,640 raw-owner gap. Do not
   run a full backfill without a separate owner decision.
+- Recovery head `d646551` was installed as exactly the scraper and wrapper files at 18:22:49 EDT,
+  with the live hashes, modes and rollback directory recorded in the evening checkpoint above.
+  The natural 18:30:04–18:40:38 run is the first installed-code proof and closed with 15 `ok`, 135
+  `not_found`, zero failed and exact 150/150 selection/attempt accounting in 633 seconds. Locks were
+  free afterward. The zero-useful-work condition is resolved for this natural run; independently
+  re-read the declared health contract before assigning an overall color or broader freshness claim.
 
 ## Acclaim collector health
 
@@ -295,17 +360,18 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
 
 ## Evidence gaps and current priority
 
-- BCPA property coverage is sparse/stale and countywide parcel coverage is partial/stale. FDEP and
-  FAA are deterministic sources but still lack durable versioned run ledgers and raw-evidence
-  receipts. Verified Clerk also lacks an end-to-end atomic parent/child mirror receipt.
-- Stabilize the existing lanes first: the Acclaim two-of-two observation gate is closed; now resolve
-  the zero-useful-work Accela backlog without hiding it as systemd success and bound the historical
-  deterministic identity repair candidates. The exact 25-row permit cohort is closed with
-  authoritative SQLite and normal-mirror Supabase parity. The live raw-owner gap is 97,640; do not
-  expand any bounded change into a repair or full backfill without a separate decision. After those
-  gates, repair property/
-  parcel coverage and add FDEP/FAA receipts before admitting PDMR or building sewer/SFWMD/
-  engineering/lobbyist collectors.
+- Supabase contains exactly 532,470 current parcel rows versus 554,358 reported by the official
+  BCPA source. Foundation migration `20260831220548` is live but intentionally empty/default-off;
+  it did not change the parcel set. FDEP and FAA still have zero durable run receipts. Atomic
+  collector code is pushed at `09503e6`, while its migration, secret, deployment and canaries remain
+  pending. Verified Clerk also lacks an end-to-end atomic parent/child mirror receipt.
+- Stabilize the existing lanes first: the Acclaim two-of-two observation gate is closed; the Accela
+  recovery passed its first natural 15/150 useful-work proof; and the corrected
+  historical-identity tool at `c6f106b` passed its read-only preview with zero mutations. The exact
+  25-row permit cohort is closed with authoritative SQLite and normal-mirror Supabase parity. Do not
+  expand the separately gated maximum-three identity canary into a repair or full backfill. Next,
+  complete atomic FDEP/FAA receipts and parcel repair, then PDMR schema/admission. Utility intake at
+  `0febf30` remains a file-only shadow, not a connected collector.
 - Hold Grok/agent wiring into the Newsroom until the deterministic source contracts and receipts
   are solid. Grok remains an advisory reviewer, not a collector or source of record.
 
@@ -321,17 +387,21 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
   YELLOW until useful-work receipts improve; systemd/wrapper success alone is insufficient. Do not
   alter the timer/dependency chain, run the remaining full backfill or roll back unless a separate
   decision explicitly requires it.
+- Preserve the exact Accela preimages/live hashes and the natural 18:30–18:40 terminal receipt. It
+  proves useful work returned for one natural run; do not inflate 15/150 into complete discovery,
+  complete coverage or an unverified overall health color.
 - Rotate the shared Edge query secret that appeared in request logs; move scheduled calls to named
   secret/header authentication and Vault-backed configuration.
 - Revoke public execution of heavy/writing security-definer RPCs and reduce anonymous/authenticated
   source-table grants to intentional read-only access.
-- Now that the scheduled Acclaim observation gate has passed, use its durable receipts so successful
-  zero-row polls, event coverage and collector progress are independently visible without scanning
-  source tables; add equivalent versioned receipts for FDEP/FAA and close the BCPA/parcel evidence
-  gaps.
-- Reconcile and admit PDMR only after its missing-receipt and malformed-folio gates. Automate its
-  private mirror only with explicit source, RLS, cadence and evidence contracts; use the same
-  standard before building sewer/SFWMD/engineering/lobbyist collectors.
+- Foundation migration `20260831220548` is already live/default-off/empty. Do not confuse that DDL
+  with a working collector: apply the separate atomic-commit migration, install its private secret,
+  deploy FDEP then FAA one at a time and run bounded canaries only after the exact approval. Receipt
+  count remains zero. Parcel promotion/backfill remains a separate gate.
+- The PDMR stage's missing-receipt and malformed-folio gates are resolved in the isolated 329/329
+  stage. Next run the pending production schema preflight; schema creation, exact admission,
+  private mirror and automation remain distinct approvals. Apply the same evidence standard before
+  connecting the pushed utility/SFWMD shadows or any lobbyist/assemblage collector.
 
 ## Verification receipt
 
@@ -364,9 +434,14 @@ permit backfill ran, and no timer, cron or LaunchAgent cadence changed.
 - PDMR reconciliation passed 99 relevant tests, including plan snapshot integrity, dry-run and
   approval gates, bounded resumable exact-ID fetch behavior, malformed/ambiguous-folio blocking,
   receipt validation and whole-stage admission parity.
+- Utility intake shadow head `0febf30` passed 28/28 tests and its file-only canary passed exact
+  `137942/523/0/137419` accounting; it remains unscheduled, unpersisted and not connected.
+- Historical identity preview head `c6f106b` completed read-only with receipt SHA
+  `5f626189535cdcd6f818921d75039aec4dd16b498f2e17f03bab2f9ac211d3cc`, 27 audited rows,
+  exactly three proposed mutations and zero writes.
 - Acclaim migration/manual parity, two truthful pre-patch scheduled failure receipts and both
   successful natural post-retry scheduled receipts with exact local/Supabase parity, the complete
   local-to-Supabase permit canary and the corrected YELLOW Accela health report are confirmed.
-  The Acclaim release gate is closed; resolution of the Accela zero-useful-work and deterministic
-  identity-audit backlogs remains pending. This documentation checkpoint itself remains a separate,
-  not-yet-committed worktree change.
+  The Acclaim release gate is closed. Accela recovery passed its first natural terminal proof at
+  15/150; identity preview is closed read-only while exact-three execution remains approval-gated.
+  This documentation checkpoint itself remains a separate, not-yet-committed worktree change.

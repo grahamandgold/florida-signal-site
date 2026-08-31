@@ -37,6 +37,13 @@ class DataWireSourceMaturityTests(unittest.TestCase):
         self.assertIn("finally {", self.html)
         self.assertIn("libraryChecking = false", self.html)
 
+    def test_row_only_feeds_and_sync_errors_never_receive_false_green_health(self):
+        self.assertEqual(self.html.count("rowOnlyNoTerminal: true"), 2)
+        self.assertIn('label = "ROWS CONNECTED · HEALTH RECEIPT NOT LIVE"', self.html)
+        self.assertIn('errorColumn: "errors"', self.html)
+        self.assertIn("LATEST SYNC COMPLETED WITH ", self.html)
+        self.assertIn("TERMINAL SYNC RECEIPT INVALID", self.html)
+
 
 if __name__ == "__main__":
     unittest.main()

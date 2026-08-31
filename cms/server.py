@@ -11,12 +11,13 @@ import re
 import sqlite3
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, quote, urlparse
+from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parent
@@ -94,7 +95,13 @@ def bounded_int(value: Any, default: int, low: int, high: int) -> int:
     return max(low, min(high, parsed))
 
 
-def status_from_clock(value: Any, current_hours: int, delayed_hours: int) -> str:
+def status_from_clock(
+    value: Any,
+    current_hours: float,
+    delayed_hours: float,
+    *,
+    now: datetime | None = None,
+) -> str:
     """Classify one observation clock without treating an event date as a pull clock."""
     if not value:
         return "unavailable"
@@ -102,7 +109,7 @@ def status_from_clock(value: Any, current_hours: int, delayed_hours: int) -> str
         parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=timezone.utc)
-        current = datetime.fromisoformat(now_iso().replace("Z", "+00:00"))
+        current = now or datetime.fromisoformat(now_iso().replace("Z", "+00:00"))
         if current.tzinfo is None:
             current = current.replace(tzinfo=timezone.utc)
         age_hours = (
@@ -115,6 +122,127 @@ def status_from_clock(value: Any, current_hours: int, delayed_hours: int) -> str
     if age_hours <= delayed_hours:
         return "delayed"
     return "stale"
+
+
+def business_calendar_age(
+    value: Any,
+    *,
+    now: datetime | None = None,
+    holidays: set[date] | None = None,
+    release_hour: int = 12,
+) -> int | None:
+    """Count completed Florida weekdays after an event; holidays are caller-supplied."""
+    if not value:
+        return None
+    try:
+        event_day = datetime.strptime(str(value).strip()[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+    observed = now or datetime.fromisoformat(now_iso().replace("Z", "+00:00"))
+    if observed.tzinfo is None:
+        observed = observed.replace(tzinfo=timezone.utc)
+    local = observed.astimezone(ZoneInfo("America/New_York"))
+    completed_through = local.date()
+    if local.hour < release_hour:
+        completed_through -= timedelta(days=1)
+    if completed_through <= event_day:
+        return 0
+    closed = holidays or set()
+    age = 0
+    cursor = event_day + timedelta(days=1)
+    while cursor <= completed_through:
+        if cursor.weekday() < 5 and cursor not in closed:
+            age += 1
+        cursor += timedelta(days=1)
+    return age
+
+
+def latest_source_event(*values: Any) -> Any:
+    """Prefer the latest comparable ISO source-event date without inventing one."""
+    usable = [value for value in values if re.match(r"^\d{4}-\d{2}-\d{2}", str(value or ""))]
+    return max(usable, key=lambda value: str(value)[:10]) if usable else next(
+        (value for value in values if value), None
+    )
+
+
+def preliminary_clerk_status(
+    event_time: Any,
+    run: dict[str, Any],
+    *,
+    now: datetime | None = None,
+) -> str:
+    """Combine source-event coverage with a terminal collector receipt."""
+    run_status = str(run.get("status") or "").lower()
+    run_time = run.get("completed_at") or run.get("observed_at")
+    if not run_time:
+        return "unavailable"
+    if run_status == "failed":
+        return "error"
+    if run_status not in {"ok", "empty", "source_wait"}:
+        return "unavailable"
+    run_freshness = status_from_clock(run_time, 2.5, 6, now=now)
+    event_business_days = business_calendar_age(event_time, now=now)
+    if run_freshness == "stale" or (event_business_days is not None and event_business_days > 2):
+        return "stale"
+    if run_freshness == "unavailable" or event_business_days is None:
+        return "unavailable"
+    if run_freshness == "delayed" or event_business_days > 0:
+        return "delayed"
+    return "current"
+
+
+def overlay_preliminary_clock(
+    existing: dict[str, Any],
+    run: dict[str, Any],
+    fetch: dict[str, Any],
+) -> dict[str, Any]:
+    """Overlay private clocks while failing closed when no terminal receipt exists."""
+    preliminary = dict(existing)
+    preliminary.update({
+        "id": "clerk-preliminary",
+        "label": preliminary.get("label") or "Broward preliminary recordings",
+        "fetched_at": fetch.get("fetched_at") or preliminary.get("fetched_at"),
+    })
+    if run:
+        preliminary["event_through"] = latest_source_event(
+            preliminary.get("event_through"), run.get("event_through")
+        )
+        preliminary["health_receipt_at"] = run.get("completed_at") or run.get("observed_at")
+        preliminary["health_receipt_status"] = run.get("status")
+        preliminary["status_basis"] = "event_and_terminal_collector_run"
+        preliminary["status"] = preliminary_clerk_status(
+            preliminary.get("event_through"), run,
+        )
+        preliminary["system_time"] = preliminary["health_receipt_at"]
+        reason = str(run.get("reason") or "").strip()
+        if reason:
+            preliminary["detail"] = (
+                str(preliminary.get("detail") or "Preliminary public-search collector.")
+                + " Latest terminal receipt: " + reason + "."
+            )
+    else:
+        preliminary.update({
+            "status": "unavailable",
+            "health_receipt_at": None,
+            "health_receipt_status": None,
+            "status_basis": "row_fetch_only_no_terminal_receipt",
+            "system_time": preliminary.get("fetched_at"),
+        })
+    return preliminary
+
+
+def require_terminal_health(receipt: dict[str, Any]) -> dict[str, Any]:
+    """Keep readable rows connected without promoting a row clock to run health."""
+    normalized = dict(receipt)
+    if not normalized.get("health_receipt_at"):
+        normalized.update({
+            "status": "unavailable",
+            "health_receipt_at": None,
+            "health_receipt_status": None,
+            "status_basis": "row_fetch_only_no_terminal_receipt",
+            "system_time": normalized.get("fetched_at"),
+        })
+    return normalized
 
 
 def review_queue_path(params: dict[str, list[str]]) -> tuple[str, int, int, str]:
@@ -255,6 +383,36 @@ def project_state_payload() -> tuple[int, dict[str, Any]]:
         str(row.get("id")): row for row in health.get("sources", [])
         if isinstance(row, dict) and row.get("id")
     } if isinstance(health, dict) else {}
+    for source_id in ("fdep", "faa"):
+        if source_id in health_rows:
+            health_rows[source_id] = require_terminal_health(health_rows[source_id])
+
+    # The public API may lag a local Desk build. Overlay only independently read
+    # source clocks for the preliminary Clerk lane; this never invents a green
+    # state from a timer or from the newest record's first-seen timestamp.
+    preliminary_run_code, preliminary_run_rows = supabase_request(
+        "broward_clerk_preliminary_run?select=status,completed_at,observed_at,"
+        "attempted_through,event_through,rows_observed,rows_new,reason"
+        "&order=completed_at.desc.nullslast&limit=1"
+    )
+    preliminary_fetch_code, preliminary_fetch_rows = supabase_request(
+        "broward_clerk_preliminary?select=fetched_at&fetched_at=not.is.null"
+        "&order=fetched_at.desc.nullslast&limit=1"
+    )
+    preliminary_run = (
+        preliminary_run_rows[0]
+        if preliminary_run_code < 400 and isinstance(preliminary_run_rows, list)
+        and preliminary_run_rows else {}
+    )
+    preliminary_fetch = (
+        preliminary_fetch_rows[0]
+        if preliminary_fetch_code < 400 and isinstance(preliminary_fetch_rows, list)
+        and preliminary_fetch_rows else {}
+    )
+    if preliminary_run or preliminary_fetch:
+        health_rows["clerk-preliminary"] = overlay_preliminary_clock(
+            health_rows.get("clerk-preliminary", {}), preliminary_run, preliminary_fetch
+        )
     operational_health = []
     for component in state.get("production_pipeline_registry", []):
         if not isinstance(component, dict):
@@ -269,6 +427,10 @@ def project_state_payload() -> tuple[int, dict[str, Any]]:
             "deployment_status": component.get("deployment_status"),
             "status": str(receipt.get("status") or "UNKNOWN").upper(),
             "event_through": receipt.get("event_through"),
+            "fetched_at": receipt.get("fetched_at"),
+            "health_receipt_at": receipt.get("health_receipt_at"),
+            "health_receipt_status": receipt.get("health_receipt_status"),
+            "status_basis": receipt.get("status_basis") or "receipt_contract_not_exposed",
             "system_time": receipt.get("system_time"),
             "detail": receipt.get("detail") or (
                 "Live health source unavailable; no status inferred."
@@ -287,11 +449,15 @@ def project_state_payload() -> tuple[int, dict[str, Any]]:
         "label": row.get("label"),
         "status": str(row.get("status") or "UNKNOWN").upper(),
         "event_through": row.get("event_through"),
+        "fetched_at": row.get("fetched_at"),
+        "health_receipt_at": row.get("health_receipt_at"),
+        "health_receipt_status": row.get("health_receipt_status"),
+        "status_basis": row.get("status_basis") or "receipt_contract_not_exposed",
         "system_time": row.get("system_time"),
         "detail": row.get("detail") or "Public source receipt supplied no detail.",
-    } for row in health.get("sources", [])
+    } for row in health_rows.values()
         if isinstance(row, dict) and row.get("id")
-    ] if isinstance(health, dict) else []
+    ]
 
     # The local PDMR evidence index has its own independently observed clock. It is
     # intentionally not promoted to production pipeline health, but the Data Explorer
@@ -304,6 +470,10 @@ def project_state_payload() -> tuple[int, dict[str, Any]]:
             "label": "Preliminary Development Meeting Request (PDMR) evidence index",
             "status": status_from_clock(pdmr.get("last_collected"), 72, 168).upper(),
             "event_through": pdmr.get("newest_event"),
+            "fetched_at": pdmr.get("last_collected"),
+            "health_receipt_at": None,
+            "health_receipt_status": None,
+            "status_basis": "manual_snapshot_observation",
             "system_time": pdmr.get("last_collected"),
             "detail": (
                 f"{int(pdmr.get('record_count') or 0)} public source records in the "
@@ -520,6 +690,9 @@ def early_intel_payload() -> dict[str, Any]:
         str(source.get("id")): source for source in health.get("sources", [])
         if isinstance(source, dict) and source.get("id")
     }
+    for source_id in ("fdep", "faa"):
+        if source_id in sources:
+            sources[source_id] = require_terminal_health(sources[source_id])
     preliminary = sources.get("clerk-preliminary", {})
     official_clerk = sources.get("broward", {})
     sunbiz = sources.get("sunbiz", {})
@@ -532,8 +705,37 @@ def early_intel_payload() -> dict[str, Any]:
         sunbiz = {
             "status": status_from_clock(latest_sunbiz.get("fetched_at"), 72, 336),
             "system_time": latest_sunbiz.get("fetched_at"),
-            "event_through": latest_sunbiz.get("date_filed"), "private": True,
+            "event_through": latest_sunbiz.get("date_filed"),
+            "fetched_at": latest_sunbiz.get("fetched_at"),
+            "health_receipt_at": None,
+            "health_receipt_status": None,
+            "status_basis": "private_row_fetch_only",
+            "private": True,
         }
+
+    preliminary_run_code, preliminary_run_rows = supabase_request(
+        "broward_clerk_preliminary_run?select=status,completed_at,observed_at,"
+        "attempted_through,event_through,rows_observed,rows_new,reason"
+        "&order=completed_at.desc.nullslast&limit=1"
+    )
+    preliminary_fetch_code, preliminary_fetch_rows = supabase_request(
+        "broward_clerk_preliminary?select=fetched_at&fetched_at=not.is.null"
+        "&order=fetched_at.desc.nullslast&limit=1"
+    )
+    preliminary_run = (
+        preliminary_run_rows[0]
+        if preliminary_run_code < 400 and isinstance(preliminary_run_rows, list)
+        and preliminary_run_rows else {}
+    )
+    preliminary_fetch = (
+        preliminary_fetch_rows[0]
+        if preliminary_fetch_code < 400 and isinstance(preliminary_fetch_rows, list)
+        and preliminary_fetch_rows else {}
+    )
+    if preliminary_run or preliminary_fetch:
+        preliminary = overlay_preliminary_clock(
+            preliminary, preliminary_run, preliminary_fetch
+        )
     fdep = sources.get("fdep", {})
     faa = sources.get("faa", {})
     permits = sources.get("permits", {})
@@ -542,11 +744,19 @@ def early_intel_payload() -> dict[str, Any]:
     pdmr_receipt = ({
         "status": status_from_clock(pdmr.get("last_collected"), 72, 168),
         "event_through": pdmr.get("newest_event"),
+        "fetched_at": pdmr.get("last_collected"),
+        "health_receipt_at": None,
+        "health_receipt_status": None,
+        "status_basis": "manual_snapshot_observation",
         "system_time": pdmr.get("last_collected"),
     } if pdmr and int(pdmr.get("record_count") or 0) > 0 else ({"status": "unverified"} if pdmr else {}))
     meeting_receipt = ({
         "status": status_from_clock(meetings.get("updated_at"), 24, 72),
         "event_through": next_meeting.get("date"),
+        "fetched_at": meetings.get("updated_at"),
+        "health_receipt_at": None,
+        "health_receipt_status": None,
+        "status_basis": "source_check_clock",
         "system_time": meetings.get("updated_at"),
     } if isinstance(meetings, dict) and meetings.get("updated_at") else {})
 
@@ -564,8 +774,34 @@ def early_intel_payload() -> dict[str, Any]:
         return "current"
 
     def connection_state(*receipts: dict[str, Any]) -> str:
-        statuses = [receipt_status(receipt) for receipt in receipts if receipt]
-        return "connected" if any(value not in {"error", "unavailable", "suppressed"} for value in statuses) else "unavailable"
+        connected = any(
+            receipt and (
+                receipt.get("event_through")
+                or receipt.get("fetched_at")
+                or receipt.get("health_receipt_at")
+                or receipt.get("system_time")
+                or receipt_status(receipt) not in {"error", "unavailable", "suppressed"}
+            )
+            for receipt in receipts
+        )
+        return "connected" if connected else "unavailable"
+
+    def source_clock(source_id: str, label: str, receipt: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "id": source_id,
+            "label": label,
+            "status": receipt_status(receipt),
+            "event_through": receipt.get("event_through"),
+            "fetched_at": receipt.get("fetched_at"),
+            "health_receipt_at": receipt.get("health_receipt_at"),
+            "health_receipt_status": receipt.get("health_receipt_status"),
+            "status_basis": receipt.get("status_basis") or "legacy_clock_not_disambiguated",
+            "observed_at": (
+                receipt.get("system_time")
+                if not receipt.get("fetched_at") and not receipt.get("health_receipt_at")
+                else None
+            ),
+        }
 
     lanes = [
         {
@@ -575,6 +811,10 @@ def early_intel_payload() -> dict[str, Any]:
             "automation": "mixed" if pdmr_receipt and meeting_receipt else "manual" if pdmr_receipt else "automated" if meeting_receipt else "none",
             "event_through": pdmr.get("newest_event") or next_meeting.get("date"),
             "system_time": pdmr.get("last_collected") or meetings.get("updated_at"),
+            "source_clocks": [
+                source_clock("pdmr-local", "PDMR evidence index", pdmr_receipt),
+                source_clock("meetings", "Meetings + agendas", meeting_receipt),
+            ],
             "headline": ((f"PDMR reaches {pdmr.get('newest_event')} · {len(agendas)} posted agenda(s)"
                           if pdmr else f"{len(agendas)} posted agenda(s) among {len(government)} upcoming government meetings")
                          if government or pdmr else "Planning-intent sources unavailable"),
@@ -586,6 +826,7 @@ def early_intel_payload() -> dict[str, Any]:
             "status": receipt_status(sunbiz),
             "connection": connection_state(sunbiz), "automation": "automated",
             "event_through": sunbiz.get("event_through"), "system_time": sunbiz.get("system_time"),
+            "source_clocks": [source_clock("sunbiz", "Sunbiz exact-match source", sunbiz)],
             "headline": (("Sunbiz exact-match resolver has private rows · " + receipt_status(sunbiz)) if sunbiz.get("private")
                          else "Sunbiz exact-match lane is current" if sunbiz.get("status") == "current"
                          else "Sunbiz has no usable public event clock"),
@@ -598,6 +839,10 @@ def early_intel_payload() -> dict[str, Any]:
             "connection": connection_state(official_clerk, preliminary), "automation": "automated",
             "event_through": preliminary.get("event_through") or official_clerk.get("event_through"),
             "system_time": preliminary.get("system_time"),
+            "source_clocks": [
+                source_clock("clerk-preliminary", "Preliminary Clerk", preliminary),
+                source_clock("broward", "Verified Clerk", official_clerk),
+            ],
             "headline": ("Preliminary Clerk reaches " + str(preliminary.get("event_through"))
                          if preliminary else "Verified Clerk reaches " + str(official_clerk.get("event_through") or "unknown")),
             "note": "Same-day preliminary records are clues only. Verified Clerk, party, legal and parcel records are the evidence lane.",
@@ -609,6 +854,10 @@ def early_intel_payload() -> dict[str, Any]:
             "connection": connection_state(fdep, faa), "automation": "automated",
             "event_through": max(str(fdep.get("event_through") or ""), str(faa.get("event_through") or "")) or None,
             "system_time": max(str(fdep.get("system_time") or ""), str(faa.get("system_time") or "")) or None,
+            "source_clocks": [
+                source_clock("fdep", "FDEP", fdep),
+                source_clock("faa", "FAA", faa),
+            ],
             "headline": f"FDEP through {fdep.get('event_through') or 'unknown'} · FAA through {faa.get('event_through') or 'unknown'}",
             "note": "Wetland, stormwater, environmental and obstruction/crane filings can surface work before a municipal building permit.",
             "href": "/data.html",
@@ -618,6 +867,7 @@ def early_intel_payload() -> dict[str, Any]:
             "status": receipt_status(permits),
             "connection": connection_state(permits), "automation": "automated",
             "event_through": permits.get("event_through"), "system_time": permits.get("system_time"),
+            "source_clocks": [source_clock("permits", "Permit applications", permits)],
             "headline": "Permit applications through " + str(permits.get("event_through") or "unknown"),
             "note": "Later-stage confirmation and workflow detail—not the definition of a Signal and not the only candidate source.",
             "href": "/data.html?search=permit:",

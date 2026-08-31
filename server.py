@@ -19,7 +19,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, time as clock_time, timedelta, timezone
+from datetime import date, datetime, time as clock_time, timedelta, timezone
 from html import unescape
 from html.parser import HTMLParser
 from http import HTTPStatus
@@ -434,16 +434,58 @@ def parse_source_time(value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
-def health_status(value: Any, current_hours: float, delayed_hours: float) -> str:
+def health_status(
+    value: Any,
+    current_hours: float,
+    delayed_hours: float,
+    *,
+    now: datetime | None = None,
+) -> str:
     parsed = parse_source_time(value)
     if not parsed:
         return "unavailable"
-    age = max(0.0, (datetime.now(timezone.utc) - parsed).total_seconds() / 3600)
+    observed = now or datetime.now(timezone.utc)
+    if observed.tzinfo is None:
+        observed = observed.replace(tzinfo=timezone.utc)
+    age = max(0.0, (observed.astimezone(timezone.utc) - parsed).total_seconds() / 3600)
     if age <= current_hours:
         return "current"
     if age <= delayed_hours:
         return "delayed"
     return "stale"
+
+
+def business_calendar_age(
+    value: Any,
+    *,
+    now: datetime | None = None,
+    holidays: set[date] | None = None,
+    release_hour: int = 12,
+) -> int | None:
+    """Count completed Florida weekdays after an event; holidays are caller-supplied."""
+    if not value:
+        return None
+    try:
+        event_day = datetime.strptime(str(value).strip()[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+    observed = now or datetime.now(timezone.utc)
+    if observed.tzinfo is None:
+        observed = observed.replace(tzinfo=timezone.utc)
+    local = observed.astimezone(ZoneInfo("America/New_York"))
+    completed_through = local.date()
+    if local.hour < release_hour:
+        completed_through -= timedelta(days=1)
+    if completed_through <= event_day:
+        return 0
+    closed = holidays or set()
+    age = 0
+    cursor = event_day + timedelta(days=1)
+    while cursor <= completed_through:
+        if cursor.weekday() < 5 and cursor not in closed:
+            age += 1
+        cursor += timedelta(days=1)
+    return age
 
 
 def verified_clerk_status(event_time: Any, system_time: Any) -> str:
@@ -455,6 +497,66 @@ def verified_clerk_status(event_time: Any, system_time: Any) -> str:
     if "stale" in {system_status, event_status}:
         return "stale"
     if "delayed" in {system_status, event_status}:
+        return "delayed"
+    return "current"
+
+
+def source_clock_row(
+    *,
+    source_id: str,
+    label: str,
+    status: str,
+    event_through: Any = None,
+    fetched_at: Any = None,
+    health_receipt_at: Any = None,
+    health_receipt_status: Any = None,
+    status_basis: str,
+    cadence: str,
+    detail: str,
+    **extra: Any,
+) -> dict[str, Any]:
+    """Keep source, observation and terminal-run clocks visibly distinct."""
+    return {
+        "id": source_id,
+        "label": label,
+        "status": status,
+        "event_through": event_through,
+        "fetched_at": fetched_at,
+        "health_receipt_at": health_receipt_at,
+        "health_receipt_status": health_receipt_status,
+        "status_basis": status_basis,
+        # Compatibility for older Desk builds. Prefer a terminal receipt when one
+        # exists; otherwise expose the row/snapshot observation clock.
+        "system_time": health_receipt_at or fetched_at,
+        "cadence": cadence,
+        "detail": detail,
+        **extra,
+    }
+
+
+def preliminary_clerk_status(
+    event_time: Any,
+    run: dict[str, Any],
+    *,
+    now: datetime | None = None,
+) -> str:
+    run_status = str(run.get("status") or "").lower()
+    run_time = run.get("completed_at") or run.get("observed_at")
+    if not run_time:
+        return "unavailable"
+    if run_status == "failed":
+        return "error"
+    if run_status not in {"ok", "empty", "source_wait"}:
+        return "unavailable"
+    run_freshness = health_status(run_time, 2.5, 6, now=now)
+    if run_freshness in {"stale", "unavailable"}:
+        return run_freshness
+    event_business_days = business_calendar_age(event_time, now=now)
+    if event_business_days is None:
+        return "unavailable"
+    if event_business_days > 2:
+        return "stale"
+    if run_freshness == "delayed" or event_business_days > 0:
         return "delayed"
     return "current"
 
@@ -473,6 +575,8 @@ def data_health_payload() -> dict[str, Any]:
         verified_clerk_run: dict[str, Any] = {}
         verified_clerk_record: dict[str, Any] = {}
         preliminary_clerk_record: dict[str, Any] = {}
+        preliminary_clerk_fetch: dict[str, Any] = {}
+        preliminary_clerk_run: dict[str, Any] = {}
         fdep_event: dict[str, Any] = {}
         fdep_fetch: dict[str, Any] = {}
         faa_event: dict[str, Any] = {}
@@ -518,6 +622,17 @@ def data_health_payload() -> dict[str, Any]:
                 "verification_status,source&order=record_date.desc,fetched_at.desc&limit=1"
             )
             preliminary_clerk_record = rows[0] if rows else {}
+            rows = supabase_public_rows(
+                "broward_clerk_preliminary?select=fetched_at&fetched_at=not.is.null"
+                "&order=fetched_at.desc&limit=1"
+            )
+            preliminary_clerk_fetch = rows[0] if rows else {}
+            rows = supabase_public_rows(
+                "broward_clerk_preliminary_run?select=status,completed_at,observed_at,"
+                "attempted_through,event_through,rows_observed,rows_new,reason"
+                "&order=completed_at.desc&limit=1"
+            )
+            preliminary_clerk_run = rows[0] if rows else {}
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
             errors.append("clerk-preliminary:" + type(error).__name__)
         try:
@@ -563,40 +678,87 @@ def data_health_payload() -> dict[str, Any]:
             if verified_doc_count is not None
             else "Authoritative SFTP documents; recording date is separate from collection time"
         )
-        preliminary_event_time = preliminary_clerk_record.get("record_date")
-        preliminary_system_time = (
-            preliminary_clerk_record.get("preliminary_first_seen_at")
-            or preliminary_clerk_record.get("fetched_at")
+        preliminary_event_time = max(
+            filter(
+                None,
+                [
+                    preliminary_clerk_run.get("event_through"),
+                    preliminary_clerk_record.get("record_date"),
+                ],
+            ),
+            default=None,
+        )
+        preliminary_fetched_at = preliminary_clerk_fetch.get("fetched_at")
+        preliminary_receipt_at = (
+            preliminary_clerk_run.get("completed_at")
+            or preliminary_clerk_run.get("observed_at")
+        )
+        preliminary_status_basis = (
+            "event_and_terminal_collector_run"
+            if preliminary_receipt_at
+            else "row_fetch_only_no_terminal_receipt"
+        )
+        preliminary_detail = (
+            "Same-day public-search text; source-event delay and collector-run health are "
+            "independent; reconciled against the authoritative SFTP feed and never presented "
+            "as verified early"
+            if preliminary_receipt_at
+            else "Preliminary rows are readable, but no terminal collector receipt answered; "
+            "row fetch time is not collector health"
         )
         transfer_snapshot_status = "unavailable"
         if transfer_freshness:
             transfer_snapshot_status = "current" if transfer_freshness.get("snapshot_is_current") else "stale"
+        transfer_receipt = next(
+            (row for row in editorial_health if row.get("component") == "property-transfer-snapshot"),
+            {},
+        )
+        try:
+            sync_errors = int(sync.get("errors", 0)) if sync else 0
+        except (TypeError, ValueError):
+            sync_errors = 1
+        sync_status = health_status(sync.get("completed_at"), 1.25, 3)
+        if sync and sync_errors:
+            sync_status = "error"
         source_rows = [
-            {"id": "supabase-sync", "label": "Public mirror", "status": health_status(sync.get("completed_at"), 1.25, 3), "system_time": sync.get("completed_at"), "event_through": None, "cadence": "every 30 minutes", "detail": f"{sync.get('rows_synced', 0)} rows in latest run · {sync.get('errors', 0)} errors" if sync else "No sync run visible"},
-            {"id": "permits", "label": "Permit applications", "status": health_status(latest_seen.get("last_seen_at"), 30, 54), "system_time": latest_seen.get("last_seen_at"), "event_through": latest_application.get("applied_date"), "cadence": "source intake nightly; mirror every 30 minutes", "detail": "Analysis uses applied_date; last_seen_at is freshness metadata"},
-            {"id": "aggregate-snapshot", "label": "Aggregate dashboard", "status": health_status(cache_row.get("updated_at"), 26, 54), "system_time": cache_row.get("updated_at"), "event_through": stats.get("permits_fresh"), "cadence": "refresh after successful aggregate build", "detail": "Counts retain their visible update time when this snapshot is delayed"},
-            {"id": "broward", "label": "Broward verified instruments", "status": verified_clerk_status(verified_event_time, verified_system_time), "verification": "verified", "system_time": verified_system_time, "event_through": verified_event_time, "cadence": "SFTP check daily at 9:30 AM plus weekday catch-up", "detail": verified_detail},
-            {"id": "clerk-preliminary", "label": "Broward preliminary recordings", "status": health_status(preliminary_event_time, 48, 96), "verification": "preliminary", "system_time": preliminary_system_time, "event_through": preliminary_event_time, "cadence": "AcclaimWeb at 12:30 AM, noon, 7 PM and 10:30 PM", "detail": "Same-day public-search text; reconciled against the authoritative SFTP feed and never presented as verified early"},
-            {"id": "permit-enrichment", "label": "Permit enrichment", "status": health_status(latest_enriched.get("last_enriched_at"), 30, 54), "system_time": latest_enriched.get("last_enriched_at"), "event_through": None, "cadence": "continuous queue after permit intake", "detail": "This is a processing clock, not an event-coverage claim; parcel and application clocks remain separate"},
-            {"id": "property-transfer-snapshot", "label": "Deed / parcel snapshot", "status": transfer_snapshot_status, "system_time": next((row.get("system_time") for row in editorial_health if row.get("component") == "property-transfer-snapshot"), None), "event_through": transfer_freshness.get("snapshot_event_through"), "cadence": "weekdays after verified Clerk catch-up", "detail": (f"snapshot lag {transfer_freshness.get('snapshot_lag_business_days')} business day(s) · verified source age {transfer_freshness.get('source_age_business_days')}" if transfer_freshness else "Freshness view unavailable; current deed modules stay suppressed")},
-            {"id": "fdep", "label": "FDEP environmental permits", "status": health_status(fdep_fetch.get("last_fetched_at"), 30, 54), "system_time": fdep_fetch.get("last_fetched_at"), "event_through": fdep_event.get("received_date"), "cadence": "daily at 9:20 UTC", "detail": "State ERP record date and fetch time remain separate"},
-            {"id": "faa", "label": "FAA obstruction cases", "status": health_status(faa_fetch.get("last_fetched_at"), 30, 54), "system_time": faa_fetch.get("last_fetched_at"), "event_through": faa_event.get("date_entered"), "cadence": "daily at 9:40 UTC", "detail": "Federal filing date and fetch time remain separate"},
-            {"id": "meetings", "label": "Meeting watch", "status": health_status(meetings.get("updated_at"), .5, 2), "system_time": meetings.get("updated_at"), "event_through": None, "cadence": "Legistar every 15 minutes; DRC and industry editorially checked", "detail": f"{len(meetings.get('meetings', []))} upcoming rooms · every row links to its public source"},
-            {"id": "sunbiz", "label": "Sunbiz", "status": (health_status(sunbiz_fetch.get("fetched_at"), 30, 54) if sunbiz_fetch else sunbiz_receipt.get("status") or "unavailable"), "system_time": (sunbiz_fetch.get("fetched_at") if sunbiz_fetch else sunbiz_receipt.get("system_time")), "event_through": (sunbiz_fetch.get("date_filed") if sunbiz_fetch else sunbiz_receipt.get("event_through")), "source_through": (None if sunbiz_fetch else sunbiz_receipt.get("source_through")), "cadence": "raw ingest nightly at 11:30 PM; exact matching in enrichment", "detail": ("Exact entity rows available; fuzzy identity writes remain off" if sunbiz_fetch else sunbiz_receipt.get("detail") or "No sanitized private-corpus receipt is available")},
+            source_clock_row(source_id="supabase-sync", label="Public mirror", status=sync_status, health_receipt_at=sync.get("completed_at"), health_receipt_status=(("failed" if sync_errors else "ok") if sync else None), status_basis="terminal_sync_run", cadence="every 30 minutes", detail=f"{sync.get('rows_synced', 0)} rows in latest run · {sync.get('errors', 0)} errors" if sync else "No sync run visible"),
+            source_clock_row(source_id="permits", label="Permit applications", status=health_status(latest_seen.get("last_seen_at"), 30, 54), event_through=latest_application.get("applied_date"), fetched_at=latest_seen.get("last_seen_at"), status_basis="row_observation_only", cadence="source intake nightly; mirror every 30 minutes", detail="Analysis uses applied_date; last_seen_at is row freshness metadata, not a terminal collector receipt"),
+            source_clock_row(source_id="aggregate-snapshot", label="Aggregate dashboard", status=health_status(cache_row.get("updated_at"), 26, 54), event_through=stats.get("permits_fresh"), fetched_at=cache_row.get("updated_at"), status_basis="snapshot_updated_at", cadence="refresh after successful aggregate build", detail="Counts retain their visible update time when this snapshot is delayed"),
+            source_clock_row(source_id="broward", label="Broward verified instruments", status=verified_clerk_status(verified_event_time, verified_system_time), verification="verified", event_through=verified_event_time, fetched_at=verified_system_time, health_receipt_at=verified_system_time, health_receipt_status=verified_clerk_run.get("parse_status"), status_basis="event_and_authoritative_terminal_run", cadence="SFTP check daily at 9:30 AM plus weekday catch-up", detail=verified_detail),
+            source_clock_row(source_id="clerk-preliminary", label="Broward preliminary recordings", status=preliminary_clerk_status(preliminary_event_time, preliminary_clerk_run), verification="preliminary", event_through=preliminary_event_time, fetched_at=preliminary_fetched_at, health_receipt_at=preliminary_receipt_at, health_receipt_status=preliminary_clerk_run.get("status"), status_basis=preliminary_status_basis, cadence="AcclaimWeb hourly plus 12:30 AM, noon, 7 PM and 10:30 PM", detail=preliminary_detail),
+            source_clock_row(source_id="permit-enrichment", label="Permit enrichment", status=health_status(latest_enriched.get("last_enriched_at"), 30, 54), fetched_at=latest_enriched.get("last_enriched_at"), status_basis="processing_clock_only", cadence="continuous queue after permit intake", detail="This is a processing clock, not an event-coverage or terminal-receipt claim; parcel and application clocks remain separate"),
+            source_clock_row(source_id="property-transfer-snapshot", label="Deed / parcel snapshot", status=transfer_snapshot_status, event_through=transfer_freshness.get("snapshot_event_through"), health_receipt_at=transfer_receipt.get("system_time"), health_receipt_status=transfer_receipt.get("status"), status_basis="snapshot_freshness_and_terminal_health", cadence="weekdays after verified Clerk catch-up", detail=(f"snapshot lag {transfer_freshness.get('snapshot_lag_business_days')} business day(s) · verified source age {transfer_freshness.get('source_age_business_days')}" if transfer_freshness else "Freshness view unavailable; current deed modules stay suppressed")),
+            source_clock_row(source_id="fdep", label="FDEP environmental permits", status="unavailable", event_through=fdep_event.get("received_date"), fetched_at=fdep_fetch.get("last_fetched_at"), status_basis="row_fetch_only_no_terminal_receipt", cadence="daily at 9:20 UTC", detail="Rows are connected, but row fetch time is not collector health; durable terminal run receipts are not live yet"),
+            source_clock_row(source_id="faa", label="FAA obstruction cases", status="unavailable", event_through=faa_event.get("date_entered"), fetched_at=faa_fetch.get("last_fetched_at"), status_basis="row_fetch_only_no_terminal_receipt", cadence="daily at 9:40 UTC", detail="Rows are connected, but row fetch time is not collector health; durable terminal run receipts are not live yet"),
+            source_clock_row(source_id="meetings", label="Meeting watch", status=health_status(meetings.get("updated_at"), .5, 2), fetched_at=meetings.get("updated_at"), status_basis="source_check_clock", cadence="Legistar every 15 minutes; DRC and industry editorially checked", detail=f"{len(meetings.get('meetings', []))} upcoming rooms · every row links to its public source"),
+            source_clock_row(source_id="sunbiz", label="Sunbiz", status=(health_status(sunbiz_fetch.get("fetched_at"), 30, 54) if sunbiz_fetch else sunbiz_receipt.get("status") or "unavailable"), event_through=(sunbiz_fetch.get("date_filed") if sunbiz_fetch else sunbiz_receipt.get("event_through")), fetched_at=(sunbiz_fetch.get("fetched_at") if sunbiz_fetch else None), health_receipt_at=(None if sunbiz_fetch else sunbiz_receipt.get("system_time")), health_receipt_status=(None if sunbiz_fetch else sunbiz_receipt.get("status")), status_basis=("row_fetch_only" if sunbiz_fetch else "terminal_editorial_receipt"), source_through=(None if sunbiz_fetch else sunbiz_receipt.get("source_through")), cadence="raw ingest nightly at 11:30 PM; exact matching in enrichment", detail=("Exact entity rows available; fuzzy identity writes remain off" if sunbiz_fetch else sunbiz_receipt.get("detail") or "No sanitized private-corpus receipt is available")),
         ]
         source_rows.extend(
             {
                 "id": "editorial-" + str(row.get("component") or "unknown"),
                 "label": "Editorial · " + str(row.get("component") or "unknown"),
                 "status": row.get("status") or "unavailable",
-                "system_time": row.get("system_time"),
                 "event_through": row.get("event_through"),
+                "fetched_at": None,
+                "health_receipt_at": row.get("system_time"),
+                "health_receipt_status": row.get("status"),
+                "status_basis": "terminal_editorial_receipt",
+                "system_time": row.get("system_time"),
                 "cadence": "durable database schedule",
                 "detail": row.get("detail") or "No run detail",
             }
             for row in editorial_health
         )
-        payload = {"generated_at": datetime.now(timezone.utc).isoformat(), "sources": source_rows, "errors": errors, "contract": "Event date drives analysis; pull, sync and system update times only describe freshness."}
+        payload = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "sources": source_rows,
+            "errors": errors,
+            "contract": (
+                "Event-through, row-fetch and terminal health-receipt clocks are separate. "
+                "A row or timer clock never proves a successful collector run; missing terminal "
+                "receipts remain visibly absent."
+            ),
+        }
         _health_cache.update({"at": now, "payload": payload})
         return payload
 

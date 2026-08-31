@@ -529,6 +529,7 @@
       PARTIAL:   ["PARTIAL", "badge--lagging"],
       FAILED:    ["FAILED", "badge--stale"],
       STALE:     ["STALE", "badge--stale"],
+      UNKNOWN:   ["HEALTH UNKNOWN", "badge--unknown"],
       EMPTY:     ["VALID EMPTY", "badge--unknown"],
       MANUAL:    ["MANUAL REFRESH", "badge--manual"],
       HISTORICAL:["HISTORICAL", "badge--unknown"],
@@ -541,7 +542,8 @@
     const FEEDS = [
       { name: "Permit applications", table: "permits",
         event: "applied_date", collected: "last_seen_at", countCol: "permit_number",
-        eventDelayDays: 4, collectionDelayDays: 3, note: "City of Fort Lauderdale (Accela). Droplet collector." },
+        eventDelayDays: 4, collectedLabel: "latest row observed",
+        note: "City of Fort Lauderdale (Accela). Row observation is not a terminal collector receipt." },
 
       { name: "Official Clerk recordings", table: "broward_clerk_records_doc",
         event: "recording_date_iso", collected: null,
@@ -551,34 +553,40 @@
       { name: "Preliminary Clerk recordings", table: "broward_clerk_preliminary",
         event: "record_date", collected: null,
         receiptTable: "broward_clerk_preliminary_run",
+        collectedLabel: "terminal health receipt",
         eventDelayDays: 4, collectionDelayDays: 3, preliminary: true,
         note: "AcclaimWeb public search. PRELIMINARY / NOT YET VERIFIED — event coverage and collector-run time are separate clocks." },
 
       { name: "FAA obstruction cases", table: "faa_oeaaa",
         event: "date_entered", collected: "last_fetched_at",
-        eventDelayDays: 10, collectionDelayDays: 2, note: "FAA OE/AAA. Supabase pg_cron edge function." },
+        eventDelayDays: 10, collectedLabel: "latest row fetched", rowOnlyNoTerminal: true,
+        note: "FAA OE/AAA. Row-fetch clock only; a durable terminal run receipt is not live yet." },
 
       { name: "FDEP environmental permits", table: "fdep_erp",
         event: "received_date", collected: "last_fetched_at",
-        eventDelayDays: 21, collectionDelayDays: 2, note: "Florida DEP Environmental Resource Permits. Supabase pg_cron edge function." },
+        eventDelayDays: 21, collectedLabel: "latest row fetched", rowOnlyNoTerminal: true,
+        note: "Florida DEP Environmental Resource Permits. Row-fetch clock only; a durable terminal run receipt is not live yet." },
 
       { name: "County parcel authority", table: "broward_parcel_geography",
         event: null, collected: "fetched_at", countCol: "parcel_id_normalized",
-        authority: true,
+        authority: true, collectedLabel: "snapshot fetched",
         note: "Broward County GIS PARCEL_POLY_BCPA_TAXROLL — the official countywide parcel layer. One-time import, no schedule." },
 
       { name: "Permit GIS coverage", table: "gis_enrichment",
         event: null, collected: "enriched_at",
+        collectedLabel: "latest enrichment row",
         eventDelayDays: 21,
         note: "Permit-derived enrichment: parcels resolved FROM permit records. This is NOT complete county parcel coverage — see County parcel authority for that." },
 
       { name: "Sync health", table: "_meta_sync_runs",
         event: null, collected: "completed_at",
-        eventDelayDays: 2, note: "Droplet → Supabase sync heartbeat." },
+        eventDelayDays: 2, collectionHealth: true, errorColumn: "errors", collectedLabel: "terminal sync receipt",
+        note: "Droplet → Supabase terminal sync receipt." },
 
       { name: "Dashboard cache", table: "dashboard_cache",
         event: null, collected: "updated_at",
-        eventDelayDays: 2, note: "Aggregate snapshot rebuilt by pg_cron." }
+        eventDelayDays: 2, collectedLabel: "snapshot built",
+        note: "Aggregate snapshot clock; not a source-event or collector-success receipt." }
     ];
 
     // Not operational feeds. Shown so they are not forgotten, labelled so they cannot be mistaken.
@@ -652,7 +660,7 @@
       return `<div class="health-card${f.authority ? " health-card--authority" : ""}" data-feed="${esc(f.table)}">
         <span class="feed">${esc(f.name)}</span>
         <span class="clock clock--event"><i>latest source event</i><b class="event loading">loading…</b></span>
-        <span class="clock clock--collected"><i>${f.receiptTable ? "latest collector run" : "last successful collection"}</i><b class="collected">—</b></span>
+        <span class="clock clock--collected"><i>${esc(f.collectedLabel || (f.receiptTable ? "health receipt" : "latest row / snapshot clock"))}</i><b class="collected">—</b></span>
         <span class="rows"></span>
         <span class="badge badge--unknown">checking</span>
         <span class="note">${esc(f.note || "")}</span>
@@ -725,15 +733,26 @@
               eventVal = receipt.event_through;
             }
           }
-          const collectedVal = receipt ? receipt.completed_at : await newestValue(f.table, f.collected);
+          let collectionReceipt = null;
+          if (!receipt && f.collectionHealth) {
+            const fields = [f.collected, f.errorColumn].filter(Boolean);
+            const receiptRows = await rows(f.table, {
+              select: fields.join(","), order: f.collected + ".desc.nullslast", limit: "1"
+            });
+            collectionReceipt = receiptRows.length ? receiptRows[0] : null;
+          }
+          const collectedVal = receipt
+            ? (receipt.completed_at || receipt.observed_at)
+            : collectionReceipt
+              ? collectionReceipt[f.collected]
+              : await newestValue(f.table, f.collected);
           const total        = await tableCount(f.table, f.countCol);
 
           const evEl = card.querySelector(".event");
           evEl.classList.remove("loading");
           evEl.textContent = f.event ? (eventVal ? dateish(eventVal) : "no rows")
                                      : "n/a — snapshot, not an event stream";
-          card.querySelector(".collected").textContent = collectedVal ?
-            (f.receiptTable ? dateTimeish(collectedVal) : dateish(collectedVal)) : "not recorded";
+          card.querySelector(".collected").textContent = collectedVal ? dateTimeish(collectedVal) : "not recorded";
           setRows(card, total);
 
           const badge = card.querySelector(".badge");
@@ -772,6 +791,10 @@
             }
           }
           else if (total && total.n === 0) key = "EMPTY";
+          else if (f.rowOnlyNoTerminal) {
+            key = "UNKNOWN";
+            label = "ROWS CONNECTED · HEALTH RECEIPT NOT LIVE";
+          }
           else if (f.authority) { key = "MANUAL"; label = "MANUAL SNAPSHOT — NOT SCHEDULED"; }
           else if (f.event) {
             const d = daysSince(eventVal);
@@ -789,9 +812,17 @@
             key = (d == null) ? "EMPTY" : (d <= f.eventDelayDays ? "HEALTHY" : "STALE");
           }
 
-          if (!f.receiptTable && !f.authority && f.collected) {
+          if (!f.receiptTable && !f.authority && f.collected && f.collectionHealth) {
             const collectorDays = daysSince(collectedVal);
-            if (collectorDays == null) { key = "FAILED"; label = "COLLECTOR CLOCK UNAVAILABLE"; }
+            const errorCount = collectionReceipt && Number(collectionReceipt[f.errorColumn]);
+            if (!collectionReceipt || !Number.isFinite(errorCount)) {
+              key = "FAILED"; label = "TERMINAL SYNC RECEIPT INVALID";
+            }
+            else if (errorCount > 0) {
+              key = "FAILED";
+              label = "LATEST SYNC COMPLETED WITH " + errorCount.toLocaleString() + " ERROR" + (errorCount === 1 ? "" : "S");
+            }
+            else if (collectorDays == null) { key = "FAILED"; label = "COLLECTOR CLOCK UNAVAILABLE"; }
             else if (collectorDays > (f.collectionDelayDays || f.eventDelayDays || 2)) {
               key = "STALE";
               label = "COLLECTOR STALE — LAST SUCCESS " + dateish(collectedVal).toUpperCase();
@@ -1241,15 +1272,21 @@
           const refresh = String(item.refresh || "connected").toLowerCase();
           if (hasRows) {
             connected += 1;
-            if (liveStatus !== "unknown") freshness[liveStatus] = (freshness[liveStatus] || 0) + 1;
+            const rowOnlyHealthUnknown = Boolean(
+              receipt && liveStatus === "unavailable" &&
+              String(receipt.status_basis || "").includes("no_terminal_receipt")
+            );
+            if (liveStatus !== "unknown" && !rowOnlyHealthUnknown) freshness[liveStatus] = (freshness[liveStatus] || 0) + 1;
             if (refresh === "manual" || refresh === "snapshot") manualOrSnapshot += 1;
             const healthy = liveStatus === "current";
             const warning = ["delayed", "stale", "error", "unavailable", "suppressed", "unverified"].includes(liveStatus);
-            const text = liveStatus !== "unknown" ? `${liveStatus} · ${refresh}` : `connected · ${refresh} · health unknown`;
+            const text = liveStatus !== "unknown" && !rowOnlyHealthUnknown
+              ? `${liveStatus} · ${refresh}`
+              : `connected · ${refresh} · health unknown`;
             labels.forEach(label => {
               label.textContent = text;
               label.dataset.state = healthy ? "connected" : warning || liveStatus === "unknown" ? "warning" : "manual";
-              label.title = receipt ? `Event ${receipt.event_through || "not exposed"}; system ${receipt.system_time || "not exposed"}. ${receipt.detail || ""}` : `Rows are available; no live freshness receipt is configured. Refresh mode: ${refresh}.`;
+              label.title = receipt ? `Event through ${receipt.event_through || "not exposed"}; fetched ${receipt.fetched_at || "not exposed"}; health receipt ${receipt.health_receipt_at || "not exposed"}${receipt.health_receipt_status ? ` (${receipt.health_receipt_status})` : ""}; basis ${receipt.status_basis || "not exposed"}. ${receipt.detail || ""}` : `Rows are available; no live freshness receipt is configured. Refresh mode: ${refresh}.`;
             });
           } else {
             labels.forEach(label => { label.textContent = "Connected · empty"; label.dataset.state = "empty"; });

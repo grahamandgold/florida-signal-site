@@ -8,6 +8,7 @@ import threading
 import unittest
 import urllib.error
 import urllib.request
+from datetime import date, datetime, timezone
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
@@ -69,6 +70,41 @@ class PublicApiTests(unittest.TestCase):
         self.assertEqual((parsed.hour, parsed.minute, parsed.second), (23, 40, 15))
         self.assertEqual(parsed.microsecond, 618190)
 
+    def test_preliminary_business_calendar_and_receipt_health(self):
+        sunday = datetime(2026, 8, 30, 23, 0, tzinfo=timezone.utc)
+        monday_after_release = datetime(2026, 8, 31, 17, 0, tzinfo=timezone.utc)
+        fresh_run = {"status": "source_wait", "completed_at": "2026-08-30T22:59:00Z"}
+
+        self.assertEqual(server_module.business_calendar_age("2026-08-28", now=sunday), 0)
+        self.assertEqual(
+            server_module.business_calendar_age("2026-08-28", now=monday_after_release), 1
+        )
+        self.assertEqual(
+            server_module.business_calendar_age(
+                "2026-08-28",
+                now=monday_after_release,
+                holidays={date(2026, 8, 31)},
+            ),
+            0,
+        )
+        self.assertEqual(
+            server_module.preliminary_clerk_status("2026-08-28", fresh_run, now=sunday),
+            "current",
+        )
+        self.assertEqual(
+            server_module.preliminary_clerk_status(
+                "2026-08-28",
+                {"status": "failed", "completed_at": "2026-08-30T22:59:00Z"},
+                now=sunday,
+            ),
+            "error",
+        )
+
+    def test_preliminary_clock_source_keeps_fetch_only_health_unknown(self):
+        source = (ROOT / "server.py").read_text(encoding="utf-8")
+        self.assertIn('else "row_fetch_only_no_terminal_receipt"', source)
+        self.assertIn("row fetch time is not collector health", source)
+
     def test_supabase_health_read_retries_one_transient_server_error(self):
         transient = urllib.error.HTTPError("https://example.invalid", 500, "timeout", {}, None)
         response = mock.MagicMock()
@@ -84,7 +120,7 @@ class PublicApiTests(unittest.TestCase):
     def test_data_health_keeps_preliminary_and_verified_clerk_clocks_separate(self):
         def rows(path):
             if path.startswith("_meta_sync_runs"):
-                return [{"completed_at": "2026-08-11T04:30:00Z", "rows_synced": 10, "errors": 0}]
+                return [{"completed_at": "2026-08-11T04:30:00Z", "rows_synced": 10, "errors": 2}]
             if path.startswith("permits?"):
                 return [{"applied_date": "2026-08-10", "last_seen_at": "2026-08-11T03:00:00Z"}]
             if path.startswith("dashboard_cache"):
@@ -93,8 +129,27 @@ class PublicApiTests(unittest.TestCase):
                 return [{"business_date": "2026-08-05", "pulled_at_utc": "2026-08-10T18:11:44Z", "parse_status": "ok", "observed_doc_count": 2446}]
             if path.startswith("broward_clerk_records_doc"):
                 return [{"recording_date_iso": "2026-08-05"}]
+            if path.startswith("broward_clerk_preliminary_run"):
+                return [{
+                    "status": "source_wait",
+                    "completed_at": "2026-08-31T21:53:00Z",
+                    "observed_at": "2026-08-31T21:52:59Z",
+                    "attempted_through": "2026-08-31",
+                    "event_through": "2026-08-28",
+                    "rows_observed": 0,
+                    "rows_new": 0,
+                    "reason": "source_not_authoritative_yet",
+                }]
+            if path.startswith("broward_clerk_preliminary?select=fetched_at"):
+                return [{"fetched_at": "2026-08-31T21:52:58Z"}]
             if path.startswith("broward_clerk_preliminary"):
-                return [{"record_date": "2026-08-10", "preliminary_first_seen_at": "2026-08-11T00:56:06Z", "verification_status": "preliminary", "source": "acclaimweb-public-search"}]
+                return [{
+                    "record_date": "2026-08-27",
+                    "fetched_at": "2026-08-28T00:57:00Z",
+                    "preliminary_first_seen_at": "2026-08-28T00:56:06Z",
+                    "verification_status": "preliminary",
+                    "source": "acclaimweb-public-search",
+                }]
             if path.startswith("fdep_erp?select=received_date"):
                 return [{"received_date": "2026-08-10"}]
             if path.startswith("fdep_erp?select=last_fetched_at"):
@@ -128,13 +183,30 @@ class PublicApiTests(unittest.TestCase):
         sources = {source["id"]: source for source in payload["sources"]}
         self.assertEqual(sources["broward"]["event_through"], "2026-08-05")
         self.assertEqual(sources["broward"]["verification"], "verified")
-        self.assertEqual(sources["clerk-preliminary"]["event_through"], "2026-08-10")
+        self.assertEqual(sources["clerk-preliminary"]["event_through"], "2026-08-28")
         self.assertEqual(sources["clerk-preliminary"]["verification"], "preliminary")
+        self.assertEqual(sources["clerk-preliminary"]["fetched_at"], "2026-08-31T21:52:58Z")
+        self.assertEqual(sources["clerk-preliminary"]["health_receipt_at"], "2026-08-31T21:53:00Z")
+        self.assertEqual(sources["clerk-preliminary"]["health_receipt_status"], "source_wait")
+        self.assertEqual(sources["clerk-preliminary"]["status_basis"], "event_and_terminal_collector_run")
+        self.assertNotEqual(
+            sources["clerk-preliminary"]["health_receipt_at"],
+            "2026-08-28T00:56:06Z",
+        )
         self.assertIn("never presented as verified early", sources["clerk-preliminary"]["detail"])
+        self.assertEqual(sources["supabase-sync"]["status"], "error")
+        self.assertEqual(sources["supabase-sync"]["health_receipt_status"], "failed")
+        self.assertEqual(sources["fdep"]["status"], "unavailable")
+        self.assertIsNone(sources["fdep"]["health_receipt_at"])
+        self.assertEqual(sources["fdep"]["status_basis"], "row_fetch_only_no_terminal_receipt")
+        self.assertEqual(sources["faa"]["status"], "unavailable")
+        self.assertIsNone(sources["faa"]["health_receipt_at"])
+        self.assertEqual(sources["faa"]["status_basis"], "row_fetch_only_no_terminal_receipt")
         self.assertEqual(sources["sunbiz"]["status"], "current")
         self.assertEqual(sources["sunbiz"]["system_time"], "2026-08-11T03:50:00Z")
         self.assertIsNone(sources["sunbiz"]["event_through"])
         self.assertIn("remain private", sources["sunbiz"]["detail"])
+        self.assertIn("row or timer clock never proves", payload["contract"])
         self.assertEqual(payload["errors"], [])
 
     def test_signup_persists_and_repeats_idempotently(self):

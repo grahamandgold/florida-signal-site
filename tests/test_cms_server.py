@@ -5,6 +5,7 @@ import sqlite3
 import subprocess
 import tempfile
 import unittest
+from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -213,6 +214,58 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
             events = log_path.read_text(encoding="utf-8").splitlines()
         return result, events
 
+    def test_preliminary_clock_uses_business_days_and_fetch_only_fails_closed(self):
+        sunday = datetime(2026, 8, 30, 23, 0, tzinfo=timezone.utc)
+        monday_after_release = datetime(2026, 8, 31, 17, 0, tzinfo=timezone.utc)
+        self.assertEqual(cms_server.business_calendar_age("2026-08-28", now=sunday), 0)
+        self.assertEqual(
+            cms_server.business_calendar_age(
+                "2026-08-28",
+                now=monday_after_release,
+                holidays={date(2026, 8, 31)},
+            ),
+            0,
+        )
+        base = {
+            "status": "current",
+            "event_through": "2026-08-27",
+            "health_receipt_at": "2026-08-29T20:00:00Z",
+            "health_receipt_status": "ok",
+            "status_basis": "event_and_terminal_collector_run",
+        }
+        fetch_only = cms_server.overlay_preliminary_clock(
+            base, {}, {"fetched_at": "2026-08-30T22:58:00Z"}
+        )
+        self.assertEqual(fetch_only["status"], "unavailable")
+        self.assertIsNone(fetch_only["health_receipt_at"])
+        self.assertIsNone(fetch_only["health_receipt_status"])
+        self.assertEqual(fetch_only["status_basis"], "row_fetch_only_no_terminal_receipt")
+        self.assertEqual(fetch_only["system_time"], "2026-08-30T22:58:00Z")
+
+        fdep = cms_server.require_terminal_health({
+            "id": "fdep",
+            "status": "current",
+            "event_through": "2026-08-28",
+            "fetched_at": "2026-08-30T09:20:00Z",
+        })
+        self.assertEqual(fdep["status"], "unavailable")
+        self.assertEqual(fdep["status_basis"], "row_fetch_only_no_terminal_receipt")
+        self.assertEqual(fdep["system_time"], "2026-08-30T09:20:00Z")
+        self.assertIsNone(fdep["health_receipt_at"])
+
+        with mock.patch.object(cms_server, "now_iso", return_value="2026-08-30T23:00:00Z"):
+            terminal = cms_server.overlay_preliminary_clock(
+                base,
+                {
+                    "status": "source_wait",
+                    "completed_at": "2026-08-30T22:59:00Z",
+                    "event_through": "2026-08-28",
+                },
+                {"fetched_at": "2026-08-30T22:58:00Z"},
+            )
+        self.assertEqual(terminal["event_through"], "2026-08-28")
+        self.assertEqual(terminal["status"], "current")
+
     def test_project_state_separates_git_state_from_live_health(self):
         manifest = {
             "schema_version": "FloridaSignalProjectStateV1",
@@ -247,6 +300,10 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         health = {"generated_at": "2026-08-23T22:00:00Z", "sources": [
             {
                 "id": "permits", "status": "current", "event_through": "2026-08-22",
+                "fetched_at": "2026-08-23T21:40:00Z",
+                "health_receipt_at": None,
+                "health_receipt_status": None,
+                "status_basis": "row_observation_only",
                 "system_time": "2026-08-23T21:40:00Z", "detail": "Live receipt",
             },
             {
@@ -258,11 +315,23 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
                 "system_time": "2026-08-23T18:00:00Z", "detail": "Verified receipt",
             },
         ]}
+        def private_receipt(path, method="GET", body=None, prefer=""):
+            if path.startswith("broward_clerk_preliminary_run"):
+                return 200, [{
+                    "status": "source_wait",
+                    "completed_at": "2026-08-23T22:20:00Z",
+                    "event_through": "2026-08-22",
+                    "reason": "source_not_authoritative_yet",
+                }]
+            if path.startswith("broward_clerk_preliminary?select=fetched_at"):
+                return 200, [{"fetched_at": "2026-08-23T22:19:00Z"}]
+            raise AssertionError(path)
         with tempfile.TemporaryDirectory() as directory:
             state_path = Path(directory) / "state.json"
             state_path.write_text(json.dumps(manifest), encoding="utf-8")
             with mock.patch.object(cms_server, "PROJECT_STATE_PATH", state_path), \
                     mock.patch.object(cms_server, "public_json", return_value=health), \
+                    mock.patch.object(cms_server, "supabase_request", side_effect=private_receipt), \
                     mock.patch.object(cms_server, "now_iso", return_value="2026-08-23T22:30:00Z"), \
                     mock.patch.object(cms_server, "pdmr_intent_payload", return_value=(200, {
                         "record_count": 329,
@@ -274,14 +343,23 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         self.assertEqual(code, 200)
         self.assertEqual(rows["permits"]["status"], "CURRENT")
         self.assertEqual(rows["permits"]["event_through"], "2026-08-22")
+        self.assertEqual(rows["permits"]["fetched_at"], "2026-08-23T21:40:00Z")
+        self.assertEqual(rows["permits"]["status_basis"], "row_observation_only")
         self.assertEqual(rows["pdmr"]["deployment_status"], "LOCAL_ONLY")
         self.assertEqual(rows["pdmr"]["status"], "UNKNOWN")
         receipts = {row["id"]: row for row in payload["source_receipts"]}
         self.assertEqual(receipts["clerk-preliminary"]["event_through"], "2026-08-22")
+        self.assertEqual(receipts["clerk-preliminary"]["fetched_at"], "2026-08-23T22:19:00Z")
+        self.assertEqual(receipts["clerk-preliminary"]["health_receipt_at"], "2026-08-23T22:20:00Z")
+        self.assertEqual(receipts["clerk-preliminary"]["health_receipt_status"], "source_wait")
+        self.assertEqual(receipts["clerk-preliminary"]["status_basis"], "event_and_terminal_collector_run")
         self.assertEqual(receipts["broward"]["event_through"], "2026-08-19")
         self.assertEqual(receipts["broward"]["status"], "DELAYED")
         self.assertEqual(receipts["pdmr-local"]["status"], "CURRENT")
         self.assertEqual(receipts["pdmr-local"]["event_through"], "2026-08-22")
+        self.assertEqual(receipts["pdmr-local"]["fetched_at"], "2026-08-23T21:45:00Z")
+        self.assertIsNone(receipts["pdmr-local"]["health_receipt_at"])
+        self.assertEqual(receipts["pdmr-local"]["status_basis"], "manual_snapshot_observation")
         self.assertIn("329 public source records", receipts["pdmr-local"]["detail"])
         rendered_state = json.dumps(payload["project_state"])
         self.assertNotIn("locked PDMRs", rendered_state)
@@ -515,15 +593,30 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
                     "category": "government", "date": "2026-08-18", "agenda_available": False,
                 }]}
             return {"sources": [
-                {"id": "clerk-preliminary", "status": "current", "event_through": "2026-08-11", "system_time": "2026-08-12T00:00:00Z"},
-                {"id": "broward", "status": "delayed", "event_through": "2026-08-06"},
+                {"id": "clerk-preliminary", "status": "current", "event_through": "2026-08-11", "system_time": "2026-08-11T20:00:00Z"},
+                {"id": "broward", "status": "delayed", "event_through": "2026-08-06", "health_receipt_at": "2026-08-11T18:00:00Z", "status_basis": "event_and_authoritative_terminal_run"},
                 {"id": "sunbiz", "status": "unavailable"},
-                {"id": "fdep", "status": "current", "event_through": "2026-08-06"},
-                {"id": "faa", "status": "current", "event_through": "2026-08-10"},
-                {"id": "permits", "status": "current", "event_through": "2026-08-10"},
+                {"id": "fdep", "status": "unavailable", "event_through": "2026-08-06", "fetched_at": "2026-08-12T01:00:00Z", "status_basis": "row_fetch_only_no_terminal_receipt"},
+                {"id": "faa", "status": "unavailable", "event_through": "2026-08-10", "fetched_at": "2026-08-12T01:10:00Z", "status_basis": "row_fetch_only_no_terminal_receipt"},
+                {"id": "permits", "status": "current", "event_through": "2026-08-10", "fetched_at": "2026-08-12T01:20:00Z", "status_basis": "row_observation_only"},
             ]}
 
+        def private_payload(path, method="GET", body=None, prefer=""):
+            if path.startswith("sunbiz_entities"):
+                return 200, []
+            if path.startswith("broward_clerk_preliminary_run"):
+                return 200, [{
+                    "status": "source_wait",
+                    "completed_at": "2026-08-12T02:30:00Z",
+                    "event_through": "2026-08-11",
+                    "reason": "source_not_authoritative_yet",
+                }]
+            if path.startswith("broward_clerk_preliminary?select=fetched_at"):
+                return 200, [{"fetched_at": "2026-08-12T02:29:00Z"}]
+            raise AssertionError(path)
+
         with mock.patch.object(cms_server, "public_json", side_effect=public_payload), \
+                mock.patch.object(cms_server, "supabase_request", side_effect=private_payload), \
                 mock.patch.object(cms_server, "now_iso", return_value="2026-08-12T03:00:00+00:00"), \
                 mock.patch.object(cms_server, "pdmr_intent_payload", return_value=(200, {
                     "record_count": 1, "newest_event": "2026-08-12", "last_collected": "2026-08-12T02:00:00Z",
@@ -535,6 +628,16 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         self.assertEqual(payload["lanes"][0]["status"], "current")
         self.assertEqual(payload["lanes"][1]["connection"], "unavailable")
         self.assertEqual(payload["lanes"][2]["status"], "delayed")
+        capital_clocks = {row["id"]: row for row in payload["lanes"][2]["source_clocks"]}
+        self.assertEqual(capital_clocks["clerk-preliminary"]["event_through"], "2026-08-11")
+        self.assertEqual(capital_clocks["clerk-preliminary"]["fetched_at"], "2026-08-12T02:29:00Z")
+        self.assertEqual(capital_clocks["clerk-preliminary"]["health_receipt_at"], "2026-08-12T02:30:00Z")
+        self.assertEqual(capital_clocks["broward"]["health_receipt_at"], "2026-08-11T18:00:00Z")
+        regulatory_clocks = {row["id"]: row for row in payload["lanes"][3]["source_clocks"]}
+        self.assertEqual(payload["lanes"][3]["connection"], "connected")
+        self.assertEqual(payload["lanes"][3]["status"], "unavailable")
+        self.assertIsNone(regulatory_clocks["fdep"]["health_receipt_at"])
+        self.assertEqual(regulatory_clocks["fdep"]["fetched_at"], "2026-08-12T01:00:00Z")
         self.assertEqual(payload["lanes"][-1]["phase"], "05 · Execution")
         self.assertIn("PDMR reaches 2026-08-12", payload["lanes"][0]["headline"])
         self.assertIn("first-public timing remains unresolved", payload["lanes"][0]["note"])

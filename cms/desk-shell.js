@@ -174,7 +174,17 @@
       target.innerHTML = lanes.length ? lanes.map(function (lane) {
         var status = String(lane.status || "unavailable").toLowerCase();
         var automation = String(lane.automation || "unknown").toLowerCase();
-        return '<article class="dw-source-row" data-health="' + esc(status) + '"><span class="dw-source-stage">' + esc(lane.phase || "—") + '</span><div><b>' + esc(lane.label || "Unnamed source") + '</b><p>' + esc(lane.headline || lane.note || "No source note exposed.") + '</p><span class="dw-source-tags"><i data-health="' + esc(status) + '">' + esc(status) + '</i><i>' + esc(automation) + ' refresh</i></span></div><span class="dw-source-clock">Event ' + esc(lane.event_through || "not exposed") + '<br>System ' + esc(dateTime(lane.system_time)) + '</span></article>';
+        var clockRows = Array.isArray(lane.source_clocks) && lane.source_clocks.length ? lane.source_clocks : [lane];
+        var clocks = clockRows.map(function (row) {
+          var lines = [];
+          if (row.event_through) lines.push("Event through " + row.event_through);
+          if (row.fetched_at) lines.push("Fetched " + dateTime(row.fetched_at));
+          if (row.health_receipt_at) lines.push("Health receipt " + dateTime(row.health_receipt_at) + (row.health_receipt_status ? " · " + String(row.health_receipt_status).toUpperCase() : ""));
+          if (!row.fetched_at && !row.health_receipt_at && row.observed_at) lines.push("Observed " + dateTime(row.observed_at) + " · legacy clock");
+          if (!lines.length) lines.push("No disambiguated live clock");
+          return (clockRows.length > 1 ? '<b>' + esc(row.label || row.id || "Source") + '</b><br>' : '') + lines.map(esc).join('<br>');
+        }).join('<br><span aria-hidden="true">—</span><br>');
+        return '<article class="dw-source-row" data-health="' + esc(status) + '"><span class="dw-source-stage">' + esc(lane.phase || "—") + '</span><div><b>' + esc(lane.label || "Unnamed source") + '</b><p>' + esc(lane.headline || lane.note || "No source note exposed.") + '</p><span class="dw-source-tags"><i data-health="' + esc(status) + '">' + esc(status) + '</i><i>' + esc(automation) + ' refresh</i></span></div><span class="dw-source-clock">' + clocks + '</span></article>';
       }).join("") + '<p class="dw-status-checked">Last checked on this device · ' + esc(new Date().toLocaleString()) + '</p>' : '<p>No monitored lane responded. No source state was inferred.</p>';
     } catch (error) {
       label.textContent = "Source status unavailable";
