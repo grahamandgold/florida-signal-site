@@ -309,7 +309,7 @@
     <section class="library" aria-labelledby="library-title">
       <div class="library__head">
         <div><div class="eyebrow">Built + planned early-warning lanes</div><h3 id="library-title">Working discovery sequence</h3><p>Fort Lauderdale's Preliminary Development Meeting Request (PDMR) planning-intent records come first. Proposed earlier-signal sensors stay visible and are marked research-only until a collector and evidence contract exist; permits remain later execution evidence.</p></div>
-        <div class="library__tools"><button type="button" id="refresh-sources">Refresh source receipts</button><span class="library__summary" id="library-summary">Checking connections…</span><span class="library__checked" id="library-checked">Not checked yet</span></div>
+        <div class="library__tools"><button type="button" id="refresh-sources">Refresh source receipts</button><span class="library__summary" id="library-summary" role="status" aria-live="polite">Checking connections…</span><span class="library__checked" id="library-checked">Not checked yet</span></div>
       </div>
       <div class="library-grid" id="library-grid"></div>
     </section>
@@ -328,7 +328,7 @@
           <input id="search-input" type="search" placeholder="permit:, folio:, instrument:, addr:…" autocomplete="off" aria-describedby="search-help">
         </label>
         <button class="button button--teal" id="refresh-btn" type="button">Search records</button>
-        <span class="count-note" id="count-note">—</span>
+        <span class="count-note" id="count-note" role="status" aria-live="polite">—</span>
       </div>
       <p class="foot-note" id="search-help" style="margin:0 18px 12px">Choose a source above or use a fielded lookup. Preliminary Development Meeting Request (PDMR) records support <code>id:</code> <code>folio:</code> <code>addr:</code> <code>owner:</code> <code>project:</code>; other sources support <code>permit:</code> <code>instrument:</code> <code>license:</code> <code>asn:</code>. Broad text research remains separate.</p>
       <div class="table-wrap">
@@ -1118,15 +1118,15 @@
 
     const SOURCE_GROUPS = [
       { eyebrow: "S1 · Earliest built lane", title: "Planning intent before application", items: [
-        { label: "Preliminary Development Meeting Request (PDMR)", note: "LauderBuild pre-application narratives, owners, folios and concept stage", table: "pdmr_intent", connection: "pdmr-local", componentId: "pdmr", refresh: "manual" },
+        { label: "Preliminary Development Meeting Request (PDMR)", note: "LauderBuild pre-application narratives, owners, folios and concept stage; event and source-check clocks stay separate", table: "pdmr_intent", connection: "pdmr-local", receiptId: "pdmr-local", refresh: "manual" },
         { label: "Agenda Watch", note: "Legistar items, staff reports and attachments; timing varies by project", href: "/agenda.html", status: "Open view", state: "private" }
       ]},
       { eyebrow: "S2 · Next sensors", title: "Early clues to research + connect", items: [
-        { label: "Sewer + utility capacity", note: "Capacity inquiries and availability letters before formal application", href: "/#project-control", status: "Research only", state: "research" },
-        { label: "Engineering intake", note: "ENG-CR, ENG-OAA and TMP workflows; source contract not built", href: "/#project-control", status: "Research only", state: "research" },
+        { label: "Sewer + utility capacity", note: "Official ENG-CR capacity requests are public Accela records; no dedicated machine-readable letter registry exists", href: "https://www.fortlauderdale.gov/Government/Departments/Development-Services/Permitting-Services/Engineering-Permits-Services/Water-and-Wastewater-Capacity-Availability-Request", status: "Research only · HTML", state: "research" },
+        { label: "Engineering intake", note: "Use exact ENG-OAA outside-agency records; generic TMP records are downstream/mixed and explicitly excluded", href: "https://aca-prod.accela.com/FTL/Cap/CapHome.aspx?module=Permits", status: "Research only · HTML", state: "research" },
         { label: "Assemblage + new LLC", note: "Join deed assemblage to newly formed entities; detector not connected", href: "/#project-control", status: "Planned join", state: "research" },
-        { label: "Lobbyist registrations", note: "Actor and client filings that may precede a public application", href: "/#project-control", status: "Research only", state: "research" },
-        { label: "SFWMD filings", note: "Regional water-management applications separate from the current FDEP feed", href: "/#project-control", status: "Research only", state: "research" }
+        { label: "Lobbyist registrations", note: "Official registration and client HTML can be snapshotted, but the City exposes no durable row ID or API", href: "https://www.fortlauderdale.gov/Government/Departments/City-Clerks-Office/Lobbyist-Information", status: "Research only · HTML", state: "research" },
+        { label: "SFWMD filings", note: "Official pending-ERP ArcGIS JSON has stable GlobalID + application numbers; safest next collector, still unconnected", href: "https://geoweb.sfwmd.gov/agsext1/rest/services/Regulation_ApplicationPermits/EnvironmentalResourceApplications_RegPermitting/MapServer/14", status: "Next collector · JSON", state: "research" }
       ]},
       { eyebrow: "S3 · Site control + actors", title: "Ownership, companies + capital", items: [
         { label: "Sunbiz entity matches", note: "Private exact matches from the state SFTP corpus", table: "sunbiz_entities", componentId: "sunbiz", refresh: "automated" },
@@ -1204,10 +1204,11 @@
       let connected = 0, empty = 0, blocked = 0, completed = 0, cursor = 0;
       const freshness = {};
       let manualOrSnapshot = 0;
+      const planned = SOURCE_GROUPS.reduce((count, group) => count + group.items.filter(item => item.state === "research").length, 0);
       const updateSummary = () => {
         q("#library-summary").textContent = completed < checks.length
           ? `${completed}/${checks.length} sources checked…`
-          : `${connected} connected · ${freshness.current || 0} current · ${(freshness.delayed || 0) + (freshness.stale || 0) + (freshness.error || 0) + (freshness.unavailable || 0)} delayed/stale · ${manualOrSnapshot} manual/snapshot · ${empty} empty · ${blocked} unavailable`;
+          : `${connected} connected · ${freshness.current || 0} current · ${(freshness.delayed || 0) + (freshness.stale || 0) + (freshness.error || 0) + (freshness.unavailable || 0)} delayed/stale · ${manualOrSnapshot} manual/snapshot · ${planned} planned/not connected · ${empty} empty · ${blocked} unavailable`;
       };
       async function checkNext() {
         const current = cursor++;
@@ -1372,6 +1373,9 @@
         q("#next-btn").disabled = cfg.privatePath ? !privateResult.has_more : data.length < PAGE;
         if (term) {
           q("#count-note").textContent = data.length + (data.length === PAGE ? "+" : "") + " exact match" + (data.length === 1 ? "" : "es") + " shown";
+        } else if (cfg.privatePath && state.table === "pdmr_intent") {
+          const total = Number(privateResult.record_count || 0);
+          q("#count-note").textContent = `${total.toLocaleString()} public PDMR record${total === 1 ? "" : "s"} · event through ${dateish(privateResult.newest_event) || "not exposed"} · source checked ${dateish(privateResult.last_collected) || "not recorded"}`;
         } else if (cfg.privatePath) {
           const rowLabel = cfg.privateLabel || "private resolver row";
           q("#count-note").textContent = data.length + (privateResult.has_more ? "+" : "") + " " + rowLabel + (data.length === 1 ? "" : "s") + " shown";

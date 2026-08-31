@@ -147,8 +147,11 @@ test.describe("private Florida Signal Newsroom", () => {
         await expect(page.locator(".source-group").first()).toContainText("Preliminary Development Meeting Request (PDMR)");
         await expect(page.locator(".source-group").nth(1)).toContainText("Sewer + utility capacity");
         await expect(page.locator(".source-group").nth(1)).toContainText("Research only");
-        await expect(page.locator('[data-source-status="pdmr-local"]')).toContainText(/connected.*manual/i, { timeout: 15_000 });
+        await expect(page.locator(".source-group").nth(1)).toContainText("generic TMP records are downstream/mixed and explicitly excluded");
+        await expect(page.locator(".source-group").nth(1)).toContainText("Next collector · JSON");
+        await expect(page.locator('[data-source-status="pdmr-local"]')).toContainText(/(current|connected).*manual/i, { timeout: 15_000 });
         await expect(page.locator("#table-select")).toHaveValue("pdmr_intent");
+        await expect(page.locator("#count-note")).toContainText(/public PDMR records · event through .* · source checked /i, { timeout: 15_000 });
         const pdmrRow = page.locator("#data-table tbody tr[data-i]").first();
         await expect(pdmrRow).toContainText(/UDP-PDMR-/i, { timeout: 15_000 });
         await pdmrRow.focus();
@@ -167,6 +170,7 @@ test.describe("private Florida Signal Newsroom", () => {
         await expect(preliminaryHealth.locator(".note")).toContainText(/Latest run (source_wait|empty|ok); attempted through \d{4}-\d{2}-\d{2}/, { timeout: 30_000 });
         await expect(preliminaryHealth.locator(".note")).not.toContainText(/source_not_authoritative_yet|empty_unverified_date/);
         await expect(page.locator("#library-summary")).toContainText(/connected · .*empty · .*unavailable/i, { timeout: 15_000 });
+        await expect(page.locator("#library-summary")).toContainText("5 planned/not connected");
         await expect(page.locator('.source-option[data-source-table="sunbiz_entities"] .source-option__status')).toContainText(/(current|connected) · automated/i, { timeout: 15_000 });
         await expect(page.locator('.source-option[data-source-table="accela_details"] .source-option__status')).toContainText(/connected · automated · health unknown/i, { timeout: 15_000 });
         await expect(page.locator('.source-option[data-source-table="gis_enrichment"] .source-option__status')).toContainText(/connected · automated · health unknown/i, { timeout: 15_000 });

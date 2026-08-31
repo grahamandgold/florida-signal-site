@@ -94,6 +94,29 @@ def bounded_int(value: Any, default: int, low: int, high: int) -> int:
     return max(low, min(high, parsed))
 
 
+def status_from_clock(value: Any, current_hours: int, delayed_hours: int) -> str:
+    """Classify one observation clock without treating an event date as a pull clock."""
+    if not value:
+        return "unavailable"
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        current = datetime.fromisoformat(now_iso().replace("Z", "+00:00"))
+        if current.tzinfo is None:
+            current = current.replace(tzinfo=timezone.utc)
+        age_hours = (
+            current.astimezone(timezone.utc) - parsed.astimezone(timezone.utc)
+        ).total_seconds() / 3600
+    except (TypeError, ValueError):
+        return "unavailable"
+    if age_hours <= current_hours:
+        return "current"
+    if age_hours <= delayed_hours:
+        return "delayed"
+    return "stale"
+
+
 def review_queue_path(params: dict[str, list[str]]) -> tuple[str, int, int, str]:
     """Build the bounded, indexed review-queue query used by the local desk."""
     status = (params.get("status", ["NEW"])[0] or "NEW").upper()
@@ -269,6 +292,24 @@ def project_state_payload() -> tuple[int, dict[str, Any]]:
     } for row in health.get("sources", [])
         if isinstance(row, dict) and row.get("id")
     ] if isinstance(health, dict) else []
+
+    # The local PDMR evidence index has its own independently observed clock. It is
+    # intentionally not promoted to production pipeline health, but the Data Explorer
+    # should not call a verified local receipt "health unknown" merely because the
+    # public data-health endpoint cannot see a loopback-only source.
+    pdmr_code, pdmr = pdmr_intent_payload(limit=1)
+    if pdmr_code == 200 and int(pdmr.get("record_count") or 0) > 0:
+        source_receipts.append({
+            "id": "pdmr-local",
+            "label": "Preliminary Development Meeting Request (PDMR) evidence index",
+            "status": status_from_clock(pdmr.get("last_collected"), 72, 168).upper(),
+            "event_through": pdmr.get("newest_event"),
+            "system_time": pdmr.get("last_collected"),
+            "detail": (
+                f"{int(pdmr.get('record_count') or 0)} public source records in the "
+                "read-only local index; refresh remains manual until production admission automation clears its gate."
+            ),
+        })
 
     return 200, {
         "project_state": state,
@@ -486,25 +527,6 @@ def early_intel_payload() -> dict[str, Any]:
         "sunbiz_entities?select=fetched_at,date_filed,source,match_type"
         "&source=eq.sunbiz-sftp-corpus&order=fetched_at.desc.nullslast&limit=1"
     )
-    def status_from_clock(value: Any, current_hours: int, delayed_hours: int) -> str:
-        if not value:
-            return "unavailable"
-        try:
-            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-            if parsed.tzinfo is None:
-                parsed = parsed.replace(tzinfo=timezone.utc)
-            current = datetime.fromisoformat(now_iso().replace("Z", "+00:00"))
-            if current.tzinfo is None:
-                current = current.replace(tzinfo=timezone.utc)
-            age_hours = (current.astimezone(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds() / 3600
-        except (TypeError, ValueError):
-            return "unavailable"
-        if age_hours <= current_hours:
-            return "current"
-        if age_hours <= delayed_hours:
-            return "delayed"
-        return "stale"
-
     if private_sunbiz_code < 400 and isinstance(private_sunbiz_rows, list) and private_sunbiz_rows:
         latest_sunbiz = private_sunbiz_rows[0]
         sunbiz = {

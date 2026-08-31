@@ -262,7 +262,13 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
             state_path = Path(directory) / "state.json"
             state_path.write_text(json.dumps(manifest), encoding="utf-8")
             with mock.patch.object(cms_server, "PROJECT_STATE_PATH", state_path), \
-                    mock.patch.object(cms_server, "public_json", return_value=health):
+                    mock.patch.object(cms_server, "public_json", return_value=health), \
+                    mock.patch.object(cms_server, "now_iso", return_value="2026-08-23T22:30:00Z"), \
+                    mock.patch.object(cms_server, "pdmr_intent_payload", return_value=(200, {
+                        "record_count": 329,
+                        "newest_event": "2026-08-22",
+                        "last_collected": "2026-08-23T21:45:00Z",
+                    })):
                 code, payload = cms_server.project_state_payload()
         rows = {row["id"]: row for row in payload["operational_health"]}
         self.assertEqual(code, 200)
@@ -274,6 +280,9 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         self.assertEqual(receipts["clerk-preliminary"]["event_through"], "2026-08-22")
         self.assertEqual(receipts["broward"]["event_through"], "2026-08-19")
         self.assertEqual(receipts["broward"]["status"], "DELAYED")
+        self.assertEqual(receipts["pdmr-local"]["status"], "CURRENT")
+        self.assertEqual(receipts["pdmr-local"]["event_through"], "2026-08-22")
+        self.assertIn("329 public source records", receipts["pdmr-local"]["detail"])
         rendered_state = json.dumps(payload["project_state"])
         self.assertNotIn("locked PDMRs", rendered_state)
         self.assertIn("historical publication metadata", rendered_state)
