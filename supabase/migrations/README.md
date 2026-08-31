@@ -11,8 +11,36 @@ Tracked, idempotent SQL mirroring live production. No secrets in this directory.
 | `20260812000230_index_health_event_clocks.sql` | partial FDEP event/fetch indexes for bounded public health probes | 2026-08-11 |
 | `20260815172000_sunbiz_private_health_receipt.sql` | aggregate-only Sunbiz freshness receipt and daily post-ingest refresh; raw entity rows stay private | 2026-08-15 |
 | `20260830233000_acclaim_run_receipts.sql` | append-only `broward_clerk_preliminary_run` receipts separating event, attempted-source and system clocks; public read, service-role insert only; no schedule | **NO — code-only, approval required** |
+| `20260831052701_source_run_ledgers_and_parcel_generations.sql` | private append-only FDEP/FAA terminal run receipts; generation-bound Broward parcel range/staging receipts and locked atomic promotion gate; no collector, grant, schedule, or promotion | **NO — code-only, export-first + approval required** |
 
 **Not tracked here (pre-existing / other work):** `fdep_erp`, `faa_oeaaa` tables + their edge functions and primary pg_cron jobs; `refresh_dashboard_cache`. The FAA transient retry schedule added on 2026-08-15 is recorded in the operations handoff. Those objects otherwise remain as originally applied.
+
+## 20260831052701 — source receipts + parcel generations
+
+- `external_source_run_receipts` is private and append-only. It accepts only
+  FDEP ERP and FAA OE/AAA terminal receipts, separates run/observation/attempted
+  event/real-world event clocks, reconciles every row count, and binds schema
+  plus private raw-manifest hashes. Client roles receive no access;
+  `service_role` receives only receipt `SELECT`/`INSERT`.
+- `broward_parcel_import_generations`,
+  `broward_parcel_generation_ranges`, and
+  `broward_parcel_geography_stage` prevent ranges or rows from different
+  dataset vintages from satisfying one countywide import.
+- `fs_promote_broward_parcel_generation(uuid)` is revoked from every Data API
+  role. It atomically replaces the live countywide table only after exact
+  range topology, raw-count accounting, per-range staged OBJECTID membership,
+  reviewed rejection/duplicate-collapse bounds, unique folios/object IDs,
+  normalized raw folios, and Broward bbox checks pass. The dependent
+  `broward_property_transfer_map` is refreshed in the same transaction.
+- The existing unbound parcel import/range ledgers remain historical evidence
+  and cannot satisfy this gate.
+- The exact deployed `fdep-erp-sync`, `faa-oeaaa-sync`, and
+  `broward-parcel-sync` sources/configuration must be exported and hashed before
+  any collector integration. The migration contains no invented Edge source,
+  cron, runtime parcel grant, or live promotion.
+
+See `SOURCE_RUN_LEDGER_AND_PARCEL_PROMOTION_RUNBOOK.md` for the approval-gated
+operator sequence and recovery boundary.
 
 ## 2026-08-11 — durable editorial loop
 
