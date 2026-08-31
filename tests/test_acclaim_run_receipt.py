@@ -208,6 +208,15 @@ class AcclaimRunMigrationContractTests(unittest.TestCase):
         self.assertIn("started_at <= observed_at", sql)
         self.assertIn("observed_at <= completed_at", sql)
         self.assertIn("grant select, insert", sql)
+        self.assertIn(
+            "revoke all on sequence public.broward_clerk_preliminary_run_id_seq",
+            sql,
+        )
+        self.assertIn("from public, anon, authenticated, service_role", sql)
+        self.assertIn(
+            "grant usage, select on sequence public.broward_clerk_preliminary_run_id_seq to service_role",
+            sql,
+        )
         self.assertNotIn("cron.schedule", sql)
         self.assertNotIn("create trigger", sql)
 

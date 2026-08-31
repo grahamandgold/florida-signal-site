@@ -52,6 +52,12 @@ grant select on table public.broward_clerk_preliminary_run to anon, authenticate
 revoke update, delete, truncate, references, trigger
   on table public.broward_clerk_preliminary_run from service_role;
 grant select, insert on table public.broward_clerk_preliminary_run to service_role;
+
+-- Existing projects may still carry permissive default sequence privileges.
+-- Revoke those explicitly before granting the collector's minimum identity
+-- privileges; anon/authenticated never need to read or advance this sequence.
+revoke all on sequence public.broward_clerk_preliminary_run_id_seq
+  from public, anon, authenticated, service_role;
 grant usage, select on sequence public.broward_clerk_preliminary_run_id_seq to service_role;
 
 drop policy if exists clerk_prelim_run_public_read on public.broward_clerk_preliminary_run;
