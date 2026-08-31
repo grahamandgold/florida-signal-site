@@ -1,6 +1,6 @@
 # Florida Signal site + Data Wire checkpoint — 2026-08-30
 
-**Verified:** 2026-08-30 20:34 ET
+**Verified:** 2026-08-30 20:41 ET
 **Scope:** private Newsroom/Data Explorer, public Data Room behavior, local Finder app, and the
 cross-repository Acclaim, Accela/permit-normalization and PDMR evidence audits.
 **Release state:** pushed branches only. Nothing in this checkpoint was merged to `main`, deployed
@@ -9,7 +9,7 @@ production Supabase.
 
 ## Revisions
 
-- Site branch `codex/project-state-panel-2026-08-23` through pushed pre-checkpoint head `ebd364e`, plus this
+- Site branch `codex/project-state-panel-2026-08-23` through pushed UI head `5bbc4dc`, plus this
   documentation checkpoint.
 - Source/Accela branch `codex/accela-health-truth-2026-08-30` through
   `40f5f1058cb0073da3189970169c3a3466fdb0d7` (permit normalization and repair gates;
@@ -59,6 +59,8 @@ production Supabase.
   fails unless the stage has exact 329-ID parity, source-bound raw/version/hash receipts and a
   fully passing ledger. The plan has not been executed: there is no stage, network pull, canonical
   admission, Supabase mirror or other production write.
+- The private PDMR table labels its unverified event clock `Portal date`, not `Filed`; the home
+  summary says `newest portal date`. The displayed date has not been proven to be a filing date.
 - Data Explorer defaults to the bounded, read-only local PDMR evidence table. It supports paged
   fielded lookup by request ID, folio, address, owner and project.
 - Sewer/utility capacity, engineering intake, assemblage + new LLC, lobbyist registrations and
@@ -144,7 +146,7 @@ production Supabase.
 
 ## Verification receipt
 
-- Site: 96 JavaScript safety checks, 44 Python tests and 25 public browser tests passed; the six
+- Site: 96 JavaScript safety checks, 45 Python tests and 25 public browser tests passed; the six
   private browser tests were then rerun against the rebuilt app and passed 6/6.
 - Accela: wrapper suite passed, 43 alert-semantic tests passed, seven exit-matrix tests passed, and
   shell syntax/Python compile/diff checks were clean. The permit-normalization hardening added 29
