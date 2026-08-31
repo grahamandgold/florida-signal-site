@@ -14,10 +14,25 @@ test.describe("private Florida Signal Newsroom", () => {
     await expect(control).toContainText("NEXT · frozen until NOW closes");
     await expect(control).toContainText("Production pipeline health");
     await expect(control).toContainText("UNKNOWN means no current health contract answered");
-    await expect(control).toContainText(/Preliminary Development Meeting Request \(PDMR\) · LOCAL_ONLY/);
+    await expect(control).toContainText("Preliminary Development Meeting Request (PDMR)");
+    await expect(control).toContainText("Stage reconciled · not admitted");
+    await expect(control).toContainText("File-only canary passed · not connected");
     await expect(control).toContainText("93-day proven lead");
     await expect(control).toContainText("RUNTIME DRIFT / NEEDS SEPARATE RECONCILIATION");
     await expect(control.locator(".project-health__row")).toHaveCount(13);
+    const headerLayout = await control.locator(".project-control__head").evaluate(node => {
+      const bounds = node.getBoundingClientRect();
+      const intro = node.firstElementChild.getBoundingClientRect();
+      const mode = node.querySelector(".project-control__mode").getBoundingClientRect();
+      return {
+        height: bounds.height,
+        introWidth: intro.width,
+        inside: [intro, mode].every(rect => rect.left >= bounds.left && rect.right <= bounds.right + 1),
+      };
+    });
+    expect(headerLayout.height).toBeLessThan(420);
+    expect(headerLayout.introWidth).toBeGreaterThan(250);
+    expect(headerLayout.inside).toBe(true);
     expect(await page.evaluate(() => document.body.scrollWidth)).toBe(390);
   });
 
@@ -168,7 +183,7 @@ test.describe("private Florida Signal Newsroom", () => {
         const preliminaryHealth = page.locator('[data-feed="broward_clerk_preliminary"]');
         await expect(preliminaryHealth.locator(".clock--collected i")).toHaveText("terminal health receipt");
         await expect(preliminaryHealth.locator(".collected")).not.toHaveText(/not recorded|loading/i, { timeout: 30_000 });
-        await expect(preliminaryHealth.locator(".badge")).toContainText(/PRELIMINARY · (CURRENT \/ RETRYING|CHECKED \/ NO NEW ROWS)|PRELIMINARY \/ NOT YET VERIFIED/, { timeout: 30_000 });
+        await expect(preliminaryHealth.locator(".badge")).toContainText(/PRELIMINARY · (CURRENT \/ RETRYING|CHECKED \/ NO NEW ROWS)|PRELIMINARY \/ NOT YET VERIFIED|SOURCE DELAY · 1 BUSINESS DAY/, { timeout: 30_000 });
         await expect(preliminaryHealth.locator(".note")).toContainText(/Latest run (source_wait|empty|ok); attempted through \d{4}-\d{2}-\d{2}/, { timeout: 30_000 });
         await expect(preliminaryHealth.locator(".note")).not.toContainText(/source_not_authoritative_yet|empty_unverified_date/);
         await expect(page.locator("#library-summary")).toContainText(/connected · .*empty · .*unavailable/i, { timeout: 15_000 });
