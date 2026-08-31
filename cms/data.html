@@ -512,7 +512,7 @@
     // ---------- feed health ----------
     // THREE CLOCKS, never conflated:
     //   event      — the newest real-world date IN the data (recording date, applied date)
-    //   collected  — the last time our collector successfully wrote (a fetch stamp)
+    //   collected  — a durable run receipt when available; otherwise the legacy fetch stamp
     //   rows       — an EXACT count
     // A feed with no new events is not broken. "Source delay" and "failure" are different words.
     const STATUS = {
@@ -541,9 +541,10 @@
         note: "Broward Clerk verified SFTP. The county publishes 6–9 days behind after its own QA; that lag is the source's, not ours." },
 
       { name: "Preliminary Clerk recordings", table: "broward_clerk_preliminary",
-        event: "record_date", collected: "fetched_at",
+        event: "record_date", collected: null,
+        receiptTable: "broward_clerk_preliminary_run",
         eventDelayDays: 4, collectionDelayDays: 3, preliminary: true,
-        note: "AcclaimWeb same-day public search. PRELIMINARY / NOT YET VERIFIED — runs ahead of the official feed and is reconciled to it later." },
+        note: "AcclaimWeb public search. PRELIMINARY / NOT YET VERIFIED — event coverage and collector-run time are separate clocks." },
 
       { name: "FAA obstruction cases", table: "faa_oeaaa",
         event: "date_entered", collected: "last_fetched_at",
@@ -588,11 +589,51 @@
       return isNaN(t) ? null : Math.floor((Date.now() - t) / 86400000);
     }
 
+    function hoursSince(v) {
+      if (!v) return null;
+      const t = new Date(v);
+      return isNaN(t) ? null : Math.max(0, (Date.now() - t.getTime()) / 3600000);
+    }
+
+    function dateTimeish(v) {
+      if (!v) return "";
+      const value = new Date(v);
+      return isNaN(value) ? String(v) : value.toLocaleString([], {
+        month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit"
+      });
+    }
+
+    function floridaCalendarParts(now) {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York", year: "numeric", month: "numeric", day: "numeric",
+        hour: "numeric", hourCycle: "h23"
+      }).formatToParts(now || new Date());
+      const result = {};
+      for (const part of parts) if (part.type !== "literal") result[part.type] = Number(part.value);
+      return result;
+    }
+
+    function businessCalendarAge(v, now, holidays) {
+      const match = String(v || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!match) return null;
+      const eventDay = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+      const local = floridaCalendarParts(now || new Date());
+      const completedThrough = new Date(Date.UTC(local.year, local.month - 1, local.day));
+      if (local.hour < 12) completedThrough.setUTCDate(completedThrough.getUTCDate() - 1);
+      const closed = holidays || new Set();
+      let age = 0;
+      for (const cursor = new Date(eventDay.getTime() + 86400000); cursor <= completedThrough; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+        const day = cursor.getUTCDay();
+        if (day !== 0 && day !== 6 && !closed.has(cursor.toISOString().slice(0, 10))) age++;
+      }
+      return age;
+    }
+
     function healthCardHtml(f) {
       return `<div class="health-card${f.authority ? " health-card--authority" : ""}" data-feed="${esc(f.table)}">
         <span class="feed">${esc(f.name)}</span>
         <span class="clock clock--event"><i>latest source event</i><b class="event loading">loading…</b></span>
-        <span class="clock clock--collected"><i>last successful collection</i><b class="collected">—</b></span>
+        <span class="clock clock--collected"><i>${f.receiptTable ? "latest collector run" : "last successful collection"}</i><b class="collected">—</b></span>
         <span class="rows"></span>
         <span class="badge badge--unknown">checking</span>
         <span class="note">${esc(f.note || "")}</span>
@@ -653,21 +694,65 @@
         const card = grid.querySelector(`[data-feed="${f.table}"]`);
         if (!card) continue;
         try {
-          const eventVal     = await newestValue(f.table, f.event);
-          const collectedVal = await newestValue(f.table, f.collected);
+          let eventVal = await newestValue(f.table, f.event);
+          let receipt = null;
+          if (f.receiptTable) {
+            const receiptRows = await rows(f.receiptTable, {
+              select: "status,completed_at,observed_at,attempted_through,event_through,rows_observed,rows_new,reason",
+              order: "completed_at.desc", limit: "1"
+            });
+            receipt = receiptRows.length ? receiptRows[0] : null;
+            if (receipt && receipt.event_through && (!eventVal || receipt.event_through > eventVal)) {
+              eventVal = receipt.event_through;
+            }
+          }
+          const collectedVal = receipt ? receipt.completed_at : await newestValue(f.table, f.collected);
           const total        = await tableCount(f.table, f.countCol);
 
           const evEl = card.querySelector(".event");
           evEl.classList.remove("loading");
           evEl.textContent = f.event ? (eventVal ? dateish(eventVal) : "no rows")
                                      : "n/a — snapshot, not an event stream";
-          card.querySelector(".collected").textContent = collectedVal ? dateish(collectedVal) : "not recorded";
+          card.querySelector(".collected").textContent = collectedVal ?
+            (f.receiptTable ? dateTimeish(collectedVal) : dateish(collectedVal)) : "not recorded";
           setRows(card, total);
 
           const badge = card.querySelector(".badge");
           let key = "HEALTHY", label = null;
 
-          if (total && total.n === 0) key = "EMPTY";
+          if (f.receiptTable) {
+            const runStatus = String((receipt || {}).status || "").toLowerCase();
+            const runHours = hoursSince(collectedVal);
+            const eventBusinessDays = businessCalendarAge(eventVal);
+            if (!receipt || runHours == null) {
+              key = "FAILED"; label = "RUN RECEIPT UNAVAILABLE";
+            } else if (runStatus === "failed") {
+              key = "FAILED"; label = "LATEST RUN FAILED";
+            } else if (runHours > 6) {
+              key = "STALE"; label = "COLLECTOR STALE — LAST RUN " + dateish(collectedVal).toUpperCase();
+            } else if (!["ok", "empty", "source_wait"].includes(runStatus) || eventBusinessDays == null) {
+              key = "FAILED"; label = "RUN RECEIPT INVALID";
+            } else if (eventBusinessDays === 0 && runHours <= 2.5) {
+              key = "HEALTHY";
+              label = runStatus === "empty" ? "PRELIMINARY · CHECKED / NO NEW ROWS" :
+                runStatus === "source_wait" ? "PRELIMINARY · CURRENT / RETRYING" :
+                "PRELIMINARY / NOT YET VERIFIED";
+            } else if (eventBusinessDays === 0) {
+              key = "DELAY"; label = "COLLECTOR RUN DELAYED — EVENT COVERAGE CURRENT";
+            } else if (eventBusinessDays <= 2) {
+              key = "DELAY"; label = "SOURCE DELAY · " + eventBusinessDays + " BUSINESS DAY" + (eventBusinessDays === 1 ? "" : "S");
+            } else {
+              key = "STALE"; label = "EVENT COVERAGE STALE · " + eventBusinessDays + " BUSINESS DAYS";
+            }
+            if (receipt) {
+              card.querySelector(".note").textContent = f.note + " Latest run " + runStatus +
+                "; attempted through " + (receipt.attempted_through || "unknown") +
+                "; " + Number(receipt.rows_observed || 0).toLocaleString() + " rows observed / " +
+                Number(receipt.rows_new || 0).toLocaleString() + " new" +
+                (receipt.reason ? "; " + String(receipt.reason) : "") + ".";
+            }
+          }
+          else if (total && total.n === 0) key = "EMPTY";
           else if (f.authority) { key = "MANUAL"; label = "MANUAL SNAPSHOT — NOT SCHEDULED"; }
           else if (f.event) {
             const d = daysSince(eventVal);
@@ -685,7 +770,7 @@
             key = (d == null) ? "EMPTY" : (d <= f.eventDelayDays ? "HEALTHY" : "STALE");
           }
 
-          if (!f.authority && f.collected) {
+          if (!f.receiptTable && !f.authority && f.collected) {
             const collectorDays = daysSince(collectedVal);
             if (collectorDays == null) { key = "FAILED"; label = "COLLECTOR CLOCK UNAVAILABLE"; }
             else if (collectorDays > (f.collectionDelayDays || f.eventDelayDays || 2)) {
@@ -694,7 +779,7 @@
             }
           }
 
-          if (f.preliminary && key === "HEALTHY") label = "PRELIMINARY / NOT YET VERIFIED";
+          if (f.preliminary && key === "HEALTHY" && !label) label = "PRELIMINARY / NOT YET VERIFIED";
           badge.textContent = label || STATUS[key][0];
           badge.className = "badge " + STATUS[key][1];
         } catch (e) {
