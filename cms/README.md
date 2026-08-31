@@ -73,6 +73,9 @@ Data Explorer opens with a plain-English working discovery sequence before any r
 Preliminary Development Meeting Request (PDMR) planning intent is the first built lane;
 sewer/utility capacity, engineering intake, assemblage +
 new LLC, lobbyist registration and SFWMD research lanes remain visible but explicitly unconnected.
+A code-only query-only SQLite shadow view can classify exact `ENG-CR`, `ENG-OAA`, `ROW-SEW`,
+`ROW-WTR` and `PLB-SEWCP-WT` families already stored in a supplied database; that artifact does
+not connect those lanes or change Desk status.
 Connected ownership/capital, regulatory and execution sources follow; permits remain later-stage
 evidence, not the page's identity. Each catalog option performs a real read check and reports
 availability separately from source health and refresh mode: `current/delayed/stale`,

@@ -24,7 +24,7 @@ Assume dirty or untracked files are user work. Preserve them. Do not clean, rese
 ## Current truth
 
 - Fort Lauderdale Preliminary Development Meeting Request (PDMR) records are public. The 27-record research cohort is **frozen**, meaning its roster and adjudication are fixed; the records are not access-locked, and their first-public timestamps remain unresolved.
-- PDMR is the first built private Early Radar lane, not the whole product. Sewer/utility capacity, engineering intake, assemblage plus new LLC, lobbyist registrations, and SFWMD remain planned research sensors without connected collectors or evidence contracts.
+- PDMR is the first built private Early Radar lane, not the whole product. SFWMD has a file-only shadow collector; Fort Lauderdale sewer/utility and engineering-intake records have a code-only query-only SQLite shadow view. Neither is connected. Assemblage plus new LLC and lobbyist registrations remain planned research sensors without connected collectors.
 - The August 30 site and Accela work is pushed on feature branches but is not merged or deployed. A rebuilt local Finder app is not a production deployment. Never describe pushed, built, automated, deployed, validated, or live as interchangeable states.
 - Keep the private PDMR-first Newsroom sequence distinct from the public map-first Data Room.
 

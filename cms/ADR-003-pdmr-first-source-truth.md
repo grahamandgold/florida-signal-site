@@ -18,7 +18,8 @@ research order.
    (PDMR) planning-intent records. Keep permits in the later execution group.
 2. Default the table to the bounded, paged, read-only PDMR evidence index.
 3. Show sewer/utility, engineering intake, assemblage + new LLC, lobbying and SFWMD as research or
-   planned until each has a collector and evidence contract.
+   planned until each has a collector and evidence contract. A file-only shadow collector or
+   SQLite view is not a connected Desk lane.
 4. Report table availability, source freshness, refresh mode and detector coverage independently.
    A readable automated table without an independent health receipt says `health unknown`; it does
    not borrow a receipt from a related source.
