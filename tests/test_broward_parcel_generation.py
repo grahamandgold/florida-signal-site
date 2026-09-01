@@ -446,6 +446,16 @@ class BrowardParcelGenerationTests(unittest.TestCase):
                 MODULE.ParcelGenerationError, "exact staging-only write approval"
             ):
                 MODULE.SupabaseStagingSink.from_environment(MODULE.DEFAULT_BUCKET)
+        with mock.patch.dict(
+            "os.environ",
+            {"FL_SIGNAL_PARCEL_WRITE_APPROVAL": MODULE.WRITE_APPROVAL},
+            clear=True,
+        ):
+            with self.assertRaisesRegex(
+                MODULE.ParcelGenerationError,
+                "exact parcel failure-evidence upload/binding approval",
+            ):
+                MODULE.SupabaseStagingSink.from_environment(MODULE.DEFAULT_BUCKET)
 
     def test_storage_upload_is_roundtrip_hashed_and_size_checked(self):
         body = b"immutable parcel evidence\n"
@@ -516,6 +526,9 @@ class BrowardParcelGenerationTests(unittest.TestCase):
             "os.environ",
             {
                 "FL_SIGNAL_PARCEL_WRITE_APPROVAL": MODULE.WRITE_APPROVAL,
+                "FL_SIGNAL_PARCEL_FAILURE_EVIDENCE_APPROVAL": (
+                    MODULE.FAILURE_EVIDENCE_WRITE_APPROVAL
+                ),
                 "SUPABASE_URL": "http://example.invalid?key=unsafe",
                 "SUPABASE_SERVICE_ROLE_KEY": "not-printed",
             },
@@ -525,6 +538,344 @@ class BrowardParcelGenerationTests(unittest.TestCase):
                 MODULE.ParcelGenerationError, "credential-free HTTPS origin"
             ):
                 MODULE.SupabaseStagingSink.from_environment(MODULE.DEFAULT_BUCKET)
+
+    def test_storage_upload_exact_existing_object_is_idempotent_not_upserted(self):
+        body = b"immutable parcel failure evidence\n"
+        sink = MODULE.SupabaseStagingSink(
+            url="https://example.invalid",
+            service_key="not-printed",
+        )
+        object_key = (
+            "broward-parcel-generations/"
+            "00000000-0000-0000-0000-000000000001/failure-manifest.json"
+        )
+        info = {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "updated_at": "2026-08-31T20:00:00Z",
+            "metadata": {"size": len(body)},
+        }
+        with mock.patch.object(
+            sink,
+            "_request",
+            side_effect=[
+                MODULE.ImmutableStorageObjectAlreadyExists("already exists"),
+                info,
+                info,
+            ],
+        ) as request, mock.patch.object(
+            MODULE.urllib.request,
+            "urlopen",
+            return_value=DownloadResponse(
+                f"https://example.invalid/storage/v1/object/authenticated/"
+                f"{MODULE.DEFAULT_BUCKET}/{object_key}",
+                body,
+            ),
+        ):
+            receipt = sink.upload_once(object_key, body, "application/json")
+        self.assertEqual(receipt["upload_disposition"], "verified_existing")
+        self.assertEqual(receipt["sha256"], MODULE.sha256_bytes(body))
+        self.assertEqual(
+            request.call_args_list[0].kwargs["extra_headers"],
+            {"x-upsert": "false"},
+        )
+        self.assertTrue(
+            request.call_args_list[0].kwargs["allow_immutable_object_exists"]
+        )
+        self.assertTrue(
+            sink._is_immutable_object_exists_response(
+                json.dumps({"statusCode": "409", "error": "Duplicate", "message": "The resource already exists"})
+            )
+        )
+        self.assertTrue(
+            sink._is_immutable_object_exists_response(
+                json.dumps({"message": "Asset Already Exists"})
+            )
+        )
+        self.assertFalse(
+            sink._is_immutable_object_exists_response(
+                json.dumps({"message": "invalid bucket"})
+            )
+        )
+
+    def test_failure_pair_upload_and_rpc_binding_are_exact_and_replayable(self):
+        run_id = str(uuid.uuid4())
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(MODULE.ParcelGenerationError, "partial failure"):
+                MODULE.collect_generation(
+                    source=FailingFixtureSource(FIXTURE_ROOT),
+                    evidence_root=root,
+                    run_id=run_id,
+                    mode="canary",
+                    page_size=4,
+                    canary_rows=7,
+                )
+            run_root = root / run_id
+            manifest_body = (run_root / "failure-manifest.json").read_bytes()
+            receipt_body = (run_root / "failure-receipt.json").read_bytes()
+            sink = MODULE.SupabaseStagingSink(
+                url="https://example.invalid",
+                service_key="not-printed",
+                failure_evidence_write_approved=True,
+            )
+            storage_rows = [
+                {
+                    "bytes": len(manifest_body),
+                    "object_key": (
+                        f"broward-parcel-generations/{run_id}/failure-manifest.json"
+                    ),
+                    "sha256": MODULE.sha256_bytes(manifest_body),
+                    "storage_metadata_size": len(manifest_body),
+                    "storage_object_id": "10000000-0000-0000-0000-000000000001",
+                    "storage_updated_at": "2026-08-31T20:00:00Z",
+                    "upload_disposition": "created",
+                    "verification_method": "private_storage_roundtrip_sha256_v1",
+                },
+                {
+                    "bytes": len(receipt_body),
+                    "object_key": (
+                        f"broward-parcel-generations/{run_id}/failure-receipt.json"
+                    ),
+                    "sha256": MODULE.sha256_bytes(receipt_body),
+                    "storage_metadata_size": len(receipt_body),
+                    "storage_object_id": "20000000-0000-0000-0000-000000000002",
+                    "storage_updated_at": "2026-08-31T20:00:01Z",
+                    "upload_disposition": "created",
+                    "verification_method": "private_storage_roundtrip_sha256_v1",
+                },
+            ]
+            database_result = {
+                "failure_manifest_object_key": storage_rows[0]["object_key"],
+                "failure_manifest_sha256": storage_rows[0]["sha256"],
+                "failure_receipt_object_key": storage_rows[1]["object_key"],
+                "failure_receipt_sha256": storage_rows[1]["sha256"],
+                "generation_id": run_id,
+                "status": "failed",
+            }
+            with mock.patch.object(
+                sink,
+                "upload_once",
+                side_effect=storage_rows,
+            ) as upload, mock.patch.object(
+                sink,
+                "rpc",
+                return_value=database_result,
+            ) as rpc:
+                result = sink.bind_failure_evidence(
+                    run_root=run_root,
+                    run_id=run_id,
+                )
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["failure_manifest_upload"], "created")
+        self.assertEqual(result["failure_receipt_upload"], "created")
+        self.assertEqual(upload.call_count, 2)
+        self.assertEqual(upload.call_args_list[0].args[1], manifest_body)
+        self.assertEqual(upload.call_args_list[1].args[1], receipt_body)
+        rpc.assert_called_once()
+        function_name, payload = rpc.call_args.args
+        self.assertEqual(function_name, "fs_fail_broward_parcel_generation")
+        self.assertEqual(payload["p_generation_id"], run_id)
+        self.assertEqual(payload["p_failure_manifest_storage"], storage_rows[0])
+        self.assertEqual(payload["p_failure_receipt_storage"], storage_rows[1])
+        self.assertEqual(
+            payload["p_failure_receipt"], json.loads(receipt_body)
+        )
+        self.assertNotIn("not-printed", json.dumps(payload, sort_keys=True))
+
+    def test_failure_pair_upload_refuses_missing_gate_or_local_tamper(self):
+        run_id = str(uuid.uuid4())
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(MODULE.ParcelGenerationError, "partial failure"):
+                MODULE.collect_generation(
+                    source=FailingFixtureSource(FIXTURE_ROOT),
+                    evidence_root=root,
+                    run_id=run_id,
+                    mode="canary",
+                    page_size=4,
+                    canary_rows=7,
+                )
+            run_root = root / run_id
+            gated_sink = MODULE.SupabaseStagingSink(
+                url="https://example.invalid",
+                service_key="not-printed",
+            )
+            with self.assertRaisesRegex(
+                MODULE.ParcelGenerationError,
+                "exact parcel failure-evidence upload/binding approval",
+            ):
+                gated_sink.bind_failure_evidence(
+                    run_root=run_root,
+                    run_id=run_id,
+                )
+
+            approved_sink = MODULE.SupabaseStagingSink(
+                url="https://example.invalid",
+                service_key="not-printed",
+                failure_evidence_write_approved=True,
+            )
+            manifest = json.loads(
+                (run_root / "failure-manifest.json").read_text()
+            )
+            referenced_path = run_root / manifest["objects"][0]["path"]
+            referenced_body = referenced_path.read_bytes()
+            referenced_path.write_bytes(referenced_body + b"tamper")
+            with self.assertRaisesRegex(
+                MODULE.ParcelGenerationError,
+                "references changed local evidence",
+            ), mock.patch.object(approved_sink, "upload_once") as upload:
+                approved_sink.bind_failure_evidence(
+                    run_root=run_root,
+                    run_id=run_id,
+                )
+            upload.assert_not_called()
+            referenced_path.write_bytes(referenced_body)
+
+            manifest_path = run_root / "failure-manifest.json"
+            manifest_path.write_bytes(manifest_path.read_bytes() + b"tamper")
+            with self.assertRaisesRegex(
+                MODULE.ParcelGenerationError,
+                "absent or invalid|not canonical|does not reconcile",
+            ), mock.patch.object(approved_sink, "upload_once") as upload:
+                approved_sink.bind_failure_evidence(
+                    run_root=run_root,
+                    run_id=run_id,
+                )
+            upload.assert_not_called()
+
+    def test_failure_binding_cli_is_explicit_and_source_free(self):
+        run_id = str(uuid.uuid4())
+        args = MODULE.parse_args(
+            [
+                "--bind-existing-failure",
+                "--write-supabase",
+                "--run-id",
+                run_id,
+                "--evidence-root",
+                "/tmp/parcel-failure-replay-test",
+            ]
+        )
+        self.assertTrue(args.bind_existing_failure)
+        self.assertTrue(args.write_supabase)
+        self.assertEqual(args.run_id, run_id)
+        self.assertFalse(args.allow_network)
+        self.assertIsNone(args.fixture_dir)
+
+        sink = mock.Mock(spec=MODULE.SupabaseStagingSink)
+        sink.bind_failure_evidence.return_value = {
+            "generation_id": run_id,
+            "status": "replayed",
+        }
+        with mock.patch.object(
+            MODULE.SupabaseStagingSink,
+            "from_environment",
+            return_value=sink,
+        ), mock.patch.object(MODULE, "ArcGISSource") as arcgis, mock.patch.object(
+            MODULE, "FixtureSource"
+        ) as fixture, mock.patch("builtins.print"):
+            exit_code = MODULE.main(
+                [
+                    "--bind-existing-failure",
+                    "--write-supabase",
+                    "--run-id",
+                    run_id,
+                    "--evidence-root",
+                    "/tmp/parcel-failure-replay-test",
+                ]
+            )
+        self.assertEqual(exit_code, 0)
+        arcgis.assert_not_called()
+        fixture.assert_not_called()
+        sink.verify_private_bucket.assert_called_once_with()
+        sink.bind_failure_evidence.assert_called_once_with(
+            run_root=Path("/tmp/parcel-failure-replay-test") / run_id,
+            run_id=run_id,
+        )
+
+        with self.assertRaises(SystemExit), mock.patch("sys.stderr"):
+            MODULE.parse_args(
+                [
+                    "--bind-existing-failure",
+                    "--run-id",
+                    run_id,
+                    "--evidence-root",
+                    "/tmp/parcel-failure-replay-test",
+                ]
+            )
+        with self.assertRaises(SystemExit), mock.patch("sys.stderr"):
+            MODULE.parse_args(
+                [
+                    "--allow-network",
+                    "--bind-existing-failure",
+                    "--write-supabase",
+                    "--run-id",
+                    run_id,
+                    "--evidence-root",
+                    "/tmp/parcel-failure-replay-test",
+                ]
+            )
+
+    def test_staging_failure_automatically_attempts_dual_binding(self):
+        run_id = str(uuid.uuid4())
+        sink = mock.Mock(spec=MODULE.SupabaseStagingSink)
+        sink.service_key = "synthetic-service-key"
+        object_counter = 0
+
+        def upload_once(object_key, body, _media_type):
+            nonlocal object_counter
+            object_counter += 1
+            return {
+                "bytes": len(body),
+                "object_key": object_key,
+                "sha256": MODULE.sha256_bytes(body),
+                "storage_metadata_size": len(body),
+                "storage_object_id": str(uuid.UUID(int=object_counter)),
+                "storage_updated_at": "2026-08-31T20:00:00Z",
+                "upload_disposition": "created",
+                "verification_method": "private_storage_roundtrip_sha256_v1",
+            }
+
+        def rpc(function_name, _payload, **_kwargs):
+            if function_name == "fs_begin_broward_parcel_generation":
+                return {"status": "staging"}
+            if function_name == "fs_stage_broward_parcel_page":
+                raise MODULE.ParcelGenerationError(
+                    "synthetic staging failure echoed synthetic-service-key"
+                )
+            self.fail(f"unexpected RPC {function_name}")
+
+        sink.upload_once.side_effect = upload_once
+        sink.rpc.side_effect = rpc
+        sink.bind_failure_evidence.return_value = {"status": "failed"}
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaises(MODULE.ParcelGenerationError) as raised:
+                MODULE.collect_generation(
+                    source=MODULE.FixtureSource(FIXTURE_ROOT),
+                    evidence_root=root,
+                    run_id=run_id,
+                    mode="canary",
+                    page_size=4,
+                    canary_rows=7,
+                    sink=sink,
+                )
+            run_root = root / run_id
+            self.assertTrue((run_root / "failure-manifest.json").is_file())
+            self.assertTrue((run_root / "failure-receipt.json").is_file())
+            failure_receipt = (
+                run_root / "failure-receipt.json"
+            ).read_text()
+            self.assertNotIn("synthetic-service-key", failure_receipt)
+            self.assertNotIn("synthetic-service-key", str(raised.exception))
+            self.assertIn(
+                MODULE.REDACTED_SUPABASE_CREDENTIAL,
+                failure_receipt,
+            )
+            sink.bind_failure_evidence.assert_called_once_with(
+                run_root=run_root,
+                run_id=run_id,
+            )
 
     def test_timer_is_default_off_marker_gated_and_nonblocking(self):
         service = SERVICE_PATH.read_text(encoding="utf-8")
@@ -758,6 +1109,44 @@ class BrowardParcelGenerationTests(unittest.TestCase):
         ):
             self.assertNotIn(f"grant insert on table public.{table} to service_role", sql)
         self.assertGreaterEqual(sql.count("security definer\nset search_path = ''"), 6)
+
+    def test_failure_rpc_atomically_binds_manifest_and_receipt(self):
+        sql = MIGRATION_PATH.read_text(encoding="utf-8").lower()
+        self.assertIn("add column failure_receipt_sha256 text", sql)
+        self.assertIn("add column failure_receipt_object_key text", sql)
+        self.assertIn("'failure_manifest'", sql)
+        self.assertIn(
+            "p_failure_manifest_storage jsonb,\n  p_failure_receipt_storage jsonb",
+            sql,
+        )
+        self.assertIn(
+            "drop function if exists public.fs_fail_broward_parcel_generation(uuid, jsonb)",
+            sql,
+        )
+        self.assertIn("'/failure-manifest.json'", sql)
+        self.assertIn("'/failure-receipt.json'", sql)
+        self.assertIn("e.purpose = 'failure_manifest'", sql)
+        self.assertIn("e.purpose = 'failure_receipt'", sql)
+        self.assertIn("raw_manifest_sha256 = manifest_sha", sql)
+        self.assertIn("raw_manifest_object_key = manifest_key", sql)
+        self.assertIn("failure_receipt_sha256 = receipt_sha", sql)
+        self.assertIn("failure_receipt_object_key = receipt_key", sql)
+        self.assertIn(
+            "failure evidence replay changed the immutable pair",
+            sql,
+        )
+        self.assertIn(
+            "failure manifest object count differs from the immutable evidence ledger",
+            sql,
+        )
+        self.assertNotIn(
+            "raw_manifest_sha256 = receipt_sha",
+            sql,
+        )
+        self.assertNotIn(
+            "raw_manifest_object_key = receipt_key",
+            sql,
+        )
 
     def test_migration_owns_reviewed_sale_date_contract(self):
         sql = MIGRATION_PATH.read_text(encoding="utf-8")

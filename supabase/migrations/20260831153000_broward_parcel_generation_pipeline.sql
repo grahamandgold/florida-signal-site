@@ -140,6 +140,8 @@ alter table public.broward_parcel_import_generations
   add column rejection_manifest_object_key text,
   add column duplicate_manifest_sha256 text,
   add column duplicate_manifest_object_key text,
+  add column failure_receipt_sha256 text,
+  add column failure_receipt_object_key text,
   add column promotion_eligible boolean not null default false;
 
 alter table public.broward_parcel_import_generations
@@ -213,6 +215,27 @@ alter table public.broward_parcel_import_generations
     or (
       promotion_eligible = false
       and status not in ('ready', 'promoted', 'superseded')
+    )
+  ),
+  add constraint broward_parcel_generation_failure_evidence_check check (
+    generation_protocol <> 'single_stream_v1'
+    or (
+      status = 'failed'
+      and raw_manifest_sha256 ~ '^[0-9a-f]{64}$'
+      and raw_manifest_object_key = (
+        'broward-parcel-generations/' || generation_id::text
+        || '/failure-manifest.json'
+      )
+      and failure_receipt_sha256 ~ '^[0-9a-f]{64}$'
+      and failure_receipt_object_key = (
+        'broward-parcel-generations/' || generation_id::text
+        || '/failure-receipt.json'
+      )
+    )
+    or (
+      status <> 'failed'
+      and failure_receipt_sha256 is null
+      and failure_receipt_object_key is null
     )
   );
 
@@ -422,6 +445,7 @@ create table public.broward_parcel_evidence_objects (
     'raw_page', 'generation_manifest', 'range_manifest',
     'rejection_manifest', 'duplicate_manifest', 'field_null_manifest',
     'supporting_evidence',
+    'failure_manifest',
     'failure_receipt'
   )),
   sha256 text not null check (sha256 ~ '^[0-9a-f]{64}$'),
@@ -2013,9 +2037,15 @@ begin
 end
 $$;
 
+-- Remove the superseded receipt-only boundary if this code is rehearsed on a
+-- database that previously loaded the unadmitted draft signature.
+drop function if exists public.fs_fail_broward_parcel_generation(uuid, jsonb);
+
 create or replace function public.fs_fail_broward_parcel_generation(
   p_generation_id uuid,
-  p_failure_receipt jsonb
+  p_failure_receipt jsonb,
+  p_failure_manifest_storage jsonb,
+  p_failure_receipt_storage jsonb
 )
 returns jsonb
 language plpgsql
@@ -2023,44 +2053,145 @@ security definer
 set search_path = ''
 as $$
 declare
+  manifest_descriptor jsonb;
+  manifest_sha text;
+  manifest_key text;
+  manifest_bytes bigint;
+  manifest_object_count bigint;
   receipt_sha text;
   receipt_key text;
   receipt_bytes bigint;
   reason text;
   old_status text;
-  stored_object_id uuid;
-  stored_created_at timestamptz;
-  stored_updated_at timestamptz;
-  stored_bytes bigint;
-  expected_object_id uuid;
-  expected_updated_at timestamptz;
-  expected_storage_bytes bigint;
+  manifest_stored_object_id uuid;
+  manifest_stored_created_at timestamptz;
+  manifest_stored_updated_at timestamptz;
+  manifest_stored_bytes bigint;
+  manifest_expected_object_id uuid;
+  manifest_expected_updated_at timestamptz;
+  manifest_expected_storage_bytes bigint;
+  receipt_stored_object_id uuid;
+  receipt_stored_created_at timestamptz;
+  receipt_stored_updated_at timestamptz;
+  receipt_stored_bytes bigint;
+  receipt_expected_object_id uuid;
+  receipt_expected_updated_at timestamptz;
+  receipt_expected_storage_bytes bigint;
 begin
-  if p_generation_id is null or jsonb_typeof(p_failure_receipt) <> 'object' then
+  if p_generation_id is null
+     or jsonb_typeof(p_failure_receipt) is distinct from 'object'
+     or jsonb_typeof(p_failure_manifest_storage) is distinct from 'object'
+     or jsonb_typeof(p_failure_receipt_storage) is distinct from 'object' then
     raise exception using errcode = '22023', message = 'invalid parcel failure receipt';
   end if;
-  receipt_sha := p_failure_receipt->>'failure_object_sha256';
-  receipt_key := p_failure_receipt->>'failure_object_key';
-  if coalesce(p_failure_receipt->>'failure_object_bytes', '') !~ '^[0-9]+$' then
-    raise exception using errcode = '22023', message = 'failure receipt byte count is invalid';
-  end if;
-  receipt_bytes := (p_failure_receipt->>'failure_object_bytes')::bigint;
-  if coalesce(p_failure_receipt->>'storage_object_id', '')
-       !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-     or nullif(p_failure_receipt->>'storage_updated_at', '') is null
-     or coalesce(p_failure_receipt->>'storage_metadata_size', '') !~ '^[0-9]+$' then
+
+  if (select array_agg(key order by key)
+      from jsonb_object_keys(p_failure_manifest_storage) key)
+       is distinct from array[
+         'bytes', 'object_key', 'sha256', 'storage_metadata_size',
+         'storage_object_id', 'storage_updated_at', 'upload_disposition',
+         'verification_method'
+       ]::text[]
+     or (select array_agg(key order by key)
+        from jsonb_object_keys(p_failure_receipt_storage) key)
+       is distinct from array[
+         'bytes', 'object_key', 'sha256', 'storage_metadata_size',
+         'storage_object_id', 'storage_updated_at', 'upload_disposition',
+         'verification_method'
+       ]::text[] then
     raise exception using errcode = '22023',
-      message = 'failure receipt Storage version fence is invalid';
+      message = 'parcel failure Storage attestations have unknown or missing fields';
   end if;
-  expected_object_id := (p_failure_receipt->>'storage_object_id')::uuid;
-  expected_updated_at := (p_failure_receipt->>'storage_updated_at')::timestamptz;
-  expected_storage_bytes := (p_failure_receipt->>'storage_metadata_size')::bigint;
+
+  manifest_descriptor := p_failure_receipt->'evidence_manifest';
+  if jsonb_typeof(manifest_descriptor) is distinct from 'object'
+     or (select array_agg(key order by key)
+        from jsonb_object_keys(manifest_descriptor) key)
+       is distinct from array[
+         'bytes', 'object_count', 'path', 'schema_version', 'sha256'
+       ]::text[]
+     or p_failure_receipt->>'run_id' is distinct from p_generation_id::text
+     or p_failure_receipt->>'schema_version'
+       is distinct from 'FloridaSignalBrowardParcelFailureReceiptV2'
+     or p_failure_receipt->>'status' is distinct from 'failed'
+     or p_failure_receipt->'promotion_eligible' is distinct from 'false'::jsonb
+     or p_failure_receipt->'promotion_performed' is distinct from 'false'::jsonb
+     or jsonb_typeof(p_failure_receipt->'error_message') is distinct from 'string'
+     or manifest_descriptor->>'path' is distinct from 'failure-manifest.json'
+     or manifest_descriptor->>'schema_version'
+       is distinct from 'FloridaSignalTerminalFailureEvidenceManifestV1'
+     or coalesce(manifest_descriptor->>'bytes', '') !~ '^[0-9]+$'
+     or coalesce(manifest_descriptor->>'object_count', '') !~ '^[0-9]+$' then
+    raise exception using errcode = '22023',
+      message = 'parcel failure receipt has no exact manifest binding';
+  end if;
+
+  manifest_sha := p_failure_manifest_storage->>'sha256';
+  manifest_key := p_failure_manifest_storage->>'object_key';
+  receipt_sha := p_failure_receipt_storage->>'sha256';
+  receipt_key := p_failure_receipt_storage->>'object_key';
+  if coalesce(p_failure_manifest_storage->>'bytes', '') !~ '^[0-9]+$'
+     or coalesce(p_failure_receipt_storage->>'bytes', '') !~ '^[0-9]+$'
+     or coalesce(p_failure_manifest_storage->>'storage_metadata_size', '')
+       !~ '^[0-9]+$'
+     or coalesce(p_failure_receipt_storage->>'storage_metadata_size', '')
+       !~ '^[0-9]+$' then
+    raise exception using errcode = '22023',
+      message = 'parcel failure evidence byte counts are invalid';
+  end if;
+  manifest_bytes := (p_failure_manifest_storage->>'bytes')::bigint;
+  manifest_object_count := (manifest_descriptor->>'object_count')::bigint;
+  receipt_bytes := (p_failure_receipt_storage->>'bytes')::bigint;
+  manifest_expected_storage_bytes :=
+    (p_failure_manifest_storage->>'storage_metadata_size')::bigint;
+  receipt_expected_storage_bytes :=
+    (p_failure_receipt_storage->>'storage_metadata_size')::bigint;
+
+  if coalesce(p_failure_manifest_storage->>'storage_object_id', '')
+       !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+     or coalesce(p_failure_receipt_storage->>'storage_object_id', '')
+       !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+     or nullif(p_failure_manifest_storage->>'storage_updated_at', '') is null
+     or nullif(p_failure_receipt_storage->>'storage_updated_at', '') is null then
+    raise exception using errcode = '22023',
+      message = 'parcel failure evidence Storage version fence is invalid';
+  end if;
+  manifest_expected_object_id :=
+    (p_failure_manifest_storage->>'storage_object_id')::uuid;
+  receipt_expected_object_id :=
+    (p_failure_receipt_storage->>'storage_object_id')::uuid;
+  manifest_expected_updated_at :=
+    (p_failure_manifest_storage->>'storage_updated_at')::timestamptz;
+  receipt_expected_updated_at :=
+    (p_failure_receipt_storage->>'storage_updated_at')::timestamptz;
   reason := left(coalesce(p_failure_receipt->>'error_message', 'collector failed'), 2000);
-  if receipt_sha !~ '^[0-9a-f]{64}$'
-     or receipt_key !~ ('^broward-parcel-generations/' || p_generation_id::text || '/')
-     or p_failure_receipt->>'verification_method'
+
+  if coalesce(manifest_sha, '') !~ '^[0-9a-f]{64}$'
+     or coalesce(receipt_sha, '') !~ '^[0-9a-f]{64}$'
+     or manifest_key is distinct from (
+       'broward-parcel-generations/' || p_generation_id::text
+       || '/failure-manifest.json'
+     )
+     or receipt_key is distinct from (
+       'broward-parcel-generations/' || p_generation_id::text
+       || '/failure-receipt.json'
+     )
+     or manifest_descriptor->>'sha256' is distinct from manifest_sha
+     or coalesce(manifest_descriptor->>'bytes', '') !~ '^[0-9]+$'
+     or (manifest_descriptor->>'bytes')::bigint is distinct from manifest_bytes
+     or manifest_bytes is distinct from manifest_expected_storage_bytes
+     or receipt_bytes is distinct from receipt_expected_storage_bytes
+     or manifest_expected_object_id = receipt_expected_object_id
+     or coalesce(p_failure_manifest_storage->>'upload_disposition', '')
+       not in ('created', 'verified_existing')
+     or coalesce(p_failure_receipt_storage->>'upload_disposition', '')
+       not in ('created', 'verified_existing')
+     or p_failure_manifest_storage->>'verification_method'
+       is distinct from 'private_storage_roundtrip_sha256_v1'
+     or p_failure_receipt_storage->>'verification_method'
        is distinct from 'private_storage_roundtrip_sha256_v1' then
-    raise exception using errcode = '23514', message = 'private failure receipt is absent';
+    raise exception using errcode = '23514',
+      message = 'private parcel failure evidence pair is invalid';
   end if;
 
   select
@@ -2068,18 +2199,41 @@ begin
     o.created_at,
     o.updated_at,
     coalesce(o.metadata->>'size', o.metadata->>'contentLength')::bigint
-    into stored_object_id, stored_created_at, stored_updated_at, stored_bytes
+    into manifest_stored_object_id, manifest_stored_created_at,
+         manifest_stored_updated_at, manifest_stored_bytes
+  from storage.objects o
+  join storage.buckets b on b.id = o.bucket_id
+  where o.bucket_id = 'fl-signal-source-evidence'
+    and o.name = manifest_key
+    and o.id = manifest_expected_object_id
+    and o.updated_at = manifest_expected_updated_at
+    and b.public = false
+    and coalesce(o.metadata->>'size', o.metadata->>'contentLength', '') ~ '^[0-9]+$';
+  if not found
+     or manifest_stored_bytes is distinct from manifest_bytes
+     or manifest_stored_bytes is distinct from manifest_expected_storage_bytes then
+    raise exception using errcode = '23514',
+      message = 'private failure manifest Storage identity or size is unverified';
+  end if;
+
+  select
+    o.id,
+    o.created_at,
+    o.updated_at,
+    coalesce(o.metadata->>'size', o.metadata->>'contentLength')::bigint
+    into receipt_stored_object_id, receipt_stored_created_at,
+         receipt_stored_updated_at, receipt_stored_bytes
   from storage.objects o
   join storage.buckets b on b.id = o.bucket_id
   where o.bucket_id = 'fl-signal-source-evidence'
     and o.name = receipt_key
-    and o.id = expected_object_id
-    and o.updated_at = expected_updated_at
+    and o.id = receipt_expected_object_id
+    and o.updated_at = receipt_expected_updated_at
     and b.public = false
     and coalesce(o.metadata->>'size', o.metadata->>'contentLength', '') ~ '^[0-9]+$';
   if not found
-     or stored_bytes is distinct from receipt_bytes
-     or stored_bytes is distinct from expected_storage_bytes then
+     or receipt_stored_bytes is distinct from receipt_bytes
+     or receipt_stored_bytes is distinct from receipt_expected_storage_bytes then
     raise exception using errcode = '23514',
       message = 'private failure receipt Storage identity or size is unverified';
   end if;
@@ -2091,26 +2245,59 @@ begin
   from public.broward_parcel_import_generations
   where generation_id = p_generation_id
   for update;
+  if manifest_object_count is distinct from (
+    select count(*)
+    from public.broward_parcel_evidence_objects e
+    where e.generation_id = p_generation_id
+      and e.purpose not in ('failure_manifest', 'failure_receipt')
+  ) then
+    raise exception using errcode = '23514',
+      message = 'failure manifest object count differs from the immutable evidence ledger';
+  end if;
   if old_status = 'failed' then
-    if exists (
+    if reason is not distinct from (
+         select g.failure_reason
+         from public.broward_parcel_import_generations g
+         where g.generation_id = p_generation_id
+       )
+       and exists (
       select 1
       from public.broward_parcel_import_generations g
       join public.broward_parcel_evidence_objects e
         on e.generation_id = g.generation_id
       where g.generation_id = p_generation_id
-        and g.raw_manifest_object_key = receipt_key
-        and g.raw_manifest_sha256 = receipt_sha
+        and g.raw_manifest_object_key = manifest_key
+        and g.raw_manifest_sha256 = manifest_sha
+        and g.failure_receipt_object_key = receipt_key
+        and g.failure_receipt_sha256 = receipt_sha
+        and e.object_key = manifest_key
+        and e.purpose = 'failure_manifest'
+        and e.sha256 = manifest_sha
+        and e.bytes = manifest_bytes
+        and e.storage_object_id = manifest_stored_object_id
+        and e.storage_updated_at = manifest_stored_updated_at
+    ) and exists (
+      select 1
+      from public.broward_parcel_evidence_objects e
+      where e.generation_id = p_generation_id
         and e.object_key = receipt_key
         and e.purpose = 'failure_receipt'
         and e.sha256 = receipt_sha
         and e.bytes = receipt_bytes
-        and e.storage_object_id = stored_object_id
-        and e.storage_updated_at = stored_updated_at
+        and e.storage_object_id = receipt_stored_object_id
+        and e.storage_updated_at = receipt_stored_updated_at
     ) then
-      return jsonb_build_object('generation_id', p_generation_id, 'status', 'replayed');
+      return jsonb_build_object(
+        'failure_manifest_object_key', manifest_key,
+        'failure_manifest_sha256', manifest_sha,
+        'failure_receipt_object_key', receipt_key,
+        'failure_receipt_sha256', receipt_sha,
+        'generation_id', p_generation_id,
+        'status', 'replayed'
+      );
     end if;
     raise exception using errcode = '23505',
-      message = 'failure receipt replay changed immutable evidence';
+      message = 'failure evidence replay changed the immutable pair';
   end if;
   if old_status is distinct from 'staging' then
     raise exception using errcode = '55000', message = 'only a staging generation can fail';
@@ -2121,8 +2308,34 @@ begin
     storage_created_at, storage_updated_at, storage_metadata_size,
     verification_method
   ) values (
+    p_generation_id, manifest_key, 'failure_manifest', manifest_sha, manifest_bytes,
+    manifest_stored_object_id, manifest_stored_created_at,
+    manifest_stored_updated_at, manifest_stored_bytes,
+    'private_storage_roundtrip_sha256_v1'
+  ) on conflict (generation_id, object_key) do nothing;
+  if not exists (
+    select 1
+    from public.broward_parcel_evidence_objects e
+    where e.generation_id = p_generation_id
+      and e.object_key = manifest_key
+      and e.purpose = 'failure_manifest'
+      and e.sha256 = manifest_sha
+      and e.bytes = manifest_bytes
+      and e.storage_object_id = manifest_stored_object_id
+      and e.storage_updated_at = manifest_stored_updated_at
+  ) then
+    raise exception using errcode = '23505',
+      message = 'failure manifest replay changed immutable evidence';
+  end if;
+
+  insert into public.broward_parcel_evidence_objects (
+    generation_id, object_key, purpose, sha256, bytes, storage_object_id,
+    storage_created_at, storage_updated_at, storage_metadata_size,
+    verification_method
+  ) values (
     p_generation_id, receipt_key, 'failure_receipt', receipt_sha, receipt_bytes,
-    stored_object_id, stored_created_at, stored_updated_at, stored_bytes,
+    receipt_stored_object_id, receipt_stored_created_at,
+    receipt_stored_updated_at, receipt_stored_bytes,
     'private_storage_roundtrip_sha256_v1'
   ) on conflict (generation_id, object_key) do nothing;
   if not exists (
@@ -2133,8 +2346,8 @@ begin
       and e.purpose = 'failure_receipt'
       and e.sha256 = receipt_sha
       and e.bytes = receipt_bytes
-      and e.storage_object_id = stored_object_id
-      and e.storage_updated_at = stored_updated_at
+      and e.storage_object_id = receipt_stored_object_id
+      and e.storage_updated_at = receipt_stored_updated_at
   ) then
     raise exception using errcode = '23505',
       message = 'failure receipt replay changed immutable evidence';
@@ -2144,13 +2357,22 @@ begin
   set
     status = 'failed',
     failure_reason = reason,
-    raw_manifest_sha256 = receipt_sha,
-    raw_manifest_object_key = receipt_key,
+    raw_manifest_sha256 = manifest_sha,
+    raw_manifest_object_key = manifest_key,
+    failure_receipt_sha256 = receipt_sha,
+    failure_receipt_object_key = receipt_key,
     source_observed_at = now(),
     completed_at = now(),
     promotion_eligible = false
   where generation_id = p_generation_id;
-  return jsonb_build_object('generation_id', p_generation_id, 'status', 'failed');
+  return jsonb_build_object(
+    'failure_manifest_object_key', manifest_key,
+    'failure_manifest_sha256', manifest_sha,
+    'failure_receipt_object_key', receipt_key,
+    'failure_receipt_sha256', receipt_sha,
+    'generation_id', p_generation_id,
+    'status', 'failed'
+  );
 end
 $$;
 
@@ -2160,9 +2382,13 @@ revoke all on function public.fs_finalize_broward_parcel_generation(
 grant execute on function public.fs_finalize_broward_parcel_generation(
   uuid, text, text, text, text, text, text, text, text, jsonb
 ) to service_role;
-revoke all on function public.fs_fail_broward_parcel_generation(uuid, jsonb)
+revoke all on function public.fs_fail_broward_parcel_generation(
+  uuid, jsonb, jsonb, jsonb
+)
   from public, anon, authenticated;
-grant execute on function public.fs_fail_broward_parcel_generation(uuid, jsonb)
+grant execute on function public.fs_fail_broward_parcel_generation(
+  uuid, jsonb, jsonb, jsonb
+)
   to service_role;
 
 -- ---------------------------------------------------------------------------

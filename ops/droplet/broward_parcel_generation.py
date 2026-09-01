@@ -42,6 +42,7 @@ NORMALIZER_VERSION = "broward-folio-centroid-sale-date-v2"
 FAILURE_EVIDENCE_MANIFEST_SCHEMA = (
     "FloridaSignalTerminalFailureEvidenceManifestV1"
 )
+FAILURE_RECEIPT_SCHEMA = "FloridaSignalBrowardParcelFailureReceiptV2"
 SALE_DATE_FIELD = "SALE_DATE_1"
 SALE_DATE_MIN = "0001-01-01"
 SALE_DATE_MAX = "9999-12-31"
@@ -120,11 +121,19 @@ REQUIRED_FIELDS = {
 OUT_FIELDS = ",".join(sorted(REQUIRED_FIELDS))
 FOLIO_RE = re.compile(r"^[A-Z0-9]{12}$")
 WRITE_APPROVAL = "I_APPROVE_BROWARD_PARCEL_STAGING_ONLY"
+FAILURE_EVIDENCE_WRITE_APPROVAL = (
+    "I_APPROVE_BROWARD_PARCEL_FAILURE_EVIDENCE_UPLOAD_AND_BIND"
+)
 DEFAULT_BUCKET = "fl-signal-source-evidence"
+REDACTED_SUPABASE_CREDENTIAL = "[REDACTED_SUPABASE_CREDENTIAL]"
 
 
 class ParcelGenerationError(RuntimeError):
     """Fail-closed collector error."""
+
+
+class ImmutableStorageObjectAlreadyExists(ParcelGenerationError):
+    """The immutable Storage key exists and must be verified, not replaced."""
 
 
 class CapturedJson(dict):
@@ -158,6 +167,12 @@ def canonical_json_bytes(value: Any) -> bytes:
 
 def sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def redact_configured_secret(value: str, secret: str | None) -> str:
+    if isinstance(secret, str) and secret:
+        return value.replace(secret, REDACTED_SUPABASE_CREDENTIAL)
+    return value
 
 
 def contract_sha256(contract: Mapping[str, Any]) -> str:
@@ -1255,15 +1270,30 @@ def quality_gate(mode: str, finalization: Finalization) -> list[str]:
 class SupabaseStagingSink:
     """Narrow staging-only Supabase client; there is deliberately no promote method."""
 
-    def __init__(self, *, url: str, service_key: str, bucket: str = DEFAULT_BUCKET):
+    def __init__(
+        self,
+        *,
+        url: str,
+        service_key: str,
+        bucket: str = DEFAULT_BUCKET,
+        failure_evidence_write_approved: bool = False,
+    ):
         self.url = url.rstrip("/")
         self.service_key = service_key
         self.bucket = bucket
+        self.failure_evidence_write_approved = failure_evidence_write_approved
 
     @classmethod
     def from_environment(cls, bucket: str) -> "SupabaseStagingSink":
         if os.environ.get("FL_SIGNAL_PARCEL_WRITE_APPROVAL") != WRITE_APPROVAL:
             raise ParcelGenerationError("exact staging-only write approval is absent")
+        if (
+            os.environ.get("FL_SIGNAL_PARCEL_FAILURE_EVIDENCE_APPROVAL")
+            != FAILURE_EVIDENCE_WRITE_APPROVAL
+        ):
+            raise ParcelGenerationError(
+                "exact parcel failure-evidence upload/binding approval is absent"
+            )
         url = os.environ.get("SUPABASE_URL")
         key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
         if not url or not key:
@@ -1278,7 +1308,12 @@ class SupabaseStagingSink:
             or parsed.fragment
         ):
             raise ParcelGenerationError("SUPABASE_URL must be a credential-free HTTPS origin")
-        return cls(url=url, service_key=key, bucket=bucket)
+        return cls(
+            url=url,
+            service_key=key,
+            bucket=bucket,
+            failure_evidence_write_approved=True,
+        )
 
     def _request(
         self,
@@ -1290,6 +1325,7 @@ class SupabaseStagingSink:
         accept: str = "application/json",
         extra_headers: Mapping[str, str] | None = None,
         timeout_seconds: float = 90.0,
+        allow_immutable_object_exists: bool = False,
     ) -> Any:
         headers = {
             "Accept": accept,
@@ -1309,6 +1345,14 @@ class SupabaseStagingSink:
                 response_body = response.read(8 * 1024 * 1024 + 1)
         except urllib.error.HTTPError as exc:
             safe_body = exc.read(2048).decode("utf-8", errors="replace")
+            if (
+                allow_immutable_object_exists
+                and exc.code == 400
+                and self._is_immutable_object_exists_response(safe_body)
+            ):
+                raise ImmutableStorageObjectAlreadyExists(
+                    f"immutable Storage object already exists at {path}"
+                ) from exc
             raise ParcelGenerationError(
                 f"Supabase staging request failed ({exc.code}) at {path}: {safe_body}"
             ) from exc
@@ -1324,6 +1368,26 @@ class SupabaseStagingSink:
             return json.loads(response_body)
         except json.JSONDecodeError as exc:
             raise ParcelGenerationError("Supabase returned invalid JSON") from exc
+
+    @staticmethod
+    def _is_immutable_object_exists_response(body: str) -> bool:
+        """Recognize only Storage's documented immutable-key collision."""
+
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError:
+            payload = None
+        if isinstance(payload, Mapping):
+            code = str(
+                payload.get("error")
+                or payload.get("error_code")
+                or payload.get("code")
+                or ""
+            ).strip().lower()
+            message = str(payload.get("message") or "").strip().lower()
+            if code == "duplicate" or "asset already exists" in message:
+                return True
+        return "asset already exists" in body.lower()
 
     def verify_private_bucket(self) -> None:
         result = self._request(path=f"/storage/v1/bucket/{self.bucket}", method="GET")
@@ -1429,13 +1493,21 @@ class SupabaseStagingSink:
         self, object_key: str, body: bytes, media_type: str
     ) -> dict[str, Any]:
         quoted_key = urllib.parse.quote(object_key, safe="/")
-        self._request(
-            path=f"/storage/v1/object/{self.bucket}/{quoted_key}",
-            method="POST",
-            body=body,
-            content_type=media_type,
-            extra_headers={"x-upsert": "false"},
-        )
+        disposition = "created"
+        try:
+            self._request(
+                path=f"/storage/v1/object/{self.bucket}/{quoted_key}",
+                method="POST",
+                body=body,
+                content_type=media_type,
+                extra_headers={"x-upsert": "false"},
+                allow_immutable_object_exists=True,
+            )
+        except ImmutableStorageObjectAlreadyExists:
+            # Never upsert. An exact existing object is a safe idempotent replay;
+            # any different bytes, size, object identity, or update clock fail
+            # the same version-fenced round-trip verification below.
+            disposition = "verified_existing"
         expected_sha256 = sha256_bytes(body)
         info_before = self._object_info(object_key)
         observed_bytes, observed_sha256 = self._download_digest(object_key, len(body))
@@ -1454,7 +1526,195 @@ class SupabaseStagingSink:
             "bytes": observed_bytes,
             "object_key": object_key,
             "sha256": observed_sha256,
+            "upload_disposition": disposition,
             "verification_method": "private_storage_roundtrip_sha256_v1",
+        }
+
+    def bind_failure_evidence(
+        self,
+        *,
+        run_root: Path,
+        run_id: str,
+    ) -> dict[str, Any]:
+        """Upload and atomically bind one existing local failure pair.
+
+        This is safe to retry: Storage keys are create-only and exact existing
+        bytes are verified in place, while the database RPC accepts only an
+        exact replay of both immutable object attestations.
+        """
+
+        if not self.failure_evidence_write_approved:
+            raise ParcelGenerationError(
+                "exact parcel failure-evidence upload/binding approval is absent"
+            )
+        try:
+            parsed_run_id = uuid.UUID(run_id)
+        except (ValueError, AttributeError) as exc:
+            raise ParcelGenerationError("run_id must be a lowercase UUID") from exc
+        if str(parsed_run_id) != run_id:
+            raise ParcelGenerationError("run_id must be a lowercase UUID")
+
+        run_root = Path(run_root)
+        manifest_path = run_root / "failure-manifest.json"
+        receipt_path = run_root / "failure-receipt.json"
+        try:
+            manifest_body = manifest_path.read_bytes()
+            receipt_body = receipt_path.read_bytes()
+            manifest = json.loads(manifest_body)
+            failure_receipt = json.loads(receipt_body)
+        except (FileNotFoundError, json.JSONDecodeError) as exc:
+            raise ParcelGenerationError(
+                "local parcel failure manifest/receipt pair is absent or invalid"
+            ) from exc
+        if not isinstance(manifest, Mapping) or not isinstance(
+            failure_receipt, Mapping
+        ):
+            raise ParcelGenerationError(
+                "local parcel failure manifest/receipt pair is not JSON objects"
+            )
+        if manifest_body != canonical_json_bytes(manifest) + b"\n" or (
+            receipt_body != canonical_json_bytes(failure_receipt) + b"\n"
+        ):
+            raise ParcelGenerationError(
+                "local parcel failure manifest/receipt pair is not canonical"
+            )
+        if self.service_key.encode("utf-8") in manifest_body or (
+            self.service_key.encode("utf-8") in receipt_body
+        ):
+            raise ParcelGenerationError(
+                "refusing to upload parcel failure evidence containing a configured credential"
+            )
+
+        manifest_descriptor = failure_receipt.get("evidence_manifest")
+        expected_descriptor_keys = {
+            "bytes",
+            "object_count",
+            "path",
+            "schema_version",
+            "sha256",
+        }
+        if not isinstance(manifest_descriptor, Mapping) or (
+            set(manifest_descriptor) != expected_descriptor_keys
+        ):
+            raise ParcelGenerationError(
+                "failure receipt has no exact evidence-manifest binding"
+            )
+        if (
+            failure_receipt.get("run_id") != run_id
+            or failure_receipt.get("schema_version") != FAILURE_RECEIPT_SCHEMA
+            or failure_receipt.get("status") != "failed"
+            or failure_receipt.get("promotion_eligible") is not False
+            or failure_receipt.get("promotion_performed") is not False
+            or manifest.get("run_id") != run_id
+            or manifest.get("schema_version") != FAILURE_EVIDENCE_MANIFEST_SCHEMA
+            or manifest_descriptor.get("path") != "failure-manifest.json"
+            or manifest_descriptor.get("schema_version")
+            != FAILURE_EVIDENCE_MANIFEST_SCHEMA
+            or manifest_descriptor.get("sha256") != sha256_bytes(manifest_body)
+            or manifest_descriptor.get("bytes") != len(manifest_body)
+            or manifest_descriptor.get("object_count")
+            != manifest.get("object_count")
+            or not isinstance(manifest.get("objects"), list)
+            or manifest.get("object_count") != len(manifest["objects"])
+        ):
+            raise ParcelGenerationError(
+                "local parcel failure manifest/receipt binding does not reconcile"
+            )
+
+        validated_paths: list[str] = []
+        expected_object_keys = {"bytes", "media_type", "path", "sha256"}
+        for descriptor in manifest["objects"]:
+            if not isinstance(descriptor, Mapping) or (
+                set(descriptor) != expected_object_keys
+            ):
+                raise ParcelGenerationError(
+                    "parcel failure manifest has a malformed evidence descriptor"
+                )
+            relative_path = descriptor.get("path")
+            path_parts = (
+                relative_path.split("/") if isinstance(relative_path, str) else []
+            )
+            byte_count = descriptor.get("bytes")
+            if (
+                not path_parts
+                or relative_path.startswith("/")
+                or "\\" in relative_path
+                or any(part in {"", ".", ".."} for part in path_parts)
+                or relative_path
+                in {"failure-manifest.json", "failure-receipt.json"}
+                or not isinstance(byte_count, int)
+                or isinstance(byte_count, bool)
+                or byte_count < 0
+                or descriptor.get("media_type")
+                not in {"application/json", "application/x-ndjson"}
+                or not isinstance(descriptor.get("sha256"), str)
+                or not re.fullmatch(r"[0-9a-f]{64}", descriptor["sha256"])
+            ):
+                raise ParcelGenerationError(
+                    "parcel failure manifest has a malformed evidence descriptor"
+                )
+            object_path = run_root.joinpath(*path_parts)
+            try:
+                object_body = object_path.read_bytes()
+            except FileNotFoundError as exc:
+                raise ParcelGenerationError(
+                    "parcel failure manifest references absent local evidence"
+                ) from exc
+            if len(object_body) != byte_count or (
+                sha256_bytes(object_body) != descriptor["sha256"]
+            ):
+                raise ParcelGenerationError(
+                    "parcel failure manifest references changed local evidence"
+                )
+            validated_paths.append(relative_path)
+        if validated_paths != sorted(validated_paths) or (
+            len(validated_paths) != len(set(validated_paths))
+        ):
+            raise ParcelGenerationError(
+                "parcel failure manifest evidence paths are not unique and sorted"
+            )
+
+        object_prefix = f"broward-parcel-generations/{run_id}"
+        manifest_object_key = f"{object_prefix}/failure-manifest.json"
+        receipt_object_key = f"{object_prefix}/failure-receipt.json"
+        manifest_storage = self.upload_once(
+            manifest_object_key,
+            manifest_body,
+            "application/json",
+        )
+        receipt_storage = self.upload_once(
+            receipt_object_key,
+            receipt_body,
+            "application/json",
+        )
+        database_receipt = self.rpc(
+            "fs_fail_broward_parcel_generation",
+            {
+                "p_failure_manifest_storage": manifest_storage,
+                "p_failure_receipt": dict(failure_receipt),
+                "p_failure_receipt_storage": receipt_storage,
+                "p_generation_id": run_id,
+            },
+        )
+        expected_database_values = {
+            "failure_manifest_object_key": manifest_object_key,
+            "failure_manifest_sha256": manifest_storage["sha256"],
+            "failure_receipt_object_key": receipt_object_key,
+            "failure_receipt_sha256": receipt_storage["sha256"],
+            "generation_id": run_id,
+        }
+        if not isinstance(database_receipt, Mapping) or any(
+            database_receipt.get(key) != value
+            for key, value in expected_database_values.items()
+        ) or database_receipt.get("status") not in {"failed", "replayed"}:
+            raise ParcelGenerationError(
+                "database failure receipt differs from the local immutable pair"
+            )
+        return {
+            **expected_database_values,
+            "failure_manifest_upload": manifest_storage["upload_disposition"],
+            "failure_receipt_upload": receipt_storage["upload_disposition"],
+            "status": database_receipt["status"],
         }
 
 
@@ -1793,6 +2053,10 @@ def collect_generation(
             returned_receipt["receipt_storage_verification"] = terminal_storage_receipt
         return returned_receipt
     except Exception as exc:
+        configured_secret = sink.service_key if sink is not None else None
+        safe_error_message = redact_configured_secret(
+            str(exc), configured_secret
+        )
         try:
             indexed_pages, indexed_rows = store.progress()
         except Exception:
@@ -1813,14 +2077,14 @@ def collect_generation(
         except Exception as manifest_exc:
             raise ParcelGenerationError(
                 "collector failed and its terminal evidence manifest could not be "
-                f"durably written: {type(exc).__name__}: {exc}; "
+                f"durably written: {type(exc).__name__}: {safe_error_message}; "
                 f"manifest error: {type(manifest_exc).__name__}: {manifest_exc}"
             ) from manifest_exc
         failure = {
             "completed_at": utc_now(),
             "evidence_manifest": failure_evidence_manifest,
             "error_class": type(exc).__name__,
-            "error_message": str(exc),
+            "error_message": safe_error_message,
             "failure_stage": failure_stage,
             "mode": mode,
             "normalizer_version": NORMALIZER_VERSION,
@@ -1835,7 +2099,7 @@ def collect_generation(
                 else "COLLECTOR_OR_CONTRACT_FAILURE"
             ),
             "run_id": run_id,
-            "schema_version": "FloridaSignalBrowardParcelFailureReceiptV2",
+            "schema_version": FAILURE_RECEIPT_SCHEMA,
             "source_accounting": {
                 "indexed_pages": indexed_pages,
                 "indexed_rows": indexed_rows,
@@ -1862,7 +2126,7 @@ def collect_generation(
         except Exception as receipt_exc:
             raise ParcelGenerationError(
                 "collector failed and its terminal failure receipt could not be "
-                f"durably written: {type(exc).__name__}: {exc}; "
+                f"durably written: {type(exc).__name__}: {safe_error_message}; "
                 f"receipt error: {type(receipt_exc).__name__}: {receipt_exc}"
             ) from receipt_exc
         delivery_error: Exception | None = None
@@ -1871,46 +2135,23 @@ def collect_generation(
             and sink_started
         ):
             try:
-                failure_key = f"broward-parcel-generations/{run_id}/{failure_path}"
-                failure_storage_receipt = sink.upload_once(
-                    failure_key,
-                    (evidence.root / failure_path).read_bytes(),
-                    "application/json",
-                )
-                sink.rpc(
-                    "fs_fail_broward_parcel_generation",
-                    {
-                        "p_failure_receipt": failure
-                        | {
-                            "failure_object_bytes": failure_storage_receipt["bytes"],
-                            "failure_object_key": failure_key,
-                            "failure_object_sha256": failure_sha,
-                            "storage_metadata_size": failure_storage_receipt[
-                                "storage_metadata_size"
-                            ],
-                            "storage_object_id": failure_storage_receipt[
-                                "storage_object_id"
-                            ],
-                            "storage_updated_at": failure_storage_receipt[
-                                "storage_updated_at"
-                            ],
-                            "verification_method": failure_storage_receipt[
-                                "verification_method"
-                            ],
-                        },
-                        "p_generation_id": run_id,
-                    },
+                sink.bind_failure_evidence(
+                    run_root=evidence.root,
+                    run_id=run_id,
                 )
             except Exception as delivery_exc:
                 delivery_error = delivery_exc
         message = (
-            f"{type(exc).__name__}: {exc}; durable failure receipt "
+            f"{type(exc).__name__}: {safe_error_message}; durable failure receipt "
             f"{failure_path} sha256={failure_sha}"
         )
         if delivery_error is not None:
+            safe_delivery_message = redact_configured_secret(
+                str(delivery_error), configured_secret
+            )
             message += (
                 "; database terminal failure delivery also failed: "
-                f"{type(delivery_error).__name__}: {delivery_error}"
+                f"{type(delivery_error).__name__}: {safe_delivery_message}"
             )
         raise ParcelGenerationError(message) from exc
     finally:
@@ -1920,6 +2161,14 @@ def collect_generation(
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--allow-network", action="store_true")
+    parser.add_argument(
+        "--bind-existing-failure",
+        action="store_true",
+        help=(
+            "retry the exact local failure manifest/receipt pair for --run-id; "
+            "performs no source collection"
+        ),
+    )
     parser.add_argument("--bucket", choices=(DEFAULT_BUCKET,), default=DEFAULT_BUCKET)
     parser.add_argument("--canary-rows", type=int, default=25)
     parser.add_argument("--evidence-root", type=Path, required=True)
@@ -1931,6 +2180,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--run-id", default=None)
     parser.add_argument("--write-supabase", action="store_true")
     args = parser.parse_args(argv)
+    if args.bind_existing_failure:
+        if args.fixture_dir or args.allow_network:
+            parser.error(
+                "failure-evidence binding cannot collect fixture or network input"
+            )
+        if not args.write_supabase:
+            parser.error("failure-evidence binding requires --write-supabase")
+        if not args.run_id:
+            parser.error("failure-evidence binding requires an exact --run-id")
+        return args
     if bool(args.fixture_dir) == bool(args.allow_network):
         parser.error("choose exactly one of --fixture-dir or --allow-network")
     if args.fixture_dir and args.write_supabase:
@@ -1941,9 +2200,20 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     run_id = args.run_id or str(uuid.uuid4())
-    mode = args.mode.replace("-", "_")
-    source: Source = FixtureSource(args.fixture_dir) if args.fixture_dir else ArcGISSource()
     try:
+        if args.bind_existing_failure:
+            sink = SupabaseStagingSink.from_environment(args.bucket)
+            sink.verify_private_bucket()
+            receipt = sink.bind_failure_evidence(
+                run_root=args.evidence_root / run_id,
+                run_id=run_id,
+            )
+            print(json.dumps(receipt, sort_keys=True))
+            return 0
+        mode = args.mode.replace("-", "_")
+        source: Source = (
+            FixtureSource(args.fixture_dir) if args.fixture_dir else ArcGISSource()
+        )
         sink = (
             SupabaseStagingSink.from_environment(args.bucket)
             if args.write_supabase

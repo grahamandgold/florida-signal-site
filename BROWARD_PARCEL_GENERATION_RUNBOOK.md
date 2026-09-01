@@ -1,10 +1,12 @@
 # Broward parcel current-generation collector
 
-**Code state (2026-08-31):** local package only. The foundation migration is
+**Code state (2026-09-01):** local package only. The foundation migration is
 already applied in production, but
 `20260831153000_broward_parcel_generation_pipeline.sql`, this collector, and
 its disabled monthly timer are not deployed or running. Nothing in this
-document is evidence of a production run.
+document is evidence of a production run. The gated failure-evidence upload
+and database binding described below are implemented but have not been run
+against Supabase.
 
 **Read-only development evidence:** file-only run
 `8f1d3a2c-5b74-4f20-9d62-6e0a8c731b45` observed the unchanged 554,358-row
@@ -97,6 +99,27 @@ The manifest has no observation-time field, so identical immutable inputs
 produce identical manifest bytes; it never rewrites or silently repairs an
 earlier object.
 
+If Supabase staging has begun, the collector then uses a separately approved
+failure boundary. It uploads both terminal files to exact generation-bound,
+create-only private Storage keys, reads each object back, and verifies its
+SHA-256 and byte count between identical object-ID/update-clock observations.
+An exact existing object is an idempotent retry; it is never overwritten.
+One SECURITY DEFINER RPC atomically adds both objects to the append-only
+evidence ledger and binds the manifest and receipt separately on the failed
+generation. A replay succeeds only when both Storage identities, clocks,
+sizes, hashes, database bindings and failure reason are unchanged. The RPC
+cannot promote, write live parcel rows, or make a failed generation eligible
+for promotion.
+
+Failures before a staging generation exists remain durable local evidence but
+cannot be database-bound because there is no generation row to own them. An
+upload or RPC failure after the local pair is written also leaves the local
+pair intact and reports the delivery failure separately. Retrying that exact
+pair is safe through the explicit `--bind-existing-failure --write-supabase`
+path with its exact run UUID and both environment gates; that path performs no
+source collection. No automatic historical scan or unrestricted replay is
+part of this package.
+
 ## Required production prerequisites
 
 Stop before any deployment unless all are satisfied:
@@ -177,15 +200,26 @@ empty or successful run.
 
 After the migration is applied, a database canary adds `--write-supabase`.
 The environment must already contain `SUPABASE_URL`,
-`SUPABASE_SERVICE_ROLE_KEY`, and the exact bounded gate:
+`SUPABASE_SERVICE_ROLE_KEY`, and both exact bounded gates:
 
 ```text
 FL_SIGNAL_PARCEL_WRITE_APPROVAL=I_APPROVE_BROWARD_PARCEL_STAGING_ONLY
+FL_SIGNAL_PARCEL_FAILURE_EVIDENCE_APPROVAL=I_APPROVE_BROWARD_PARCEL_FAILURE_EVIDENCE_UPLOAD_AND_BIND
 ```
 
 Fixture input is prohibited from writing to Supabase. A source canary ends in
 `canary_complete`; database constraints permanently prohibit it from becoming
 ready or promoted.
+
+If a prior staging run's terminal pair is local but its Storage/RPC delivery
+was ambiguous, retry only that exact UUID; this cannot collect or backfill:
+
+```bash
+python3 ops/droplet/broward_parcel_generation.py \
+  --bind-existing-failure --write-supabase \
+  --run-id '<exact-existing-lowercase-uuid>' \
+  --evidence-root /var/lib/florida-signal/broward-parcel-generations
+```
 
 Only after that canary is independently reconciled should an operator run one
 new `current-generation` UUID. It collects the entire current source. It does
@@ -202,8 +236,12 @@ The service role can call only four empty-search-path, staging-only RPCs. At
 upload time the collector downloads every private object, recomputes SHA-256
 and byte count between two identical object-info observations. `begin` requires
 that observed object ID, update clock and Storage-owned size to still match and
-binds them in the append-only ledger. Page/finalize/failure RPCs reject
-bare names, replaced objects or mismatched ledger entries. The finalizer also
+binds them in the append-only ledger. Page/finalize/failure RPCs reject bare
+names, replaced objects or mismatched ledger entries. The failure RPC requires
+and independently version-fences the separate `failure-manifest.json` and
+`failure-receipt.json` Storage objects; the generation's raw-manifest fields
+bind the former and its dedicated failure-receipt fields bind the latter. The
+finalizer also
 recomputes a database-owned content digest from every persisted observation;
 it does not accept that digest from the collector. Finalization compares the
 entire supplied range-manifest array in both directions with the persisted
@@ -297,7 +335,8 @@ jitter. It is **default off** in three independent ways:
 1. installation does not enable the timer;
 2. the service requires the absent marker
    `/etc/florida-signal/enable-broward-parcel-generation`; and
-3. the exact staging-only environment approval is required.
+3. both exact staging-only and failure-evidence environment approvals are
+   required.
 
 The service uses a dedicated nonblocking `flock`. It does not share the
 property-transfer database lock, avoiding the old reverse-lock/deadlock risk;
@@ -322,8 +361,9 @@ journalctl -u florida-broward-parcel-generation.service --since '-45 days'
 ```
 
 A nonzero collector exit triggers `florida-freshness-alert.service`; failed
-runs retain immutable local/Storage evidence and a failed database receipt when
-staging had begun. Unexpected normalization errors first write and `fsync` a
+runs retain immutable local evidence and, when staging had begun and delivery
+succeeds, separately bound private-Storage manifest/receipt objects plus a
+failed database receipt. Unexpected normalization errors first write and `fsync` a
 mode-`0600` terminal local failure receipt (including captured-versus-indexed
 source accounting, active raw page SHA-256, original error type/message, and
 `promotion_eligible: false`); a failure to deliver that receipt to Storage or

@@ -3,13 +3,17 @@
 
 begin;
 
-select plan(69);
+select plan(72);
 
 select has_table('public', 'broward_parcel_quality_contracts', 'quality contract table exists');
 select has_table('public', 'broward_parcel_generation_pages', 'page receipt table exists');
 select has_table('public', 'broward_parcel_generation_observations', 'raw observation table exists');
 select has_column('public', 'broward_parcel_generation_observations',
   'sale_date_1_null_reason', 'sale-date field-null reason is persisted');
+select has_column('public', 'broward_parcel_import_generations',
+  'failure_receipt_sha256', 'failed generation binds the receipt SHA-256');
+select has_column('public', 'broward_parcel_import_generations',
+  'failure_receipt_object_key', 'failed generation binds the receipt object key');
 select has_table('public', 'broward_parcel_evidence_objects', 'immutable evidence ledger exists');
 select has_table('public', 'broward_parcel_promotion_previews', 'promotion preview table exists');
 select has_table('public', 'broward_parcel_promotion_authorizations', 'promotion authorization table exists');
@@ -25,7 +29,9 @@ select has_function('public', 'fs_finalize_broward_parcel_generation',
   array['uuid','text','text','text','text','text','text','text','text','jsonb'],
   'finalize RPC exists');
 select has_function('public', 'fs_fail_broward_parcel_generation',
-  array['uuid','jsonb'], 'failure RPC exists');
+  array['uuid','jsonb','jsonb','jsonb'], 'dual-evidence failure RPC exists');
+select hasnt_function('public', 'fs_fail_broward_parcel_generation',
+  array['uuid','jsonb'], 'receipt-only failure RPC is absent');
 select has_function('public', 'fs_broward_parcel_range_manifests_match',
   array['uuid','jsonb'], 'exact range-manifest replay matcher exists');
 select has_function('public', 'fs_preview_broward_parcel_generation',
@@ -108,7 +114,7 @@ select ok(has_function_privilege('service_role',
   'public.fs_finalize_broward_parcel_generation(uuid,text,text,text,text,text,text,text,text,jsonb)','execute'),
   'service role may call finalize RPC');
 select ok(has_function_privilege('service_role',
-  'public.fs_fail_broward_parcel_generation(uuid,jsonb)','execute'),
+  'public.fs_fail_broward_parcel_generation(uuid,jsonb,jsonb,jsonb)','execute'),
   'service role may call failure RPC');
 select is((select prosecdef from pg_proc where oid =
   'public.fs_begin_broward_parcel_generation(uuid,jsonb,text,text,text,integer,text,integer,jsonb,jsonb)'::regprocedure), true,
@@ -120,7 +126,7 @@ select is((select prosecdef from pg_proc where oid =
   'public.fs_finalize_broward_parcel_generation(uuid,text,text,text,text,text,text,text,text,jsonb)'::regprocedure), true,
   'finalize RPC is a narrow definer boundary');
 select is((select prosecdef from pg_proc where oid =
-  'public.fs_fail_broward_parcel_generation(uuid,jsonb)'::regprocedure), true,
+  'public.fs_fail_broward_parcel_generation(uuid,jsonb,jsonb,jsonb)'::regprocedure), true,
   'failure RPC is a narrow definer boundary');
 select ok('search_path=' = any(coalesce((select proconfig from pg_proc where oid =
   'public.fs_begin_broward_parcel_generation(uuid,jsonb,text,text,text,integer,text,integer,jsonb,jsonb)'::regprocedure),array[]::text[])),
@@ -132,7 +138,7 @@ select ok('search_path=' = any(coalesce((select proconfig from pg_proc where oid
   'public.fs_finalize_broward_parcel_generation(uuid,text,text,text,text,text,text,text,text,jsonb)'::regprocedure),array[]::text[])),
   'finalize RPC has an empty search path');
 select ok('search_path=' = any(coalesce((select proconfig from pg_proc where oid =
-  'public.fs_fail_broward_parcel_generation(uuid,jsonb)'::regprocedure),array[]::text[])),
+  'public.fs_fail_broward_parcel_generation(uuid,jsonb,jsonb,jsonb)'::regprocedure),array[]::text[])),
   'failure RPC has an empty search path');
 
 select is((select promotion_allowed from public.broward_parcel_quality_contracts
