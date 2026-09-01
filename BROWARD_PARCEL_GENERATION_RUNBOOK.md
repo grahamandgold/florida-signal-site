@@ -8,6 +8,14 @@ document is evidence of a production run. The gated failure-evidence upload
 and database binding described below are implemented but have not been run
 against Supabase.
 
+**Disposable database verification (2026-09-01):** the foundation and parcel
+migrations applied cleanly to an isolated PostgreSQL 17 cluster. A synthetic
+current-generation receipt proved `staging -> validated -> ready`, exact
+terminal-receipt SHA/size/Storage binding, and the fail-safe ambiguous-response
+path `ready -> failed` while retaining the terminal evidence and clearing
+promotion eligibility. The temporary cluster was stopped and removed; this
+made no production or Supabase write.
+
 **Read-only development evidence:** file-only run
 `8f1d3a2c-5b74-4f20-9d62-6e0a8c731b45` observed the unchanged 554,358-row
 source universe on 2026-08-31, attempted exactly 25 rows, produced 23 winners,
@@ -39,7 +47,9 @@ current-source stream:
    stable `OBJECTID`, then `OBJECTID_12`;
 5. account for every rejection and duplicate, including duplicates whose rows
    land in different 20,000-`OBJECTID` ranges;
-6. finish as a non-promotable canary or a reviewable current generation; and
+6. stop in `validated`, write and round-trip the immutable success receipt,
+   then atomically bind that receipt before becoming a non-promotable canary
+   or a reviewable current generation; and
 7. promote only through the owner-only preview, backup and atomic foundation
    wrapper.
 
@@ -104,12 +114,31 @@ failure boundary. It uploads both terminal files to exact generation-bound,
 create-only private Storage keys, reads each object back, and verifies its
 SHA-256 and byte count between identical object-ID/update-clock observations.
 An exact existing object is an idempotent retry; it is never overwritten.
-One SECURITY DEFINER RPC atomically adds both objects to the append-only
-evidence ledger and binds the manifest and receipt separately on the failed
-generation. A replay succeeds only when both Storage identities, clocks,
-sizes, hashes, database bindings and failure reason are unchanged. The RPC
+One SECURITY DEFINER RPC receives the exact canonical bytes of both terminal
+objects, recomputes their SHA-256 and byte counts, compares every manifest
+descriptor in both directions with the already-bound evidence ledger, then
+atomically adds both objects and binds the manifest and receipt separately on
+the failed generation. A replay succeeds only when both Storage identities,
+clocks, sizes, hashes, database bindings and failure reason are unchanged. The RPC
 cannot promote, write live parcel rows, or make a failed generation eligible
-for promotion.
+for promotion. Deterministic database finalization now stops in `validated`
+with promotion disabled. A separate receipt RPC receives the exact canonical
+receipt text, recomputes its byte count and SHA-256, verifies the private
+Storage row identity/size, binds it as append-only `terminal_receipt` evidence,
+and only then advances to `ready` or `canary_complete`. If receipt upload,
+verification, binding, or its response fails, the transactionally locked
+failure boundary may move that still-unpromoted `validated`, `ready`, or
+`canary_complete` generation to `failed` and clear promotion eligibility. It
+cannot rewrite a promoted or superseded generation.
+
+The attempted `receipt.json` is preserved locally and identified in the V3
+failure receipt, but it is deliberately excluded from the first-phase failure
+manifest. That manifest therefore remains an exact count of the evidence
+ledger bound by `begin`, even if the receipt upload created an object before a
+later verification/RPC failure. If an ambiguous receipt RPC actually committed,
+the failure RPC excludes the separately bound `terminal_receipt` from that
+first-phase count and still closes the run fail-safe rather than leaving it
+falsely ready.
 
 Failures before a staging generation exists remain durable local evidence but
 cannot be database-bound because there is no generation row to own them. An
@@ -118,7 +147,9 @@ pair intact and reports the delivery failure separately. Retrying that exact
 pair is safe through the explicit `--bind-existing-failure --write-supabase`
 path with its exact run UUID and both environment gates; that path performs no
 source collection. No automatic historical scan or unrestricted replay is
-part of this package.
+part of this package. Operator-facing exceptions suppress the original chained
+exception after configured-credential redaction, preventing a traceback or
+structured error reporter from re-exposing the unredacted cause.
 
 ## Required production prerequisites
 
@@ -143,7 +174,7 @@ Stop before any deployment unless all are satisfied:
 - Confirm `florida-freshness-alert.service` exists before installing the unit;
   it is the systemd `OnFailure` target.
 - Review every live-table trigger, inbound foreign key and intentional grant.
-- Obtain exact approval to apply the integration migration, including its four
+- Obtain exact approval to apply the integration migration, including its five
   service-role-only staging RPCs and revocation of direct service-role staging
   and live-table DML.
 
@@ -232,12 +263,14 @@ python3 ops/droplet/broward_parcel_generation.py \
   --evidence-root /var/lib/florida-signal/broward-parcel-generations
 ```
 
-The service role can call only four empty-search-path, staging-only RPCs. At
+The service role can call only five empty-search-path, generation-bound RPCs. At
 upload time the collector downloads every private object, recomputes SHA-256
 and byte count between two identical object-info observations. `begin` requires
 that observed object ID, update clock and Storage-owned size to still match and
-binds them in the append-only ledger. Page/finalize/failure RPCs reject bare
-names, replaced objects or mismatched ledger entries. The failure RPC requires
+binds them in the append-only ledger. Page/finalize/receipt/failure RPCs reject
+bare names, replaced objects or mismatched ledger entries. The receipt RPC is
+the only service-role boundary that can advance `validated` to
+`ready`/`canary_complete`; it cannot promote. The failure RPC requires
 and independently version-fences the separate `failure-manifest.json` and
 `failure-receipt.json` Storage objects; the generation's raw-manifest fields
 bind the former and its dedicated failure-receipt fields bind the latter. The

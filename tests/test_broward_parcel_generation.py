@@ -2,6 +2,7 @@ import importlib.util
 import json
 import sys
 import tempfile
+import traceback
 import unittest
 import uuid
 from unittest import mock
@@ -431,6 +432,10 @@ class BrowardParcelGenerationTests(unittest.TestCase):
             self.assertTrue(
                 (root / run_id / "manifests" / "field-nulls.jsonl").exists()
             )
+            self.assertNotIn(
+                "receipt.json",
+                {item["path"] for item in manifest["objects"]},
+            )
         self.assertEqual(result["status"], "canary_complete")
         self.assertFalse(result["promotion_eligible"])
         self.assertFalse(result["promotion_performed"])
@@ -678,7 +683,10 @@ class BrowardParcelGenerationTests(unittest.TestCase):
         self.assertEqual(payload["p_failure_manifest_storage"], storage_rows[0])
         self.assertEqual(payload["p_failure_receipt_storage"], storage_rows[1])
         self.assertEqual(
-            payload["p_failure_receipt"], json.loads(receipt_body)
+            payload["p_failure_manifest_body"], manifest_body.decode("utf-8")
+        )
+        self.assertEqual(
+            payload["p_failure_receipt_body"], receipt_body.decode("utf-8")
         )
         self.assertNotIn("not-printed", json.dumps(payload, sort_keys=True))
 
@@ -868,6 +876,15 @@ class BrowardParcelGenerationTests(unittest.TestCase):
             ).read_text()
             self.assertNotIn("synthetic-service-key", failure_receipt)
             self.assertNotIn("synthetic-service-key", str(raised.exception))
+            rendered_traceback = "".join(
+                traceback.format_exception(
+                    type(raised.exception),
+                    raised.exception,
+                    raised.exception.__traceback__,
+                )
+            )
+            self.assertNotIn("synthetic-service-key", rendered_traceback)
+            self.assertTrue(raised.exception.__suppress_context__)
             self.assertIn(
                 MODULE.REDACTED_SUPABASE_CREDENTIAL,
                 failure_receipt,
@@ -996,6 +1013,133 @@ class BrowardParcelGenerationTests(unittest.TestCase):
                 immutable_paths.index("failure-receipt.json"),
             )
 
+    def test_attempted_success_receipt_is_preserved_but_not_double_counted(self):
+        run_id = str(uuid.uuid4())
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evidence = MODULE.EvidenceBundle(root, run_id)
+            evidence.write_json("base.json", {"bound": True})
+            receipt_path, receipt_sha = evidence.write_terminal_receipt(
+                {"run_id": run_id, "status": "canary_complete"}
+            )
+            binding = evidence.finish_failure_manifest()
+            manifest = json.loads(
+                (root / run_id / binding["path"]).read_text()
+            )
+        self.assertEqual(receipt_path, "receipt.json")
+        self.assertEqual(
+            evidence.attempted_terminal_receipt,
+            {
+                "bytes": len(
+                    MODULE.canonical_json_bytes(
+                        {"run_id": run_id, "status": "canary_complete"}
+                    )
+                    + b"\n"
+                ),
+                "media_type": "application/json",
+                "path": "receipt.json",
+                "sha256": receipt_sha,
+            },
+        )
+        self.assertEqual([item["path"] for item in manifest["objects"]], ["base.json"])
+
+    def test_ambiguous_terminal_binding_closes_with_reconcilable_failure_manifest(self):
+        with tempfile.TemporaryDirectory() as dry_directory:
+            dry_result = MODULE.collect_generation(
+                source=MODULE.FixtureSource(FIXTURE_ROOT),
+                evidence_root=Path(dry_directory),
+                run_id=str(uuid.uuid4()),
+                mode="canary",
+                page_size=4,
+                canary_rows=7,
+            )
+
+        run_id = str(uuid.uuid4())
+        sink = mock.Mock(spec=MODULE.SupabaseStagingSink)
+        sink.service_key = "synthetic-service-key"
+        object_counter = 0
+
+        def upload_once(object_key, body, _media_type):
+            nonlocal object_counter
+            object_counter += 1
+            return {
+                "bytes": len(body),
+                "object_key": object_key,
+                "sha256": MODULE.sha256_bytes(body),
+                "storage_metadata_size": len(body),
+                "storage_object_id": str(uuid.UUID(int=object_counter)),
+                "storage_updated_at": "2026-09-01T16:00:00Z",
+                "upload_disposition": "created",
+                "verification_method": "private_storage_roundtrip_sha256_v1",
+            }
+
+        def rpc(function_name, payload, **_kwargs):
+            if function_name == "fs_begin_broward_parcel_generation":
+                return {"status": "staging"}
+            if function_name == "fs_stage_broward_parcel_page":
+                return {"status": "staged"}
+            if function_name == "fs_finalize_broward_parcel_generation":
+                return {
+                    "duplicate_rows": dry_result["duplicate_rows"],
+                    "folio_set_sha256": dry_result["folio_set_sha256"],
+                    "generation_id": run_id,
+                    "promotion_eligible": False,
+                    "promotion_eligible_on_receipt": False,
+                    "rejected_rows": dry_result["rejected_rows"],
+                    "rows_accepted": dry_result["accepted_rows"],
+                    "rows_received": dry_result["source_rows"],
+                    "sale_date_1_field_null_rows": dry_result["field_null_rows"],
+                    "source_content_sha256": "a" * 64,
+                    "source_object_id_set_sha256": payload[
+                        "p_source_object_id_set_sha256"
+                    ],
+                    "status": "validated",
+                    "system_object_id_set_sha256": payload[
+                        "p_system_object_id_set_sha256"
+                    ],
+                    "terminal_status": "canary_complete",
+                }
+            if function_name == "fs_commit_broward_parcel_generation_receipt":
+                raise MODULE.ParcelGenerationError(
+                    "synthetic ambiguous terminal receipt response"
+                )
+            self.fail(f"unexpected RPC {function_name}")
+
+        sink.upload_once.side_effect = upload_once
+        sink.rpc.side_effect = rpc
+        sink.bind_failure_evidence.return_value = {"status": "failed"}
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(
+                MODULE.ParcelGenerationError,
+                "synthetic ambiguous terminal receipt response",
+            ):
+                MODULE.collect_generation(
+                    source=MODULE.FixtureSource(FIXTURE_ROOT),
+                    evidence_root=root,
+                    run_id=run_id,
+                    mode="canary",
+                    page_size=4,
+                    canary_rows=7,
+                    sink=sink,
+                )
+            run_root = root / run_id
+            failure, manifest = self._read_failure_bundle(run_root)
+            attempted = failure["attempted_terminal_receipt"]
+            receipt_body = (run_root / "receipt.json").read_bytes()
+            self.assertEqual(attempted["path"], "receipt.json")
+            self.assertEqual(attempted["bytes"], len(receipt_body))
+            self.assertEqual(attempted["sha256"], MODULE.sha256_bytes(receipt_body))
+            self.assertNotIn(
+                "receipt.json",
+                {item["path"] for item in manifest["objects"]},
+            )
+            sink.bind_failure_evidence.assert_called_once_with(
+                run_root=run_root,
+                run_id=run_id,
+            )
+
     def test_mid_capture_failure_manifest_includes_raw_before_request_receipt(self):
         run_id = str(uuid.uuid4())
         original_write_json = MODULE.EvidenceBundle.write_json
@@ -1116,7 +1260,7 @@ class BrowardParcelGenerationTests(unittest.TestCase):
         self.assertIn("add column failure_receipt_object_key text", sql)
         self.assertIn("'failure_manifest'", sql)
         self.assertIn(
-            "p_failure_manifest_storage jsonb,\n  p_failure_receipt_storage jsonb",
+            "p_failure_manifest_body text,\n  p_failure_receipt_body text,\n  p_failure_manifest_storage jsonb,\n  p_failure_receipt_storage jsonb",
             sql,
         )
         self.assertIn(
@@ -1136,9 +1280,21 @@ class BrowardParcelGenerationTests(unittest.TestCase):
             sql,
         )
         self.assertIn(
-            "failure manifest object count differs from the immutable evidence ledger",
+            "failure manifest differs from the immutable evidence ledger",
             sql,
         )
+        self.assertIn("jsonb_array_elements(failure_manifest->'objects')", sql)
+        self.assertIn("p_failure_manifest_body", sql)
+        self.assertIn("p_failure_receipt_body", sql)
+        self.assertIn(
+            "old.status in ('validated', 'ready', 'canary_complete')",
+            sql,
+        )
+        self.assertIn(
+            "old_status is null\n     or old_status not in ('staging', 'validated', 'canary_complete', 'ready')",
+            sql,
+        )
+        self.assertNotIn("only a staging generation can fail", sql)
         self.assertNotIn(
             "raw_manifest_sha256 = receipt_sha",
             sql,
@@ -1147,6 +1303,27 @@ class BrowardParcelGenerationTests(unittest.TestCase):
             "raw_manifest_object_key = receipt_key",
             sql,
         )
+
+    def test_ready_requires_exact_terminal_receipt_binding(self):
+        sql = MIGRATION_PATH.read_text(encoding="utf-8").lower()
+        collector = MODULE_PATH.read_text(encoding="utf-8").lower()
+        self.assertIn("add column terminal_receipt_sha256 text", sql)
+        self.assertIn("add column terminal_receipt_object_key text", sql)
+        self.assertIn("'terminal_receipt'", sql)
+        self.assertIn(
+            "create or replace function public.fs_commit_broward_parcel_generation_receipt",
+            sql,
+        )
+        self.assertIn("status = 'validated'", sql)
+        self.assertIn(
+            "only a validated parcel generation can bind its terminal receipt",
+            sql,
+        )
+        self.assertIn("p_terminal_receipt_body", sql)
+        self.assertIn("pg_catalog.octet_length", sql)
+        self.assertIn("extensions.digest", sql)
+        self.assertIn("fs_commit_broward_parcel_generation_receipt", collector)
+        self.assertIn("write_terminal_receipt", collector)
 
     def test_migration_owns_reviewed_sale_date_contract(self):
         sql = MIGRATION_PATH.read_text(encoding="utf-8")

@@ -140,6 +140,8 @@ alter table public.broward_parcel_import_generations
   add column rejection_manifest_object_key text,
   add column duplicate_manifest_sha256 text,
   add column duplicate_manifest_object_key text,
+  add column terminal_receipt_sha256 text,
+  add column terminal_receipt_object_key text,
   add column failure_receipt_sha256 text,
   add column failure_receipt_object_key text,
   add column promotion_eligible boolean not null default false;
@@ -149,14 +151,16 @@ alter table public.broward_parcel_import_generations
 alter table public.broward_parcel_import_generations
   add constraint broward_parcel_import_generations_status_check
   check (status in (
-    'staging', 'canary_complete', 'ready', 'failed', 'promoted', 'superseded'
+    'staging', 'validated', 'canary_complete', 'ready', 'failed',
+    'promoted', 'superseded'
   ));
 
 alter table public.broward_parcel_import_generations
   drop constraint if exists broward_parcel_generation_promoted_clock;
 alter table public.broward_parcel_import_generations
   add constraint broward_parcel_generation_promoted_clock check (
-    (status in ('staging', 'canary_complete', 'ready', 'failed') and promoted_at is null)
+    (status in ('staging', 'validated', 'canary_complete', 'ready', 'failed')
+      and promoted_at is null)
     or (status in ('promoted', 'superseded') and promoted_at is not null)
   );
 
@@ -164,7 +168,7 @@ create unique index broward_parcel_one_staging_current_generation_idx
   on public.broward_parcel_import_generations ((run_mode))
   where generation_protocol = 'single_stream_v1'
     and run_mode = 'current_generation'
-    and status = 'staging';
+    and status in ('staging', 'validated');
 
 alter table public.broward_parcel_import_generations
   drop constraint if exists broward_parcel_generation_quality_contract_bounds;
@@ -216,6 +220,22 @@ alter table public.broward_parcel_import_generations
       promotion_eligible = false
       and status not in ('ready', 'promoted', 'superseded')
     )
+  ),
+  add constraint broward_parcel_generation_terminal_receipt_check check (
+    generation_protocol <> 'single_stream_v1'
+    or (
+      status in ('ready', 'canary_complete', 'promoted', 'superseded')
+      and terminal_receipt_sha256 ~ '^[0-9a-f]{64}$'
+      and terminal_receipt_object_key = (
+        'broward-parcel-generations/' || generation_id::text || '/receipt.json'
+      )
+    )
+    or (
+      status in ('staging', 'validated')
+      and terminal_receipt_sha256 is null
+      and terminal_receipt_object_key is null
+    )
+    or status = 'failed'
   ),
   add constraint broward_parcel_generation_failure_evidence_check check (
     generation_protocol <> 'single_stream_v1'
@@ -274,7 +294,7 @@ begin
       message = 'a staging parcel generation cannot be promotion eligible';
   end if;
   if new.run_mode = 'canary' and (
-    new.status not in ('staging', 'canary_complete', 'failed')
+    new.status not in ('staging', 'validated', 'canary_complete', 'failed')
     or new.promotion_eligible
   ) then
     raise exception using
@@ -291,8 +311,9 @@ create trigger broward_parcel_generation_contract_guard
   before insert or update on public.broward_parcel_import_generations
   for each row execute function public.fs_validate_broward_parcel_generation_contract();
 
--- Replace the foundation state guard so canary_complete is an immutable
--- terminal state while owner-only ready -> promoted remains unchanged.
+-- Replace the foundation state guard so finalized generations are immutable
+-- except for an exact owner-bound transition to failed when their terminal
+-- receipt cannot be delivered; owner-only ready -> promoted remains unchanged.
 create or replace function public.fs_guard_broward_parcel_generation_update()
 returns trigger
 language plpgsql
@@ -346,7 +367,54 @@ begin
     end if;
 
     if old.status = 'staging'
-       and new.status in ('staging', 'canary_complete', 'ready', 'failed') then
+       and new.status in ('staging', 'validated', 'failed') then
+      return new;
+    end if;
+
+    -- Deterministic finalization ends in validated, with promotion disabled.
+    -- Only the owner-bound terminal-receipt RPC may bind the create-only
+    -- receipt and advance to ready/canary_complete.
+    if current_user = generation_owner
+       and old.status = 'validated'
+       and new.status in ('ready', 'canary_complete')
+       and (
+         (to_jsonb(new) - array[
+           'status', 'terminal_receipt_sha256',
+           'terminal_receipt_object_key', 'completed_at',
+           'promotion_eligible'
+         ]::text[])
+         =
+         (to_jsonb(old) - array[
+           'status', 'terminal_receipt_sha256',
+           'terminal_receipt_object_key', 'completed_at',
+           'promotion_eligible'
+         ]::text[])
+       ) then
+      return new;
+    end if;
+
+    -- A receipt upload or binding failure must be able to close any still
+    -- unpromoted finalized state.  The failure boundary can only change its
+    -- own receipt fields and clear promotion eligibility.
+    if current_user = generation_owner
+       and old.status in ('validated', 'ready', 'canary_complete')
+       and new.status = 'failed'
+       and new.promotion_eligible = false
+       and (
+         (to_jsonb(new) - array[
+           'status', 'failure_reason', 'raw_manifest_sha256',
+           'raw_manifest_object_key', 'failure_receipt_sha256',
+           'failure_receipt_object_key', 'source_observed_at',
+           'completed_at', 'promotion_eligible'
+         ]::text[])
+         =
+         (to_jsonb(old) - array[
+           'status', 'failure_reason', 'raw_manifest_sha256',
+           'raw_manifest_object_key', 'failure_receipt_sha256',
+           'failure_receipt_object_key', 'source_observed_at',
+           'completed_at', 'promotion_eligible'
+         ]::text[])
+       ) then
       return new;
     end if;
 
@@ -445,6 +513,7 @@ create table public.broward_parcel_evidence_objects (
     'raw_page', 'generation_manifest', 'range_manifest',
     'rejection_manifest', 'duplicate_manifest', 'field_null_manifest',
     'supporting_evidence',
+    'terminal_receipt',
     'failure_manifest',
     'failure_receipt'
   )),
@@ -522,7 +591,7 @@ create trigger broward_parcel_evidence_no_truncate
   before truncate on public.broward_parcel_evidence_objects
   for each statement execute function public.fs_reject_broward_parcel_observation_mutation();
 
--- The collector gets no direct staging DML. The four exact, empty-search-path
+-- The collector gets no direct staging DML. The five exact, empty-search-path
 -- SECURITY DEFINER RPCs below are the only write boundary, which also prevents
 -- callers from bypassing the per-generation advisory-lock order.
 revoke all on table public.broward_parcel_import_generations
@@ -1431,13 +1500,21 @@ begin
     raise exception using errcode = '23514', message = 'generation is not single-stream v1';
   end if;
 
+  select * into c
+  from public.broward_parcel_quality_contracts
+  where quality_contract_sha256 = g.quality_contract_sha256
+    and run_mode = g.run_mode;
+  if not found then
+    raise exception using errcode = '23514', message = 'quality contract disappeared';
+  end if;
+
   replay_range_manifests_match :=
     public.fs_broward_parcel_range_manifests_match(
       p_generation_id,
       p_range_manifests
     );
 
-  if g.status in ('canary_complete', 'ready') then
+  if g.status in ('validated', 'canary_complete', 'ready') then
     if g.raw_manifest_sha256 = p_manifest_sha256
        and g.raw_manifest_object_key = p_manifest_key
        and g.rejection_manifest_sha256 = p_rejection_manifest_sha256
@@ -1452,6 +1529,9 @@ begin
         'folio_set_sha256', g.folio_set_sha256,
         'generation_id', p_generation_id,
         'promotion_eligible', g.promotion_eligible,
+        'promotion_eligible_on_receipt', (
+          g.run_mode = 'current_generation' and c.promotion_allowed
+        ),
         'rejected_rows', g.rows_rejected,
         'replayed', true,
         'rows_accepted', g.rows_accepted,
@@ -1465,21 +1545,15 @@ begin
         'source_content_sha256', g.source_content_sha256,
         'source_object_id_set_sha256', g.source_object_id_set_sha256,
         'system_object_id_set_sha256', g.system_object_id_set_sha256,
-        'status', g.status
+        'status', g.status,
+        'terminal_status', case when g.run_mode = 'canary'
+          then 'canary_complete' else 'ready' end
       );
     end if;
     raise exception using errcode = '23505', message = 'generation finalization replay changed evidence';
   end if;
   if g.status <> 'staging' then
     raise exception using errcode = '55000', message = 'parcel generation is not staging';
-  end if;
-
-  select * into c
-  from public.broward_parcel_quality_contracts
-  where quality_contract_sha256 = g.quality_contract_sha256
-    and run_mode = g.run_mode;
-  if not found then
-    raise exception using errcode = '23514', message = 'quality contract disappeared';
   end if;
 
   if exists (
@@ -2013,8 +2087,8 @@ begin
     raw_manifest_object_key = p_manifest_key,
     source_observed_at = now(),
     completed_at = now(),
-    status = terminal_status,
-    promotion_eligible = (g.run_mode = 'current_generation' and c.promotion_allowed)
+    status = 'validated',
+    promotion_eligible = false
   where generation_id = p_generation_id and status = 'staging';
   if not found then
     raise exception using errcode = '55000', message = 'generation state changed during finalization';
@@ -2024,15 +2098,264 @@ begin
     'duplicate_rows', duplicate_count,
     'folio_set_sha256', observed_folio_hash,
     'generation_id', p_generation_id,
-    'promotion_eligible', (g.run_mode = 'current_generation' and c.promotion_allowed),
+    'promotion_eligible', false,
+    'promotion_eligible_on_receipt', (
+      g.run_mode = 'current_generation' and c.promotion_allowed
+    ),
     'rejected_rows', rejected_count,
     'rows_accepted', accepted_count,
     'rows_received', raw_count,
     'sale_date_1_field_null_rows', sale_date_field_null_count,
     'source_content_sha256', observed_source_content_hash,
     'source_object_id_set_sha256', observed_source_object_hash,
-    'status', terminal_status,
+    'status', 'validated',
+    'terminal_status', terminal_status,
     'system_object_id_set_sha256', observed_system_object_hash
+  );
+end
+$$;
+
+-- Deterministic finalization deliberately stops at validated.  This second
+-- phase binds the exact canonical collector receipt to its create-only private
+-- Storage row before ready/canary_complete can become visible.
+create or replace function public.fs_commit_broward_parcel_generation_receipt(
+  p_generation_id uuid,
+  p_terminal_receipt_body text,
+  p_terminal_receipt_storage jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  g public.broward_parcel_import_generations%rowtype;
+  c public.broward_parcel_quality_contracts%rowtype;
+  terminal_receipt jsonb;
+  receipt_sha text;
+  receipt_key text;
+  receipt_bytes bigint;
+  expected_object_id uuid;
+  expected_updated_at timestamptz;
+  expected_storage_bytes bigint;
+  stored_object_id uuid;
+  stored_created_at timestamptz;
+  stored_updated_at timestamptz;
+  stored_bytes bigint;
+  target_status text;
+  target_promotion_eligible boolean;
+begin
+  if p_generation_id is null
+     or p_terminal_receipt_body is null
+     or jsonb_typeof(p_terminal_receipt_storage) is distinct from 'object'
+     or (select array_agg(key order by key)
+        from jsonb_object_keys(p_terminal_receipt_storage) key)
+       is distinct from array[
+         'bytes', 'object_key', 'sha256', 'storage_metadata_size',
+         'storage_object_id', 'storage_updated_at', 'upload_disposition',
+         'verification_method'
+       ]::text[] then
+    raise exception using errcode = '22023',
+      message = 'invalid parcel terminal receipt';
+  end if;
+
+  begin
+    terminal_receipt := p_terminal_receipt_body::jsonb;
+  exception when others then
+    raise exception using errcode = '22023',
+      message = 'parcel terminal receipt body is not JSON';
+  end;
+  if jsonb_typeof(terminal_receipt) is distinct from 'object'
+     or right(p_terminal_receipt_body, 1) is distinct from E'\n'
+     or terminal_receipt->>'run_id' is distinct from p_generation_id::text
+     or terminal_receipt->'dry_run' is distinct from 'false'::jsonb
+     or terminal_receipt->'quality_gate_passed' is distinct from 'true'::jsonb
+     or terminal_receipt->'promotion_authorized' is distinct from 'false'::jsonb
+     or terminal_receipt->'promotion_performed' is distinct from 'false'::jsonb
+     or jsonb_typeof(terminal_receipt->'database_receipt') is distinct from 'object'
+     or terminal_receipt->>'database_destination'
+       is distinct from 'public.broward_parcel_geography_stage' then
+    raise exception using errcode = '22023',
+      message = 'parcel terminal receipt contract is invalid';
+  end if;
+
+  receipt_sha := p_terminal_receipt_storage->>'sha256';
+  receipt_key := p_terminal_receipt_storage->>'object_key';
+  if coalesce(p_terminal_receipt_storage->>'bytes', '') !~ '^[0-9]+$'
+     or coalesce(p_terminal_receipt_storage->>'storage_metadata_size', '')
+       !~ '^[0-9]+$'
+     or coalesce(p_terminal_receipt_storage->>'storage_object_id', '')
+       !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+     or nullif(p_terminal_receipt_storage->>'storage_updated_at', '') is null
+     or coalesce(receipt_sha, '') !~ '^[0-9a-f]{64}$'
+     or receipt_key is distinct from (
+       'broward-parcel-generations/' || p_generation_id::text || '/receipt.json'
+     )
+     or coalesce(p_terminal_receipt_storage->>'upload_disposition', '')
+       not in ('created', 'verified_existing')
+     or p_terminal_receipt_storage->>'verification_method'
+       is distinct from 'private_storage_roundtrip_sha256_v1' then
+    raise exception using errcode = '23514',
+      message = 'private parcel terminal receipt attestation is invalid';
+  end if;
+  receipt_bytes := (p_terminal_receipt_storage->>'bytes')::bigint;
+  expected_storage_bytes :=
+    (p_terminal_receipt_storage->>'storage_metadata_size')::bigint;
+  expected_object_id :=
+    (p_terminal_receipt_storage->>'storage_object_id')::uuid;
+  expected_updated_at :=
+    (p_terminal_receipt_storage->>'storage_updated_at')::timestamptz;
+  if receipt_bytes is distinct from expected_storage_bytes
+     or receipt_bytes is distinct from
+       pg_catalog.octet_length(pg_catalog.convert_to(p_terminal_receipt_body, 'UTF8'))
+     or receipt_sha is distinct from encode(
+       extensions.digest(
+         pg_catalog.convert_to(p_terminal_receipt_body, 'UTF8'), 'sha256'
+       ),
+       'hex'
+     ) then
+    raise exception using errcode = '23514',
+      message = 'parcel terminal receipt body differs from its Storage attestation';
+  end if;
+
+  select
+    o.id,
+    o.created_at,
+    o.updated_at,
+    coalesce(o.metadata->>'size', o.metadata->>'contentLength')::bigint
+    into stored_object_id, stored_created_at, stored_updated_at, stored_bytes
+  from storage.objects o
+  join storage.buckets b on b.id = o.bucket_id
+  where o.bucket_id = 'fl-signal-source-evidence'
+    and o.name = receipt_key
+    and o.id = expected_object_id
+    and o.updated_at = expected_updated_at
+    and b.public = false
+    and coalesce(o.metadata->>'size', o.metadata->>'contentLength', '') ~ '^[0-9]+$';
+  if not found
+     or stored_bytes is distinct from receipt_bytes
+     or stored_bytes is distinct from expected_storage_bytes then
+    raise exception using errcode = '23514',
+      message = 'private terminal receipt Storage identity or size is unverified';
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtext('florida-signal:broward-parcel:' || p_generation_id::text)
+  );
+  select * into g
+  from public.broward_parcel_import_generations
+  where generation_id = p_generation_id
+  for update;
+  if not found then
+    raise exception using errcode = 'P0002', message = 'parcel generation not found';
+  end if;
+  select * into c
+  from public.broward_parcel_quality_contracts
+  where quality_contract_sha256 = g.quality_contract_sha256
+    and run_mode = g.run_mode;
+  if not found then
+    raise exception using errcode = '23514', message = 'quality contract disappeared';
+  end if;
+
+  target_status := case when g.run_mode = 'canary'
+    then 'canary_complete' else 'ready' end;
+  target_promotion_eligible :=
+    g.run_mode = 'current_generation' and c.promotion_allowed;
+  if terminal_receipt->>'status' is distinct from target_status
+     or terminal_receipt->'promotion_eligible'
+       is distinct from to_jsonb(target_promotion_eligible)
+     or terminal_receipt->>'manifest_path' is distinct from 'manifest.json'
+     or terminal_receipt->>'manifest_sha256' is distinct from g.raw_manifest_sha256
+     or terminal_receipt->>'storage_prefix' is distinct from (
+       'broward-parcel-generations/' || p_generation_id::text
+     )
+     or terminal_receipt#>>'{database_receipt,generation_id}'
+       is distinct from p_generation_id::text
+     or terminal_receipt#>>'{database_receipt,status}'
+       is distinct from 'validated'
+     or terminal_receipt#>>'{database_receipt,terminal_status}'
+       is distinct from target_status
+     or terminal_receipt#>>'{database_receipt,source_content_sha256}'
+       is distinct from g.source_content_sha256 then
+    raise exception using errcode = '23514',
+      message = 'parcel terminal receipt differs from validated database evidence';
+  end if;
+
+  if g.status = target_status then
+    if g.terminal_receipt_object_key = receipt_key
+       and g.terminal_receipt_sha256 = receipt_sha
+       and g.promotion_eligible = target_promotion_eligible
+       and exists (
+         select 1
+         from public.broward_parcel_evidence_objects e
+         where e.generation_id = p_generation_id
+           and e.object_key = receipt_key
+           and e.purpose = 'terminal_receipt'
+           and e.sha256 = receipt_sha
+           and e.bytes = receipt_bytes
+           and e.storage_object_id = stored_object_id
+           and e.storage_updated_at = stored_updated_at
+       ) then
+      return jsonb_build_object(
+        'generation_id', p_generation_id,
+        'promotion_eligible', target_promotion_eligible,
+        'replayed', true,
+        'status', target_status,
+        'terminal_receipt_object_key', receipt_key,
+        'terminal_receipt_sha256', receipt_sha
+      );
+    end if;
+    raise exception using errcode = '23505',
+      message = 'terminal parcel receipt replay changed immutable evidence';
+  end if;
+  if g.status <> 'validated' then
+    raise exception using errcode = '55000',
+      message = 'only a validated parcel generation can bind its terminal receipt';
+  end if;
+
+  insert into public.broward_parcel_evidence_objects (
+    generation_id, object_key, purpose, sha256, bytes, storage_object_id,
+    storage_created_at, storage_updated_at, storage_metadata_size,
+    verification_method
+  ) values (
+    p_generation_id, receipt_key, 'terminal_receipt', receipt_sha, receipt_bytes,
+    stored_object_id, stored_created_at, stored_updated_at, stored_bytes,
+    'private_storage_roundtrip_sha256_v1'
+  ) on conflict (generation_id, object_key) do nothing;
+  if not exists (
+    select 1
+    from public.broward_parcel_evidence_objects e
+    where e.generation_id = p_generation_id
+      and e.object_key = receipt_key
+      and e.purpose = 'terminal_receipt'
+      and e.sha256 = receipt_sha
+      and e.bytes = receipt_bytes
+      and e.storage_object_id = stored_object_id
+      and e.storage_updated_at = stored_updated_at
+  ) then
+    raise exception using errcode = '23505',
+      message = 'terminal parcel receipt changed immutable evidence';
+  end if;
+
+  update public.broward_parcel_import_generations
+  set
+    status = target_status,
+    terminal_receipt_sha256 = receipt_sha,
+    terminal_receipt_object_key = receipt_key,
+    completed_at = now(),
+    promotion_eligible = target_promotion_eligible
+  where generation_id = p_generation_id and status = 'validated';
+  if not found then
+    raise exception using errcode = '55000',
+      message = 'generation state changed during terminal receipt binding';
+  end if;
+
+  return jsonb_build_object(
+    'generation_id', p_generation_id,
+    'promotion_eligible', target_promotion_eligible,
+    'status', target_status,
+    'terminal_receipt_object_key', receipt_key,
+    'terminal_receipt_sha256', receipt_sha
   );
 end
 $$;
@@ -2040,10 +2363,14 @@ $$;
 -- Remove the superseded receipt-only boundary if this code is rehearsed on a
 -- database that previously loaded the unadmitted draft signature.
 drop function if exists public.fs_fail_broward_parcel_generation(uuid, jsonb);
+drop function if exists public.fs_fail_broward_parcel_generation(
+  uuid, jsonb, jsonb, jsonb
+);
 
 create or replace function public.fs_fail_broward_parcel_generation(
   p_generation_id uuid,
-  p_failure_receipt jsonb,
+  p_failure_manifest_body text,
+  p_failure_receipt_body text,
   p_failure_manifest_storage jsonb,
   p_failure_receipt_storage jsonb
 )
@@ -2053,6 +2380,8 @@ security definer
 set search_path = ''
 as $$
 declare
+  failure_manifest jsonb;
+  failure_receipt jsonb;
   manifest_descriptor jsonb;
   manifest_sha text;
   manifest_key text;
@@ -2079,10 +2408,64 @@ declare
   receipt_expected_storage_bytes bigint;
 begin
   if p_generation_id is null
-     or jsonb_typeof(p_failure_receipt) is distinct from 'object'
+     or p_failure_manifest_body is null
+     or p_failure_receipt_body is null
      or jsonb_typeof(p_failure_manifest_storage) is distinct from 'object'
      or jsonb_typeof(p_failure_receipt_storage) is distinct from 'object' then
     raise exception using errcode = '22023', message = 'invalid parcel failure receipt';
+  end if;
+
+  begin
+    failure_manifest := p_failure_manifest_body::jsonb;
+    failure_receipt := p_failure_receipt_body::jsonb;
+  exception when others then
+    raise exception using errcode = '22023',
+      message = 'parcel failure evidence body is not JSON';
+  end;
+  if jsonb_typeof(failure_manifest) is distinct from 'object'
+     or jsonb_typeof(failure_receipt) is distinct from 'object'
+     or right(p_failure_manifest_body, 1) is distinct from E'\n'
+     or right(p_failure_receipt_body, 1) is distinct from E'\n'
+     or failure_manifest->>'run_id' is distinct from p_generation_id::text
+     or failure_manifest->>'schema_version'
+       is distinct from 'FloridaSignalTerminalFailureEvidenceManifestV1'
+     or jsonb_typeof(failure_manifest->'objects') is distinct from 'array'
+     or coalesce(failure_manifest->>'object_count', '') !~ '^[0-9]+$'
+     or (failure_manifest->>'object_count')::bigint
+       is distinct from jsonb_array_length(failure_manifest->'objects') then
+    raise exception using errcode = '22023',
+      message = 'parcel failure manifest contract is invalid';
+  end if;
+  if exists (
+    select 1
+    from jsonb_array_elements(failure_manifest->'objects') item
+    where jsonb_typeof(item) is distinct from 'object'
+       or (select array_agg(key order by key)
+           from jsonb_object_keys(item) key)
+         is distinct from array['bytes', 'media_type', 'path', 'sha256']::text[]
+       or jsonb_typeof(item->'bytes') is distinct from 'number'
+       or coalesce(item->>'bytes', '') !~ '^[0-9]+$'
+       or jsonb_typeof(item->'media_type') is distinct from 'string'
+       or item->>'media_type' not in ('application/json', 'application/x-ndjson')
+       or jsonb_typeof(item->'path') is distinct from 'string'
+       or coalesce(item->>'path', '') = ''
+       or left(item->>'path', 1) = '/'
+       or position(E'\\' in item->>'path') <> 0
+       or item->>'path' ~ '(^|/)(\.|\.\.)(/|$)'
+       or item->>'path' in (
+         'receipt.json', 'failure-manifest.json', 'failure-receipt.json'
+       )
+       or jsonb_typeof(item->'sha256') is distinct from 'string'
+       or coalesce(item->>'sha256', '') !~ '^[0-9a-f]{64}$'
+  ) or (
+    select count(*)
+    from jsonb_array_elements(failure_manifest->'objects') item
+  ) is distinct from (
+    select count(distinct item->>'path')
+    from jsonb_array_elements(failure_manifest->'objects') item
+  ) then
+    raise exception using errcode = '22023',
+      message = 'parcel failure manifest has malformed or duplicate evidence';
   end if;
 
   if (select array_agg(key order by key)
@@ -2103,20 +2486,20 @@ begin
       message = 'parcel failure Storage attestations have unknown or missing fields';
   end if;
 
-  manifest_descriptor := p_failure_receipt->'evidence_manifest';
+  manifest_descriptor := failure_receipt->'evidence_manifest';
   if jsonb_typeof(manifest_descriptor) is distinct from 'object'
      or (select array_agg(key order by key)
         from jsonb_object_keys(manifest_descriptor) key)
        is distinct from array[
          'bytes', 'object_count', 'path', 'schema_version', 'sha256'
        ]::text[]
-     or p_failure_receipt->>'run_id' is distinct from p_generation_id::text
-     or p_failure_receipt->>'schema_version'
-       is distinct from 'FloridaSignalBrowardParcelFailureReceiptV2'
-     or p_failure_receipt->>'status' is distinct from 'failed'
-     or p_failure_receipt->'promotion_eligible' is distinct from 'false'::jsonb
-     or p_failure_receipt->'promotion_performed' is distinct from 'false'::jsonb
-     or jsonb_typeof(p_failure_receipt->'error_message') is distinct from 'string'
+     or failure_receipt->>'run_id' is distinct from p_generation_id::text
+     or failure_receipt->>'schema_version'
+       is distinct from 'FloridaSignalBrowardParcelFailureReceiptV3'
+     or failure_receipt->>'status' is distinct from 'failed'
+     or failure_receipt->'promotion_eligible' is distinct from 'false'::jsonb
+     or failure_receipt->'promotion_performed' is distinct from 'false'::jsonb
+     or jsonb_typeof(failure_receipt->'error_message') is distinct from 'string'
      or manifest_descriptor->>'path' is distinct from 'failure-manifest.json'
      or manifest_descriptor->>'schema_version'
        is distinct from 'FloridaSignalTerminalFailureEvidenceManifestV1'
@@ -2140,7 +2523,7 @@ begin
       message = 'parcel failure evidence byte counts are invalid';
   end if;
   manifest_bytes := (p_failure_manifest_storage->>'bytes')::bigint;
-  manifest_object_count := (manifest_descriptor->>'object_count')::bigint;
+  manifest_object_count := (failure_manifest->>'object_count')::bigint;
   receipt_bytes := (p_failure_receipt_storage->>'bytes')::bigint;
   manifest_expected_storage_bytes :=
     (p_failure_manifest_storage->>'storage_metadata_size')::bigint;
@@ -2164,7 +2547,7 @@ begin
     (p_failure_manifest_storage->>'storage_updated_at')::timestamptz;
   receipt_expected_updated_at :=
     (p_failure_receipt_storage->>'storage_updated_at')::timestamptz;
-  reason := left(coalesce(p_failure_receipt->>'error_message', 'collector failed'), 2000);
+  reason := left(coalesce(failure_receipt->>'error_message', 'collector failed'), 2000);
 
   if coalesce(manifest_sha, '') !~ '^[0-9a-f]{64}$'
      or coalesce(receipt_sha, '') !~ '^[0-9a-f]{64}$'
@@ -2179,8 +2562,28 @@ begin
      or manifest_descriptor->>'sha256' is distinct from manifest_sha
      or coalesce(manifest_descriptor->>'bytes', '') !~ '^[0-9]+$'
      or (manifest_descriptor->>'bytes')::bigint is distinct from manifest_bytes
+     or (manifest_descriptor->>'object_count')::bigint
+       is distinct from manifest_object_count
      or manifest_bytes is distinct from manifest_expected_storage_bytes
      or receipt_bytes is distinct from receipt_expected_storage_bytes
+     or manifest_bytes is distinct from pg_catalog.octet_length(
+       pg_catalog.convert_to(p_failure_manifest_body, 'UTF8')
+     )
+     or receipt_bytes is distinct from pg_catalog.octet_length(
+       pg_catalog.convert_to(p_failure_receipt_body, 'UTF8')
+     )
+     or manifest_sha is distinct from encode(
+       extensions.digest(
+         pg_catalog.convert_to(p_failure_manifest_body, 'UTF8'), 'sha256'
+       ),
+       'hex'
+     )
+     or receipt_sha is distinct from encode(
+       extensions.digest(
+         pg_catalog.convert_to(p_failure_receipt_body, 'UTF8'), 'sha256'
+       ),
+       'hex'
+     )
      or manifest_expected_object_id = receipt_expected_object_id
      or coalesce(p_failure_manifest_storage->>'upload_disposition', '')
        not in ('created', 'verified_existing')
@@ -2245,14 +2648,38 @@ begin
   from public.broward_parcel_import_generations
   where generation_id = p_generation_id
   for update;
-  if manifest_object_count is distinct from (
+  if exists (
+    with supplied as (
+      select
+        'broward-parcel-generations/' || p_generation_id::text || '/'
+          || (item->>'path') as object_key,
+        item->>'sha256' as sha256,
+        (item->>'bytes')::bigint as bytes
+      from jsonb_array_elements(failure_manifest->'objects') item
+    ), stored as (
+      select e.object_key, e.sha256, e.bytes
+      from public.broward_parcel_evidence_objects e
+      where e.generation_id = p_generation_id
+        and e.purpose not in (
+          'terminal_receipt', 'failure_manifest', 'failure_receipt'
+        )
+    )
+    select 1
+    from (
+      (select * from supplied except all select * from stored)
+      union all
+      (select * from stored except all select * from supplied)
+    ) difference
+  ) or manifest_object_count is distinct from (
     select count(*)
     from public.broward_parcel_evidence_objects e
     where e.generation_id = p_generation_id
-      and e.purpose not in ('failure_manifest', 'failure_receipt')
+      and e.purpose not in (
+        'terminal_receipt', 'failure_manifest', 'failure_receipt'
+      )
   ) then
     raise exception using errcode = '23514',
-      message = 'failure manifest object count differs from the immutable evidence ledger';
+      message = 'failure manifest differs from the immutable evidence ledger';
   end if;
   if old_status = 'failed' then
     if reason is not distinct from (
@@ -2299,8 +2726,10 @@ begin
     raise exception using errcode = '23505',
       message = 'failure evidence replay changed the immutable pair';
   end if;
-  if old_status is distinct from 'staging' then
-    raise exception using errcode = '55000', message = 'only a staging generation can fail';
+  if old_status is null
+     or old_status not in ('staging', 'validated', 'canary_complete', 'ready') then
+    raise exception using errcode = '55000',
+      message = 'only an unpromoted parcel generation can fail';
   end if;
 
   insert into public.broward_parcel_evidence_objects (
@@ -2382,12 +2811,18 @@ revoke all on function public.fs_finalize_broward_parcel_generation(
 grant execute on function public.fs_finalize_broward_parcel_generation(
   uuid, text, text, text, text, text, text, text, text, jsonb
 ) to service_role;
+revoke all on function public.fs_commit_broward_parcel_generation_receipt(
+  uuid, text, jsonb
+) from public, anon, authenticated;
+grant execute on function public.fs_commit_broward_parcel_generation_receipt(
+  uuid, text, jsonb
+) to service_role;
 revoke all on function public.fs_fail_broward_parcel_generation(
-  uuid, jsonb, jsonb, jsonb
+  uuid, text, text, jsonb, jsonb
 )
   from public, anon, authenticated;
 grant execute on function public.fs_fail_broward_parcel_generation(
-  uuid, jsonb, jsonb, jsonb
+  uuid, text, text, jsonb, jsonb
 )
   to service_role;
 
@@ -2801,6 +3236,7 @@ select
     when latest.status = 'staging'
       and latest.started_at < now() - interval '6 hours' then 'STALLED'
     when latest.status = 'staging' then 'RUNNING'
+    when latest.status = 'validated' then 'RECEIPT_BINDING_REQUIRED'
     when latest.status = 'ready' then 'AWAITING_REVIEWED_PROMOTION'
     when promoted.generation_id is null then 'NOT_CONNECTED'
     when live.live_rows <> promoted.rows_accepted
@@ -2815,6 +3251,8 @@ select
       and latest.started_at < now() - interval '6 hours'
       then 'Latest collector generation has remained staging for more than 6 hours.'
     when latest.status = 'staging' then 'A current-generation collection is in progress.'
+    when latest.status = 'validated'
+      then 'Deterministic validation passed, but the immutable terminal receipt is not bound.'
     when latest.status = 'ready' then 'A ready generation awaits preview, backup and owner approval.'
     when promoted.generation_id is null then 'No current-generation snapshot has been promoted.'
     when live.live_rows <> promoted.rows_accepted

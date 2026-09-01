@@ -42,7 +42,7 @@ NORMALIZER_VERSION = "broward-folio-centroid-sale-date-v2"
 FAILURE_EVIDENCE_MANIFEST_SCHEMA = (
     "FloridaSignalTerminalFailureEvidenceManifestV1"
 )
-FAILURE_RECEIPT_SCHEMA = "FloridaSignalBrowardParcelFailureReceiptV2"
+FAILURE_RECEIPT_SCHEMA = "FloridaSignalBrowardParcelFailureReceiptV3"
 SALE_DATE_FIELD = "SALE_DATE_1"
 SALE_DATE_MIN = "0001-01-01"
 SALE_DATE_MAX = "9999-12-31"
@@ -934,6 +934,7 @@ class EvidenceBundle:
         except FileExistsError as exc:
             raise ParcelGenerationError(f"run evidence already exists: {run_id}") from exc
         self.objects: list[dict[str, Any]] = []
+        self.attempted_terminal_receipt: dict[str, Any] | None = None
 
     def write_bytes(self, relative_path: str, body: bytes, media_type: str) -> tuple[str, str]:
         sha = write_once(self.root / relative_path, body)
@@ -949,6 +950,28 @@ class EvidenceBundle:
 
     def write_json(self, relative_path: str, value: Any) -> tuple[str, str]:
         return self.write_bytes(relative_path, canonical_json_bytes(value) + b"\n", "application/json")
+
+    def write_terminal_receipt(self, value: Mapping[str, Any]) -> tuple[str, str]:
+        """Write the success receipt without adding it to the pre-bound manifest.
+
+        The generation manifest and its evidence ledger are bound before the
+        database performs deterministic finalization.  The success receipt is
+        therefore a second-phase artifact: it is written create-only, uploaded,
+        and bound by a dedicated RPC before the generation becomes ready.  If
+        that phase fails, the failure manifest must still reconcile exactly to
+        the already-bound first-phase evidence ledger.
+        """
+
+        relative_path = "receipt.json"
+        body = canonical_json_bytes(value) + b"\n"
+        sha256 = write_once(self.root / relative_path, body)
+        self.attempted_terminal_receipt = {
+            "bytes": len(body),
+            "media_type": "application/json",
+            "path": relative_path,
+            "sha256": sha256,
+        }
+        return relative_path, sha256
 
     def write_jsonl(self, relative_path: str, rows: Sequence[Mapping[str, Any]]) -> tuple[str, str]:
         path, sha, _ = self.write_jsonl_iter(relative_path, iter(rows))
@@ -1690,8 +1713,9 @@ class SupabaseStagingSink:
         database_receipt = self.rpc(
             "fs_fail_broward_parcel_generation",
             {
+                "p_failure_manifest_body": manifest_body.decode("utf-8"),
                 "p_failure_manifest_storage": manifest_storage,
-                "p_failure_receipt": dict(failure_receipt),
+                "p_failure_receipt_body": receipt_body.decode("utf-8"),
                 "p_failure_receipt_storage": receipt_storage,
                 "p_generation_id": run_id,
             },
@@ -2002,12 +2026,14 @@ def collect_generation(
                 raise ParcelGenerationError(
                     "database finalizer omitted its independently recomputed content hash"
                 )
-            expected_database_status = (
+            expected_terminal_status = (
                 "canary_complete" if mode == "canary" else "ready"
             )
             expected_database_values = {
                 "duplicate_rows": finalization.duplicate_rows,
                 "folio_set_sha256": finalization.folio_set_sha256,
+                "promotion_eligible": False,
+                "promotion_eligible_on_receipt": mode == "current_generation",
                 "rejected_rows": finalization.rejected_rows,
                 "rows_accepted": finalization.accepted_rows,
                 "rows_received": finalization.source_rows,
@@ -2015,8 +2041,9 @@ def collect_generation(
                 "source_object_id_set_sha256": (
                     finalization.source_object_id_set_sha256
                 ),
-                "status": expected_database_status,
+                "status": "validated",
                 "system_object_id_set_sha256": system_object_id_set_sha256,
+                "terminal_status": expected_terminal_status,
             }
             if any(
                 database_receipt.get(key) != value
@@ -2030,13 +2057,13 @@ def collect_generation(
                 database_source_content_sha256
             )
             receipt["promotion_eligible"] = bool(
-                database_receipt.get("promotion_eligible")
+                database_receipt.get("promotion_eligible_on_receipt")
             )
-            receipt["status"] = expected_database_status
+            receipt["status"] = expected_terminal_status
             receipt["storage_prefix"] = object_prefix
 
         failure_stage = "terminal_receipt_write"
-        receipt_path, receipt_sha = evidence.write_json("receipt.json", receipt)
+        receipt_path, receipt_sha = evidence.write_terminal_receipt(receipt)
         returned_receipt = receipt | {
             "receipt_path": receipt_path,
             "receipt_sha256": receipt_sha,
@@ -2049,8 +2076,34 @@ def collect_generation(
                 (evidence.root / receipt_path).read_bytes(),
                 "application/json",
             )
+            failure_stage = "terminal_receipt_binding"
+            terminal_database_receipt = sink.rpc(
+                "fs_commit_broward_parcel_generation_receipt",
+                {
+                    "p_generation_id": run_id,
+                    "p_terminal_receipt_body": (
+                        evidence.root / receipt_path
+                    ).read_text(encoding="utf-8"),
+                    "p_terminal_receipt_storage": terminal_storage_receipt,
+                },
+            )
+            expected_terminal_database_values = {
+                "generation_id": run_id,
+                "promotion_eligible": receipt["promotion_eligible"],
+                "status": receipt["status"],
+                "terminal_receipt_object_key": receipt_object_key,
+                "terminal_receipt_sha256": terminal_storage_receipt["sha256"],
+            }
+            if not isinstance(terminal_database_receipt, Mapping) or any(
+                terminal_database_receipt.get(key) != value
+                for key, value in expected_terminal_database_values.items()
+            ):
+                raise ParcelGenerationError(
+                    "database terminal receipt differs from the immutable collector receipt"
+                )
             returned_receipt["receipt_object_key"] = receipt_object_key
             returned_receipt["receipt_storage_verification"] = terminal_storage_receipt
+            returned_receipt["terminal_database_receipt"] = terminal_database_receipt
         return returned_receipt
     except Exception as exc:
         configured_secret = sink.service_key if sink is not None else None
@@ -2075,11 +2128,15 @@ def collect_generation(
         try:
             failure_evidence_manifest = evidence.finish_failure_manifest()
         except Exception as manifest_exc:
+            safe_manifest_message = redact_configured_secret(
+                str(manifest_exc), configured_secret
+            )
             raise ParcelGenerationError(
                 "collector failed and its terminal evidence manifest could not be "
                 f"durably written: {type(exc).__name__}: {safe_error_message}; "
-                f"manifest error: {type(manifest_exc).__name__}: {manifest_exc}"
-            ) from manifest_exc
+                "manifest error: "
+                f"{type(manifest_exc).__name__}: {safe_manifest_message}"
+            ) from None
         failure = {
             "completed_at": utc_now(),
             "evidence_manifest": failure_evidence_manifest,
@@ -2121,14 +2178,26 @@ def collect_generation(
             "started_at": started_at,
             "status": "failed",
         }
+        if evidence.attempted_terminal_receipt is not None:
+            # This artifact is preserved locally (and may already exist in
+            # private Storage), but it is deliberately outside the first-phase
+            # manifest.  That keeps the failure manifest's object count exactly
+            # equal to the immutable evidence ledger already bound at begin.
+            failure["attempted_terminal_receipt"] = dict(
+                evidence.attempted_terminal_receipt
+            )
         try:
             failure_path, failure_sha = evidence.write_json("failure-receipt.json", failure)
         except Exception as receipt_exc:
+            safe_receipt_message = redact_configured_secret(
+                str(receipt_exc), configured_secret
+            )
             raise ParcelGenerationError(
                 "collector failed and its terminal failure receipt could not be "
                 f"durably written: {type(exc).__name__}: {safe_error_message}; "
-                f"receipt error: {type(receipt_exc).__name__}: {receipt_exc}"
-            ) from receipt_exc
+                "receipt error: "
+                f"{type(receipt_exc).__name__}: {safe_receipt_message}"
+            ) from None
         delivery_error: Exception | None = None
         if (
             sink is not None
@@ -2153,7 +2222,12 @@ def collect_generation(
                 "; database terminal failure delivery also failed: "
                 f"{type(delivery_error).__name__}: {safe_delivery_message}"
             )
-        raise ParcelGenerationError(message) from exc
+        # The original exception may contain a configured credential in its
+        # message or nested cause.  The terminal failure receipt and the
+        # operator-facing exception above are already redacted, so suppress
+        # exception chaining rather than re-exposing the unsafe cause in a
+        # traceback or structured error reporter.
+        raise ParcelGenerationError(message) from None
     finally:
         store.close()
 

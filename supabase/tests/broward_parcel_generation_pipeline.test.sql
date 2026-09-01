@@ -3,7 +3,7 @@
 
 begin;
 
-select plan(72);
+select plan(82);
 
 select has_table('public', 'broward_parcel_quality_contracts', 'quality contract table exists');
 select has_table('public', 'broward_parcel_generation_pages', 'page receipt table exists');
@@ -14,6 +14,10 @@ select has_column('public', 'broward_parcel_import_generations',
   'failure_receipt_sha256', 'failed generation binds the receipt SHA-256');
 select has_column('public', 'broward_parcel_import_generations',
   'failure_receipt_object_key', 'failed generation binds the receipt object key');
+select has_column('public', 'broward_parcel_import_generations',
+  'terminal_receipt_sha256', 'successful generation binds the receipt SHA-256');
+select has_column('public', 'broward_parcel_import_generations',
+  'terminal_receipt_object_key', 'successful generation binds the receipt object key');
 select has_table('public', 'broward_parcel_evidence_objects', 'immutable evidence ledger exists');
 select has_table('public', 'broward_parcel_promotion_previews', 'promotion preview table exists');
 select has_table('public', 'broward_parcel_promotion_authorizations', 'promotion authorization table exists');
@@ -28,10 +32,14 @@ select has_function('public', 'fs_stage_broward_parcel_page',
 select has_function('public', 'fs_finalize_broward_parcel_generation',
   array['uuid','text','text','text','text','text','text','text','text','jsonb'],
   'finalize RPC exists');
+select has_function('public', 'fs_commit_broward_parcel_generation_receipt',
+  array['uuid','text','jsonb'], 'terminal receipt RPC exists');
 select has_function('public', 'fs_fail_broward_parcel_generation',
-  array['uuid','jsonb','jsonb','jsonb'], 'dual-evidence failure RPC exists');
+  array['uuid','text','text','jsonb','jsonb'], 'exact-body dual-evidence failure RPC exists');
 select hasnt_function('public', 'fs_fail_broward_parcel_generation',
   array['uuid','jsonb'], 'receipt-only failure RPC is absent');
+select hasnt_function('public', 'fs_fail_broward_parcel_generation',
+  array['uuid','jsonb','jsonb','jsonb'], 'unbound JSON-only failure RPC is absent');
 select has_function('public', 'fs_broward_parcel_range_manifests_match',
   array['uuid','jsonb'], 'exact range-manifest replay matcher exists');
 select has_function('public', 'fs_preview_broward_parcel_generation',
@@ -114,7 +122,10 @@ select ok(has_function_privilege('service_role',
   'public.fs_finalize_broward_parcel_generation(uuid,text,text,text,text,text,text,text,text,jsonb)','execute'),
   'service role may call finalize RPC');
 select ok(has_function_privilege('service_role',
-  'public.fs_fail_broward_parcel_generation(uuid,jsonb,jsonb,jsonb)','execute'),
+  'public.fs_commit_broward_parcel_generation_receipt(uuid,text,jsonb)','execute'),
+  'service role may bind a terminal receipt');
+select ok(has_function_privilege('service_role',
+  'public.fs_fail_broward_parcel_generation(uuid,text,text,jsonb,jsonb)','execute'),
   'service role may call failure RPC');
 select is((select prosecdef from pg_proc where oid =
   'public.fs_begin_broward_parcel_generation(uuid,jsonb,text,text,text,integer,text,integer,jsonb,jsonb)'::regprocedure), true,
@@ -126,7 +137,10 @@ select is((select prosecdef from pg_proc where oid =
   'public.fs_finalize_broward_parcel_generation(uuid,text,text,text,text,text,text,text,text,jsonb)'::regprocedure), true,
   'finalize RPC is a narrow definer boundary');
 select is((select prosecdef from pg_proc where oid =
-  'public.fs_fail_broward_parcel_generation(uuid,jsonb,jsonb,jsonb)'::regprocedure), true,
+  'public.fs_commit_broward_parcel_generation_receipt(uuid,text,jsonb)'::regprocedure), true,
+  'terminal receipt RPC is a narrow definer boundary');
+select is((select prosecdef from pg_proc where oid =
+  'public.fs_fail_broward_parcel_generation(uuid,text,text,jsonb,jsonb)'::regprocedure), true,
   'failure RPC is a narrow definer boundary');
 select ok('search_path=' = any(coalesce((select proconfig from pg_proc where oid =
   'public.fs_begin_broward_parcel_generation(uuid,jsonb,text,text,text,integer,text,integer,jsonb,jsonb)'::regprocedure),array[]::text[])),
@@ -138,7 +152,10 @@ select ok('search_path=' = any(coalesce((select proconfig from pg_proc where oid
   'public.fs_finalize_broward_parcel_generation(uuid,text,text,text,text,text,text,text,text,jsonb)'::regprocedure),array[]::text[])),
   'finalize RPC has an empty search path');
 select ok('search_path=' = any(coalesce((select proconfig from pg_proc where oid =
-  'public.fs_fail_broward_parcel_generation(uuid,jsonb,jsonb,jsonb)'::regprocedure),array[]::text[])),
+  'public.fs_commit_broward_parcel_generation_receipt(uuid,text,jsonb)'::regprocedure),array[]::text[])),
+  'terminal receipt RPC has an empty search path');
+select ok('search_path=' = any(coalesce((select proconfig from pg_proc where oid =
+  'public.fs_fail_broward_parcel_generation(uuid,text,text,jsonb,jsonb)'::regprocedure),array[]::text[])),
   'failure RPC has an empty search path');
 
 select is((select promotion_allowed from public.broward_parcel_quality_contracts
@@ -390,7 +407,7 @@ set
   folio_set_sha256 = repeat('4', 64),
   source_observed_at = now(),
   completed_at = now(),
-  status = 'canary_complete',
+  status = 'validated',
   promotion_eligible = false
 where generation_id = '22222222-2222-4222-8222-222222222222';
 
@@ -437,6 +454,117 @@ select throws_ok(
   'terminal finalizer rejects a changed range-manifest replay'
 )
 from broward_parcel_range_manifest_fixture;
+
+insert into public.broward_parcel_import_generations (
+  generation_id,
+  source_layer_url,
+  source_dataset_vintage,
+  collector_version,
+  parser_version,
+  normalizer_version,
+  coverage_oid_min,
+  coverage_oid_max,
+  expected_range_count,
+  source_reported_count,
+  minimum_accepted_rows,
+  max_rejected_rows,
+  max_duplicate_folios,
+  quality_contract_sha256,
+  source_schema_sha256,
+  status,
+  started_at,
+  generation_protocol,
+  run_mode,
+  source_universe_count,
+  source_vintage_json,
+  promotion_eligible
+) values (
+  '33333333-3333-4333-8333-333333333333',
+  'https://services.arcgis.com/JMAJrTsHNLrSsWf5/arcgis/rest/services/PARCEL_POLY_BCPA_TAXROLL/FeatureServer/0',
+  'fixture',
+  'fixture-collector',
+  'fixture-parser',
+  'broward-folio-centroid-sale-date-v2',
+  0,
+  559999,
+  28,
+  550000,
+  530000,
+  200,
+  25000,
+  '7f2742496d4792bdb1129c9744b330f97f6e3802ce092d8c76667fcbeea98288',
+  repeat('b', 64),
+  'staging',
+  now(),
+  'single_stream_v1',
+  'current_generation',
+  550000,
+  '{}'::jsonb,
+  false
+);
+
+update public.broward_parcel_import_generations
+set
+  rows_received = 550000,
+  rows_accepted = 550000,
+  rows_rejected = 0,
+  rejected_missing_folio = 0,
+  rejected_bad_folio_format = 0,
+  rejected_missing_centroid = 0,
+  rejected_out_of_bounds = 0,
+  duplicate_folios = 0,
+  source_content_sha256 = repeat('1', 64),
+  source_object_id_set_sha256 = repeat('2', 64),
+  system_object_id_set_sha256 = repeat('3', 64),
+  folio_set_sha256 = repeat('4', 64),
+  rejection_manifest_sha256 = repeat('5', 64),
+  rejection_manifest_object_key =
+    'broward-parcel-generations/33333333-3333-4333-8333-333333333333/manifests/rejections.jsonl',
+  duplicate_manifest_sha256 = repeat('6', 64),
+  duplicate_manifest_object_key =
+    'broward-parcel-generations/33333333-3333-4333-8333-333333333333/manifests/duplicates.jsonl',
+  raw_manifest_sha256 = repeat('7', 64),
+  raw_manifest_object_key =
+    'broward-parcel-generations/33333333-3333-4333-8333-333333333333/manifest.json',
+  source_observed_at = now(),
+  completed_at = now(),
+  status = 'validated',
+  promotion_eligible = false
+where generation_id = '33333333-3333-4333-8333-333333333333';
+
+select lives_ok(
+  $$
+    update public.broward_parcel_import_generations
+    set
+      status = 'failed',
+      failure_reason = 'terminal receipt upload failed',
+      raw_manifest_sha256 = repeat('8', 64),
+      raw_manifest_object_key =
+        'broward-parcel-generations/33333333-3333-4333-8333-333333333333/failure-manifest.json',
+      failure_receipt_sha256 = repeat('9', 64),
+      failure_receipt_object_key =
+        'broward-parcel-generations/33333333-3333-4333-8333-333333333333/failure-receipt.json',
+      source_observed_at = now(),
+      completed_at = now(),
+      promotion_eligible = false
+    where generation_id = '33333333-3333-4333-8333-333333333333'
+  $$,
+  'an unpromoted validated generation can close as a durable failure'
+);
+
+select is(
+  (select status from public.broward_parcel_import_generations
+   where generation_id = '33333333-3333-4333-8333-333333333333'),
+  'failed',
+  'post-finalizer delivery failure cannot leave the generation ready'
+);
+
+select is(
+  (select promotion_eligible from public.broward_parcel_import_generations
+   where generation_id = '33333333-3333-4333-8333-333333333333'),
+  false,
+  'post-finalizer delivery failure clears promotion eligibility'
+);
 
 select * from finish();
 rollback;
