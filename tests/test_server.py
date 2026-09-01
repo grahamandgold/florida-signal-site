@@ -155,8 +155,16 @@ class PublicApiTests(unittest.TestCase):
             }
             table_proof = {
                 "status": "passed",
-                "local": {"count": 329, "pk_set_sha256": "a" * 64, "rowset_sha256": "b" * 64},
-                "supabase": {"count": 329, "pk_set_sha256": "a" * 64, "rowset_sha256": "b" * 64},
+                "local": {
+                    "count": 329,
+                    "pk_set_sha256": "a" * 64,
+                    "sanitized_rowset_sha256": "b" * 64,
+                },
+                "supabase": {
+                    "count": 329,
+                    "pk_set_sha256": "a" * 64,
+                    "sanitized_rowset_sha256": "b" * 64,
+                },
             }
             unit_proof = {
                 "status": "passed", "timer_enabled": True, "timer_active": True,
@@ -206,7 +214,12 @@ class PublicApiTests(unittest.TestCase):
             self.assertEqual(summary["status"], "verified")
             self.assertEqual(summary["natural_schedule_proof"], "passed")
             self.assertEqual(summary["local"]["events"], 329)
+            self.assertEqual(summary["mirror"]["parity_status"], "passed")
             self.assertEqual(summary["mirror"]["tables"]["parcel_events"]["supabase_count"], 329)
+            self.assertEqual(
+                summary["mirror"]["tables"]["parcel_events"]["local_rowset_sha256"],
+                "b" * 64,
+            )
             self.assertEqual(summary["collector"]["records_attempted"], 25)
             self.assertEqual(summary["collector"]["records_written"], 3)
             self.assertEqual(summary["collector"]["records_rejected"], 0)
