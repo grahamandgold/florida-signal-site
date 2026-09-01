@@ -1072,6 +1072,179 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         self.assertEqual(health["latest_successful_run_at"], "2026-09-01T00:57:00Z")
         self.assertEqual(health["latest_success_execution"], success["execution"])
 
+    def test_utility_receipt_refresher_repeats_after_failure_and_stops_with_desk(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script = root / "sync.py"
+            script.write_text("# test helper\n", encoding="utf-8")
+            known_hosts = root / "known_hosts"
+            known_hosts.write_text("florida ssh-ed25519 test\n", encoding="utf-8")
+            finished = cms_server.threading.Event()
+            calls = []
+
+            def runner(command, **kwargs):
+                calls.append((command, kwargs))
+                if len(calls) == 1:
+                    return subprocess.CompletedProcess(command, 1, stdout="", stderr="failed")
+                finished.set()
+                return subprocess.CompletedProcess(
+                    command, 0, stdout='{"status":"synced"}\n', stderr="",
+                )
+
+            refresher = cms_server.UtilityReceiptRefresher(
+                script=script,
+                destination=root / "local",
+                ssh_host="florida",
+                known_hosts=known_hosts,
+                interval_seconds=0.01,
+                process_timeout_seconds=1,
+                runner=runner,
+            )
+            refresher.start()
+            self.assertTrue(finished.wait(1), "recurring refresh did not retry")
+            refresher.stop()
+
+            call_count = len(calls)
+            self.assertGreaterEqual(call_count, 2)
+            self.assertEqual(refresher.last_status, "synced")
+            self.assertIn("--known-hosts", calls[-1][0])
+            self.assertEqual(calls[-1][0][-1], str(known_hosts))
+            self.assertTrue(calls[-1][1]["check"] is False)
+            self.assertEqual(calls[-1][1]["timeout"], 1)
+            cms_server.threading.Event().wait(0.03)
+            self.assertEqual(len(calls), call_count)
+
+    def test_utility_receipt_refresher_failure_preserves_snapshot_for_stale_health(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script = root / "sync.py"
+            script.write_text("# test helper\n", encoding="utf-8")
+            known_hosts = root / "known_hosts"
+            known_hosts.write_text("florida ssh-ed25519 test\n", encoding="utf-8")
+            destination = root / "local"
+            destination.mkdir()
+            prior = destination / "latest-success.json"
+            prior.write_text("preserved receipt pointer\n", encoding="utf-8")
+
+            refresher = cms_server.UtilityReceiptRefresher(
+                script=script,
+                destination=destination,
+                ssh_host="florida",
+                known_hosts=known_hosts,
+                runner=lambda command, **kwargs: subprocess.CompletedProcess(
+                    command, 1, stdout="", stderr="network unavailable",
+                ),
+            )
+            self.assertFalse(refresher.sync_once())
+            self.assertEqual(refresher.last_status, "sync_failed")
+            self.assertEqual(prior.read_text(encoding="utf-8"), "preserved receipt pointer\n")
+
+            rows = [utility_row("ENG-CR-260001", applied_date="2026-08-30")]
+            stale = utility_health(rows, system_time="2026-08-31T23:00:00Z")[0]
+            proof = cms_server.utility_intake_projection_proof(rows)
+            verification = destination / "test.verification.json"
+            verification.write_text("{}\n", encoding="utf-8")
+            stale["metrics"].update({
+                "verification_receipt_path": str(verification),
+                "verification_receipt_sha256": hashlib.sha256(
+                    verification.read_bytes()
+                ).hexdigest(),
+            })
+            with mock.patch.object(
+                cms_server, "UTILITY_INTAKE_RECEIPT_DIR", destination,
+            ):
+                checked = cms_server.validate_utility_intake_health(
+                    stale, proof, observed_at=UTILITY_NOW,
+                )
+            self.assertEqual(checked["status"], "stale")
+            self.assertEqual(checked["validation"]["reason"], "scheduled_receipt_overdue")
+
+    def test_utility_receipt_refresher_lifecycle_is_owned_by_server(self):
+        events = []
+
+        class Refresher:
+            def start(self):
+                events.append("refresh-start")
+
+            def stop(self):
+                events.append("refresh-stop")
+
+        class Server:
+            def __init__(self, address, handler):
+                events.append(("server-created", address, handler))
+
+            def serve_forever(self):
+                events.append("serve")
+
+            def server_close(self):
+                events.append("server-close")
+
+        cms_server.serve_data_wire(
+            "127.0.0.1", 8788, refresher=Refresher(), server_factory=Server,
+        )
+        self.assertEqual(
+            events,
+            [
+                ("server-created", ("127.0.0.1", 8788), cms_server.Handler),
+                "refresh-start", "serve", "refresh-stop", "server-close",
+            ],
+        )
+
+    def test_utility_receipt_refresher_start_failure_still_closes_server(self):
+        events = []
+
+        class Refresher:
+            def start(self):
+                events.append("refresh-start-failed")
+                raise RuntimeError("thread unavailable")
+
+            def stop(self):
+                events.append("unexpected-stop")
+
+        class Server:
+            def __init__(self, _address, _handler):
+                pass
+
+            def serve_forever(self):
+                events.append("unexpected-serve")
+
+            def server_close(self):
+                events.append("server-close")
+
+        with self.assertRaisesRegex(RuntimeError, "thread unavailable"):
+            cms_server.serve_data_wire(
+                "127.0.0.1", 8788, refresher=Refresher(), server_factory=Server,
+            )
+        self.assertEqual(events, ["refresh-start-failed", "server-close"])
+
+    def test_utility_receipt_refresher_stop_terminates_active_helper_group(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script = root / "blocking-sync.py"
+            script.write_text("import time\ntime.sleep(30)\n", encoding="utf-8")
+            known_hosts = root / "known_hosts"
+            known_hosts.write_text("florida ssh-ed25519 test\n", encoding="utf-8")
+            refresher = cms_server.UtilityReceiptRefresher(
+                script=script,
+                destination=root / "local",
+                ssh_host="florida",
+                known_hosts=known_hosts,
+                interval_seconds=300,
+                process_timeout_seconds=30,
+            )
+            refresher.start()
+            process = None
+            for _attempt in range(100):
+                with refresher._process_lock:
+                    process = refresher._active_process
+                if process is not None:
+                    break
+                cms_server.threading.Event().wait(0.01)
+            self.assertIsNotNone(process, "managed sync helper did not start")
+            refresher.stop()
+            self.assertIsNone(refresher._thread)
+            self.assertIsNotNone(process.poll())
+
     def test_utility_intake_health_downgrades_projection_mismatch_and_staleness(self):
         rows = [utility_row("ENG-CR-260001", applied_date="2026-08-30")]
         mismatch = utility_health(rows, metrics_override={"supabase_rows": 99})
@@ -1188,7 +1361,11 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         self.assertIn('FL_SIGNAL_UTILITY_LOCAL_ROOT="$utility_local_root"', launcher)
         self.assertIn('FL_SIGNAL_UTILITY_LATEST_ATTEMPT_POINTER="$utility_local_root/latest-attempt.json"', launcher)
         self.assertIn('FL_SIGNAL_UTILITY_LATEST_SUCCESS_POINTER="$utility_local_root/latest-success.json"', launcher)
+        self.assertIn('FL_SIGNAL_UTILITY_SYNC_SCRIPT="$utility_sync_script"', launcher)
+        self.assertIn('FL_SIGNAL_UTILITY_KNOWN_HOSTS="$utility_known_hosts"', launcher)
+        self.assertIn('FL_SIGNAL_UTILITY_SYNC_INTERVAL_SECONDS="$utility_sync_interval"', launcher)
         self.assertIn('sync_utility_intake_receipts.py', launcher)
+        self.assertNotIn('/usr/bin/python3 "$utility_sync_script"', launcher)
         self.assertIn('job_label="com.floridasignal.datawire.server"', launcher)
         self.assertIn('if [[ "${1:-}" == "--serve" ]]', launcher)
         self.assertIn('exec /usr/bin/python3 "$resources/cms/server.py" --port 8788', launcher)

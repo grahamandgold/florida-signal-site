@@ -18,6 +18,9 @@ class UtilityIntakeGrantMigrationTests(unittest.TestCase):
         self.assertIn("from public, anon, authenticated, service_role", normalized)
         self.assertNotIn("security definer", normalized)
         self.assertNotIn("select private.fs_apply_utility_intake_anon_read_hardening", normalized)
+        self.assertNotIn("create schema", normalized)
+        self.assertNotRegex(normalized, r"revoke\s+all\s+on\s+schema")
+        self.assertIn("makes no schema-wide grant", normalized)
 
     def test_gate_hardens_table_and_column_grants_and_attests_rls_policy(self):
         sql = MIGRATION.read_text(encoding="utf-8").lower()

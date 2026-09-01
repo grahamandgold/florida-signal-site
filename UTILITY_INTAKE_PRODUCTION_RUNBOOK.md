@@ -71,7 +71,8 @@ Production paths are:
 - Latest attempt: `/srv/grahamandgold/florida-signal/staging/data/utility-intake/latest-attempt.json`
 - Latest success: `/srv/grahamandgold/florida-signal/staging/data/utility-intake/latest-success.json`
 - Dedicated env: `/srv/grahamandgold/florida-signal/secrets/florida-utility-intake.env`
-- Dependency helper: `/srv/grahamandgold/florida-signal/tools/florida-utility-intake-wait.sh`
+- Active release: `/srv/grahamandgold/florida-signal/utility-intake-releases/current`
+- Dependency helper: `/srv/grahamandgold/florida-signal/utility-intake-releases/current/florida-utility-intake-wait.sh`
 
 Every raw/derived shadow evidence file is create-only mode `0600`, fsynced, and
 followed by a run-directory fsync. The run-directory entry itself is fsynced
@@ -99,8 +100,13 @@ The Finder app stores its read-only snapshot under
 the existing `florida` SSH alias, copies only sanitized receipt basenames from
 the fixed producer directory, verifies the complete hash/schema/run binding,
 rereads both pointers for stability, then atomically places the receipt files
-before the pointers. It issues no remote shell and no remote write. A failed
-sync preserves the previous snapshot; freshness then fails closed naturally.
+before the pointers. It issues no remote shell and no remote write. The helper
+requires an explicit absolute, non-symlink, non-writable known-hosts file and
+passes `StrictHostKeyChecking=yes` with only that file trusted. A mode-`0600`
+nonblocking process lock suppresses overlap. The Desk server owns an immediate
+and five-minute recurring refresh thread; it starts and stops with that exact
+Desk process. A failed sync preserves the previous snapshot; the independent
+75-minute receipt threshold then fails closed to stale naturally.
 
 ## Hard stops
 
@@ -121,25 +127,37 @@ First preserve the current scripts, units, helper, Desk app, and existing
 receipt pointers in a new explicit mode-`0700` backup directory and record a
 SHA-256 inventory. Do not use a broad checkout copy as a runtime replacement.
 The reviewed manifest covers the production script, its sibling shadow module,
-wait helper, service, and timer. Run the atomic installer with the timer still
-disabled:
+wait helper, service, and timer. Quiesce and prove the service/timer state
+**before** invoking the installer:
 
 ```bash
+sudo systemctl disable --now florida-utility-intake.timer 2>/dev/null || \
+  test "$(systemctl is-enabled florida-utility-intake.timer 2>/dev/null || true)" = "not-found"
+sudo systemctl stop florida-utility-intake.service 2>/dev/null || true
+systemctl is-active florida-utility-intake.timer
+systemctl is-enabled florida-utility-intake.timer
+systemctl is-active florida-utility-intake.service
 sudo env FL_SIGNAL_UTILITY_INSTALL_APPROVAL=I_APPROVE_EXACT_UTILITY_INTAKE_ATOMIC_INSTALL \
   bash ops/droplet/install_utility_intake.sh "$(pwd)"
-sudo systemctl daemon-reload
-sudo systemctl disable --now florida-utility-intake.timer
+systemctl is-active florida-utility-intake.timer
 systemctl is-enabled florida-utility-intake.timer
 ```
 
-The installer verifies every source hash, atomically renames every installed
-file, imports the installed sibling pair from their exact destination, and runs
-an empty-environment/missing-credential self-test. That self-test must exit 3
-and preserve a `startup_stage=credential_file` receipt under the printed
-`install-checks/` path, with `remote_methods=[]` and no latest-success pointer.
-This closes the pre-environment/startup-import gap. Do not continue if the exact
-hash manifest, installed import, self-test receipt, or `systemd-analyze verify`
-fails.
+The first state check may report `unknown/not-found` only when the timer unit is
+absent; otherwise require `inactive/disabled`. The installer rechecks before
+creating a stage and fails on any active service or enabled timer. It copies all
+five hash-reviewed files into an unreachable generation, validates the sibling
+imports and both units there, then runs an empty-environment/missing-credential
+self-test there. That self-test must exit 3 and preserve a
+`startup_stage=credential_file` receipt under the printed `install-checks/`
+path, with `remote_methods=[]` and no latest-success pointer. Only after every
+check passes are both inactive unit files atomically placed from that same
+generation; one atomic `current` symlink then switches every executable code
+path. A post-switch daemon reload, byte-for-byte unit verification, active
+import verification, and strict `inactive/disabled` timer check are mandatory.
+Any late failure restores the prior generation and unit files and reloads them.
+Do not continue if the exact hash manifest, staged or active import, self-test
+receipt, unit verification, rollback, or timer-state gate fails.
 
 The helper only performs a bounded wait for the existing Accela and sync
 oneshots. Python invokes it so timeout, missing-helper, and failed-dependency
@@ -147,9 +165,11 @@ states are receipted. It never starts, stops, or restarts a dependency.
 
 Install the two-variable env file without printing it. Apply
 `20260831235500_utility_intake_anon_read_hardening.sql`; this creates a private
-owner-only function and changes no grant or row by default. Preview current
-policy/grant state, preserve its output, then invoke the exact function once in
-an explicit transaction:
+owner-only function and changes no table/schema grant, policy, RLS state, or row
+by default. The canonical `private` schema must already exist; migration
+application does not create it and performs no schema-wide revoke. Preview
+current policy/grant state, preserve its output, then invoke the exact function
+once in an explicit transaction:
 
 ```sql
 select schemaname, tablename, policyname, roles, cmd, qual, with_check
@@ -201,10 +221,12 @@ request occurred. The record count is discovered by the canary, never hard-coded
 Deploy only the reviewed utility deltas from a branch descended from current
 Desk authority; never replace whole Desk files from the older utility branch.
 Run `ops/update_datawire_desktop_app.sh`, which bundles the read-only receipt
-sync helper. The Finder launcher refreshes the local snapshot before starting
-the loopback Desk and exports the exact local receipt/pointer paths. Confirm the
-Desk env contains `SUPABASE_ANON_KEY`; the utility route rejects a service-role
-or secret key and sends no Authorization header.
+sync helper. The Finder launcher gives the loopback server the exact local
+receipt/pointer paths, helper path, `florida` alias, explicit
+`~/.ssh/known_hosts`, and five-minute interval. The server refreshes immediately
+and repeatedly only while the Desk is open. Confirm the Desk env contains
+`SUPABASE_ANON_KEY`; the utility route rejects a service-role or secret key and
+sends no Authorization header.
 
 Verify sewer/utility and outside-agency engineering cards, exact live rows,
 search, paging through an explicit empty page, exact total, event clock,
@@ -242,8 +264,10 @@ failed-config canary invokes the existing alert path without exposing values.
 
 ## Rollback
 
-Disable the timer and restore only the backed-up script, unit, helper, and Desk
-files. Remove the dedicated env file only through the approved secret-management
-process. Do not delete evidence bundles, immutable receipts, latest pointers,
-logs, Accela rows, Supabase rows, or user work. Re-run the private Desk and
-existing source-lane checks after restoration.
+Disable the timer, stop the service, atomically repoint `utility-intake-releases/current`
+to the preserved prior generation, reload systemd, and prove the timer remains
+inactive/disabled. Restore the backed-up Desk app only if needed. Remove the
+dedicated env file only through the approved secret-management process. Do not
+delete release generations, evidence bundles, immutable receipts, latest
+pointers, logs, Accela rows, Supabase rows, or user work. Re-run the private
+Desk and existing source-lane checks after restoration.

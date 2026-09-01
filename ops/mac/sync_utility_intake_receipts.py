@@ -4,12 +4,15 @@
 The source is a fixed read-only SSH alias and fixed producer directory.  The
 script copies two pointer snapshots, validates every hash-bound receipt between
 them, and atomically installs only stable bytes into the private Desk data
-directory.  It never contacts Supabase and never issues a remote write.
+directory. A cross-process lock prevents overlapping refreshes, and scp trusts
+only the caller's explicit, protected known-hosts file. It never contacts
+Supabase and never issues a remote write.
 """
 
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -28,6 +31,7 @@ VERIFICATION_SCHEMA = "FloridaSignalUtilityIntakeProductionVerificationV1"
 REMOTE_ROOT = Path("/srv/grahamandgold/florida-signal/staging/data/utility-intake")
 REMOTE_RECEIPTS = REMOTE_ROOT / "receipts"
 MAX_FILE_BYTES = 2_000_000
+MAX_KNOWN_HOSTS_BYTES = 1_000_000
 POINTER_NAMES = ("latest-attempt.json", "latest-success.json")
 SAFE_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,220}")
 
@@ -87,13 +91,18 @@ def _validate_pointer(path: Path, kind: str) -> tuple[dict[str, Any], bytes]:
     return pointer, raw
 
 
-def _copy_remote(scp: Path, host: str, remote_name: str, destination: Path) -> None:
+def _copy_remote(
+    scp: Path, host: str, known_hosts: Path, remote_name: str, destination: Path,
+) -> None:
     if not SAFE_NAME_RE.fullmatch(remote_name):
         raise SyncError("remote filename is unsafe")
     try:
         result = subprocess.run(
             [
                 str(scp), "-q", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+                "-o", "StrictHostKeyChecking=yes",
+                "-o", f"UserKnownHostsFile={known_hosts}",
+                "-o", "GlobalKnownHostsFile=/dev/null",
                 f"{host}:{REMOTE_ROOT / remote_name}", str(destination),
             ],
             stdin=subprocess.DEVNULL,
@@ -108,13 +117,18 @@ def _copy_remote(scp: Path, host: str, remote_name: str, destination: Path) -> N
         raise SyncError("bounded read-only receipt copy failed")
 
 
-def _copy_remote_receipt(scp: Path, host: str, name: str, destination: Path) -> None:
+def _copy_remote_receipt(
+    scp: Path, host: str, known_hosts: Path, name: str, destination: Path,
+) -> None:
     if not SAFE_NAME_RE.fullmatch(name):
         raise SyncError("remote receipt filename is unsafe")
     try:
         result = subprocess.run(
             [
                 str(scp), "-q", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+                "-o", "StrictHostKeyChecking=yes",
+                "-o", f"UserKnownHostsFile={known_hosts}",
+                "-o", "GlobalKnownHostsFile=/dev/null",
                 f"{host}:{REMOTE_RECEIPTS / name}", str(destination),
             ],
             stdin=subprocess.DEVNULL,
@@ -131,7 +145,7 @@ def _copy_remote_receipt(scp: Path, host: str, name: str, destination: Path) -> 
 
 def _validate_outcome(
     path: Path, pointer: dict[str, Any], copied: dict[str, bytes], *, scp: Path, host: str,
-    scratch: Path,
+    known_hosts: Path, scratch: Path,
 ) -> None:
     outcome_name = _remote_receipt_name(pointer.get("receipt_path"))
     outcome, raw = _read_json(path)
@@ -157,7 +171,7 @@ def _validate_outcome(
     if not re.fullmatch(r"[0-9a-f]{64}", verification_sha):
         raise SyncError("verification receipt hash is malformed")
     verification_path = scratch / f"receipt-{uuid4().hex}-{verification_name}"
-    _copy_remote_receipt(scp, host, verification_name, verification_path)
+    _copy_remote_receipt(scp, host, known_hosts, verification_name, verification_path)
     verification_receipt, verification_raw = _read_json(verification_path)
     if hashlib.sha256(verification_raw).hexdigest() != verification_sha:
         raise SyncError("verification receipt hash mismatch")
@@ -180,6 +194,49 @@ def _real_private_directory(path: Path) -> None:
     if path.is_symlink() or not stat.S_ISDIR(metadata.st_mode):
         raise SyncError("snapshot destination is unsafe")
     os.chmod(path, 0o700)
+
+
+def _validate_known_hosts(path: Path) -> None:
+    if not path.is_absolute() or path.is_symlink():
+        raise SyncError("known-hosts path must be an absolute regular file")
+    try:
+        metadata = path.lstat()
+    except OSError as error:
+        raise SyncError("known-hosts path is unavailable") from error
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_size <= 0
+        or metadata.st_size > MAX_KNOWN_HOSTS_BYTES
+        or metadata.st_mode & 0o022
+    ):
+        raise SyncError("known-hosts file is unsafe")
+
+
+def _acquire_sync_lock(destination: Path) -> int:
+    lock_path = destination / ".sync.lock"
+    flags = os.O_RDWR | os.O_CREAT
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(lock_path, flags, 0o600)
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise SyncError("receipt sync lock is not a regular file")
+        os.fchmod(descriptor, 0o600)
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as error:
+        try:
+            os.close(descriptor)
+        except (OSError, UnboundLocalError):
+            pass
+        raise SyncError("receipt sync is already active") from error
+    except Exception:
+        try:
+            os.close(descriptor)
+        except (OSError, UnboundLocalError):
+            pass
+        raise
+    return descriptor
 
 
 def _fsync_directory(path: Path) -> None:
@@ -222,24 +279,16 @@ def _atomic_place(path: Path, raw: bytes) -> None:
     _fsync_directory(path.parent)
 
 
-def sync_receipts(*, destination: Path, host: str, scp: Path, attempts: int = 3) -> dict[str, Any]:
-    if not destination.is_absolute():
-        raise SyncError("snapshot destination must be absolute")
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", host):
-        raise SyncError("SSH alias is unsafe")
-    if not scp.is_absolute() or scp.is_symlink() or not os.access(scp, os.X_OK):
-        raise SyncError("scp executable is unsafe")
-    _real_private_directory(destination)
-    receipts_dir = destination / "receipts"
-    _real_private_directory(receipts_dir)
-
+def _sync_receipts_locked(
+    *, destination: Path, host: str, known_hosts: Path, scp: Path, attempts: int,
+) -> dict[str, Any]:
     for attempt_number in range(1, attempts + 1):
         with tempfile.TemporaryDirectory(prefix="utility-receipts-", dir=str(destination)) as tmp:
             scratch = Path(tmp)
             first: dict[str, tuple[dict[str, Any], bytes]] = {}
             for name, kind in zip(POINTER_NAMES, ("attempt", "success")):
                 copied_path = scratch / f"first-{name}"
-                _copy_remote(scp, host, name, copied_path)
+                _copy_remote(scp, host, known_hosts, name, copied_path)
                 first[name] = _validate_pointer(copied_path, kind)
 
             receipts: dict[str, bytes] = {}
@@ -248,15 +297,16 @@ def sync_receipts(*, destination: Path, host: str, scp: Path, attempts: int = 3)
                 if outcome_name in receipts:
                     continue
                 outcome_path = scratch / f"receipt-{uuid4().hex}-{outcome_name}"
-                _copy_remote_receipt(scp, host, outcome_name, outcome_path)
+                _copy_remote_receipt(scp, host, known_hosts, outcome_name, outcome_path)
                 _validate_outcome(
-                    outcome_path, pointer, receipts, scp=scp, host=host, scratch=scratch,
+                    outcome_path, pointer, receipts, scp=scp, host=host,
+                    known_hosts=known_hosts, scratch=scratch,
                 )
 
             stable = True
             for name, kind in zip(POINTER_NAMES, ("attempt", "success")):
                 copied_path = scratch / f"second-{name}"
-                _copy_remote(scp, host, name, copied_path)
+                _copy_remote(scp, host, known_hosts, name, copied_path)
                 _pointer, second_raw = _validate_pointer(copied_path, kind)
                 if second_raw != first[name][1]:
                     stable = False
@@ -264,7 +314,7 @@ def sync_receipts(*, destination: Path, host: str, scp: Path, attempts: int = 3)
                 continue
 
             for name, raw in receipts.items():
-                _atomic_place(receipts_dir / name, raw)
+                _atomic_place(destination / "receipts" / name, raw)
             for name in POINTER_NAMES:
                 _atomic_place(destination / name, first[name][1])
             return {
@@ -277,10 +327,39 @@ def sync_receipts(*, destination: Path, host: str, scp: Path, attempts: int = 3)
     raise SyncError("producer pointers changed during every bounded snapshot attempt")
 
 
+def sync_receipts(
+    *, destination: Path, host: str, known_hosts: Path, scp: Path, attempts: int = 3,
+) -> dict[str, Any]:
+    if not destination.is_absolute():
+        raise SyncError("snapshot destination must be absolute")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", host):
+        raise SyncError("SSH alias is unsafe")
+    if not scp.is_absolute() or scp.is_symlink() or not os.access(scp, os.X_OK):
+        raise SyncError("scp executable is unsafe")
+    if type(attempts) is not int or not 1 <= attempts <= 3:
+        raise SyncError("snapshot attempts are outside the bound")
+    _validate_known_hosts(known_hosts)
+    _real_private_directory(destination)
+    receipts_dir = destination / "receipts"
+    _real_private_directory(receipts_dir)
+    descriptor = _acquire_sync_lock(destination)
+    try:
+        return _sync_receipts_locked(
+            destination=destination, host=host, known_hosts=known_hosts,
+            scp=scp, attempts=attempts,
+        )
+    finally:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(descriptor)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--destination", required=True, type=Path)
     parser.add_argument("--ssh-host", default="florida")
+    parser.add_argument("--known-hosts", required=True, type=Path)
     parser.add_argument("--scp", type=Path, default=Path("/usr/bin/scp"))
     return parser
 
@@ -289,7 +368,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         result = sync_receipts(
-            destination=args.destination, host=args.ssh_host, scp=args.scp,
+            destination=args.destination, host=args.ssh_host,
+            known_hosts=args.known_hosts, scp=args.scp,
         )
     except (OSError, SyncError) as error:
         print(json.dumps({"status": "unavailable", "error_type": type(error).__name__}))

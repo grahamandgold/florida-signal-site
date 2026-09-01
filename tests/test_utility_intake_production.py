@@ -6,7 +6,9 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -645,7 +647,8 @@ class UtilityIntakeProductionTests(unittest.TestCase):
         self.assertNotIn("fs_wait_for_units.sh", service)
         self.assertIn("EnvironmentFile=-/srv/grahamandgold/florida-signal/secrets/florida-utility-intake.env", service)
         self.assertIn("--credential-file /srv/grahamandgold/florida-signal/secrets/florida-utility-intake.env", service)
-        self.assertIn("--dependency-wait-command /srv/grahamandgold/florida-signal/tools/florida-utility-intake-wait.sh", service)
+        self.assertIn("/utility-intake-releases/current/utility_intake_production.py", service)
+        self.assertIn("--dependency-wait-command /srv/grahamandgold/florida-signal/utility-intake-releases/current/florida-utility-intake-wait.sh", service)
         self.assertIn("--latest-attempt-pointer /srv/grahamandgold/florida-signal/staging/data/utility-intake/latest-attempt.json", service)
         self.assertIn("--latest-success-pointer /srv/grahamandgold/florida-signal/staging/data/utility-intake/latest-success.json", service)
         self.assertIn("FL_SIGNAL_UTILITY_EXECUTION_CONTEXT=systemd_timer_expected", service)
@@ -667,7 +670,7 @@ class UtilityIntakeProductionTests(unittest.TestCase):
         self.assertIn("OnCalendar=*:27/30", timer)
         self.assertIn("Persistent=true", timer)
 
-    def test_atomic_installer_is_hash_gated_and_leaves_timer_enablement_untouched(self):
+    def test_atomic_installer_stages_before_one_generation_switch_and_keeps_timer_off(self):
         installer = (ROOT / "ops/droplet/install_utility_intake.sh").read_text()
         manifest = (ROOT / "ops/droplet/utility-intake-install.sha256").read_text()
         self.assertIn("utility-intake-install.sha256", installer)
@@ -676,11 +679,163 @@ class UtilityIntakeProductionTests(unittest.TestCase):
         self.assertIn("utility_intake_production.SHADOW_IMPORT_ERROR is None", installer)
         self.assertIn("intentionally-absent.env", installer)
         self.assertIn('receipt["startup_stage"] == "credential_file"', installer)
+        self.assertIn("timer_is_preinstall_safe", installer)
+        self.assertIn("service_is_preinstall_safe", installer)
+        self.assertIn("validate_staged_release", installer)
+        self.assertIn("switch_release", installer)
+        self.assertIn('replace_symlink "$final_dir" "$current_path"', installer)
+        self.assertIn("os.replace", installer)
+        self.assertIn("rollback_release_switch", installer)
+        self.assertIn("timer_is_postswitch_safe", installer)
+        self.assertLess(
+            installer.index("if ! timer_is_preinstall_safe"),
+            installer.index('stage_release "$repo_root" "$stage_dir"'),
+        )
+        self.assertLess(
+            installer.index('validate_staged_release "$stage_dir" "$check_root"'),
+            installer.index('switch_release "$stage_dir" "$final_dir"'),
+        )
         self.assertNotIn("systemctl enable", installer)
         self.assertNotIn("systemctl start", installer)
         for line in manifest.splitlines():
             expected, relative = line.split("  ", 1)
             self.assertEqual(hashlib.sha256((ROOT / relative).read_bytes()).hexdigest(), expected)
+
+    def test_release_switch_late_failure_restores_one_complete_prior_generation(self):
+        installer = ROOT / "ops/droplet/install_utility_intake.sh"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            releases = root / "releases"
+            units = root / "units"
+            old_release = releases / "old"
+            stage = releases / ".stage-new"
+            final = releases / "new"
+            current = releases / "current"
+            marker = root / "late-guard-ran"
+            units.mkdir(parents=True)
+            old_release.mkdir(parents=True)
+            stage.mkdir()
+            names = (
+                "utility_intake_production.py",
+                "utility_intake_shadow.py",
+                "florida-utility-intake-wait.sh",
+                "florida-utility-intake.service",
+                "florida-utility-intake.timer",
+            )
+            for name in names:
+                (old_release / name).write_text(f"old:{name}\n", encoding="utf-8")
+                (stage / name).write_text(f"new:{name}\n", encoding="utf-8")
+            current.symlink_to(old_release)
+            (units / "florida-utility-intake.service").symlink_to(
+                current / "florida-utility-intake.service"
+            )
+            (units / "florida-utility-intake.timer").symlink_to(
+                current / "florida-utility-intake.timer"
+            )
+            env = os.environ.copy()
+            env["TEST_LATE_GUARD_MARKER"] = str(marker)
+            env["TEST_RELEASE_CURRENT"] = str(current)
+            env["TEST_RELEASE_UNITS"] = str(units)
+            result = subprocess.run(
+                [
+                    "/bin/bash", "-c",
+                    r'''source "$1"
+install_post_switch_guard() {
+  [[ "$(/usr/bin/readlink "$TEST_RELEASE_CURRENT")" == "$1" ]] || return 2
+  /usr/bin/cmp -s "$1/florida-utility-intake.service" \
+    "$TEST_RELEASE_UNITS/florida-utility-intake.service" || return 2
+  /usr/bin/cmp -s "$1/florida-utility-intake.timer" \
+    "$TEST_RELEASE_UNITS/florida-utility-intake.timer" || return 2
+  : >"$TEST_LATE_GUARD_MARKER"
+  return 1
+}
+if switch_release "$2" "$3" "$4" "$5" "$6"; then
+  exit 90
+fi''',
+                    "release-switch-test", str(installer), str(stage), str(final),
+                    str(releases), str(current), str(units),
+                ],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(marker.is_file())
+            self.assertEqual(current.readlink(), old_release)
+            self.assertEqual(
+                (units / "florida-utility-intake.service").readlink(),
+                current / "florida-utility-intake.service",
+            )
+            self.assertEqual(
+                (units / "florida-utility-intake.timer").readlink(),
+                current / "florida-utility-intake.timer",
+            )
+            self.assertEqual(
+                (units / "florida-utility-intake.service").read_text(encoding="utf-8"),
+                "old:florida-utility-intake.service\n",
+            )
+            self.assertEqual(
+                (units / "florida-utility-intake.timer").read_text(encoding="utf-8"),
+                "old:florida-utility-intake.timer\n",
+            )
+            self.assertFalse(stage.exists())
+            self.assertTrue(final.is_dir())
+
+    def test_release_switch_late_failure_on_first_install_leaves_no_runnable_unit(self):
+        installer = ROOT / "ops/droplet/install_utility_intake.sh"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            releases = root / "releases"
+            units = root / "units"
+            stage = releases / ".stage-new"
+            final = releases / "new"
+            current = releases / "current"
+            releases.mkdir()
+            units.mkdir()
+            stage.mkdir()
+            for name in (
+                "utility_intake_production.py",
+                "utility_intake_shadow.py",
+                "florida-utility-intake-wait.sh",
+                "florida-utility-intake.service",
+                "florida-utility-intake.timer",
+            ):
+                (stage / name).write_text(f"new:{name}\n", encoding="utf-8")
+            result = subprocess.run(
+                [
+                    "/bin/bash", "-c",
+                    r'''source "$1"
+install_post_switch_guard() {
+  [[ "$(/usr/bin/readlink "$TEST_RELEASE_CURRENT")" == "$1" ]] || return 2
+  /usr/bin/cmp -s "$1/florida-utility-intake.service" \
+    "$TEST_RELEASE_UNITS/florida-utility-intake.service" || return 2
+  /usr/bin/cmp -s "$1/florida-utility-intake.timer" \
+    "$TEST_RELEASE_UNITS/florida-utility-intake.timer" || return 2
+  return 1
+}
+if switch_release "$2" "$3" "$4" "$5" "$6"; then
+  exit 90
+fi''',
+                    "release-switch-test", str(installer), str(stage), str(final),
+                    str(releases), str(current), str(units),
+                ],
+                env={
+                    **os.environ,
+                    "TEST_RELEASE_CURRENT": str(current),
+                    "TEST_RELEASE_UNITS": str(units),
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(current.exists())
+            self.assertFalse(current.is_symlink())
+            for name in ("florida-utility-intake.service", "florida-utility-intake.timer"):
+                self.assertFalse((units / name).exists())
+                self.assertFalse((units / name).is_symlink())
+            self.assertTrue(final.is_dir())
 
 
 if __name__ == "__main__":

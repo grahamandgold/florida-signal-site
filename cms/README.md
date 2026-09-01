@@ -102,7 +102,10 @@ SQLite data remains in Application Support and is not replaced with the app bund
 reads durable project state, the private PDMR evidence database and the read-only PDMR Candidate
 script from a verified snapshot inside the generated app. It also bundles the utility receipt-sync
 helper, which copies only the fixed latest-attempt/latest-success chains from the `florida` SSH
-alias, validates them, and atomically stores them under Application Support before the Desk starts.
+alias, enforces strict host-key checking against the explicit local known-hosts file, validates the
+hash-bound chain, and atomically stores it under Application Support. A cross-process lock prevents
+overlap. The loopback server runs that bounded refresh immediately and every five minutes only
+while the Desk is open; failures preserve the prior snapshot, which then ages to stale/unverified.
 This avoids macOS privacy failures when
 a Finder-launched app is denied Documents access. Re-run the updater after a local PDMR collection
 to refresh the snapshot. `FL_SIGNAL_SITE_REPO` and `FL_SIGNAL_SOURCE_ROOT` select the source at

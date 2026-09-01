@@ -9,10 +9,12 @@ import hashlib
 import json
 import os
 import re
+import signal
 import sqlite3
 import stat
 import subprocess
 import sys
+import threading
 from datetime import date, datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -1088,6 +1090,213 @@ UTILITY_INTAKE_LOCAL_FILE_CAP = 2_000_000
 UTILITY_INTAKE_REMOTE_RESPONSE_CAP = 8_000_000
 UTILITY_INTAKE_REMOTE_SCAN_CAP = 10_000
 UTILITY_INTAKE_REQUEST_TIMEOUT_SECONDS = 25
+UTILITY_INTAKE_SYNC_PROCESS_TIMEOUT_SECONDS = 45
+UTILITY_INTAKE_SYNC_DEFAULT_INTERVAL_SECONDS = 300
+
+
+def utility_intake_sync_interval(value: Any) -> int:
+    try:
+        parsed = int(str(value))
+    except (TypeError, ValueError):
+        return UTILITY_INTAKE_SYNC_DEFAULT_INTERVAL_SECONDS
+    return max(60, min(3600, parsed))
+
+
+class UtilityReceiptRefresher:
+    """Refresh the localhost receipt snapshot only for the Desk process lifetime."""
+
+    def __init__(
+        self,
+        *,
+        script: Path,
+        destination: Path,
+        ssh_host: str,
+        known_hosts: Path,
+        interval_seconds: float = UTILITY_INTAKE_SYNC_DEFAULT_INTERVAL_SECONDS,
+        process_timeout_seconds: float = UTILITY_INTAKE_SYNC_PROCESS_TIMEOUT_SECONDS,
+        runner=None,
+    ) -> None:
+        if (
+            not script.is_absolute()
+            or script.is_symlink()
+            or not script.is_file()
+            or not destination.is_absolute()
+            or not known_hosts.is_absolute()
+            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", ssh_host)
+            or interval_seconds <= 0
+            or process_timeout_seconds <= 0
+        ):
+            raise ValueError("utility receipt refresher configuration is unsafe")
+        self.script = script
+        self.destination = destination
+        self.ssh_host = ssh_host
+        self.known_hosts = known_hosts
+        self.interval_seconds = interval_seconds
+        self.process_timeout_seconds = process_timeout_seconds
+        self._runner = runner
+        self._stop = threading.Event()
+        self._cycle_lock = threading.Lock()
+        self._lifecycle_lock = threading.Lock()
+        self._process_lock = threading.Lock()
+        self._active_process: subprocess.Popen | None = None
+        self._thread: threading.Thread | None = None
+        self.last_status = "not_started"
+
+    def command(self) -> list[str]:
+        return [
+            sys.executable,
+            str(self.script),
+            "--destination", str(self.destination),
+            "--ssh-host", self.ssh_host,
+            "--known-hosts", str(self.known_hosts),
+        ]
+
+    @staticmethod
+    def _terminate_process(process: subprocess.Popen) -> None:
+        if process.poll() is not None:
+            return
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+            process.wait(timeout=2)
+        except (OSError, subprocess.SubprocessError):
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except OSError:
+                pass
+            try:
+                process.wait(timeout=2)
+            except (OSError, subprocess.SubprocessError):
+                pass
+
+    def _run_managed_process(self) -> subprocess.CompletedProcess:
+        process = subprocess.Popen(
+            self.command(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
+        with self._process_lock:
+            self._active_process = process
+            should_stop = self._stop.is_set()
+        if should_stop:
+            self._terminate_process(process)
+        try:
+            stdout, stderr = process.communicate(timeout=self.process_timeout_seconds)
+        except subprocess.TimeoutExpired:
+            self._terminate_process(process)
+            stdout, stderr = process.communicate()
+        finally:
+            with self._process_lock:
+                if self._active_process is process:
+                    self._active_process = None
+        return subprocess.CompletedProcess(
+            self.command(), process.returncode, stdout=stdout, stderr=stderr,
+        )
+
+    def sync_once(self) -> bool:
+        if not self._cycle_lock.acquire(blocking=False):
+            self.last_status = "overlap_suppressed"
+            return False
+        try:
+            if self._stop.is_set():
+                self.last_status = "stopped"
+                return False
+            try:
+                if self._runner is None:
+                    result = self._run_managed_process()
+                else:
+                    result = self._runner(
+                        self.command(),
+                        stdin=subprocess.DEVNULL,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=self.process_timeout_seconds,
+                    )
+                payload = json.loads(result.stdout) if result.returncode == 0 else None
+            except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+                if self._stop.is_set():
+                    self.last_status = "stopped"
+                    return False
+                self.last_status = "sync_failed"
+                print("Utility receipt refresh failed; preserving prior local snapshot.", flush=True)
+                return False
+            if self._stop.is_set():
+                self.last_status = "stopped"
+                return False
+            if (
+                result.returncode != 0
+                or not isinstance(payload, dict)
+                or payload.get("status") != "synced"
+            ):
+                self.last_status = "sync_failed"
+                print("Utility receipt refresh failed; preserving prior local snapshot.", flush=True)
+                return False
+            self.last_status = "synced"
+            return True
+        finally:
+            self._cycle_lock.release()
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            self.sync_once()
+            if self._stop.wait(self.interval_seconds):
+                break
+
+    def start(self) -> None:
+        with self._lifecycle_lock:
+            if self._thread is not None and self._thread.is_alive():
+                return
+            self._stop.clear()
+            self._thread = threading.Thread(
+                target=self._run,
+                name="utility-receipt-refresh",
+                daemon=True,
+            )
+            self._thread.start()
+
+    def stop(self) -> None:
+        with self._lifecycle_lock:
+            thread = self._thread
+            self._stop.set()
+        with self._process_lock:
+            process = self._active_process
+        if process is not None:
+            self._terminate_process(process)
+        if thread is not None:
+            timeout = self.process_timeout_seconds + 1.0 if self._runner is not None else 5.0
+            thread.join(timeout=timeout)
+            if thread.is_alive():
+                self.last_status = "stop_timeout"
+                print("Utility receipt refresh did not stop inside its process bound.", flush=True)
+                return
+        with self._lifecycle_lock:
+            self._thread = None
+
+
+def build_utility_receipt_refresher() -> UtilityReceiptRefresher | None:
+    script_value = os.getenv("FL_SIGNAL_UTILITY_SYNC_SCRIPT", "").strip()
+    known_hosts_value = os.getenv("FL_SIGNAL_UTILITY_KNOWN_HOSTS", "").strip()
+    if not script_value or not known_hosts_value:
+        return None
+    try:
+        return UtilityReceiptRefresher(
+            script=Path(script_value),
+            destination=UTILITY_INTAKE_LOCAL_ROOT,
+            ssh_host=os.getenv("FL_SIGNAL_UTILITY_SSH_HOST", "florida").strip(),
+            known_hosts=Path(known_hosts_value),
+            interval_seconds=utility_intake_sync_interval(
+                os.getenv("FL_SIGNAL_UTILITY_SYNC_INTERVAL_SECONDS", "")
+            ),
+        )
+    except ValueError:
+        print(
+            "Utility receipt refresh disabled by unsafe configuration; local health will age stale.",
+            flush=True,
+        )
+        return None
 
 
 def utility_intake_family(permit_number: Any) -> str | None:
@@ -2960,6 +3169,26 @@ class Handler(SimpleHTTPRequestHandler):
         self.reply({"error": "Not found"}, HTTPStatus.NOT_FOUND)
 
 
+def serve_data_wire(
+    host: str,
+    port: int,
+    *,
+    refresher: UtilityReceiptRefresher | None = None,
+    server_factory=ThreadingHTTPServer,
+) -> None:
+    server = server_factory((host, port), Handler)
+    refresher_started = False
+    try:
+        if refresher is not None:
+            refresher.start()
+            refresher_started = True
+        server.serve_forever()
+    finally:
+        if refresher is not None and refresher_started:
+            refresher.stop()
+        server.server_close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
@@ -2969,7 +3198,22 @@ def main() -> None:
     print(f"The Data Wire running at http://{args.host}:{args.port}")
     if not ADMIN_TOKEN:
         print("Read-only: set DATA_WIRE_ADMIN_TOKEN to enable editorial writes")
-    ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
+    previous_sigterm = signal.getsignal(signal.SIGTERM)
+
+    def stop_for_launchd(_signum, _frame):
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, stop_for_launchd)
+    try:
+        serve_data_wire(
+            args.host,
+            args.port,
+            refresher=build_utility_receipt_refresher(),
+        )
+    except KeyboardInterrupt:
+        pass
+    finally:
+        signal.signal(signal.SIGTERM, previous_sigterm)
 
 
 if __name__ == "__main__":

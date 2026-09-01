@@ -26,6 +26,13 @@ class UtilityReceiptSyncTests(unittest.TestCase):
         path.write_bytes(raw)
         return hashlib.sha256(raw).hexdigest()
 
+    @staticmethod
+    def _known_hosts(root: Path) -> Path:
+        path = root / "known_hosts"
+        path.write_text("florida ssh-ed25519 AAAAC3Nza-test-only\n", encoding="utf-8")
+        path.chmod(0o600)
+        return path
+
     def _remote_fixture(self, root: Path):
         remote = root / "remote" / "utility-intake"
         receipts = remote / "receipts"
@@ -95,6 +102,7 @@ class UtilityReceiptSyncTests(unittest.TestCase):
             fake_scp = root / "scp"
             fake_scp.write_text("#!/bin/sh\n", encoding="utf-8")
             fake_scp.chmod(0o755)
+            known_hosts = self._known_hosts(root)
             calls = []
 
             def copy(command, **_kwargs):
@@ -107,7 +115,8 @@ class UtilityReceiptSyncTests(unittest.TestCase):
                     mock.patch.object(syncer, "REMOTE_RECEIPTS", remote / "receipts"), \
                     mock.patch.object(syncer.subprocess, "run", side_effect=copy):
                 result = syncer.sync_receipts(
-                    destination=destination, host="florida", scp=fake_scp,
+                    destination=destination, host="florida",
+                    known_hosts=known_hosts, scp=fake_scp,
                 )
             self.assertEqual(result["status"], "synced")
             self.assertEqual(result["latest_attempt_run_id"], "utility-natural")
@@ -115,6 +124,11 @@ class UtilityReceiptSyncTests(unittest.TestCase):
             self.assertEqual(len(calls), 6)  # two pointers, outcome, verification, two pointers
             self.assertTrue(all(command[0] == str(fake_scp) for command in calls))
             self.assertTrue(all("BatchMode=yes" in command for command in calls))
+            self.assertTrue(all("StrictHostKeyChecking=yes" in command for command in calls))
+            self.assertTrue(all(
+                f"UserKnownHostsFile={known_hosts}" in command for command in calls
+            ))
+            self.assertTrue(all("GlobalKnownHostsFile=/dev/null" in command for command in calls))
             self.assertEqual((destination / "latest-attempt.json").stat().st_mode & 0o777, 0o600)
             self.assertEqual((destination / "receipts/utility-natural.json").stat().st_mode & 0o777, 0o600)
             self.assertEqual(
@@ -134,6 +148,7 @@ class UtilityReceiptSyncTests(unittest.TestCase):
             fake_scp = root / "scp"
             fake_scp.write_text("#!/bin/sh\n", encoding="utf-8")
             fake_scp.chmod(0o755)
+            known_hosts = self._known_hosts(root)
 
             def copy(command, **_kwargs):
                 shutil.copyfile(Path(command[-2].split(":", 1)[1]), Path(command[-1]))
@@ -144,7 +159,8 @@ class UtilityReceiptSyncTests(unittest.TestCase):
                     mock.patch.object(syncer.subprocess, "run", side_effect=copy):
                 with self.assertRaisesRegex(syncer.SyncError, "hash mismatch"):
                     syncer.sync_receipts(
-                        destination=destination, host="florida", scp=fake_scp,
+                        destination=destination, host="florida",
+                        known_hosts=known_hosts, scp=fake_scp,
                     )
             self.assertEqual(existing.read_text(), "preserve me\n")
 
@@ -154,12 +170,62 @@ class UtilityReceiptSyncTests(unittest.TestCase):
             fake_scp = root / "scp"
             fake_scp.write_text("#!/bin/sh\n", encoding="utf-8")
             fake_scp.chmod(0o755)
+            known_hosts = self._known_hosts(root)
             with self.assertRaisesRegex(syncer.SyncError, "SSH alias"):
                 syncer.sync_receipts(
-                    destination=root / "local", host="florida;touch-x", scp=fake_scp,
+                    destination=root / "local", host="florida;touch-x",
+                    known_hosts=known_hosts, scp=fake_scp,
                 )
             with self.assertRaisesRegex(syncer.SyncError, "producer directory"):
                 syncer._remote_receipt_name("/tmp/escape.json")
+
+    def test_known_hosts_is_explicit_real_and_not_group_or_world_writable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake_scp = root / "scp"
+            fake_scp.write_text("#!/bin/sh\n", encoding="utf-8")
+            fake_scp.chmod(0o755)
+            known_hosts = self._known_hosts(root)
+            known_hosts.chmod(0o666)
+            with self.assertRaisesRegex(syncer.SyncError, "known-hosts file is unsafe"):
+                syncer.sync_receipts(
+                    destination=root / "local", host="florida",
+                    known_hosts=known_hosts, scp=fake_scp,
+                )
+            known_hosts.unlink()
+            target = root / "trusted-hosts"
+            target.write_text("florida ssh-ed25519 test\n", encoding="utf-8")
+            known_hosts.symlink_to(target)
+            with self.assertRaisesRegex(syncer.SyncError, "absolute regular file"):
+                syncer.sync_receipts(
+                    destination=root / "local", host="florida",
+                    known_hosts=known_hosts, scp=fake_scp,
+                )
+
+    def test_process_lock_blocks_overlap_without_touching_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            destination = root / "local"
+            destination.mkdir()
+            existing = destination / "latest-attempt.json"
+            existing.write_text("preserve me\n", encoding="utf-8")
+            known_hosts = self._known_hosts(root)
+            fake_scp = root / "scp"
+            fake_scp.write_text("#!/bin/sh\n", encoding="utf-8")
+            fake_scp.chmod(0o755)
+            descriptor = syncer._acquire_sync_lock(destination)
+            try:
+                with mock.patch.object(syncer.subprocess, "run") as run:
+                    with self.assertRaisesRegex(syncer.SyncError, "already active"):
+                        syncer.sync_receipts(
+                            destination=destination, host="florida",
+                            known_hosts=known_hosts, scp=fake_scp,
+                        )
+                    run.assert_not_called()
+            finally:
+                syncer.fcntl.flock(descriptor, syncer.fcntl.LOCK_UN)
+                syncer.os.close(descriptor)
+            self.assertEqual(existing.read_text(encoding="utf-8"), "preserve me\n")
 
 
 if __name__ == "__main__":

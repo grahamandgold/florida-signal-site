@@ -1,10 +1,10 @@
 -- Default-off least-privilege gate for the utility-intake Desk mirror.
--- Applying this migration creates only a private, owner-invoked function. It
--- does not change public.permits grants, policies, RLS, or rows until a database
--- owner supplies the exact approval phrase in a separate transaction.
-
-create schema if not exists private;
-revoke all on schema private from public, anon, authenticated;
+-- Applying this migration creates or replaces only this private, owner-invoked
+-- function and its function-specific EXECUTE/comment metadata. The canonical
+-- private schema is a prerequisite: application makes no schema-wide grant,
+-- revoke, ownership, or creation change. public.permits grants, policies, RLS,
+-- and rows remain untouched until a database owner supplies the exact approval
+-- phrase in a separate transaction.
 
 create or replace function private.fs_apply_utility_intake_anon_read_hardening(
   p_approval text
