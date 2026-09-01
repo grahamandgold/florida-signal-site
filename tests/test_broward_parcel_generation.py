@@ -96,6 +96,14 @@ class BrowardParcelGenerationTests(unittest.TestCase):
         )
         self.assertEqual(MODULE.PRODUCTION_QUALITY_CONTRACT["minimum_source_rows"], 550_000)
         self.assertEqual(MODULE.PRODUCTION_QUALITY_CONTRACT["maximum_source_rows"], 560_000)
+        self.assertEqual(
+            MODULE.PRODUCTION_QUALITY_CONTRACT["normalizer_version"],
+            MODULE.NORMALIZER_VERSION,
+        )
+        self.assertEqual(
+            MODULE.PRODUCTION_QUALITY_CONTRACT["field_null_policy"]["sale_date_1"],
+            MODULE.SALE_DATE_FIELD_NULL_POLICY,
+        )
 
     def test_source_item_identity_is_pinned(self):
         self.assertEqual(MODULE.SOURCE_ITEM_ID, "4b6c15240fdc492a87b8f984b11d2854")
@@ -103,6 +111,118 @@ class BrowardParcelGenerationTests(unittest.TestCase):
         layer = json.loads((FIXTURE_ROOT / "metadata.json").read_text())
         self.assertEqual(item["id"], MODULE.SOURCE_ITEM_ID)
         self.assertEqual(layer["serviceItemId"], MODULE.SOURCE_ITEM_ID)
+        sale_date_field = next(
+            field for field in layer["fields"] if field["name"] == "SALE_DATE_1"
+        )
+        self.assertEqual(sale_date_field["type"], "esriFieldTypeDate")
+
+    def test_negative_arcgis_epoch_milliseconds_preserve_pre_1970_sale_date(self):
+        feature = json.loads(
+            (FIXTURE_ROOT / "sale-date-negative-epoch.json").read_text()
+        )
+        observation = MODULE.normalize_feature(feature)
+        self.assertEqual(observation.sale_date_1, "1967-04-26")
+        self.assertEqual(observation.field_null_reasons, {})
+        self.assertEqual(observation.attributes["SALE_DATE_1"], -84_758_400_000)
+        self.assertIsNone(observation.rejection_reason)
+
+    def test_overflow_epoch_is_explicit_field_null_without_row_rejection(self):
+        feature = json.loads(
+            (FIXTURE_ROOT / "sale-date-overflow-epoch.json").read_text()
+        )
+        observation = MODULE.normalize_feature(feature)
+        self.assertIsNone(observation.sale_date_1)
+        self.assertEqual(
+            observation.field_null_reasons,
+            {"sale_date_1": MODULE.SALE_DATE_OUT_OF_RANGE_REASON},
+        )
+        self.assertEqual(
+            observation.attributes["SALE_DATE_1"],
+            MODULE.SALE_DATE_MAX_EPOCH_MS + 1,
+        )
+        self.assertIsNone(observation.rejection_reason)
+
+    def test_sale_date_never_guesses_units_or_coerces_malformed_values(self):
+        self.assertEqual(MODULE.sale_date(None), (None, None))
+        for value in ("", "0", True, 0.5, float("nan"), float("inf")):
+            with self.subTest(value=value):
+                self.assertEqual(
+                    MODULE.sale_date(value),
+                    (None, MODULE.SALE_DATE_INVALID_REASON),
+                )
+        self.assertEqual(MODULE.sale_date(0), ("1970-01-01", None))
+        self.assertEqual(
+            MODULE.sale_date(MODULE.SALE_DATE_MIN_EPOCH_MS),
+            (MODULE.SALE_DATE_MIN, None),
+        )
+        self.assertEqual(
+            MODULE.sale_date(MODULE.SALE_DATE_MAX_EPOCH_MS),
+            (MODULE.SALE_DATE_MAX, None),
+        )
+        for value in (
+            MODULE.SALE_DATE_MIN_EPOCH_MS - 1,
+            MODULE.SALE_DATE_MAX_EPOCH_MS + 1,
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(
+                    MODULE.sale_date(value),
+                    (None, MODULE.SALE_DATE_OUT_OF_RANGE_REASON),
+                )
+
+    def test_missing_required_sale_date_attribute_fails_closed(self):
+        feature = json.loads(
+            (FIXTURE_ROOT / "sale-date-negative-epoch.json").read_text()
+        )
+        del feature["attributes"]["SALE_DATE_1"]
+        with self.assertRaisesRegex(
+            MODULE.ParcelGenerationError,
+            "feature omitted required SALE_DATE_1 attribute",
+        ):
+            MODULE.normalize_feature(feature)
+
+    def test_field_null_accounting_is_orthogonal_to_source_row_partition(self):
+        features = [
+            json.loads(
+                (FIXTURE_ROOT / "sale-date-negative-epoch.json").read_text()
+            ),
+            json.loads(
+                (FIXTURE_ROOT / "sale-date-overflow-epoch.json").read_text()
+            ),
+        ]
+        observations = [MODULE.normalize_feature(feature) for feature in features]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evidence = MODULE.EvidenceBundle(root / "evidence", str(uuid.uuid4()))
+            store = MODULE.ObservationStore(root / "observations.sqlite")
+            try:
+                store.ingest_page(
+                    page_index=0,
+                    raw_sha256="a" * 64,
+                    observations=observations,
+                )
+                result = store.finalize(evidence)
+            finally:
+                store.close()
+            field_null_rows = [
+                json.loads(line)
+                for line in (evidence.root / result.field_nulls_path)
+                .read_text()
+                .splitlines()
+            ]
+        self.assertEqual(result.source_rows, 2)
+        self.assertEqual(result.accepted_rows, 2)
+        self.assertEqual(result.rejected_rows, 0)
+        self.assertEqual(result.duplicate_rows, 0)
+        self.assertEqual(result.field_null_rows, 1)
+        self.assertEqual(
+            result.field_null_counts[MODULE.SALE_DATE_OUT_OF_RANGE_REASON], 1
+        )
+        self.assertEqual(len(field_null_rows), 1)
+        self.assertEqual(
+            field_null_rows[0]["attributes"]["SALE_DATE_1"],
+            MODULE.SALE_DATE_MAX_EPOCH_MS + 1,
+        )
+        self.assertEqual(MODULE.quality_gate("canary", result), [])
 
     def test_shuffled_page_and_range_order_are_invariant(self):
         pages = self._fixture_observations()
@@ -187,12 +307,16 @@ class BrowardParcelGenerationTests(unittest.TestCase):
                 raw_page["sha256"],
                 MODULE.sha256_bytes((FIXTURE_ROOT / "page-0000.json").read_bytes()),
             )
+            self.assertTrue(
+                (root / run_id / "manifests" / "field-nulls.jsonl").exists()
+            )
         self.assertEqual(result["status"], "canary_complete")
         self.assertFalse(result["promotion_eligible"])
         self.assertFalse(result["promotion_performed"])
         self.assertTrue(result["dry_run"])
         self.assertEqual(result["source_rows"], 7)
         self.assertEqual(result["accepted_rows"], 2)
+        self.assertEqual(result["field_null_rows"], 0)
 
     def test_sink_has_no_promotion_method_and_requires_exact_gate(self):
         self.assertFalse(hasattr(MODULE.SupabaseStagingSink, "promote"))
@@ -299,6 +423,14 @@ class BrowardParcelGenerationTests(unittest.TestCase):
         sql = MIGRATION_PATH.read_text(encoding="utf-8")
         self.assertIn(MODULE.PRODUCTION_QUALITY_CONTRACT_SHA256, sql)
         self.assertIn(MODULE.CANARY_QUALITY_CONTRACT_SHA256, sql)
+        self.assertIn(
+            MODULE.canonical_json_bytes(MODULE.PRODUCTION_QUALITY_CONTRACT).decode(),
+            sql,
+        )
+        self.assertIn(
+            MODULE.canonical_json_bytes(MODULE.CANARY_QUALITY_CONTRACT).decode(),
+            sql,
+        )
 
     def test_small_current_generation_cannot_pass_production_contract(self):
         run_id = str(uuid.uuid4())
@@ -339,6 +471,50 @@ class BrowardParcelGenerationTests(unittest.TestCase):
         self.assertEqual(failure["status"], "failed")
         self.assertFalse(failure["promotion_eligible"])
 
+    def test_unexpected_normalization_failure_has_durable_terminal_receipt(self):
+        run_id = str(uuid.uuid4())
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with mock.patch.object(
+                MODULE,
+                "sale_date",
+                side_effect=RuntimeError("unexpected normalization fixture"),
+            ):
+                with self.assertRaises(MODULE.ParcelGenerationError) as raised:
+                    MODULE.collect_generation(
+                        source=MODULE.FixtureSource(FIXTURE_ROOT),
+                        evidence_root=root,
+                        run_id=run_id,
+                        mode="canary",
+                        page_size=4,
+                        canary_rows=7,
+                    )
+            run_root = root / run_id
+            failure_path = run_root / "failure-receipt.json"
+            failure_body = failure_path.read_bytes()
+            failure = json.loads(failure_body)
+            failure_sha256 = MODULE.sha256_bytes(failure_body)
+            raw_page_path = run_root / "raw" / "page-000000.json"
+            raw_page_sha256 = MODULE.sha256_bytes(raw_page_path.read_bytes())
+            self.assertEqual(failure_path.stat().st_mode & 0o777, 0o600)
+            self.assertTrue(raw_page_path.is_file())
+            self.assertFalse((run_root / "receipt.json").exists())
+        self.assertEqual(failure["status"], "failed")
+        self.assertEqual(failure["reason_code"], "ROW_NORMALIZATION_FAILURE")
+        self.assertEqual(failure["failure_stage"], "page_normalization")
+        self.assertEqual(failure["error_class"], "RuntimeError")
+        self.assertEqual(failure["error_message"], "unexpected normalization fixture")
+        self.assertEqual(failure["raw_page_path"], "raw/page-000000.json")
+        self.assertEqual(failure["raw_page_sha256"], raw_page_sha256)
+        self.assertEqual(failure["source_accounting"]["selected_source_rows"], 7)
+        self.assertEqual(failure["source_accounting"]["indexed_pages"], 0)
+        self.assertEqual(failure["source_accounting"]["raw_rows_captured"], 4)
+        self.assertEqual(failure["source_accounting"]["indexed_rows"], 0)
+        self.assertEqual(failure["source_accounting"]["raw_rows_not_indexed"], 4)
+        self.assertFalse(failure["source_accounting"]["row_partition_complete"])
+        self.assertFalse(failure["promotion_eligible"])
+        self.assertIn(f"sha256={failure_sha256}", str(raised.exception))
+
     def test_migration_keeps_live_table_out_of_collector_permissions(self):
         sql = MIGRATION_PATH.read_text(encoding="utf-8").lower()
         self.assertIn("revoke insert, update, delete, truncate", sql)
@@ -358,6 +534,18 @@ class BrowardParcelGenerationTests(unittest.TestCase):
         ):
             self.assertNotIn(f"grant insert on table public.{table} to service_role", sql)
         self.assertGreaterEqual(sql.count("security definer\nset search_path = ''"), 6)
+
+    def test_migration_owns_reviewed_sale_date_contract(self):
+        sql = MIGRATION_PATH.read_text(encoding="utf-8")
+        self.assertIn(MODULE.PRODUCTION_QUALITY_CONTRACT_SHA256, sql)
+        self.assertIn(MODULE.CANARY_QUALITY_CONTRACT_SHA256, sql)
+        self.assertIn("esriFieldTypeDate_epoch_milliseconds_utc", sql)
+        self.assertIn("field_null_with_reason_and_raw_attribute_v1", sql)
+        self.assertIn("sale_date_1_null_reason text", sql)
+        self.assertIn("field_null_manifest", sql)
+        self.assertIn("where item->>'purpose' = 'field_null_manifest'", sql)
+        self.assertIn("parcel SALE_DATE_1 field-null classification is inconsistent", sql)
+        self.assertIn("'sale_date_1_field_null_rows'", sql)
 
     def test_promotion_requires_reviewed_preview_and_backup(self):
         sql = MIGRATION_PATH.read_text(encoding="utf-8").lower()

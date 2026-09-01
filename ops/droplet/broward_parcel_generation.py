@@ -38,6 +38,27 @@ SOURCE_ITEM_URL = (
 SYSTEM_OBJECT_ID_FIELD = "OBJECTID_12"
 STABLE_SOURCE_OBJECT_ID_FIELD = "OBJECTID"
 WINNER_RULE = "minimum_numeric_OBJECTID_then_minimum_OBJECTID_12"
+NORMALIZER_VERSION = "broward-folio-centroid-sale-date-v2"
+SALE_DATE_FIELD = "SALE_DATE_1"
+SALE_DATE_MIN = "0001-01-01"
+SALE_DATE_MAX = "9999-12-31"
+SALE_DATE_MIN_EPOCH_MS = -62_135_596_800_000
+SALE_DATE_MAX_EPOCH_MS = 253_402_300_799_999
+SALE_DATE_INVALID_REASON = "invalid_arcgis_epoch_milliseconds"
+SALE_DATE_OUT_OF_RANGE_REASON = (
+    "arcgis_epoch_milliseconds_out_of_supported_range"
+)
+SALE_DATE_NULL_REASONS = (
+    SALE_DATE_INVALID_REASON,
+    SALE_DATE_OUT_OF_RANGE_REASON,
+)
+SALE_DATE_FIELD_NULL_POLICY = {
+    "field": SALE_DATE_FIELD,
+    "invalid_value_policy": "field_null_with_reason_and_raw_attribute_v1",
+    "source_encoding": "esriFieldTypeDate_epoch_milliseconds_utc",
+    "supported_date_max": SALE_DATE_MAX,
+    "supported_date_min": SALE_DATE_MIN,
+}
 PRODUCTION_QUALITY_CONTRACT = {
     "bbox": {
         "latitude_max": 26.50,
@@ -45,6 +66,7 @@ PRODUCTION_QUALITY_CONTRACT = {
         "longitude_max": -79.98,
         "longitude_min": -80.70,
     },
+    "field_null_policy": {"sale_date_1": SALE_DATE_FIELD_NULL_POLICY},
     "folio_normalizer": "uppercase_alphanumeric_exactly_12_nonzero_v1",
     "maximum_duplicate_rows": 25_000,
     "maximum_rejected_rows": 200,
@@ -52,8 +74,9 @@ PRODUCTION_QUALITY_CONTRACT = {
     "minimum_accepted_rows": 530_000,
     "minimum_source_rows": 550_000,
     "mode": "current_generation",
+    "normalizer_version": NORMALIZER_VERSION,
     "range_width": 20_000,
-    "schema_version": "FloridaSignalBrowardParcelQualityContractV1",
+    "schema_version": "FloridaSignalBrowardParcelQualityContractV2",
     "source_layer_url": SOURCE_LAYER_URL,
     "stable_source_object_id_field": STABLE_SOURCE_OBJECT_ID_FIELD,
     "system_object_id_field": SYSTEM_OBJECT_ID_FIELD,
@@ -150,15 +173,29 @@ def hash_lines(values: Iterable[str]) -> str:
     return digest.hexdigest()
 
 
+def fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def write_once(path: Path, body: bytes) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with path.open("xb") as handle:
+        descriptor = os.open(
+            path,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            0o600,
+        )
+        with os.fdopen(descriptor, "wb") as handle:
             handle.write(body)
             handle.flush()
             os.fsync(handle.fileno())
     except FileExistsError as exc:
         raise ParcelGenerationError(f"immutable evidence already exists: {path}") from exc
+    fsync_directory(path.parent)
     return sha256_bytes(body)
 
 
@@ -202,23 +239,40 @@ def optional_number(value: Any) -> float | int | None:
     return int(rendered) if rendered.is_integer() else rendered
 
 
-def sale_date(value: Any) -> str | None:
-    if value in (None, ""):
-        return None
-    if isinstance(value, (int, float)):
-        seconds = (
-            float(value) / 1000.0
-            if abs(float(value)) > 100_000_000_000
-            else float(value)
-        )
-        return dt.datetime.fromtimestamp(seconds, tz=dt.timezone.utc).date().isoformat()
-    rendered = str(value).strip()
-    if not rendered:
-        return None
+def sale_date(value: Any) -> tuple[str | None, str | None]:
+    """Normalize ArcGIS esriFieldTypeDate without guessing its numeric unit.
+
+    ArcGIS feature JSON encodes this field as UTC epoch milliseconds. Source
+    null remains null. A present value that is not a finite integral JSON
+    number, or that is outside the supported ISO date range, is an explicit
+    field-null decision; the exact source value remains in ``attributes``.
+    """
+
+    if value is None:
+        return None, None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None, SALE_DATE_INVALID_REASON
+    if isinstance(value, float) and (
+        not math.isfinite(value) or not value.is_integer()
+    ):
+        return None, SALE_DATE_INVALID_REASON
+    epoch_milliseconds = int(value)
+    if not (
+        SALE_DATE_MIN_EPOCH_MS
+        <= epoch_milliseconds
+        <= SALE_DATE_MAX_EPOCH_MS
+    ):
+        return None, SALE_DATE_OUT_OF_RANGE_REASON
     try:
-        return dt.date.fromisoformat(rendered[:10]).isoformat()
-    except ValueError as exc:
-        raise ParcelGenerationError(f"unparseable SALE_DATE_1: {value!r}") from exc
+        normalized = (
+            dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
+            + dt.timedelta(milliseconds=epoch_milliseconds)
+        ).date()
+    except (OverflowError, ValueError):
+        return None, SALE_DATE_OUT_OF_RANGE_REASON
+    if not (SALE_DATE_MIN <= normalized.isoformat() <= SALE_DATE_MAX):
+        return None, SALE_DATE_OUT_OF_RANGE_REASON
+    return normalized.isoformat(), None
 
 
 def build_address(attributes: Mapping[str, Any]) -> str | None:
@@ -267,6 +321,10 @@ def validate_metadata(metadata: Mapping[str, Any]) -> str:
             "esriFieldTypeDouble",
         }:
             raise ParcelGenerationError(f"{name} has incompatible type {by_name[name]!r}")
+    if by_name[SALE_DATE_FIELD] != "esriFieldTypeDate":
+        raise ParcelGenerationError(
+            f"{SALE_DATE_FIELD} has incompatible type {by_name[SALE_DATE_FIELD]!r}"
+        )
     schema_projection = {
         "capabilities": metadata.get("capabilities"),
         "fields": sorted(
@@ -298,6 +356,7 @@ class Observation:
     use_type: str | None
     municipality: str | None
     sale_date_1: str | None
+    field_null_reasons: Mapping[str, str]
     deed_type_1: str | None
     stamp_amount_1: float | int | None
     sale1_cin: str | None
@@ -363,9 +422,16 @@ def normalize_feature(feature: Mapping[str, Any]) -> Observation:
                 ):
                     rejection_reason = "out_of_bounds_centroid"
 
-    # A type change in non-identity evidence is generation-level schema drift,
-    # not a folio rejection.  Fail closed so it cannot be silently mislabeled.
-    parsed_sale_date = sale_date(attributes.get("SALE_DATE_1"))
+    if SALE_DATE_FIELD not in attributes:
+        raise ParcelGenerationError(
+            f"feature omitted required {SALE_DATE_FIELD} attribute"
+        )
+    parsed_sale_date, sale_date_null_reason = sale_date(attributes[SALE_DATE_FIELD])
+    field_null_reasons = (
+        {"sale_date_1": sale_date_null_reason}
+        if sale_date_null_reason is not None
+        else {}
+    )
     parsed_stamp = optional_number(attributes.get("STAMP_AMOUNT_1"))
 
     return Observation(
@@ -385,6 +451,7 @@ def normalize_feature(feature: Mapping[str, Any]) -> Observation:
         use_type=optional_text(attributes.get("USE_TYPE")),
         municipality=optional_text(attributes.get("MUNICIPALITY")),
         sale_date_1=parsed_sale_date,
+        field_null_reasons=field_null_reasons,
         deed_type_1=optional_text(attributes.get("DEED_TYPE_1")),
         stamp_amount_1=parsed_stamp,
         sale1_cin=optional_text(attributes.get("SALE1_CIN")),
@@ -426,6 +493,8 @@ class Finalization:
     rejected_rows: int
     duplicate_rows: int
     rejection_counts: Mapping[str, int]
+    field_null_rows: int
+    field_null_counts: Mapping[str, int]
     folio_set_sha256: str
     source_object_id_set_sha256: str
     source_content_sha256: str
@@ -437,6 +506,8 @@ class Finalization:
     rejections_sha256: str
     duplicates_path: str
     duplicates_sha256: str
+    field_nulls_path: str
+    field_nulls_sha256: str
 
     def as_dict(self) -> dict[str, Any]:
         value = dataclasses.asdict(self)
@@ -465,6 +536,7 @@ class ObservationStore:
                 page_index integer not null references pages(page_index),
                 folio text,
                 rejection_reason text,
+                sale_date_1_null_reason text,
                 longitude real,
                 latitude real,
                 mapped_json text not null,
@@ -500,9 +572,9 @@ class ObservationStore:
                     """
                     insert into observations(
                         source_object_id, system_object_id, page_index, folio,
-                        rejection_reason, longitude, latitude, mapped_json,
-                        attributes_json
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        rejection_reason, sale_date_1_null_reason, longitude,
+                        latitude, mapped_json, attributes_json
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     [
                         (
@@ -511,6 +583,7 @@ class ObservationStore:
                             page_index,
                             row.folio,
                             row.rejection_reason,
+                            row.field_null_reasons.get("sale_date_1"),
                             row.longitude,
                             row.latitude,
                             canonical_json_bytes(row.as_dict()).decode("utf-8"),
@@ -531,6 +604,13 @@ class ObservationStore:
             (page_index,),
         )
         return [json.loads(row[0]) for row in rows]
+
+    def progress(self) -> tuple[int, int]:
+        pages = int(self.connection.execute("select count(*) from pages").fetchone()[0])
+        rows = int(
+            self.connection.execute("select count(*) from observations").fetchone()[0]
+        )
+        return pages, rows
 
     def finalize(
         self, evidence: "EvidenceBundle", range_width: int = 20_000
@@ -556,6 +636,7 @@ class ObservationStore:
                 o.system_object_id,
                 o.folio,
                 o.rejection_reason,
+                o.sale_date_1_null_reason,
                 o.mapped_json,
                 case
                     when o.rejection_reason is not null then 'rejected'
@@ -600,6 +681,22 @@ class ObservationStore:
                 "out_of_bounds_centroid",
             )
         }
+        field_null_counts = {
+            reason: int(
+                self.connection.execute(
+                    "select count(*) from decisions where sale_date_1_null_reason = ?",
+                    (reason,),
+                ).fetchone()[0]
+            )
+            for reason in SALE_DATE_NULL_REASONS
+        }
+        field_null_rows = int(
+            self.connection.execute(
+                "select count(*) from decisions where sale_date_1_null_reason is not null"
+            ).fetchone()[0]
+        )
+        if field_null_rows != sum(field_null_counts.values()):
+            raise ParcelGenerationError("field-null decisions contain an unknown reason")
 
         winners_path, winners_sha, written_winners = evidence.write_jsonl_iter(
             "manifests/winners.jsonl",
@@ -634,12 +731,29 @@ class ObservationStore:
                 )
             ),
         )
+        field_nulls_path, field_nulls_sha, written_field_nulls = (
+            evidence.write_jsonl_iter(
+                "manifests/field-nulls.jsonl",
+                (
+                    json.loads(row[0])
+                    for row in self.connection.execute(
+                        """
+                        select mapped_json from decisions
+                        where sale_date_1_null_reason is not null
+                        order by sale_date_1_null_reason, source_object_id
+                        """
+                    )
+                ),
+            )
+        )
         if (written_winners, written_rejections, written_duplicates) != (
             accepted_rows,
             rejected_rows,
             duplicate_rows,
         ):
             raise ParcelGenerationError("streamed decision manifests changed row counts")
+        if written_field_nulls != field_null_rows:
+            raise ParcelGenerationError("streamed field-null manifest changed row counts")
 
         source_bounds = self.connection.execute(
             "select min(source_object_id), max(source_object_id) from decisions"
@@ -716,6 +830,8 @@ class ObservationStore:
             rejected_rows=rejected_rows,
             duplicate_rows=duplicate_rows,
             rejection_counts=rejection_counts,
+            field_null_rows=field_null_rows,
+            field_null_counts=field_null_counts,
             folio_set_sha256=hash_lines(
                 str(row[0])
                 for row in self.connection.execute(
@@ -742,6 +858,8 @@ class ObservationStore:
             rejections_sha256=rejects_sha,
             duplicates_path=dupes_path,
             duplicates_sha256=dupes_sha,
+            field_nulls_path=field_nulls_path,
+            field_nulls_sha256=field_nulls_sha,
         )
 
 
@@ -788,7 +906,12 @@ class EvidenceBundle:
         byte_count = 0
         row_count = 0
         try:
-            with path.open("xb") as handle:
+            descriptor = os.open(
+                path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+            )
+            with os.fdopen(descriptor, "wb") as handle:
                 for row in rows:
                     encoded = canonical_json_bytes(row) + b"\n"
                     handle.write(encoded)
@@ -799,6 +922,7 @@ class EvidenceBundle:
                 os.fsync(handle.fileno())
         except FileExistsError as exc:
             raise ParcelGenerationError(f"immutable evidence already exists: {path}") from exc
+        fsync_directory(path.parent)
         sha = digest.hexdigest()
         self.objects.append(
             {
@@ -1030,6 +1154,10 @@ def quality_gate(mode: str, finalization: Finalization) -> list[str]:
         finalization.accepted_rows + finalization.rejected_rows + finalization.duplicate_rows
     ):
         failures.append("source accounting does not reconcile")
+    if finalization.field_null_rows != sum(finalization.field_null_counts.values()):
+        failures.append("field-null accounting does not reconcile")
+    if not 0 <= finalization.field_null_rows <= finalization.source_rows:
+        failures.append("field-null row count exceeds source observations")
     return failures
 
 
@@ -1250,6 +1378,8 @@ def evidence_purpose(relative_path: str) -> str:
         return "rejection_manifest"
     if relative_path == "manifests/duplicates.jsonl":
         return "duplicate_manifest"
+    if relative_path == "manifests/field-nulls.jsonl":
+        return "field_null_manifest"
     return "supporting_evidence"
 
 
@@ -1274,11 +1404,22 @@ def collect_generation(
     store = ObservationStore(evidence.root / "work.sqlite")
     started_at = utc_now()
     sink_started = False
+    failure_stage = "metadata_fetch"
+    active_page_index: int | None = None
+    active_raw_page_path: str | None = None
+    active_raw_page_sha256: str | None = None
+    selected_source_rows: int | None = None
+    raw_pages_captured = 0
+    raw_rows_captured = 0
+    finalization: Finalization | None = None
     try:
         metadata = source.metadata()
+        failure_stage = "metadata_capture_and_validation"
         evidence.capture_source_json("source-metadata.json", metadata)
         source_schema_sha256 = validate_metadata(metadata)
+        failure_stage = "item_metadata_fetch"
         item_metadata = source.item_metadata()
+        failure_stage = "item_metadata_capture_and_validation"
         evidence.capture_source_json("source-item-metadata.json", item_metadata)
         service_item_id = optional_text(metadata.get("serviceItemId"))
         item_id = optional_text(item_metadata.get("id"))
@@ -1287,20 +1428,35 @@ def collect_generation(
                 "ArcGIS layer and item metadata no longer match the pinned service item"
             )
 
+        failure_stage = "source_object_ids_start"
         start_payload = source.object_ids("start")
         evidence.capture_source_json("object-ids-start.json", start_payload)
         universe_ids = parse_object_ids(start_payload)
         selected_ids = universe_ids[:canary_rows] if mode == "canary" else universe_ids
         if not selected_ids:
             raise ParcelGenerationError("source returned no object IDs")
+        selected_source_rows = len(selected_ids)
         system_object_id_set_sha256 = hash_lines(str(value) for value in selected_ids)
         page_descriptors: list[dict[str, Any]] = []
         for page_index, expected_ids in enumerate(chunks(selected_ids, page_size)):
+            active_page_index = page_index
+            active_raw_page_path = None
+            active_raw_page_sha256 = None
+            failure_stage = "page_fetch"
             payload = source.page(page_index, expected_ids)
+            failure_stage = "raw_page_capture"
             page_path, page_sha = evidence.capture_source_json(
                 f"page-{page_index:06d}.json", payload
             )
+            active_raw_page_path = page_path
+            active_raw_page_sha256 = page_sha
+            raw_pages_captured += 1
+            raw_features = payload.get("features")
+            if isinstance(raw_features, list):
+                raw_rows_captured += len(raw_features)
+            failure_stage = "page_normalization"
             observations = validate_page(payload, expected_ids)
+            failure_stage = "page_index_commit"
             store.ingest_page(
                 page_index=page_index, raw_sha256=page_sha, observations=observations
             )
@@ -1315,13 +1471,19 @@ def collect_generation(
                 }
             )
 
+        active_page_index = None
+        active_raw_page_path = None
+        active_raw_page_sha256 = None
+        failure_stage = "source_object_ids_end"
         end_payload = source.object_ids("end")
         evidence.capture_source_json("object-ids-end.json", end_payload)
         end_universe_ids = parse_object_ids(end_payload)
         if universe_ids != end_universe_ids:
             raise ParcelGenerationError("source object-ID universe changed during collection")
 
+        failure_stage = "deterministic_finalization"
         finalization = store.finalize(evidence)
+        failure_stage = "quality_gate"
         gate_failures = quality_gate(mode, finalization)
         if gate_failures:
             raise ParcelGenerationError("; ".join(gate_failures))
@@ -1333,8 +1495,11 @@ def collect_generation(
             "canary_rows": canary_rows if mode == "canary" else None,
             "collector": "broward_parcel_generation.py",
             "duplicate_rows": finalization.duplicate_rows,
+            "field_null_counts": dict(finalization.field_null_counts),
+            "field_null_rows": finalization.field_null_rows,
             "folio_set_sha256": finalization.folio_set_sha256,
             "mode": mode,
+            "normalizer_version": NORMALIZER_VERSION,
             "quality_contract_sha256": quality_sha,
             "rejected_rows": finalization.rejected_rows,
             "run_id": run_id,
@@ -1347,6 +1512,7 @@ def collect_generation(
             "source_universe_count": len(universe_ids),
             "winner_rule": WINNER_RULE,
         }
+        failure_stage = "generation_manifest"
         manifest_path, manifest_sha = evidence.finish_manifest(manifest_context)
         receipt: dict[str, Any] = {
             **manifest_context,
@@ -1370,6 +1536,7 @@ def collect_generation(
         }
 
         if sink is not None:
+            failure_stage = "private_evidence_upload"
             sink.verify_private_bucket()
             object_prefix = f"broward-parcel-generations/{run_id}"
             # Upload immutable evidence and read every object back before making a
@@ -1398,6 +1565,7 @@ def collect_generation(
             # Set before the RPC so an ambiguous timeout can still attempt the
             # idempotent failure boundary if the database committed begin.
             sink_started = True
+            failure_stage = "database_generation_begin"
             sink.rpc(
                 "fs_begin_broward_parcel_generation",
                 {
@@ -1423,6 +1591,8 @@ def collect_generation(
             )
             for descriptor in page_descriptors:
                 page_index = int(descriptor["page_index"])
+                active_page_index = page_index
+                failure_stage = "database_page_staging"
                 sink.rpc(
                     "fs_stage_broward_parcel_page",
                     {
@@ -1435,6 +1605,8 @@ def collect_generation(
                         "p_system_object_id_min": descriptor["system_object_id_min"],
                     },
                 )
+            active_page_index = None
+            failure_stage = "database_finalization"
             database_receipt = sink.rpc(
                 "fs_finalize_broward_parcel_generation",
                 {
@@ -1479,6 +1651,7 @@ def collect_generation(
                 "rejected_rows": finalization.rejected_rows,
                 "rows_accepted": finalization.accepted_rows,
                 "rows_received": finalization.source_rows,
+                "sale_date_1_field_null_rows": finalization.field_null_rows,
                 "source_object_id_set_sha256": (
                     finalization.source_object_id_set_sha256
                 ),
@@ -1502,12 +1675,14 @@ def collect_generation(
             receipt["status"] = expected_database_status
             receipt["storage_prefix"] = object_prefix
 
+        failure_stage = "terminal_receipt_write"
         receipt_path, receipt_sha = evidence.write_json("receipt.json", receipt)
         returned_receipt = receipt | {
             "receipt_path": receipt_path,
             "receipt_sha256": receipt_sha,
         }
         if sink is not None:
+            failure_stage = "terminal_receipt_upload"
             receipt_object_key = f"{object_prefix}/{receipt_path}"
             terminal_storage_receipt = sink.upload_once(
                 receipt_object_key,
@@ -1518,28 +1693,73 @@ def collect_generation(
             returned_receipt["receipt_storage_verification"] = terminal_storage_receipt
         return returned_receipt
     except Exception as exc:
+        try:
+            indexed_pages, indexed_rows = store.progress()
+        except Exception:
+            indexed_pages, indexed_rows = None, None
+        raw_rows_not_indexed = (
+            raw_rows_captured - indexed_rows
+            if indexed_rows is not None and raw_rows_captured >= indexed_rows
+            else None
+        )
+        row_partition_complete = bool(
+            selected_source_rows is not None
+            and indexed_rows == selected_source_rows
+            and raw_rows_captured == indexed_rows
+            and finalization is not None
+        )
         failure = {
             "completed_at": utc_now(),
             "error_class": type(exc).__name__,
             "error_message": str(exc),
+            "failure_stage": failure_stage,
             "mode": mode,
+            "normalizer_version": NORMALIZER_VERSION,
+            "page_index": active_page_index,
             "promotion_eligible": False,
             "promotion_performed": False,
+            "raw_page_path": active_raw_page_path,
+            "raw_page_sha256": active_raw_page_sha256,
+            "reason_code": (
+                "ROW_NORMALIZATION_FAILURE"
+                if failure_stage == "page_normalization"
+                else "COLLECTOR_OR_CONTRACT_FAILURE"
+            ),
             "run_id": run_id,
+            "schema_version": "FloridaSignalBrowardParcelFailureReceiptV2",
+            "source_accounting": {
+                "indexed_pages": indexed_pages,
+                "indexed_rows": indexed_rows,
+                "raw_pages_captured": raw_pages_captured,
+                "raw_rows_captured": raw_rows_captured,
+                "raw_rows_not_indexed": raw_rows_not_indexed,
+                "row_partition_complete": row_partition_complete,
+                "selected_source_rows": selected_source_rows,
+                "winner_rows": (
+                    finalization.accepted_rows if finalization is not None else None
+                ),
+                "rejected_rows": (
+                    finalization.rejected_rows if finalization is not None else None
+                ),
+                "duplicate_rows": (
+                    finalization.duplicate_rows if finalization is not None else None
+                ),
+            },
             "started_at": started_at,
             "status": "failed",
         }
-        failure_path: str | None = None
-        failure_sha: str | None = None
         try:
             failure_path, failure_sha = evidence.write_json("failure-receipt.json", failure)
-        except Exception:
-            pass
+        except Exception as receipt_exc:
+            raise ParcelGenerationError(
+                "collector failed and its terminal failure receipt could not be "
+                f"durably written: {type(exc).__name__}: {exc}; "
+                f"receipt error: {type(receipt_exc).__name__}: {receipt_exc}"
+            ) from receipt_exc
+        delivery_error: Exception | None = None
         if (
             sink is not None
             and sink_started
-            and failure_path is not None
-            and failure_sha is not None
         ):
             try:
                 failure_key = f"broward-parcel-generations/{run_id}/{failure_path}"
@@ -1572,9 +1792,18 @@ def collect_generation(
                         "p_generation_id": run_id,
                     },
                 )
-            except Exception:
-                pass
-        raise
+            except Exception as delivery_exc:
+                delivery_error = delivery_exc
+        message = (
+            f"{type(exc).__name__}: {exc}; durable failure receipt "
+            f"{failure_path} sha256={failure_sha}"
+        )
+        if delivery_error is not None:
+            message += (
+                "; database terminal failure delivery also failed: "
+                f"{type(delivery_error).__name__}: {delivery_error}"
+            )
+        raise ParcelGenerationError(message) from exc
     finally:
         store.close()
 

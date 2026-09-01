@@ -59,10 +59,10 @@ insert into public.broward_parcel_quality_contracts (
   promotion_allowed
 ) values
   (
-    '86345dd19823bc431ccfd5ac7ab26e81d8ba2c6584c46f5064097c116a01aaca',
-    'broward-parcel-current-generation-v1',
+    '7f2742496d4792bdb1129c9744b330f97f6e3802ce092d8c76667fcbeea98288',
+    'broward-parcel-current-generation-v2',
     'current_generation',
-    '{"bbox":{"latitude_max":26.5,"latitude_min":25.9,"longitude_max":-79.98,"longitude_min":-80.7},"folio_normalizer":"uppercase_alphanumeric_exactly_12_nonzero_v1","maximum_duplicate_rows":25000,"maximum_rejected_rows":200,"maximum_source_rows":560000,"minimum_accepted_rows":530000,"minimum_source_rows":550000,"mode":"current_generation","range_width":20000,"schema_version":"FloridaSignalBrowardParcelQualityContractV1","source_layer_url":"https://services.arcgis.com/JMAJrTsHNLrSsWf5/arcgis/rest/services/PARCEL_POLY_BCPA_TAXROLL/FeatureServer/0","stable_source_object_id_field":"OBJECTID","system_object_id_field":"OBJECTID_12","winner_rule":"minimum_numeric_OBJECTID_then_minimum_OBJECTID_12"}'::jsonb,
+    '{"bbox":{"latitude_max":26.5,"latitude_min":25.9,"longitude_max":-79.98,"longitude_min":-80.7},"field_null_policy":{"sale_date_1":{"field":"SALE_DATE_1","invalid_value_policy":"field_null_with_reason_and_raw_attribute_v1","source_encoding":"esriFieldTypeDate_epoch_milliseconds_utc","supported_date_max":"9999-12-31","supported_date_min":"0001-01-01"}},"folio_normalizer":"uppercase_alphanumeric_exactly_12_nonzero_v1","maximum_duplicate_rows":25000,"maximum_rejected_rows":200,"maximum_source_rows":560000,"minimum_accepted_rows":530000,"minimum_source_rows":550000,"mode":"current_generation","normalizer_version":"broward-folio-centroid-sale-date-v2","range_width":20000,"schema_version":"FloridaSignalBrowardParcelQualityContractV2","source_layer_url":"https://services.arcgis.com/JMAJrTsHNLrSsWf5/arcgis/rest/services/PARCEL_POLY_BCPA_TAXROLL/FeatureServer/0","stable_source_object_id_field":"OBJECTID","system_object_id_field":"OBJECTID_12","winner_rule":"minimum_numeric_OBJECTID_then_minimum_OBJECTID_12"}'::jsonb,
     'https://services.arcgis.com/JMAJrTsHNLrSsWf5/arcgis/rest/services/PARCEL_POLY_BCPA_TAXROLL/FeatureServer/0',
     550000,
     560000,
@@ -77,10 +77,10 @@ insert into public.broward_parcel_quality_contracts (
     true
   ),
   (
-    '1d02ba8236997c3fbdba1b01074b5cd21836d335ebd4086ee5bcc9565b02d253',
-    'broward-parcel-canary-v1',
+    '31824f7c0a0ce627e955ae17f4b156f174f4ab9dea77245d64115958aa2f8575',
+    'broward-parcel-canary-v2',
     'canary',
-    '{"bbox":{"latitude_max":26.5,"latitude_min":25.9,"longitude_max":-79.98,"longitude_min":-80.7},"folio_normalizer":"uppercase_alphanumeric_exactly_12_nonzero_v1","maximum_duplicate_rows":24,"maximum_rejected_rows":24,"maximum_source_rows":25,"minimum_accepted_rows":1,"minimum_source_rows":1,"mode":"canary","range_width":20000,"schema_version":"FloridaSignalBrowardParcelQualityContractV1","source_layer_url":"https://services.arcgis.com/JMAJrTsHNLrSsWf5/arcgis/rest/services/PARCEL_POLY_BCPA_TAXROLL/FeatureServer/0","stable_source_object_id_field":"OBJECTID","system_object_id_field":"OBJECTID_12","winner_rule":"minimum_numeric_OBJECTID_then_minimum_OBJECTID_12"}'::jsonb,
+    '{"bbox":{"latitude_max":26.5,"latitude_min":25.9,"longitude_max":-79.98,"longitude_min":-80.7},"field_null_policy":{"sale_date_1":{"field":"SALE_DATE_1","invalid_value_policy":"field_null_with_reason_and_raw_attribute_v1","source_encoding":"esriFieldTypeDate_epoch_milliseconds_utc","supported_date_max":"9999-12-31","supported_date_min":"0001-01-01"}},"folio_normalizer":"uppercase_alphanumeric_exactly_12_nonzero_v1","maximum_duplicate_rows":24,"maximum_rejected_rows":24,"maximum_source_rows":25,"minimum_accepted_rows":1,"minimum_source_rows":1,"mode":"canary","normalizer_version":"broward-folio-centroid-sale-date-v2","range_width":20000,"schema_version":"FloridaSignalBrowardParcelQualityContractV2","source_layer_url":"https://services.arcgis.com/JMAJrTsHNLrSsWf5/arcgis/rest/services/PARCEL_POLY_BCPA_TAXROLL/FeatureServer/0","stable_source_object_id_field":"OBJECTID","system_object_id_field":"OBJECTID_12","winner_rule":"minimum_numeric_OBJECTID_then_minimum_OBJECTID_12"}'::jsonb,
     'https://services.arcgis.com/JMAJrTsHNLrSsWf5/arcgis/rest/services/PARCEL_POLY_BCPA_TAXROLL/FeatureServer/0',
     1,
     25,
@@ -387,6 +387,10 @@ create table public.broward_parcel_generation_observations (
   use_type text,
   municipality text,
   sale_date_1 date,
+  sale_date_1_null_reason text check (sale_date_1_null_reason in (
+    'invalid_arcgis_epoch_milliseconds',
+    'arcgis_epoch_milliseconds_out_of_supported_range'
+  )),
   deed_type_1 text,
   stamp_amount_1 numeric,
   sale1_cin text,
@@ -396,7 +400,10 @@ create table public.broward_parcel_generation_observations (
   unique (generation_id, system_object_id),
   foreign key (generation_id, page_index)
     references public.broward_parcel_generation_pages(generation_id, page_index)
-  on delete restrict
+  on delete restrict,
+  constraint broward_parcel_sale_date_field_null_contract check (
+    sale_date_1_null_reason is null or sale_date_1 is null
+  )
 );
 
 -- The collector must download every just-uploaded private object and verify its
@@ -413,7 +420,8 @@ create table public.broward_parcel_evidence_objects (
   ),
   purpose text not null check (purpose in (
     'raw_page', 'generation_manifest', 'range_manifest',
-    'rejection_manifest', 'duplicate_manifest', 'supporting_evidence',
+    'rejection_manifest', 'duplicate_manifest', 'field_null_manifest',
+    'supporting_evidence',
     'failure_receipt'
   )),
   sha256 text not null check (sha256 ~ '^[0-9a-f]{64}$'),
@@ -650,7 +658,8 @@ begin
       or purpose is null
       or purpose not in (
         'raw_page', 'generation_manifest', 'range_manifest',
-        'rejection_manifest', 'duplicate_manifest', 'supporting_evidence'
+        'rejection_manifest', 'duplicate_manifest', 'field_null_manifest',
+        'supporting_evidence'
       )
       or sha256 is null
       or sha256 !~ '^[0-9a-f]{64}$'
@@ -681,6 +690,10 @@ begin
      or 1 <> (
        select count(*) from jsonb_array_elements(p_evidence_objects) item
        where item->>'purpose' = 'duplicate_manifest'
+     )
+     or 1 <> (
+       select count(*) from jsonb_array_elements(p_evidence_objects) item
+       where item->>'purpose' = 'field_null_manifest'
      )
      or 1 > (
        select count(*) from jsonb_array_elements(p_evidence_objects) item
@@ -838,7 +851,7 @@ begin
     coalesce(nullif(p_source_vintage->>'modified', ''), 'observed-no-modified-clock'),
     'broward_parcel_generation.py/v1',
     'broward-parcel-arcgis-v1',
-    'broward-folio-centroid-v1',
+    'broward-folio-centroid-sale-date-v2',
     range_min,
     range_max,
     range_count,
@@ -945,6 +958,7 @@ declare
   observed_system_object_id_min bigint;
   observed_system_object_id_max bigint;
   invalid_identity_count bigint;
+  invalid_sale_date_count bigint;
   existing public.broward_parcel_generation_pages%rowtype;
 begin
   if p_generation_id is null
@@ -998,6 +1012,52 @@ begin
      or observed_system_object_id_max is distinct from p_system_object_id_max then
     raise exception using errcode = '23514',
       message = 'parcel page mapped identities do not match source attributes or bounds';
+  end if;
+  -- SALE_DATE_1 is declared esriFieldTypeDate by the pinned source schema, so
+  -- numeric values are UTC epoch milliseconds. Verify the collector's mapping
+  -- independently: source null remains null, every supported integral epoch
+  -- maps to its exact UTC date (including pre-1970 values), and every other
+  -- present value has exactly one reviewed field-null reason.
+  select count(*) into invalid_sale_date_count
+  from jsonb_to_recordset(p_observations) as x(
+    sale_date_1 text,
+    field_null_reasons jsonb,
+    attributes jsonb
+  )
+  where not (x.attributes ? 'SALE_DATE_1')
+     or jsonb_typeof(x.field_null_reasons) is distinct from 'object'
+     or exists (
+       select 1
+       from jsonb_object_keys(x.field_null_reasons) as reason_key
+       where reason_key <> 'sale_date_1'
+     )
+     or case
+       when jsonb_typeof(x.attributes -> 'SALE_DATE_1') = 'null' then
+         x.sale_date_1 is not null
+         or x.field_null_reasons ? 'sale_date_1'
+       when jsonb_typeof(x.attributes -> 'SALE_DATE_1') = 'number'
+        and (x.attributes ->> 'SALE_DATE_1') ~ '^-?[0-9]+(?:[.]0+)?$'
+        and (x.attributes ->> 'SALE_DATE_1')::numeric
+          between -62135596800000 and 253402300799999 then
+         x.sale_date_1 is null
+         or x.field_null_reasons ? 'sale_date_1'
+         or x.sale_date_1::date is distinct from (
+           date '1970-01-01'
+           + floor((x.attributes ->> 'SALE_DATE_1')::numeric / 86400000)::integer
+         )
+       when jsonb_typeof(x.attributes -> 'SALE_DATE_1') = 'number'
+        and (x.attributes ->> 'SALE_DATE_1') ~ '^-?[0-9]+(?:[.]0+)?$' then
+         x.sale_date_1 is not null
+         or x.field_null_reasons ->> 'sale_date_1'
+           is distinct from 'arcgis_epoch_milliseconds_out_of_supported_range'
+       else
+         x.sale_date_1 is not null
+         or x.field_null_reasons ->> 'sale_date_1'
+           is distinct from 'invalid_arcgis_epoch_milliseconds'
+     end;
+  if invalid_sale_date_count <> 0 then
+    raise exception using errcode = '23514',
+      message = 'parcel SALE_DATE_1 field-null classification is inconsistent';
   end if;
   payload_sha := encode(
     extensions.digest(pg_catalog.convert_to(p_observations::text, 'UTF8'), 'sha256'), 'hex'
@@ -1075,6 +1135,7 @@ begin
     use_type,
     municipality,
     sale_date_1,
+    sale_date_1_null_reason,
     deed_type_1,
     stamp_amount_1,
     sale1_cin,
@@ -1097,6 +1158,7 @@ begin
     x.use_type,
     x.municipality,
     x.sale_date_1::date,
+    x.field_null_reasons ->> 'sale_date_1',
     x.deed_type_1,
     x.stamp_amount_1,
     x.sale1_cin,
@@ -1116,6 +1178,7 @@ begin
     use_type text,
     municipality text,
     sale_date_1 text,
+    field_null_reasons jsonb,
     deed_type_1 text,
     stamp_amount_1 numeric,
     sale1_cin text,
@@ -1179,6 +1242,7 @@ declare
   bad_folio_count bigint;
   missing_centroid_count bigint;
   out_of_bounds_count bigint;
+  sale_date_field_null_count bigint;
   range_count bigint;
   bad_range_count bigint;
   observed_source_object_hash text;
@@ -1243,6 +1307,12 @@ begin
         'replayed', true,
         'rows_accepted', g.rows_accepted,
         'rows_received', g.rows_received,
+        'sale_date_1_field_null_rows', (
+          select count(*)
+          from public.broward_parcel_generation_observations o
+          where o.generation_id = p_generation_id
+            and o.sale_date_1_null_reason is not null
+        ),
         'source_content_sha256', g.source_content_sha256,
         'source_object_id_set_sha256', g.source_object_id_set_sha256,
         'system_object_id_set_sha256', g.system_object_id_set_sha256,
@@ -1290,6 +1360,24 @@ begin
   ) then
     raise exception using errcode = '23514',
       message = 'private generation manifest lacks an exact immutable evidence attestation';
+  end if;
+  if not exists (
+    select 1
+    from public.broward_parcel_evidence_objects e
+    join storage.objects o
+      on o.id = e.storage_object_id
+     and o.bucket_id = 'fl-signal-source-evidence'
+     and o.name = e.object_key
+     and o.updated_at = e.storage_updated_at
+     and coalesce(o.metadata->>'size', o.metadata->>'contentLength', '') ~ '^[0-9]+$'
+     and coalesce(o.metadata->>'size', o.metadata->>'contentLength')::numeric
+       = e.storage_metadata_size::numeric
+    where e.generation_id = p_generation_id
+      and e.purpose = 'field_null_manifest'
+      and e.bytes = e.storage_metadata_size
+  ) then
+    raise exception using errcode = '23514',
+      message = 'private field-null manifest lacks an exact immutable evidence attestation';
   end if;
 
   with supplied as (
@@ -1362,6 +1450,10 @@ begin
   select count(*) into raw_count
   from public.broward_parcel_generation_observations
   where generation_id = p_generation_id;
+  select count(*) into sale_date_field_null_count
+  from public.broward_parcel_generation_observations
+  where generation_id = p_generation_id
+    and sale_date_1_null_reason is not null;
   if page_count = 0
      or missing_page_count <> 0
      or page_row_sum <> raw_count
@@ -1716,6 +1808,7 @@ begin
             'raw_folio', raw_folio,
             'sale1_cin', sale1_cin,
             'sale_date_1', sale_date_1,
+            'sale_date_1_null_reason', sale_date_1_null_reason,
             'situs_address', situs_address,
             'situs_city', situs_city,
             'situs_zip_code', situs_zip_code,
@@ -1786,6 +1879,7 @@ begin
     'rejected_rows', rejected_count,
     'rows_accepted', accepted_count,
     'rows_received', raw_count,
+    'sale_date_1_field_null_rows', sale_date_field_null_count,
     'source_content_sha256', observed_source_content_hash,
     'source_object_id_set_sha256', observed_source_object_hash,
     'status', terminal_status,

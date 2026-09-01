@@ -13,6 +13,20 @@ source universe on 2026-08-31, attempted exactly 25 rows, produced 23 winners,
 `5a0ea8d85b6262d277b37e360aaf8455807b1bfac3c868e41be9a4ee61a25a06`.
 It made no Supabase or production write.
 
+**Preserved failed development evidence:** file-only current-generation run
+`dac445a3-81e1-450d-afc0-60dd4398a507` captured 16 immutable 500-row pages
+(8,000 raw rows) before normalization failed; its SQLite index contains the 15
+previously committed pages (7,500 rows). `page-000015.json` preserves source
+`OBJECTID=7599`, system `OBJECTID_12=7690`, folio `484202000300`, and
+`SALE_DATE_1=-84758400000`. The layer metadata declares that field
+`esriFieldTypeDate`, so the value is UTC epoch **milliseconds** and represents
+`1967-04-26`; the old magnitude heuristic mistakenly treated it as seconds and
+raised `ValueError: year -716 is out of range`. The failed receipt remains
+non-promotable with SHA-256
+`ebca750accd5d118ab50a1929a5e079835d7b21c711dc9c75dadafc786f00157`.
+Do not delete, rewrite, or reuse this run directory. No Supabase or production
+write was made.
+
 This package replaces the unsafe direct-to-live parcel refresh with one
 current-source stream:
 
@@ -56,6 +70,21 @@ used for promotion.
 
 The migration owns these values. The collector supplies only the matching
 SHA-256; it cannot widen the thresholds based on what it just observed.
+
+`SALE_DATE_1` has a separate reviewed field-null contract; it never changes
+the source-row winner/rejection/duplicate partition. Every finite integral
+numeric value is interpreted as ArcGIS UTC epoch milliseconds, including valid
+negative values before 1970. Supported ISO dates are `0001-01-01` through
+`9999-12-31`. A present non-integral/non-numeric value becomes a null field
+with reason `invalid_arcgis_epoch_milliseconds`; an integral value outside that
+range becomes a null field with reason
+`arcgis_epoch_milliseconds_out_of_supported_range`. The unmodified raw
+attribute remains in source evidence and the mapped observation, and every
+such decision appears in `manifests/field-nulls.jsonl`. Source null remains
+null without a reason. Omission of the requested `SALE_DATE_1` attribute is
+schema/response drift and fails the generation rather than impersonating a
+source null. The database staging RPC independently verifies the same unit,
+date, and reason outcome.
 
 ## Required production prerequisites
 
@@ -129,9 +158,9 @@ python3 ops/droplet/broward_parcel_generation.py \
 ```
 
 Its start/end full system-OBJECTID sets must match. Inspect metadata, pages,
-SQLite index, winner/rejection/duplicate/range manifests and the terminal
-receipt. A source change during the pull is a failed canary, never an empty or
-successful run.
+SQLite index, winner/rejection/duplicate/field-null/range manifests and the
+terminal receipt. A source change during the pull is a failed canary, never an
+empty or successful run.
 
 ## Approved staging sequence
 
@@ -279,7 +308,12 @@ journalctl -u florida-broward-parcel-generation.service --since '-45 days'
 
 A nonzero collector exit triggers `florida-freshness-alert.service`; failed
 runs retain immutable local/Storage evidence and a failed database receipt when
-staging had begun. The private `broward_parcel_pipeline_alerts` view reports
+staging had begun. Unexpected normalization errors first write and `fsync` a
+mode-`0600` terminal local failure receipt (including captured-versus-indexed
+source accounting, active raw page SHA-256, original error type/message, and
+`promotion_eligible: false`); a failure to deliver that receipt to Storage or
+the database is reported separately and never erases the durable local receipt.
+The private `broward_parcel_pipeline_alerts` view reports
 `UNKNOWN`, `FAILED`, `STALLED` (staging longer than six hours),
 `NOT_CONNECTED`, `PARITY_MISMATCH`, `STALE` (older than 45 days), or
 `AWAITING_REVIEWED_PROMOTION`; `RUNNING` is visible health but is not emitted as

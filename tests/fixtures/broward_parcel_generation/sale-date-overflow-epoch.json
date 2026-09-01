@@ -1,0 +1,15 @@
+{
+  "attributes": {
+    "DEED_TYPE_1": "WD",
+    "FOLIO": "504200000099",
+    "FOLIO_NUMBER": "504200000099",
+    "OBJECTID": 990099,
+    "OBJECTID_12": 990099,
+    "SALE_DATE_1": 253402300800000,
+    "STAMP_AMOUNT_1": 1
+  },
+  "centroid": {
+    "x": -80.14,
+    "y": 26.12
+  }
+}

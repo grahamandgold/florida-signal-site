@@ -5,7 +5,8 @@
         "OBJECTID_12": 5,
         "OBJECTID": 20003,
         "FOLIO": "BAD",
-        "FOLIO_NUMBER": "BAD"
+        "FOLIO_NUMBER": "BAD",
+        "SALE_DATE_1": null
       },
       "centroid": {"x": -80.17, "y": 26.15}
     },
@@ -14,7 +15,8 @@
         "OBJECTID_12": 6,
         "OBJECTID": 20004,
         "FOLIO": "504200000006",
-        "FOLIO_NUMBER": "504200000006"
+        "FOLIO_NUMBER": "504200000006",
+        "SALE_DATE_1": null
       },
       "centroid": null
     },
@@ -23,7 +25,8 @@
         "OBJECTID_12": 7,
         "OBJECTID": 20005,
         "FOLIO": "504200000007",
-        "FOLIO_NUMBER": "504200000007"
+        "FOLIO_NUMBER": "504200000007",
+        "SALE_DATE_1": null
       },
       "centroid": {"x": -81.0, "y": 26.16}
     }

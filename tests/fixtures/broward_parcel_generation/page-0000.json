@@ -28,6 +28,7 @@
         "OBJECTID": 20000,
         "FOLIO": "504200000002",
         "FOLIO_NUMBER": "504200000002",
+        "SALE_DATE_1": null,
         "SITUS_STREET_NUMBER": "200",
         "SITUS_STREET_NAME": "BROWARD",
         "SITUS_STREET_TYPE": "BLVD"
@@ -40,6 +41,7 @@
         "OBJECTID": 20001,
         "FOLIO": "504200000001",
         "FOLIO_NUMBER": "504200000001",
+        "SALE_DATE_1": null,
         "SITUS_STREET_NUMBER": "102",
         "SITUS_STREET_NAME": "LAS OLAS",
         "SITUS_STREET_TYPE": "BLVD"
@@ -51,7 +53,8 @@
         "OBJECTID_12": 4,
         "OBJECTID": 20002,
         "FOLIO": null,
-        "FOLIO_NUMBER": null
+        "FOLIO_NUMBER": null,
+        "SALE_DATE_1": null
       },
       "centroid": {"x": -80.16, "y": 26.14}
     }

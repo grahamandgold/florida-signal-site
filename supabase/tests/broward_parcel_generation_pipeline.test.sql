@@ -3,11 +3,13 @@
 
 begin;
 
-select plan(54);
+select plan(56);
 
 select has_table('public', 'broward_parcel_quality_contracts', 'quality contract table exists');
 select has_table('public', 'broward_parcel_generation_pages', 'page receipt table exists');
 select has_table('public', 'broward_parcel_generation_observations', 'raw observation table exists');
+select has_column('public', 'broward_parcel_generation_observations',
+  'sale_date_1_null_reason', 'sale-date field-null reason is persisted');
 select has_table('public', 'broward_parcel_evidence_objects', 'immutable evidence ledger exists');
 select has_table('public', 'broward_parcel_promotion_previews', 'promotion preview table exists');
 select has_table('public', 'broward_parcel_promotion_authorizations', 'promotion authorization table exists');
@@ -137,6 +139,17 @@ select results_eq(
     where run_mode='current_generation'$$,
   $$values (550000,560000,530000,200,25000)$$,
   'production quality bounds are migration-owned constants'
+);
+select results_eq(
+  $$select contract_body->>'normalizer_version',
+           contract_body#>>'{field_null_policy,sale_date_1,source_encoding}',
+           contract_body#>>'{field_null_policy,sale_date_1,invalid_value_policy}'
+    from public.broward_parcel_quality_contracts
+    where run_mode='current_generation'$$,
+  $$values ('broward-folio-centroid-sale-date-v2',
+            'esriFieldTypeDate_epoch_milliseconds_utc',
+            'field_null_with_reason_and_raw_attribute_v1')$$,
+  'sale-date unit and field-null policy are migration-owned constants'
 );
 select is((select prosecdef from pg_proc where oid =
   'public.fs_promote_broward_parcel_generation(uuid)'::regprocedure), true,

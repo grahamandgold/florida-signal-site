@@ -1,0 +1,15 @@
+{
+  "attributes": {
+    "DEED_TYPE_1": "QCD",
+    "FOLIO": "484202000300",
+    "FOLIO_NUMBER": "484202000300",
+    "OBJECTID": 7599,
+    "OBJECTID_12": 7690,
+    "SALE_DATE_1": -84758400000,
+    "STAMP_AMOUNT_1": 0.3
+  },
+  "centroid": {
+    "x": -80.12624201435587,
+    "y": 26.319279212423815
+  }
+}
