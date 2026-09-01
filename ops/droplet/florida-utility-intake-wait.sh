@@ -8,18 +8,6 @@ readonly max_wait_seconds=600
 readonly poll_seconds=2
 readonly deadline=$((SECONDS + max_wait_seconds))
 readonly units=(florida-accela.service florida-sync.service)
-readonly credential_file=/srv/grahamandgold/florida-signal/secrets/florida-utility-intake.env
-
-if [[ -L "$credential_file" || ! -f "$credential_file" ]]; then
-  echo "dedicated utility credential file is missing or unsafe" >&2
-  exit 64
-fi
-credential_mode="$(/usr/bin/stat --format=%a -- "$credential_file")"
-credential_owner="$(/usr/bin/stat --format=%U:%G -- "$credential_file")"
-if [[ "$credential_mode" != "600" || "$credential_owner" != "root:root" ]]; then
-  echo "dedicated utility credential file must be root:root mode 600" >&2
-  exit 64
-fi
 
 for unit in "${units[@]}"; do
   while true; do

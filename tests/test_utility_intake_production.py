@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import datetime as dt
 import hashlib
 import importlib.util
@@ -93,32 +94,26 @@ class FakeTransport:
     def __init__(
         self,
         remote_rows: list[dict[str, object]],
-        *,
-        fail_health: bool = False,
-        normalized_system_time: bool = False,
     ) -> None:
         self.remote_rows = remote_rows
-        self.fail_health = fail_health
-        self.normalized_system_time = normalized_system_time
-        self.health: dict[str, object] | None = None
-        self.calls: list[tuple[str, str]] = []
+        self.calls: list[tuple[str, str | None]] = []
 
-    def request_json(self, method, path, *, body=None, prefer=None):
-        self.calls.append((method, path))
-        if path.startswith("permits?"):
-            query = parse_qs(urlparse(path).query)
-            offset = int(query.get("offset", ["0"])[0])
-            limit = int(query.get("limit", ["1000"])[0])
-            return self.remote_rows[offset : offset + limit]
-        if path.startswith("editorial_pipeline_health?"):
-            if self.fail_health:
-                raise production.ProductionError("simulated health failure")
-            self.health = dict(body[0])
-            returned = dict(body[0])
-            if self.normalized_system_time:
-                returned["system_time"] = returned["system_time"].replace("Z", "+00:00")
-            return [returned]
-        raise AssertionError(path)
+    def read_projection_page(self, *, cursor=None, limit=1000):
+        self.calls.append(("read_projection", cursor))
+        ordered = sorted(self.remote_rows, key=lambda row: str(row.get("permit_number") or ""))
+        remaining = [row for row in ordered if cursor is None or str(row.get("permit_number") or "") > cursor]
+        raw_page = remaining[:limit]
+        next_cursor = str(raw_page[-1]["permit_number"]) if raw_page else cursor
+        return {
+            "schema_version": production.READ_ONLY_TRANSPORT_SCHEMA,
+            "projection": production.parity_projection_contract(),
+            "cursor": cursor,
+            "next_cursor": next_cursor,
+            "scanned_count": len(raw_page),
+            "declared_total": len(remaining),
+            "exhausted": not raw_page,
+            "rows": [dict(row) for row in raw_page],
+        }
 
 
 class UtilityIntakeProductionTests(unittest.TestCase):
@@ -160,10 +155,12 @@ class UtilityIntakeProductionTests(unittest.TestCase):
                 receipt["parity"]["supabase"]["projection"]["version"],
                 production.PARITY_PROJECTION_VERSION,
             )
-            self.assertEqual(transport.health["metrics"]["remote_stability_reads"], 2)
-            self.assertTrue(receipt["health"]["published"])
-            self.assertEqual(transport.health["status"], "current")
-            self.assertEqual(transport.health["event_through"], "2026-08-31")
+            self.assertEqual(receipt["health"]["metrics"]["remote_stability_reads"], 2)
+            self.assertTrue(
+                receipt["health"]["metrics"]["remote_exact_count_reconciled"]
+            )
+            self.assertEqual(receipt["health"]["status"], "current")
+            self.assertEqual(receipt["health"]["event_through"], "2026-08-31")
             verification = receipt["verification"]
             self.assertTrue(Path(verification["receipt_path"]).is_file())
             self.assertEqual(
@@ -171,42 +168,89 @@ class UtilityIntakeProductionTests(unittest.TestCase):
                 verification["receipt_sha256"],
             )
             self.assertEqual(
-                transport.health["metrics"]["verification_receipt_sha256"],
+                receipt["health"]["metrics"]["verification_receipt_sha256"],
                 verification["receipt_sha256"],
             )
             self.assertEqual(Path(pointer["receipt_path"]).stat().st_mode & 0o777, 0o600)
             self.assertEqual((root / "latest.json").stat().st_mode & 0o777, 0o600)
 
-    def test_postgres_timestamp_rendering_is_compared_as_an_instant(self):
+    def test_real_transport_is_get_only_and_exposes_only_the_declared_projection(self):
+        exact = {column: None for column in production.PARITY_COLUMNS}
+        exact["permit_number"] = "ENG-CR-26010001"
+        child = dict(exact)
+        child["permit_number"] = "ENG-CR-26010001.D001"
+
+        class Response:
+            headers = {"Content-Range": "0-1/2"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self, _limit):
+                return json.dumps([exact, child]).encode("utf-8")
+
+        transport = production.ReadOnlySupabaseTransport(
+            "https://project-ref.supabase.co",
+            "sb_publishable_" + "x" * 24,
+        )
+        opener = mock.Mock()
+        opener.open.return_value = Response()
+        with mock.patch.object(
+            production.urllib.request, "build_opener", return_value=opener,
+        ) as build_opener:
+            page = transport.read_projection_page(cursor=None, limit=10)
+        request = opener.open.call_args.args[0]
+        query = parse_qs(urlparse(request.full_url).query)
+        self.assertIsInstance(build_opener.call_args.args[0], production._RejectRedirects)
+        self.assertEqual(request.get_method(), "GET")
+        self.assertEqual(urlparse(request.full_url).path, "/rest/v1/permits")
+        self.assertEqual(query["select"], [",".join(production.PARITY_COLUMNS)])
+        self.assertEqual(query["order"], ["permit_number.asc"])
+        self.assertIn("permit_number.like.ENG-CR-*", query["or"][0])
+        self.assertEqual(set(query), {"select", "or", "order", "limit"})
+        self.assertEqual(request.get_header("Apikey"), "sb_publishable_" + "x" * 24)
+        self.assertIsNone(request.get_header("Authorization"))
+        self.assertEqual(request.get_header("Prefer"), "count=exact")
+        self.assertIsNone(request.data)
+        self.assertEqual([row["permit_number"] for row in page["rows"]], ["ENG-CR-26010001"])
+        self.assertEqual(page["scanned_count"], 2)
+        self.assertEqual(page["declared_total"], 2)
+        self.assertFalse(page["exhausted"])
+        self.assertFalse(hasattr(transport, "publish_health"))
+        self.assertFalse(hasattr(transport, "request_json"))
+
+    def test_transport_rejects_service_role_and_nonproject_origins(self):
+        payload = base64.urlsafe_b64encode(json.dumps({
+            "role": "service_role",
+        }).encode("utf-8")).decode("ascii").rstrip("=")
+        service_role_jwt = f"header.{payload}.signature"
+        for url, key in (
+            ("https://project-ref.supabase.co", service_role_jwt),
+            ("https://project-ref.supabase.co", "sb_secret_not-allowed-here"),
+            ("https://example.com", "sb_publishable_" + "x" * 24),
+            ("https://project-ref.supabase.co.evil.example", "sb_publishable_" + "x" * 24),
+        ):
+            with self.subTest(url=url, key_prefix=key[:10]):
+                with self.assertRaises(production.ProductionError):
+                    production.ReadOnlySupabaseTransport(url, key)
+
+    def test_local_health_clock_matches_the_immutable_receipt_clock(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             remote = fixture(root / "remote.sqlite")
             (root / "remote.sqlite").unlink()
-            transport = FakeTransport(remote, normalized_system_time=True)
+            transport = FakeTransport(remote)
             _, result = self.run_case(root, transport)
             self.assertEqual(result["status"], "ok")
-
-    def test_health_failure_retains_verified_evidence_and_terminal_failure(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            remote = fixture(root / "remote.sqlite")
-            (root / "remote.sqlite").unlink()
-            transport = FakeTransport(remote, fail_health=True)
-            _, result = self.run_case(root, transport)
-            self.assertEqual(result["status"], "failed")
-            self.assertEqual(result["exit_code"], 1)
             receipt = json.loads(Path(result["receipt_path"]).read_text())
-            self.assertEqual(receipt["reason_code"], "UTILITY_INTAKE_HEALTH_PUBLICATION_FAILED")
-            self.assertFalse(receipt["health"]["published"])
-            verification_path = Path(receipt["verification"]["receipt_path"])
-            verification = json.loads(verification_path.read_text())
-            self.assertEqual(verification["status"], "verified")
-            self.assertEqual(
-                hashlib.sha256(verification_path.read_bytes()).hexdigest(),
-                receipt["verification"]["receipt_sha256"],
-            )
+            self.assertEqual(receipt["health"]["system_time"], receipt["completed_at"])
+            self.assertFalse(receipt["safety"]["supabase_health_pointer_upsert"])
+            self.assertEqual(receipt["safety"]["remote_methods"], ["GET"])
 
-    def test_row_drift_fails_closed_and_publishes_error(self):
+    def test_row_drift_fails_closed_and_writes_local_error_health(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             remote = fixture(root / "remote.sqlite")
@@ -219,7 +263,7 @@ class UtilityIntakeProductionTests(unittest.TestCase):
             receipt = json.loads(Path(result["receipt_path"]).read_text())
             self.assertEqual(receipt["parity"]["status"], "failed")
             self.assertIn("parity failed", receipt["reason_detail"])
-            self.assertEqual(transport.health["status"], "error")
+            self.assertEqual(receipt["health"]["status"], "error")
 
     def test_remote_duplicate_identity_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -232,6 +276,32 @@ class UtilityIntakeProductionTests(unittest.TestCase):
             receipt = json.loads(Path(result["receipt_path"]).read_text())
             self.assertIn("duplicate identities", receipt["reason_detail"])
 
+    def test_remote_duplicate_at_cursor_boundary_fails_exact_count_reconciliation(self):
+        row = {
+            column: ("ENG-CR-26010001" if column == "permit_number" else None)
+            for column in production.PARITY_COLUMNS
+        }
+        with mock.patch.object(production, "REMOTE_PAGE_SIZE", 1):
+            with self.assertRaisesRegex(
+                production.ProductionError, "declared count changed during pagination",
+            ):
+                production._remote_projection_once(FakeTransport([row, dict(row)]))
+
+    def test_remote_declared_count_above_scan_cap_fails_before_pagination(self):
+        row = {
+            column: ("ENG-CR-26010001" if column == "permit_number" else None)
+            for column in production.PARITY_COLUMNS
+        }
+
+        class OversizeTransport(FakeTransport):
+            def read_projection_page(self, *, cursor=None, limit=1000):
+                payload = super().read_projection_page(cursor=cursor, limit=limit)
+                payload["declared_total"] = production.REMOTE_SCAN_CAP + 1
+                return payload
+
+        with self.assertRaisesRegex(production.ProductionError, "exceeds its bounds"):
+            production._remote_projection_once(OversizeTransport([row]))
+
     def test_remote_projection_pages_until_explicit_empty_on_both_stability_reads(self):
         rows = [
             {column: (f"ENG-CR-2601{index:04d}" if column == "permit_number" else None)
@@ -242,11 +312,8 @@ class UtilityIntakeProductionTests(unittest.TestCase):
         with mock.patch.object(production, "REMOTE_PAGE_SIZE", 2):
             projected = production._remote_projection(transport)
         self.assertEqual(len(projected), 3)
-        offsets = [
-            int(parse_qs(urlparse(path).query)["offset"][0])
-            for method, path in transport.calls if path.startswith("permits?")
-        ]
-        self.assertEqual(offsets, [0, 2, 3, 0, 2, 3])
+        cursors = [cursor for operation, cursor in transport.calls if operation == "read_projection"]
+        self.assertEqual(cursors, [None, "ENG-CR-26010001", "ENG-CR-26010002", None, "ENG-CR-26010001", "ENG-CR-26010002"])
 
     def test_remote_projection_change_between_complete_reads_fails_closed(self):
         remote = [
@@ -255,16 +322,19 @@ class UtilityIntakeProductionTests(unittest.TestCase):
         ]
 
         class ChangingTransport(FakeTransport):
-            def request_json(self, method, path, *, body=None, prefer=None):
-                permit_calls = sum(1 for _, prior in self.calls if prior.startswith("permits?"))
-                if path.startswith("permits?") and permit_calls >= 2:
+            def read_projection_page(self, *, cursor=None, limit=1000):
+                first_page_calls = sum(
+                    1 for operation, prior_cursor in self.calls
+                    if operation == "read_projection" and prior_cursor is None
+                )
+                if cursor is None and first_page_calls >= 1:
                     self.remote_rows[0]["status"] = "changed during proof"
-                return super().request_json(method, path, body=body, prefer=prefer)
+                return super().read_projection_page(cursor=cursor, limit=limit)
 
         with self.assertRaisesRegex(production.ProductionError, "changed across stability reads"):
             production._remote_projection(ChangingTransport(remote))
 
-    def test_receipt_file_fsync_failure_prevents_health_publication_and_removes_partial(self):
+    def test_receipt_file_fsync_failure_prevents_local_health_receipt_and_removes_partial(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             remote = fixture(root / "remote.sqlite")
@@ -285,10 +355,10 @@ class UtilityIntakeProductionTests(unittest.TestCase):
                         run_id="utility-production-fsync-file",
                         clock=lambda: FIXED,
                     )
-            self.assertFalse(any(path.startswith("editorial_pipeline_health?") for _, path in transport.calls))
+            self.assertTrue(all(operation == "read_projection" for operation, _ in transport.calls))
             self.assertFalse((root / "receipts" / "utility-production-fsync-file.verification.json").exists())
 
-    def test_receipt_directory_fsync_failure_prevents_health_publication(self):
+    def test_receipt_directory_fsync_failure_prevents_local_health_receipt(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             remote = fixture(root / "remote.sqlite")
@@ -309,7 +379,25 @@ class UtilityIntakeProductionTests(unittest.TestCase):
                         run_id="utility-production-fsync-directory",
                         clock=lambda: FIXED,
                     )
-            self.assertFalse(any(path.startswith("editorial_pipeline_health?") for _, path in transport.calls))
+            self.assertTrue(all(operation == "read_projection" for operation, _ in transport.calls))
+
+    def test_configuration_receipt_refuses_a_symlink_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "target"
+            target.mkdir()
+            receipt_link = root / "receipts"
+            receipt_link.symlink_to(target, target_is_directory=True)
+            with self.assertRaisesRegex(production.ProductionError, "directory is unsafe"):
+                production.write_configuration_failure(
+                    receipt_dir=receipt_link,
+                    latest_pointer=root / "latest.json",
+                    run_id="utility-config-symlink-proof",
+                    error=ValueError("missing config"),
+                    clock=lambda: FIXED,
+                )
+            self.assertEqual(list(target.iterdir()), [])
+            self.assertFalse((root / "latest.json").exists())
 
     def test_transport_configuration_failure_writes_sanitized_fsynced_receipt_and_pointer(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -326,7 +414,7 @@ class UtilityIntakeProductionTests(unittest.TestCase):
                 "--run-id", "utility-config-failure",
             ]
             with mock.patch.object(
-                production, "SupabaseTransport", side_effect=ValueError(secret_marker),
+                production, "ReadOnlySupabaseTransport", side_effect=ValueError(secret_marker),
             ), redirect_stdout(stdout), redirect_stderr(stderr):
                 code = production.main(args)
             self.assertEqual(code, 3)
@@ -339,6 +427,105 @@ class UtilityIntakeProductionTests(unittest.TestCase):
             self.assertFalse(receipt["safety"]["secret_values_recorded"])
             self.assertEqual(receipt_path.stat().st_mode & 0o777, 0o600)
             self.assertEqual(hashlib.sha256(receipt_path.read_bytes()).hexdigest(), pointer["receipt_sha256"])
+
+    def test_configuration_failure_fsyncs_create_only_receipt_and_atomic_pointer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            real_open = production.os.open
+            real_fsync = production.os.fsync
+            with mock.patch.object(
+                production.os, "open", wraps=real_open,
+            ) as opened, mock.patch.object(
+                production.os, "fsync", wraps=real_fsync,
+            ) as fsynced:
+                result = production.write_configuration_failure(
+                    receipt_dir=root / "receipts",
+                    latest_pointer=root / "latest.json",
+                    run_id="utility-config-fsync-proof",
+                    error=ValueError("sensitive value must not be recorded"),
+                    clock=lambda: FIXED,
+                )
+            create_calls = [
+                item for item in opened.call_args_list
+                if len(item.args) >= 3 and item.args[1] & production.os.O_EXCL
+            ]
+            self.assertEqual(len(create_calls), 2)
+            self.assertTrue(all(item.args[2] == 0o600 for item in create_calls))
+            self.assertGreaterEqual(fsynced.call_count, 4)
+            pointer = json.loads((root / "latest.json").read_text())
+            receipt_path = Path(pointer["receipt_path"])
+            self.assertEqual(result["receipt_sha256"], pointer["receipt_sha256"])
+            self.assertNotIn("sensitive value", receipt_path.read_text())
+
+    def test_optional_environment_path_reaches_python_and_receipts_missing_scoped_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = [
+                "--sqlite-path", str(root / "permits.sqlite"),
+                "--writer-lock-path", str(root / ".writer.lock"),
+                "--evidence-dir", str(root / "runs"),
+                "--receipt-dir", str(root / "receipts"),
+                "--latest-pointer", str(root / "latest.json"),
+                "--run-id", "utility-missing-scoped-config",
+            ]
+            with mock.patch.dict(
+                production.os.environ, {}, clear=True,
+            ), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                code = production.main(args)
+            self.assertEqual(code, 3)
+            receipt = json.loads(Path(json.loads((root / "latest.json").read_text())["receipt_path"]).read_text())
+            self.assertEqual(receipt["reason_code"], "UTILITY_INTAKE_CONFIGURATION_FAILED")
+            self.assertEqual(receipt["startup_stage"], "read_only_transport")
+
+    def test_dependency_wait_failure_is_receipted_by_python_without_network(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            helper = root / "wait.sh"
+            helper.write_text("#!/usr/bin/env bash\nexit 75\n", encoding="utf-8")
+            helper.chmod(0o755)
+            args = [
+                "--sqlite-path", str(root / "permits.sqlite"),
+                "--writer-lock-path", str(root / ".writer.lock"),
+                "--evidence-dir", str(root / "runs"),
+                "--receipt-dir", str(root / "receipts"),
+                "--latest-pointer", str(root / "latest.json"),
+                "--dependency-wait-command", str(helper),
+                "--run-id", "utility-dependency-failure",
+            ]
+            environment = {
+                "SUPABASE_URL": "https://project-ref.supabase.co",
+                "SUPABASE_ANON_KEY": "sb_publishable_" + "x" * 24,
+            }
+            with mock.patch.dict(
+                production.os.environ, environment, clear=True,
+            ), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                code = production.main(args)
+            self.assertEqual(code, 3)
+            receipt = json.loads(Path(json.loads((root / "latest.json").read_text())["receipt_path"]).read_text())
+            self.assertEqual(receipt["reason_code"], "UTILITY_INTAKE_DEPENDENCY_FAILED")
+            self.assertEqual(receipt["startup_stage"], "dependency_wait")
+
+    def test_missing_production_credential_file_is_receipted_after_python_starts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = [
+                "--sqlite-path", str(root / "permits.sqlite"),
+                "--writer-lock-path", str(root / ".writer.lock"),
+                "--evidence-dir", str(root / "runs"),
+                "--receipt-dir", str(root / "receipts"),
+                "--latest-pointer", str(root / "latest.json"),
+                "--credential-file", str(root / "missing.env"),
+                "--run-id", "utility-missing-credential-file",
+            ]
+            with mock.patch.dict(
+                production.os.environ, {}, clear=True,
+            ), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                code = production.main(args)
+            self.assertEqual(code, 3)
+            pointer = json.loads((root / "latest.json").read_text())
+            receipt = json.loads(Path(pointer["receipt_path"]).read_text())
+            self.assertEqual(receipt["startup_stage"], "credential_file")
+            self.assertEqual(receipt["health"]["status"], "error")
 
     def test_empty_source_cannot_publish_current_health(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -364,8 +551,8 @@ class UtilityIntakeProductionTests(unittest.TestCase):
                 clock=lambda: FIXED,
             )
             self.assertEqual(result["status"], "failed")
-            self.assertEqual(transport.health["status"], "error")
             receipt = json.loads(Path(result["receipt_path"]).read_text())
+            self.assertEqual(receipt["health"]["status"], "error")
             self.assertIn("shadow evidence is not admissible: empty", receipt["reason_detail"])
 
     def test_service_uses_one_source_transport_and_failure_alerting(self):
@@ -373,17 +560,25 @@ class UtilityIntakeProductionTests(unittest.TestCase):
         timer = (ROOT / "ops/droplet/florida-utility-intake.timer").read_text()
         environment = (ROOT / "ops/droplet/florida-utility-intake.env.example").read_text()
         wait_helper = (ROOT / "ops/droplet/florida-utility-intake-wait.sh").read_text()
+        collector = PRODUCTION_PATH.read_text()
         self.assertIn("OnFailure=florida-healthreport.service", service)
         self.assertIn("florida-utility-intake-wait.sh", service)
+        self.assertNotIn("ExecStartPre=", service)
         self.assertNotIn("fs_wait_for_units.sh", service)
-        self.assertIn("secrets/florida-utility-intake.env", service)
+        self.assertIn("EnvironmentFile=-/srv/grahamandgold/florida-signal/secrets/florida-utility-intake.env", service)
+        self.assertIn("--credential-file /srv/grahamandgold/florida-signal/secrets/florida-utility-intake.env", service)
+        self.assertIn("--dependency-wait-command /srv/grahamandgold/florida-signal/tools/florida-utility-intake-wait.sh", service)
         self.assertNotIn("secrets/.env", service)
         variables = [line.split("=", 1)[0] for line in environment.splitlines() if line and not line.startswith("#")]
-        self.assertEqual(variables, ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"])
+        self.assertEqual(variables, ["SUPABASE_URL", "SUPABASE_ANON_KEY"])
+        self.assertNotIn("SUPABASE_SERVICE_ROLE_KEY", service + environment)
+        self.assertNotIn("SUPABASE_SERVICE_ROLE_KEY", collector)
+        self.assertNotIn("editorial_pipeline_health?", collector)
+        for method in ("POST", "PUT", "PATCH", "DELETE"):
+            self.assertNotIn(f'method="{method}"', collector)
         self.assertIn("readonly max_wait_seconds=600", wait_helper)
         self.assertIn("florida-accela.service florida-sync.service", wait_helper)
-        self.assertIn('credential_mode" != "600"', wait_helper)
-        self.assertIn('credential_owner" != "root:root"', wait_helper)
+        self.assertNotIn("credential", wait_helper.lower())
         self.assertNotIn("systemctl start", wait_helper)
         self.assertIn("utility_intake_production.py", service)
         self.assertNotIn("scrape_accela", service)

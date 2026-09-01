@@ -9,6 +9,7 @@ import json
 import os
 import re
 import sqlite3
+import stat
 import subprocess
 import sys
 from datetime import date, datetime, timedelta, timezone
@@ -1059,6 +1060,14 @@ UTILITY_INTAKE_RECEIPT_DIR = Path(os.getenv(
     "FL_SIGNAL_UTILITY_RECEIPT_DIR",
     "/srv/grahamandgold/florida-signal/staging/data/utility-intake/receipts",
 ))
+UTILITY_INTAKE_LATEST_POINTER = Path(os.getenv(
+    "FL_SIGNAL_UTILITY_LATEST_POINTER",
+    "/srv/grahamandgold/florida-signal/staging/data/utility-intake/latest.json",
+))
+UTILITY_INTAKE_LATEST_SCHEMA = "FloridaSignalUtilityIntakeProductionLatestV1"
+UTILITY_INTAKE_RECEIPT_SCHEMA = "FloridaSignalUtilityIntakeProductionReceiptV2"
+UTILITY_INTAKE_VERIFICATION_SCHEMA = "FloridaSignalUtilityIntakeProductionVerificationV1"
+UTILITY_INTAKE_LOCAL_FILE_CAP = 2_000_000
 
 
 def utility_intake_family(permit_number: Any) -> str | None:
@@ -1139,6 +1148,184 @@ def _utility_health_timestamp(value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def _utility_read_private_json(path: Path) -> tuple[dict[str, Any], bytes]:
+    """Read one bounded, regular, non-symlink receipt through a stable fd."""
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(path, flags)
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError("utility receipt is not a regular file")
+        if metadata.st_size <= 0 or metadata.st_size > UTILITY_INTAKE_LOCAL_FILE_CAP:
+            raise ValueError("utility receipt size is outside its bound")
+        chunks = []
+        remaining = UTILITY_INTAKE_LOCAL_FILE_CAP + 1
+        while remaining:
+            chunk = os.read(descriptor, min(65_536, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b"".join(chunks)
+        if len(raw) > UTILITY_INTAKE_LOCAL_FILE_CAP:
+            raise ValueError("utility receipt exceeded its byte cap")
+    finally:
+        os.close(descriptor)
+    payload = json.loads(raw)
+    if not isinstance(payload, dict):
+        raise ValueError("utility receipt is not an object")
+    return payload, raw
+
+
+def _utility_unavailable_health() -> dict[str, Any]:
+    return {
+        "component": "utility-intake",
+        "status": "unverified",
+        "event_through": None,
+        "source_through": None,
+        "system_time": None,
+        "detail": "Local utility intake receipt chain is unavailable or invalid.",
+        "metrics": {},
+    }
+
+
+def load_utility_intake_local_health() -> dict[str, Any]:
+    """Load health only through the latest-pointer/outcome/verification binding."""
+    try:
+        pointer, pointer_raw = _utility_read_private_json(UTILITY_INTAKE_LATEST_POINTER)
+        if set(pointer) != {
+            "schema_version", "run_id", "status", "updated_at", "receipt_path",
+            "receipt_sha256", "counts",
+        }:
+            raise ValueError("utility latest pointer has the wrong shape")
+        run_id = str(pointer.get("run_id") or "")
+        outcome_status = str(pointer.get("status") or "")
+        outcome_sha = str(pointer.get("receipt_sha256") or "")
+        if (
+            pointer.get("schema_version") != UTILITY_INTAKE_LATEST_SCHEMA
+            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,159}", run_id)
+            or outcome_status not in {"ok", "failed"}
+            or not re.fullmatch(r"[0-9a-f]{64}", outcome_sha)
+        ):
+            raise ValueError("utility latest pointer contract failed")
+
+        outcome_path = Path(str(pointer.get("receipt_path") or ""))
+        configured_root = UTILITY_INTAKE_RECEIPT_DIR.expanduser()
+        if (
+            not outcome_path.is_absolute()
+            or outcome_path.parent.resolve(strict=True) != configured_root.resolve(strict=True)
+            or outcome_path.is_symlink()
+        ):
+            raise ValueError("utility outcome receipt path is unsafe")
+        outcome, outcome_raw = _utility_read_private_json(outcome_path)
+        if hashlib.sha256(outcome_raw).hexdigest() != outcome_sha:
+            raise ValueError("utility outcome receipt hash mismatch")
+        if (
+            outcome.get("schema_version") != UTILITY_INTAKE_RECEIPT_SCHEMA
+            or outcome.get("run_id") != run_id
+            or outcome.get("status") != outcome_status
+            or outcome.get("counts") != pointer.get("counts")
+            or outcome.get("completed_at") != pointer.get("updated_at")
+        ):
+            raise ValueError("utility outcome receipt is not bound to latest")
+
+        health = outcome.get("health")
+        verification = outcome.get("verification")
+        if not isinstance(health, dict) or not isinstance(verification, dict):
+            raise ValueError("utility outcome receipt lacks bound health")
+        if health.get("component") != "utility-intake":
+            raise ValueError("utility health component mismatch")
+        if (outcome_status == "ok") != (health.get("status") == "current"):
+            raise ValueError("utility health status is not terminal-outcome bound")
+        if health.get("system_time") != outcome.get("completed_at"):
+            raise ValueError("utility health clock is not terminal-outcome bound")
+        metrics = health.get("metrics")
+        if not isinstance(metrics, dict):
+            raise ValueError("utility health metrics are malformed")
+        if (
+            metrics.get("verification_receipt_path") != verification.get("receipt_path")
+            or metrics.get("verification_receipt_sha256") != verification.get("receipt_sha256")
+        ):
+            raise ValueError("utility health verification binding mismatch")
+
+        verification_path_value = verification.get("receipt_path")
+        verification_sha = str(verification.get("receipt_sha256") or "")
+        if outcome_status == "ok":
+            counts = outcome.get("counts")
+            parity = outcome.get("parity")
+            if (
+                not isinstance(counts, dict)
+                or not isinstance(parity, dict)
+                or parity.get("status") != "passed"
+                or not isinstance(parity.get("sqlite"), dict)
+                or parity.get("sqlite") != parity.get("supabase")
+                or parity["sqlite"].get("projection")
+                != utility_intake_projection_contract()
+            ):
+                raise ValueError("utility outcome lacks complete declared parity")
+            proof = parity["sqlite"]
+            expected_metrics = {
+                "rows_attempted": counts.get("records_attempted"),
+                "rows_written": counts.get("records_written"),
+                "rows_rejected": counts.get("records_rejected"),
+                "sqlite_rows": counts.get("sqlite_records"),
+                "supabase_rows": counts.get("supabase_records"),
+                "sqlite_pk_set_sha256": proof.get("primary_key_set_sha256"),
+                "supabase_pk_set_sha256": proof.get("primary_key_set_sha256"),
+                "sqlite_projection_rowset_sha256": proof.get(
+                    "declared_projection_rowset_sha256"
+                ),
+                "supabase_projection_rowset_sha256": proof.get(
+                    "declared_projection_rowset_sha256"
+                ),
+                "parity_projection_version": UTILITY_INTAKE_PROJECTION_VERSION,
+                "parity_projection_sha256": proof["projection"].get("sha256"),
+                "remote_stability_reads": 2,
+                "remote_exact_count_reconciled": True,
+            }
+            if (
+                proof.get("count") != counts.get("sqlite_records")
+                or proof.get("count") != counts.get("supabase_records")
+                or any(metrics.get(key) != value for key, value in expected_metrics.items())
+            ):
+                raise ValueError("utility local health is not outcome-parity bound")
+
+            verification_path = Path(str(verification_path_value or ""))
+            if (
+                not verification_path.is_absolute()
+                or verification_path.parent.resolve(strict=True)
+                != configured_root.resolve(strict=True)
+                or verification_path.is_symlink()
+                or not re.fullmatch(r"[0-9a-f]{64}", verification_sha)
+            ):
+                raise ValueError("utility verification receipt path is unsafe")
+            verification_receipt, verification_raw = _utility_read_private_json(
+                verification_path
+            )
+            if hashlib.sha256(verification_raw).hexdigest() != verification_sha:
+                raise ValueError("utility verification receipt hash mismatch")
+            if (
+                verification_receipt.get("schema_version")
+                != UTILITY_INTAKE_VERIFICATION_SCHEMA
+                or verification_receipt.get("run_id") != run_id
+                or verification_receipt.get("status") != "verified"
+                or verification_receipt.get("completed_at")
+                != outcome.get("completed_at")
+                or verification_receipt.get("counts") != counts
+                or verification_receipt.get("parity") != parity
+            ):
+                raise ValueError("utility verification receipt is not bound to outcome")
+
+        _, pointer_after = _utility_read_private_json(UTILITY_INTAKE_LATEST_POINTER)
+        if pointer_after != pointer_raw:
+            raise ValueError("utility latest pointer changed during receipt validation")
+        return dict(health)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return _utility_unavailable_health()
+
+
 def validate_utility_intake_health(
     health: dict[str, Any] | None,
     proof: dict[str, Any],
@@ -1174,6 +1361,7 @@ def validate_utility_intake_health(
         "parity_projection_version": UTILITY_INTAKE_PROJECTION_VERSION,
         "parity_projection_sha256": proof["projection"]["sha256"],
         "remote_stability_reads": 2,
+        "remote_exact_count_reconciled": True,
     }
     mismatches = [key for key, value in expected.items() if metrics.get(key) != value]
     receipt_path_value = metrics.get("verification_receipt_path")
@@ -1347,16 +1535,7 @@ def utility_intake_payload(
         family: sum(1 for row in selected if row.get("family_id") == family)
         for family in sorted(UTILITY_INTAKE_LANES[lane])
     }
-    health_code, health_rows = supabase_request(
-        "editorial_pipeline_health?select=component,status,event_through,source_through,"
-        "system_time,detail,metrics&component=eq.utility-intake&limit=1"
-    )
-    raw_health = (
-        health_rows[0]
-        if health_code < 400 and isinstance(health_rows, list) and health_rows
-        and isinstance(health_rows[0], dict)
-        else None
-    )
+    raw_health = load_utility_intake_local_health()
     health = validate_utility_intake_health(
         raw_health, all_lane_proof, observed_at=observed_at
     )
