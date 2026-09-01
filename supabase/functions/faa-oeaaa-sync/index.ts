@@ -15,7 +15,7 @@ const BUCKET = "fl-signal-source-evidence";
 const BASE = "https://oeaaa.faa.gov/oeaaa/services";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SRK = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const COLLECTOR_VERSION = "faa-edge-v4-live-contract";
+const COLLECTOR_VERSION = "faa-edge-v4.1-live-contract";
 const PARSER_VERSION = "faa-xml-v4-bounded-live-contract";
 const NORMALIZER_VERSION = "faa-row-v4-live-contract";
 const SYNC_KEY_HEADER = "x-florida-signal-sync-key";
@@ -23,7 +23,10 @@ const MAX_LOOKBACK_DAYS = 370;
 const MAX_YEAR_REQUESTS = 2;
 const MAX_RAW_RESPONSE_BYTES = 25_000_000;
 const MAX_TOTAL_RAW_BYTES = 100_000_000;
-const PER_REQUEST_TIMEOUT_MS = 20_000;
+// The bounded Florida OE feed can legitimately take about 20 seconds to
+// stream its multi-megabyte XML body. Keep a per-request ceiling, but leave
+// enough headroom for normal source variance inside the 115-second run cap.
+const PER_REQUEST_TIMEOUT_MS = 40_000;
 const COMMIT_REQUEST_TIMEOUT_MS = 8_000;
 const OVERALL_RUN_BUDGET_MS = 115_000;
 const FAILURE_RECEIPT_RESERVE_MS = 20_000;
