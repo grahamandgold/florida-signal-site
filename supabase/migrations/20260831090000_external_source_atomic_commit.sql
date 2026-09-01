@@ -467,7 +467,7 @@ begin
             'expiration_date','received_date','status_code','structure_type',
             'structure_description','agl_height','agl_height_det','amsl_height',
             'sponsor','sponsor_city','sponsor_state','nearest_airport',
-            'nearest_city','nearest_state','lat','lon','in_broward','raw'
+            'nearest_city','nearest_state','lat','lon','raw'
           ]::text[] <> '{}'::jsonb
           or p.asn is null
           or btrim(p.asn) = ''
@@ -487,15 +487,15 @@ begin
       count(*) filter (where e.asn is null),
       count(*) filter (
         where e.asn is not null
-          and (to_jsonb(e) - array['first_fetched_at','last_fetched_at']::text[])
+          and (to_jsonb(e) - array['first_fetched_at','last_fetched_at','in_broward']::text[])
             is distinct from
-              (to_jsonb(p) - array['first_fetched_at','last_fetched_at']::text[])
+              (to_jsonb(p) - array['first_fetched_at','last_fetched_at','in_broward']::text[])
       ),
       count(*) filter (
         where e.asn is not null
-          and (to_jsonb(e) - array['first_fetched_at','last_fetched_at']::text[])
+          and (to_jsonb(e) - array['first_fetched_at','last_fetched_at','in_broward']::text[])
             is not distinct from
-              (to_jsonb(p) - array['first_fetched_at','last_fetched_at']::text[])
+              (to_jsonb(p) - array['first_fetched_at','last_fetched_at','in_broward']::text[])
       )
     into v_rows_inserted, v_rows_updated, v_rows_unchanged
     from parsed p
@@ -506,7 +506,7 @@ begin
       expiration_date, received_date, status_code, structure_type,
       structure_description, agl_height, agl_height_det, amsl_height,
       sponsor, sponsor_city, sponsor_state, nearest_airport, nearest_city,
-      nearest_state, lat, lon, in_broward, raw, first_fetched_at,
+      nearest_state, lat, lon, raw, first_fetched_at,
       last_fetched_at
     )
     select
@@ -515,7 +515,7 @@ begin
       p.structure_type, p.structure_description, p.agl_height,
       p.agl_height_det, p.amsl_height, p.sponsor, p.sponsor_city,
       p.sponsor_state, p.nearest_airport, p.nearest_city, p.nearest_state,
-      p.lat, p.lon, p.in_broward, p.raw, now(), now()
+      p.lat, p.lon, p.raw, now(), now()
     from public.external_source_run_stage s
     cross join lateral jsonb_populate_record(null::public.faa_oeaaa, s.row_data) p
     where s.source_id = p_source_id and s.run_id = p_run_id
@@ -542,7 +542,6 @@ begin
       nearest_state = excluded.nearest_state,
       lat = excluded.lat,
       lon = excluded.lon,
-      in_broward = excluded.in_broward,
       raw = excluded.raw,
       last_fetched_at = excluded.last_fetched_at;
   end if;

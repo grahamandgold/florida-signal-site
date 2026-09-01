@@ -46,6 +46,24 @@ deployment, collector call, schedule change, parcel import, or promotion.
 - The unbound legacy range ledger is not promotable: it reports 539,213
   accepted rows, while the live unique set is 532,470. Its page/range-local
   duplicate accounting misses 6,743 cross-page/range duplicate source rows.
+- A read-only FDEP audit found 109,456 live layer-0 rows whose normalized
+  `application_id`, `permit_id`, and `received_date` are null even though the
+  preserved raw payload supplies `APPLICATION_NUMBER` and `RECEIVE_DATE`.
+  Layer 0 and layer 1 expose different public schemas; applying the layer-1
+  mapper to both caused that defect. The corrected collector maps and validates
+  each layer separately. It intentionally repairs only rows observed in its
+  bounded current window.
+- The 2026-08-31 public-source preview for the 90-day default beginning
+  2026-06-02 was 94 layer-0 rows plus 40 layer-1 rows (134 total). Counts are a
+  preview, not an execution guarantee, and must be re-read immediately before
+  the canary. Repair of the older 109,456-row layer-0 corpus is a separate
+  historical operation: preview exact affected keys and classifications,
+  preserve raw evidence, obtain explicit approval for that exact scope, and
+  use bounded resumable batches. It is not admitted by this runbook or by a
+  normal scheduled run.
+- The live FAA `in_broward` field is stored/generated from latitude and
+  longitude. The corrected atomic path never stages or writes it; PostgreSQL
+  computes it. The earlier pending SQL and collector must not be deployed.
 
 ## Purpose
 
@@ -370,20 +388,26 @@ Only after a separate collector-code review and deployment approval:
 Approved: apply the production external_source_atomic_commit migration,
 granting service_role SELECT/INSERT/UPDATE/DELETE on the private RLS-forced
 staging table and EXECUTE on the SECURITY INVOKER
-fs_commit_external_source_run RPC; configure FL_SIGNAL_SYNC_KEY from the
-existing private query secret; then deploy FDEP and FAA collectors one at a
-time and run bounded live canaries. No parcel backfill or promotion.
+fs_commit_external_source_run RPC; rotate the retired URL query secret,
+configure FL_SIGNAL_SYNC_KEY and the matching Vault-backed
+x-florida-signal-sync-key cron header without storing its value in cron SQL;
+then deploy FDEP and FAA collectors one at a time and run bounded live
+canaries. No parcel backfill or promotion.
 ```
 
-1. Start with one source and one bounded, non-overlapping canary invocation.
-2. Verify private raw object(s), exact source/run-bound manifest key, every
+1. Confirm the old secret is absent from every active cron URL and new request
+   log, and that `cron.job.command` contains only the Vault secret name. Keep
+   the existing schedules disabled until that check and the matching collector
+   deployment are complete.
+2. Start with one source and one bounded, non-overlapping canary invocation.
+3. Verify private raw object(s), exact source/run-bound manifest key, every
    referenced object, the database-computed canonical manifest hash/copy,
    exact count identities, schema hash, terminal status, and one immutable
    receipt row.
-3. Attempting to update/delete that receipt must fail.
-4. Observe two ordinary scheduled runs without changing cadence.
-5. Repeat independently for the other source.
-6. Change Desk health to receipt-backed `UNKNOWN`/attention/healthy semantics
+4. Attempting to update/delete that receipt must fail.
+5. Observe two ordinary scheduled runs without changing cadence.
+6. Repeat independently for the other source.
+7. Change Desk health to receipt-backed `UNKNOWN`/attention/healthy semantics
    only after those natural observations. Never infer a collector run from
    `MAX(last_fetched_at)` alone.
 

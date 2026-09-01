@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import re
 import subprocess
 import unittest
@@ -7,7 +8,9 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase/migrations/20260831090000_external_source_atomic_commit.sql"
 FDEP = ROOT / "supabase/functions/fdep-erp-sync/index.ts"
+FDEP_NORMALIZER = ROOT / "supabase/functions/fdep-erp-sync/normalize.ts"
 FAA = ROOT / "supabase/functions/faa-oeaaa-sync/index.ts"
+FDEP_FIXTURE = ROOT / "tests/fixtures/fdep_layer_normalization.json"
 
 
 class ExternalSourceAtomicCommitTests(unittest.TestCase):
@@ -130,6 +133,73 @@ class ExternalSourceAtomicCommitTests(unittest.TestCase):
             self.assertIn("collector authentication is not configured", source)
             self.assertNotRegex(source, r"const SYNC_KEY = \"[^\"]+\"")
 
+    def test_sync_secret_is_header_only_and_never_read_from_url(self):
+        for source in (self.fdep, self.faa):
+            self.assertIn('SYNC_KEY_HEADER = "x-florida-signal-sync-key"', source)
+            self.assertIn("request.headers.get(SYNC_KEY_HEADER)", source)
+            self.assertNotIn('url.searchParams.get("key")', source)
+
+    def test_fdep_layer_specific_normalizer_fixture(self):
+        script = f"""
+          import assert from "node:assert/strict";
+          import fs from "node:fs";
+          import {{ assertLayerSchema, layerDateWhere, layerReceivedDateField, layerSourceContract, mapFeature, resolveSince }} from {json.dumps(FDEP_NORMALIZER.as_uri())};
+          const fixture = JSON.parse(fs.readFileSync({json.dumps(str(FDEP_FIXTURE))}, "utf8"));
+          const sourceContract = layerSourceContract();
+          for (const [name, sample] of Object.entries(fixture)) {{
+            const layer = Number(name.slice(-1));
+            const row = mapFeature(layer, sample.feature);
+            const {{ raw, ...normalized }} = row;
+            assert.deepEqual(normalized, sample.expected);
+            assert.deepEqual(raw, sample.feature.attributes);
+            assertLayerSchema(layer, {{ fields: sourceContract[String(layer)].map((field) => ({{ name: field }})) }});
+          }}
+          const incomplete = sourceContract["0"].filter((name) => name !== "RECEIVE_DATE");
+          assert.throws(
+            () => assertLayerSchema(0, {{ fields: incomplete.map((name) => ({{ name }})) }}),
+            /layer 0 source schema missing: RECEIVE_DATE/,
+          );
+          assert.equal(layerReceivedDateField(0), "RECEIVE_DATE");
+          assert.equal(layerReceivedDateField(1), "RECEIVED_DATE");
+          assert.throws(() => layerReceivedDateField(2), /unsupported FDEP layer 2/);
+          assert.equal(
+            layerDateWhere(0, "2026-06-02", "2026-08-31"),
+            "RECEIVE_DATE >= DATE '2026-06-02' AND RECEIVE_DATE < DATE '2026-09-01'",
+          );
+          assert.equal(
+            layerDateWhere(1, "2026-08-27", "2026-08-31"),
+            "RECEIVED_DATE >= DATE '2026-08-27' AND RECEIVED_DATE < DATE '2026-09-01'",
+          );
+          const now = new Date("2026-08-31T12:00:00.000Z");
+          assert.deepEqual(resolveSince(null, now), {{
+            since: "2026-06-02",
+            sinceMode: "default_90_day_lookback",
+            through: "2026-08-31",
+          }});
+          assert.deepEqual(resolveSince("2026-08-27", now), {{
+            since: "2026-08-27",
+            sinceMode: "explicit",
+            through: "2026-08-31",
+          }});
+          assert.throws(() => resolveSince("2025-01-01", now), /within 370 days/);
+          assert.throws(() => resolveSince("2026-02-30", now), /within 370 days/);
+          assert.throws(() => resolveSince("2026-09-01", now), /within 370 days/);
+        """
+        subprocess.run(
+            ["node", "--experimental-strip-types", "--input-type=module", "--eval", script],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertIn('assertLayerSchema(layer, payload)', self.fdep)
+        self.assertIn('where: layerDateWhere(layer, since, through)', self.fdep)
+        self.assertNotIn(': "1=1"', self.fdep)
+        self.assertIn('since_mode: sinceMode', self.fdep)
+        self.assertIn('window_semantics: WINDOW_SEMANTICS', self.fdep)
+        self.assertIn('attempted_event_from: `${since}T00:00:00.000Z`', self.fdep)
+        self.assertIn('attempted_event_through: `${through}T23:59:59.999Z`', self.fdep)
+        self.assertIn('fdep-row-v3-layer-specific', self.fdep)
+
     def test_faa_bounds_lookback_and_raw_response_size(self):
         self.assertIn("MAX_LOOKBACK_DAYS = 370", self.faa)
         self.assertIn("lookbackDays > MAX_LOOKBACK_DAYS", self.faa)
@@ -141,8 +211,20 @@ class ExternalSourceAtomicCommitTests(unittest.TestCase):
             self.assertIn("MAX_TOTAL_RAW_BYTES", source)
             self.assertIn("totalRawBytes > MAX_TOTAL_RAW_BYTES", source)
 
+    def test_faa_generated_broward_flag_is_database_owned(self):
+        self.assertNotIn("in_broward", self.faa)
+        self.assertIn(
+            "array['first_fetched_at','last_fetched_at','in_broward']::text[]",
+            self.sql,
+        )
+        faa_dml = self.sql[
+            self.sql.index("insert into public.faa_oeaaa"):
+            self.sql.index("  end if;", self.sql.index("insert into public.faa_oeaaa"))
+        ]
+        self.assertNotIn("in_broward", faa_dml)
+
     def test_typescript_parses_with_node_type_stripping(self):
-        for path in (FDEP, FAA):
+        for path in (FDEP, FDEP_NORMALIZER, FAA):
             subprocess.run(
                 ["node", "--experimental-strip-types", "--check", str(path)],
                 check=True,

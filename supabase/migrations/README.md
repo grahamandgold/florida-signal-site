@@ -66,6 +66,12 @@ operator sequence and recovery boundary.
   manifest, stage a complete run, and call only the atomic RPC. They read
   `FL_SIGNAL_SYNC_KEY` from Edge Function secrets and fail closed if it is
   unset or still the rejected placeholder.
+- The corrected FDEP replacement uses distinct layer-0 and layer-1 source
+  contracts and a bounded 90-day default. It does not repair older malformed
+  layer-0 normalized columns; that history requires a separately previewed,
+  explicitly approved repair. The corrected FAA path omits the stored
+  generated `in_broward` column from staging, classification, inserts and
+  updates so PostgreSQL remains its sole owner.
 - Production application/deployment is blocked until the operator explicitly
   approves the service-role staging DML and RPC EXECUTE privilege. No collector
   canary may precede that approval.

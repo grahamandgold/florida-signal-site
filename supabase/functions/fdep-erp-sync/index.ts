@@ -1,4 +1,13 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import {
+  assertLayerSchema,
+  contractShape,
+  layerDateWhere,
+  layerSourceContract,
+  mapFeature,
+  resolveSince,
+  type Row,
+} from "./normalize.ts";
 
 // Configure this through Supabase Edge Function secrets before deployment.
 const SYNC_KEY = Deno.env.get("FL_SIGNAL_SYNC_KEY")?.trim();
@@ -9,15 +18,16 @@ const BBOX = "-80.5,25.94,-80.05,26.35";
 const BASE = "https://ca.dep.state.fl.us/arcgis/rest/services/OpenData/ERP/MapServer";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SRK = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const COLLECTOR_VERSION = "fdep-edge-v2-atomic-receipts";
-const PARSER_VERSION = "fdep-esri-json-v2";
-const NORMALIZER_VERSION = "fdep-row-v2";
+const COLLECTOR_VERSION = "fdep-edge-v3-atomic-receipts";
+const PARSER_VERSION = "fdep-esri-json-v3";
+const NORMALIZER_VERSION = "fdep-row-v3-layer-specific";
+const WINDOW_SEMANTICS = "event_date_since_inclusive_through_inclusive";
+const SYNC_KEY_HEADER = "x-florida-signal-sync-key";
 const MAX_PAGES_PER_LAYER = 100;
 const MAX_RAW_RESPONSE_BYTES = 25_000_000;
 const MAX_TOTAL_RAW_BYTES = 100_000_000;
 const authHeaders = { apikey: SRK, Authorization: `Bearer ${SRK}` };
 
-type Row = Record<string, unknown>;
 type RawObject = Record<string, unknown>;
 
 const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), {
@@ -115,73 +125,26 @@ async function commit(runId: string, receipt: Row, manifest: Row): Promise<Row> 
   return await committed.json();
 }
 
-function numberOrNull(value: unknown): number | null {
-  const parsed = value === null || value === undefined || value === "" ? NaN : Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-function integerOrNull(value: unknown): number | null {
-  const parsed = numberOrNull(value);
-  return parsed === null ? null : Math.trunc(parsed);
-}
-function esriDate(value: unknown): string | null {
-  const parsed = numberOrNull(value);
-  if (parsed === null) return null;
-  const date = new Date(parsed);
-  return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : null;
-}
 function laterClock(current: string | null, ...dates: Array<string | null>): string | null {
   for (const date of dates) if (date && (!current || date > current.slice(0, 10))) current = `${date}T00:00:00.000Z`;
   return current;
 }
 
-function mapFeature(layer: number, feature: Row): Row | null {
-  const a = (feature.attributes ?? {}) as Row;
-  const geometry = (feature.geometry ?? {}) as Row;
-  const objectid = integerOrNull(a.OBJECTID);
-  if (objectid === null) return null;
-  return {
-    layer_id: layer,
-    objectid,
-    permit_id: a.PERMIT_ID ?? null,
-    application_id: a.APPLICATION_ID ?? null,
-    project_id: integerOrNull(a.PROJECT_ID),
-    project_name: a.PROJECT_NAME ?? null,
-    applicant_name: a.APPLICANT_NAME ?? null,
-    applicant_company: a.APPLICANT_COMPANY ?? null,
-    permit_type: a.PERMIT_TYPE ?? null,
-    permit_status: a.PERMIT_STATUS ?? null,
-    defined_status: a.DEFINED_STATUS ?? null,
-    division: a.DIVISION ?? null,
-    permitting_program: a.PERMITTING_PROGRAM ?? null,
-    district: a.DISTRICT ?? null,
-    office_abbrev: a.OFFICE_ABBREV ?? null,
-    location_id: a.LOCATION_ID ?? null,
-    location_name: a.LOCATION_NAME ?? null,
-    street_address: a.STREET_ADDRESS ?? null,
-    city: a.CITY ?? null,
-    state: a.STATE ?? null,
-    zip5: a.ZIP5 ?? null,
-    zip4: a.ZIP4 ?? null,
-    received_date: esriDate(a.RECEIVED_DATE),
-    agency_action: a.AGENCY_ACTION ?? null,
-    agency_action_date: esriDate(a.AGENCY_ACTION_DATE),
-    documents_url: a.DOCUMENTS ?? null,
-    lat: numberOrNull(geometry.y),
-    lon: numberOrNull(geometry.x),
-    raw: a,
-  };
-}
-
-const contractShape = () => Object.keys(mapFeature(0, { attributes: { OBJECTID: 1 }, geometry: {} })!).sort();
-
 Deno.serve(async (request: Request) => {
   if (!SYNC_KEY || SYNC_KEY === REJECTED_SYNC_KEY_PLACEHOLDER) {
     return response({ error: "collector authentication is not configured" }, 503);
   }
+  if (request.headers.get(SYNC_KEY_HEADER)?.trim() !== SYNC_KEY) {
+    return response({ error: "unauthorized" }, 401);
+  }
   const url = new URL(request.url);
-  if (url.searchParams.get("key") !== SYNC_KEY) return response({ error: "unauthorized" }, 401);
-  const since = url.searchParams.get("since") ?? undefined;
-  if (since && !/^\d{4}-\d{2}-\d{2}$/.test(since)) return response({ error: "since must be YYYY-MM-DD" }, 400);
+  let sinceWindow;
+  try {
+    sinceWindow = resolveSince(url.searchParams.get("since"));
+  } catch (error) {
+    return response({ error: safeError(error) }, 400);
+  }
+  const { since, sinceMode, through } = sinceWindow;
   const layers = [...new Set((url.searchParams.get("layers") ?? "0,1").split(",").map(Number))];
   if (!layers.length || layers.some((layer) => !Number.isInteger(layer) || ![0, 1].includes(layer))) {
     return response({ error: "layers must be a subset of 0,1" }, 400);
@@ -221,7 +184,7 @@ Deno.serve(async (request: Request) => {
           f: "json",
           resultRecordCount: "1000",
           resultOffset: String(offset),
-          where: since ? `RECEIVED_DATE >= DATE '${since}'` : "1=1",
+          where: layerDateWhere(layer, since, through),
         });
         const source = await fetch(`${BASE}/${layer}/query?${params}`);
         observedAt = new Date().toISOString();
@@ -249,12 +212,15 @@ Deno.serve(async (request: Request) => {
         if (!source.ok) throw new Error(`layer ${layer} HTTP ${source.status}`);
         const payload = JSON.parse(raw);
         if (payload.error) throw new Error(`layer ${layer}: ${JSON.stringify(payload.error).slice(0, 300)}`);
-        for (const field of payload.fields ?? []) if (field?.name) schemaFields.add(`attribute:${field.name}`);
+        assertLayerSchema(layer, payload);
+        for (const field of payload.fields ?? []) {
+          if (field?.name) schemaFields.add(`layer:${layer}:attribute:${field.name}`);
+        }
         const features = Array.isArray(payload.features) ? payload.features : [];
         rowsObserved += features.length;
         for (const feature of features) {
           const attrs = (feature?.attributes ?? {}) as Row;
-          Object.keys(attrs).forEach((name) => schemaFields.add(`attribute:${name}`));
+          Object.keys(attrs).forEach((name) => schemaFields.add(`layer:${layer}:attribute:${name}`));
           const row = mapFeature(layer, feature ?? {});
           if (!row) continue;
           rows.set(`${layer}:${row.objectid}`, row);
@@ -277,7 +243,13 @@ Deno.serve(async (request: Request) => {
     const status = partialReason || rowsRejected > 0 ? "partial" : rows.size ? "ok" : "empty";
     if (rows.size) await stage(runId, rows);
     const sourceSchemaSha = await sha256(JSON.stringify([...schemaFields].sort()));
-    const contractSha = await sha256(JSON.stringify({ source_id: SOURCE_ID, parser: PARSER_VERSION, key: ["layer_id", "objectid"], fields: contractShape() }));
+    const contractSha = await sha256(JSON.stringify({
+      source_id: SOURCE_ID,
+      parser: PARSER_VERSION,
+      key: ["layer_id", "objectid"],
+      fields: contractShape(),
+      source_fields_by_layer: layerSourceContract(),
+    }));
     const completedAt = new Date().toISOString();
     const manifestKey = `${SOURCE_ID}/${runId}/manifest.json`;
     const manifest: Row = {
@@ -287,7 +259,7 @@ Deno.serve(async (request: Request) => {
       started_at: startedAt,
       observed_at: observedAt,
       completed_at: completedAt,
-      request: { bbox: BBOX, layers, since: since ?? null },
+      request: { bbox: BBOX, layers, since, since_mode: sinceMode, through, window_semantics: WINDOW_SEMANTICS },
       raw_objects: rawObjects,
       pages_attempted: pagesAttempted,
       pages_succeeded: pagesSucceeded,
@@ -309,8 +281,8 @@ Deno.serve(async (request: Request) => {
       started_at: startedAt,
       observed_at: observedAt,
       completed_at: completedAt,
-      attempted_event_from: since ? `${since}T00:00:00.000Z` : null,
-      attempted_event_through: startedAt,
+      attempted_event_from: `${since}T00:00:00.000Z`,
+      attempted_event_through: `${through}T23:59:59.999Z`,
       event_through: eventThrough,
       pages_attempted: pagesAttempted,
       pages_succeeded: pagesSucceeded,
@@ -321,7 +293,7 @@ Deno.serve(async (request: Request) => {
       source_schema_sha256: sourceSchemaSha,
       raw_manifest_object_key: manifestKey,
       outcomes,
-      source_metadata: { bbox: BBOX, layers, since: since ?? null },
+      source_metadata: { bbox: BBOX, layers, since, since_mode: sinceMode, through, window_semantics: WINDOW_SEMANTICS },
     }, manifest);
     return response({ ok: status === "ok" || status === "empty", receipt });
   } catch (error) {
@@ -336,7 +308,7 @@ Deno.serve(async (request: Request) => {
         started_at: startedAt,
         observed_at: terminalAt,
         completed_at: terminalAt,
-        request: { bbox: BBOX, layers, since: since ?? null },
+        request: { bbox: BBOX, layers, since, since_mode: sinceMode, through, window_semantics: WINDOW_SEMANTICS },
         raw_objects: rawObjects,
         pages_attempted: pagesAttempted,
         pages_succeeded: pagesSucceeded,
@@ -348,7 +320,13 @@ Deno.serve(async (request: Request) => {
         error: safeError(error),
       };
       await upload(failureKey, JSON.stringify(manifest), "application/json");
-      const contractSha = await sha256(JSON.stringify({ source_id: SOURCE_ID, parser: PARSER_VERSION, key: ["layer_id", "objectid"], fields: contractShape() }));
+      const contractSha = await sha256(JSON.stringify({
+        source_id: SOURCE_ID,
+        parser: PARSER_VERSION,
+        key: ["layer_id", "objectid"],
+        fields: contractShape(),
+        source_fields_by_layer: layerSourceContract(),
+      }));
       const receipt = await commit(runId, {
         collector_name: "fdep-erp-sync",
         collector_version: COLLECTOR_VERSION,
@@ -360,8 +338,8 @@ Deno.serve(async (request: Request) => {
         started_at: startedAt,
         observed_at: terminalAt,
         completed_at: terminalAt,
-        attempted_event_from: since ? `${since}T00:00:00.000Z` : null,
-        attempted_event_through: startedAt,
+        attempted_event_from: `${since}T00:00:00.000Z`,
+        attempted_event_through: `${through}T23:59:59.999Z`,
         event_through: null,
         pages_attempted: pagesAttempted,
         pages_succeeded: pagesSucceeded,
@@ -372,7 +350,7 @@ Deno.serve(async (request: Request) => {
         source_schema_sha256: null,
         raw_manifest_object_key: failureKey,
         outcomes,
-        source_metadata: { bbox: BBOX, layers, since: since ?? null },
+        source_metadata: { bbox: BBOX, layers, since, since_mode: sinceMode, through, window_semantics: WINDOW_SEMANTICS },
       }, manifest);
       return response({ ok: false, error: safeError(error), receipt }, 500);
     } catch (receiptError) {

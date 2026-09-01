@@ -11,6 +11,7 @@ const SRK = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const COLLECTOR_VERSION = "faa-edge-v2-atomic-receipts";
 const PARSER_VERSION = "faa-xml-v2";
 const NORMALIZER_VERSION = "faa-row-v2";
+const SYNC_KEY_HEADER = "x-florida-signal-sync-key";
 const MAX_LOOKBACK_DAYS = 370;
 const MAX_YEAR_REQUESTS = 2;
 const MAX_RAW_RESPONSE_BYTES = 25_000_000;
@@ -138,9 +139,6 @@ function timestampOrNull(value: string | null): string | null {
   const parsed = new Date(value);
   return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
 }
-function inBroward(lat: number | null, lon: number | null): boolean | null {
-  return lat === null || lon === null ? null : lat >= 25.94 && lat <= 26.35 && lon >= -80.5 && lon <= -80.05;
-}
 function laterClock(current: string | null, ...dates: Array<string | null>): string | null {
   for (const date of dates) {
     if (!date) continue;
@@ -190,7 +188,6 @@ function parseCases(xml: string, schemaTags: Set<string>): { rows: Row[]; observ
       nearest_state: tag(block, "nearestState"),
       lat,
       lon,
-      in_broward: inBroward(lat, lon),
       raw,
     });
   }
@@ -206,8 +203,10 @@ Deno.serve(async (request: Request) => {
   if (!SYNC_KEY || SYNC_KEY === REJECTED_SYNC_KEY_PLACEHOLDER) {
     return response({ error: "collector authentication is not configured" }, 503);
   }
+  if (request.headers.get(SYNC_KEY_HEADER)?.trim() !== SYNC_KEY) {
+    return response({ error: "unauthorized" }, 401);
+  }
   const url = new URL(request.url);
-  if (url.searchParams.get("key") !== SYNC_KEY) return response({ error: "unauthorized" }, 401);
   const today = new Date().toISOString().slice(0, 10);
   const since = url.searchParams.get("since") ?? new Date(Date.now() - 60 * 86_400_000).toISOString().slice(0, 10);
   const sinceDate = new Date(`${since}T00:00:00.000Z`);
