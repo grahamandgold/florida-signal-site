@@ -59,6 +59,51 @@ class DownloadResponse:
 
 
 class BrowardParcelGenerationTests(unittest.TestCase):
+    def _read_failure_bundle(self, run_root: Path):
+        failure = json.loads((run_root / "failure-receipt.json").read_text())
+        binding = failure["evidence_manifest"]
+        manifest_path = run_root / binding["path"]
+        manifest_body = manifest_path.read_bytes()
+        manifest = json.loads(manifest_body)
+        self.assertEqual(binding["path"], "failure-manifest.json")
+        self.assertEqual(binding["bytes"], len(manifest_body))
+        self.assertEqual(binding["sha256"], MODULE.sha256_bytes(manifest_body))
+        self.assertEqual(
+            binding["schema_version"], MODULE.FAILURE_EVIDENCE_MANIFEST_SCHEMA
+        )
+        self.assertEqual(
+            manifest["schema_version"], MODULE.FAILURE_EVIDENCE_MANIFEST_SCHEMA
+        )
+        self.assertEqual(binding["object_count"], len(manifest["objects"]))
+        self.assertEqual(manifest["object_count"], len(manifest["objects"]))
+        self.assertEqual(
+            manifest_body,
+            MODULE.canonical_json_bytes(manifest) + b"\n",
+        )
+        self.assertEqual(
+            manifest["objects"],
+            sorted(
+                manifest["objects"],
+                key=lambda item: (
+                    item["path"],
+                    item["sha256"],
+                    item["bytes"],
+                    item["media_type"],
+                ),
+            ),
+        )
+        self.assertNotIn(
+            "failure-manifest.json",
+            {item["path"] for item in manifest["objects"]},
+        )
+        for item in manifest["objects"]:
+            body = (run_root / item["path"]).read_bytes()
+            self.assertEqual(item["bytes"], len(body), item["path"])
+            self.assertEqual(
+                item["sha256"], MODULE.sha256_bytes(body), item["path"]
+            )
+        return failure, manifest
+
     def _fixture_observations(self):
         source = MODULE.FixtureSource(FIXTURE_ROOT)
         pages = []
@@ -115,6 +160,82 @@ class BrowardParcelGenerationTests(unittest.TestCase):
             field for field in layer["fields"] if field["name"] == "SALE_DATE_1"
         )
         self.assertEqual(sale_date_field["type"], "esriFieldTypeDate")
+
+    def test_durable_directory_creation_uses_exact_mkdir_and_parent_fsync_sequence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            run_root = parent / "run-id"
+            raw_root = run_root / "raw"
+            manifests_root = run_root / "manifests"
+            real_mkdir = MODULE.os.mkdir
+            manager = mock.Mock()
+            with mock.patch.object(
+                MODULE.os,
+                "mkdir",
+                side_effect=real_mkdir,
+            ) as mkdir, mock.patch.object(
+                MODULE.os,
+                "open",
+                side_effect=[51, 52, 53],
+            ) as open_directory, mock.patch.object(
+                MODULE.os, "fsync"
+            ) as fsync, mock.patch.object(MODULE.os, "close") as close:
+                manager.attach_mock(mkdir, "mkdir")
+                manager.attach_mock(open_directory, "open")
+                manager.attach_mock(fsync, "fsync")
+                manager.attach_mock(close, "close")
+                MODULE.create_durable_directory(run_root)
+                MODULE.create_durable_directory(raw_root)
+                MODULE.create_durable_directory(manifests_root)
+        directory_flags = MODULE.os.O_RDONLY | getattr(MODULE.os, "O_DIRECTORY", 0)
+        self.assertEqual(
+            manager.mock_calls,
+            [
+                mock.call.mkdir(run_root, 0o700),
+                mock.call.open(parent, directory_flags),
+                mock.call.fsync(51),
+                mock.call.close(51),
+                mock.call.mkdir(raw_root, 0o700),
+                mock.call.open(run_root, directory_flags),
+                mock.call.fsync(52),
+                mock.call.close(52),
+                mock.call.mkdir(manifests_root, 0o700),
+                mock.call.open(run_root, directory_flags),
+                mock.call.fsync(53),
+                mock.call.close(53),
+            ],
+        )
+
+    def test_run_raw_and_manifest_directories_are_parent_fsynced_in_order(self):
+        run_id = str(uuid.uuid4())
+        with tempfile.TemporaryDirectory() as directory:
+            evidence_root = Path(directory) / "evidence"
+            evidence_root.mkdir()
+            with mock.patch.object(
+                MODULE,
+                "fsync_directory",
+                wraps=MODULE.fsync_directory,
+            ) as fsync_directory:
+                evidence = MODULE.EvidenceBundle(evidence_root, run_id)
+                evidence.write_json("raw/page.json", {"raw": True})
+                evidence.write_json("manifests/range.json", {"range": True})
+            run_root = evidence_root / run_id
+            self.assertEqual(
+                [call.args[0] for call in fsync_directory.call_args_list],
+                [
+                    evidence_root,
+                    run_root,
+                    run_root / "raw",
+                    run_root,
+                    run_root / "manifests",
+                ],
+            )
+            self.assertEqual(run_root.stat().st_mode & 0o777, 0o700)
+            self.assertEqual((run_root / "raw").stat().st_mode & 0o777, 0o700)
+            self.assertEqual(
+                (run_root / "manifests").stat().st_mode & 0o777,
+                0o700,
+            )
 
     def test_negative_arcgis_epoch_milliseconds_preserve_pre_1970_sale_date(self):
         feature = json.loads(
@@ -465,11 +586,110 @@ class BrowardParcelGenerationTests(unittest.TestCase):
                     canary_rows=7,
                 )
             run_root = root / run_id
-            failure = json.loads((run_root / "failure-receipt.json").read_text())
+            failure, manifest = self._read_failure_bundle(run_root)
             self.assertTrue((run_root / "raw" / "page-000000.json").exists())
             self.assertFalse((run_root / "receipt.json").exists())
+            paths = [item["path"] for item in manifest["objects"]]
+            self.assertEqual(paths, sorted(paths))
+            self.assertEqual(len(paths), len(set(paths)))
+            for expected_path in (
+                "raw/source-metadata.json",
+                "raw/source-metadata.json.request.json",
+                "raw/source-item-metadata.json",
+                "raw/source-item-metadata.json.request.json",
+                "raw/object-ids-start.json",
+                "raw/object-ids-start.json.request.json",
+                "raw/page-000000.json",
+                "raw/page-000000.json.request.json",
+            ):
+                self.assertIn(expected_path, paths)
+            self.assertNotIn("raw/page-000001.json", paths)
+            by_path = {item["path"]: item for item in manifest["objects"]}
+            for tampered_path in (
+                "raw/page-000000.json",
+                "raw/source-metadata.json",
+            ):
+                path = run_root / tampered_path
+                original = path.read_bytes()
+                path.write_bytes(original + b"tamper")
+                self.assertNotEqual(
+                    by_path[tampered_path]["sha256"],
+                    MODULE.sha256_bytes(path.read_bytes()),
+                )
+                self.assertNotEqual(by_path[tampered_path]["bytes"], path.stat().st_size)
+                path.write_bytes(original)
         self.assertEqual(failure["status"], "failed")
         self.assertFalse(failure["promotion_eligible"])
+
+    def test_failure_manifest_is_durable_before_terminal_failure_receipt(self):
+        run_id = str(uuid.uuid4())
+        original_write_once = MODULE.write_once
+
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+            MODULE,
+            "write_once",
+            side_effect=original_write_once,
+        ) as write_once:
+            with self.assertRaisesRegex(MODULE.ParcelGenerationError, "partial failure"):
+                MODULE.collect_generation(
+                    source=FailingFixtureSource(FIXTURE_ROOT),
+                    evidence_root=Path(directory),
+                    run_id=run_id,
+                    mode="canary",
+                    page_size=4,
+                    canary_rows=7,
+                )
+            immutable_paths = [call.args[0].name for call in write_once.call_args_list]
+            self.assertLess(
+                immutable_paths.index("failure-manifest.json"),
+                immutable_paths.index("failure-receipt.json"),
+            )
+
+    def test_mid_capture_failure_manifest_includes_raw_before_request_receipt(self):
+        run_id = str(uuid.uuid4())
+        original_write_json = MODULE.EvidenceBundle.write_json
+
+        def fail_page_request_receipt(evidence, relative_path, value):
+            if relative_path == "raw/page-000000.json.request.json":
+                raise RuntimeError("fixture request receipt write failed")
+            return original_write_json(evidence, relative_path, value)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with mock.patch.object(
+                MODULE.EvidenceBundle,
+                "write_json",
+                new=fail_page_request_receipt,
+            ):
+                with self.assertRaisesRegex(
+                    MODULE.ParcelGenerationError,
+                    "fixture request receipt write failed",
+                ):
+                    MODULE.collect_generation(
+                        source=MODULE.FixtureSource(FIXTURE_ROOT),
+                        evidence_root=root,
+                        run_id=run_id,
+                        mode="canary",
+                        page_size=4,
+                        canary_rows=7,
+                    )
+            run_root = root / run_id
+            failure, manifest = self._read_failure_bundle(run_root)
+            by_path = {item["path"]: item for item in manifest["objects"]}
+            raw_path = "raw/page-000000.json"
+            self.assertIn(raw_path, by_path)
+            self.assertNotIn(f"{raw_path}.request.json", by_path)
+            raw_body = (run_root / raw_path).read_bytes()
+            self.assertEqual(by_path[raw_path]["bytes"], len(raw_body))
+            self.assertEqual(
+                by_path[raw_path]["sha256"], MODULE.sha256_bytes(raw_body)
+            )
+        self.assertEqual(failure["failure_stage"], "raw_page_capture")
+        self.assertEqual(failure["raw_page_path"], "raw/page-000000.json")
+        self.assertEqual(failure["source_accounting"]["raw_pages_captured"], 1)
+        self.assertEqual(failure["source_accounting"]["raw_rows_captured"], 4)
+        self.assertEqual(failure["source_accounting"]["indexed_rows"], 0)
+        self.assertEqual(failure["source_accounting"]["raw_rows_not_indexed"], 4)
 
     def test_unexpected_normalization_failure_has_durable_terminal_receipt(self):
         run_id = str(uuid.uuid4())
@@ -492,7 +712,7 @@ class BrowardParcelGenerationTests(unittest.TestCase):
             run_root = root / run_id
             failure_path = run_root / "failure-receipt.json"
             failure_body = failure_path.read_bytes()
-            failure = json.loads(failure_body)
+            failure, manifest = self._read_failure_bundle(run_root)
             failure_sha256 = MODULE.sha256_bytes(failure_body)
             raw_page_path = run_root / "raw" / "page-000000.json"
             raw_page_sha256 = MODULE.sha256_bytes(raw_page_path.read_bytes())
@@ -513,6 +733,10 @@ class BrowardParcelGenerationTests(unittest.TestCase):
         self.assertEqual(failure["source_accounting"]["raw_rows_not_indexed"], 4)
         self.assertFalse(failure["source_accounting"]["row_partition_complete"])
         self.assertFalse(failure["promotion_eligible"])
+        self.assertIn(
+            "raw/page-000000.json",
+            {item["path"] for item in manifest["objects"]},
+        )
         self.assertIn(f"sha256={failure_sha256}", str(raised.exception))
 
     def test_migration_keeps_live_table_out_of_collector_permissions(self):
@@ -546,6 +770,18 @@ class BrowardParcelGenerationTests(unittest.TestCase):
         self.assertIn("where item->>'purpose' = 'field_null_manifest'", sql)
         self.assertIn("parcel SALE_DATE_1 field-null classification is inconsistent", sql)
         self.assertIn("'sale_date_1_field_null_rows'", sql)
+
+    def test_finalizer_replay_requires_exact_persisted_range_manifests(self):
+        sql = MIGRATION_PATH.read_text(encoding="utf-8").lower()
+        self.assertIn("fs_broward_parcel_range_manifests_match", sql)
+        self.assertIn("select * from supplied except all select * from stored", sql)
+        self.assertIn("select * from stored except all select * from supplied", sql)
+        self.assertIn("and replay_range_manifests_match then", sql)
+        self.assertIn("invalid parcel range manifest payload", sql)
+        self.assertIn(
+            "revoke all on function public.fs_broward_parcel_range_manifests_match",
+            sql,
+        )
 
     def test_promotion_requires_reviewed_preview_and_backup(self):
         sql = MIGRATION_PATH.read_text(encoding="utf-8").lower()

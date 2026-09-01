@@ -3,7 +3,7 @@
 
 begin;
 
-select plan(56);
+select plan(69);
 
 select has_table('public', 'broward_parcel_quality_contracts', 'quality contract table exists');
 select has_table('public', 'broward_parcel_generation_pages', 'page receipt table exists');
@@ -26,6 +26,8 @@ select has_function('public', 'fs_finalize_broward_parcel_generation',
   'finalize RPC exists');
 select has_function('public', 'fs_fail_broward_parcel_generation',
   array['uuid','jsonb'], 'failure RPC exists');
+select has_function('public', 'fs_broward_parcel_range_manifests_match',
+  array['uuid','jsonb'], 'exact range-manifest replay matcher exists');
 select has_function('public', 'fs_preview_broward_parcel_generation',
   array['uuid'], 'owner-only preview function exists');
 select has_function('public', 'fs_promote_broward_parcel_generation',
@@ -92,6 +94,9 @@ select ok(not has_table_privilege('service_role',
 select ok(not has_function_privilege('service_role',
   'public.fs_promote_broward_parcel_generation(uuid)','execute'),
   'service role cannot promote parcels');
+select ok(not has_function_privilege('service_role',
+  'public.fs_broward_parcel_range_manifests_match(uuid,jsonb)','execute'),
+  'service role cannot call the private replay matcher directly');
 
 select ok(has_function_privilege('service_role',
   'public.fs_begin_broward_parcel_generation(uuid,jsonb,text,text,text,integer,text,integer,jsonb,jsonb)','execute'),
@@ -171,6 +176,261 @@ select ok(not has_table_privilege('service_role',
   'collector cannot alter quality contracts');
 select has_column('public', 'broward_parcel_promotion_authorizations',
   'backup_storage_object_id', 'backup authorization binds exact Storage object identity');
+
+insert into public.broward_parcel_import_generations (
+  generation_id,
+  source_layer_url,
+  source_dataset_vintage,
+  collector_version,
+  parser_version,
+  normalizer_version,
+  coverage_oid_min,
+  coverage_oid_max,
+  expected_range_count,
+  source_reported_count,
+  minimum_accepted_rows,
+  max_rejected_rows,
+  max_duplicate_folios,
+  quality_contract_sha256,
+  source_schema_sha256,
+  status,
+  started_at,
+  generation_protocol,
+  run_mode,
+  source_universe_count,
+  source_vintage_json,
+  promotion_eligible
+) values (
+  '22222222-2222-4222-8222-222222222222',
+  'https://services.arcgis.com/JMAJrTsHNLrSsWf5/arcgis/rest/services/PARCEL_POLY_BCPA_TAXROLL/FeatureServer/0',
+  'fixture',
+  'fixture-collector',
+  'fixture-parser',
+  'broward-folio-centroid-sale-date-v2',
+  0,
+  19999,
+  1,
+  2,
+  1,
+  24,
+  24,
+  '31824f7c0a0ce627e955ae17f4b156f174f4ab9dea77245d64115958aa2f8575',
+  repeat('b', 64),
+  'staging',
+  now(),
+  'single_stream_v1',
+  'canary',
+  2,
+  '{}'::jsonb,
+  false
+);
+
+insert into public.broward_parcel_generation_ranges (
+  generation_id,
+  oid_min,
+  oid_max,
+  expected_source_count,
+  rows_received,
+  rows_accepted,
+  rows_rejected,
+  rejected_missing_folio,
+  rejected_bad_folio_format,
+  rejected_missing_centroid,
+  rejected_out_of_bounds,
+  duplicate_folios,
+  status,
+  attempts,
+  raw_manifest_sha256,
+  raw_manifest_object_key,
+  started_at,
+  completed_at
+) values (
+  '22222222-2222-4222-8222-222222222222',
+  0,
+  19999,
+  2,
+  2,
+  2,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  'complete',
+  1,
+  repeat('a', 64),
+  'broward-parcel-generations/22222222-2222-4222-8222-222222222222/manifests/range-000000000-000019999.json',
+  now(),
+  now()
+);
+
+create temporary table broward_parcel_range_manifest_fixture (
+  payload jsonb not null
+) on commit drop;
+
+insert into broward_parcel_range_manifest_fixture (payload) values (
+  jsonb_build_array(jsonb_build_object(
+    'duplicates_within_or_across_ranges', 0,
+    'manifest_object_key',
+      'broward-parcel-generations/22222222-2222-4222-8222-222222222222/manifests/range-000000000-000019999.json',
+    'manifest_sha256', repeat('a', 64),
+    'range_end', 19999,
+    'range_start', 0,
+    'rejected_bad_folio_format', 0,
+    'rejected_missing_centroid', 0,
+    'rejected_missing_folio', 0,
+    'rejected_out_of_bounds_centroid', 0,
+    'rows_accepted', 2,
+    'rows_received', 2,
+    'rows_rejected', 0
+  ))
+);
+
+select ok(public.fs_broward_parcel_range_manifests_match(
+  '22222222-2222-4222-8222-222222222222', payload
+), 'exact persisted range-manifest replay matches')
+from broward_parcel_range_manifest_fixture;
+
+select ok(not public.fs_broward_parcel_range_manifests_match(
+  '22222222-2222-4222-8222-222222222222',
+  jsonb_set(payload, '{0,rows_received}', '3'::jsonb)
+), 'range-manifest replay rejects a changed count')
+from broward_parcel_range_manifest_fixture;
+
+select ok(not public.fs_broward_parcel_range_manifests_match(
+  '22222222-2222-4222-8222-222222222222',
+  jsonb_set(
+    payload,
+    '{0,manifest_object_key}',
+    to_jsonb('broward-parcel-generations/22222222-2222-4222-8222-222222222222/manifests/changed.json'::text)
+  )
+), 'range-manifest replay rejects a changed object key')
+from broward_parcel_range_manifest_fixture;
+
+select ok(not public.fs_broward_parcel_range_manifests_match(
+  '22222222-2222-4222-8222-222222222222',
+  jsonb_set(payload, '{0,manifest_sha256}', to_jsonb(repeat('c', 64)))
+), 'range-manifest replay rejects a changed SHA-256')
+from broward_parcel_range_manifest_fixture;
+
+select ok(not public.fs_broward_parcel_range_manifests_match(
+  '22222222-2222-4222-8222-222222222222', '[]'::jsonb
+), 'range-manifest replay rejects a missing persisted row');
+
+select ok(not public.fs_broward_parcel_range_manifests_match(
+  '22222222-2222-4222-8222-222222222222', payload || payload
+), 'range-manifest replay rejects an extra row')
+from broward_parcel_range_manifest_fixture;
+
+select throws_ok(
+  format(
+    'select public.fs_broward_parcel_range_manifests_match(%L, %L::jsonb)',
+    '22222222-2222-4222-8222-222222222222',
+    payload #- '{0,rows_received}'
+  ),
+  '22023',
+  'invalid parcel range manifest payload',
+  'range-manifest replay rejects a missing property as malformed'
+)
+from broward_parcel_range_manifest_fixture;
+
+select throws_ok(
+  format(
+    'select public.fs_broward_parcel_range_manifests_match(%L, %L::jsonb)',
+    '22222222-2222-4222-8222-222222222222',
+    jsonb_set(payload, '{0,unexpected}', '0'::jsonb)
+  ),
+  '22023',
+  'invalid parcel range manifest payload',
+  'range-manifest replay rejects an extra property as malformed'
+)
+from broward_parcel_range_manifest_fixture;
+
+select throws_ok(
+  format(
+    'select public.fs_broward_parcel_range_manifests_match(%L, %L::jsonb)',
+    '22222222-2222-4222-8222-222222222222',
+    jsonb_set(payload, '{0,rows_received}', '"2"'::jsonb)
+  ),
+  '22023',
+  'invalid parcel range manifest payload',
+  'range-manifest replay rejects a string count as malformed'
+)
+from broward_parcel_range_manifest_fixture;
+
+update public.broward_parcel_import_generations
+set
+  rows_received = 2,
+  rows_accepted = 2,
+  rows_rejected = 0,
+  rejected_missing_folio = 0,
+  rejected_bad_folio_format = 0,
+  rejected_missing_centroid = 0,
+  rejected_out_of_bounds = 0,
+  duplicate_folios = 0,
+  raw_manifest_sha256 = repeat('d', 64),
+  raw_manifest_object_key =
+    'broward-parcel-generations/22222222-2222-4222-8222-222222222222/manifest.json',
+  rejection_manifest_sha256 = repeat('e', 64),
+  rejection_manifest_object_key =
+    'broward-parcel-generations/22222222-2222-4222-8222-222222222222/manifests/rejections.jsonl',
+  duplicate_manifest_sha256 = repeat('f', 64),
+  duplicate_manifest_object_key =
+    'broward-parcel-generations/22222222-2222-4222-8222-222222222222/manifests/duplicates.jsonl',
+  source_content_sha256 = repeat('3', 64),
+  source_object_id_set_sha256 = repeat('1', 64),
+  system_object_id_set_sha256 = repeat('2', 64),
+  folio_set_sha256 = repeat('4', 64),
+  source_observed_at = now(),
+  completed_at = now(),
+  status = 'canary_complete',
+  promotion_eligible = false
+where generation_id = '22222222-2222-4222-8222-222222222222';
+
+select is(
+  (
+    public.fs_finalize_broward_parcel_generation(
+      '22222222-2222-4222-8222-222222222222',
+      'broward-parcel-generations/22222222-2222-4222-8222-222222222222/manifest.json',
+      repeat('d', 64),
+      'broward-parcel-generations/22222222-2222-4222-8222-222222222222/manifests/rejections.jsonl',
+      repeat('e', 64),
+      'broward-parcel-generations/22222222-2222-4222-8222-222222222222/manifests/duplicates.jsonl',
+      repeat('f', 64),
+      repeat('1', 64),
+      repeat('2', 64),
+      payload
+    )->>'replayed'
+  )::boolean,
+  true,
+  'terminal finalizer accepts an exact persisted range-manifest replay'
+)
+from broward_parcel_range_manifest_fixture;
+
+select throws_ok(
+  format(
+    $sql$
+      select public.fs_finalize_broward_parcel_generation(
+        '22222222-2222-4222-8222-222222222222',
+        'broward-parcel-generations/22222222-2222-4222-8222-222222222222/manifest.json',
+        repeat('d', 64),
+        'broward-parcel-generations/22222222-2222-4222-8222-222222222222/manifests/rejections.jsonl',
+        repeat('e', 64),
+        'broward-parcel-generations/22222222-2222-4222-8222-222222222222/manifests/duplicates.jsonl',
+        repeat('f', 64),
+        repeat('1', 64),
+        repeat('2', 64),
+        %L::jsonb
+      )
+    $sql$,
+    jsonb_set(payload, '{0,rows_received}', '3'::jsonb)
+  ),
+  '23505',
+  'generation finalization replay changed evidence',
+  'terminal finalizer rejects a changed range-manifest replay'
+)
+from broward_parcel_range_manifest_fixture;
 
 select * from finish();
 rollback;

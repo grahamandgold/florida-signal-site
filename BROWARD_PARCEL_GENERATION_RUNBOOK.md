@@ -86,6 +86,17 @@ schema/response drift and fails the generation rather than impersonating a
 source null. The database staging RPC independently verifies the same unit,
 date, and reason outcome.
 
+Every failed run is also locally terminal and auditable. Before writing
+`failure-receipt.json`, the collector writes `failure-manifest.json` with a
+canonical, path-sorted snapshot of every immutable `EvidenceBundle` object
+created so far. The receipt binds the manifest's relative path, SHA-256, byte
+count, schema version and object count. This includes partial capture: if a
+raw page is durable but writing its request receipt fails, that raw page and
+its exact captured-row accounting are still sealed into the failure manifest.
+The manifest has no observation-time field, so identical immutable inputs
+produce identical manifest bytes; it never rewrites or silently repairs an
+earlier object.
+
 ## Required production prerequisites
 
 Stop before any deployment unless all are satisfied:
@@ -194,7 +205,11 @@ that observed object ID, update clock and Storage-owned size to still match and
 binds them in the append-only ledger. Page/finalize/failure RPCs reject
 bare names, replaced objects or mismatched ledger entries. The finalizer also
 recomputes a database-owned content digest from every persisted observation;
-it does not accept that digest from the collector. It
+it does not accept that digest from the collector. Finalization compares the
+entire supplied range-manifest array in both directions with the persisted
+range ledger, including every count, range bound, object key and SHA-256;
+changed, missing, extra or malformed entries cannot replay a terminal receipt.
+It
 cannot directly write generation/range/page/observation/stage tables, write
 `broward_parcel_geography`, alter the fixed contracts, insert a
 preview/authorization, or execute promotion.

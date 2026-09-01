@@ -39,6 +39,9 @@ SYSTEM_OBJECT_ID_FIELD = "OBJECTID_12"
 STABLE_SOURCE_OBJECT_ID_FIELD = "OBJECTID"
 WINNER_RULE = "minimum_numeric_OBJECTID_then_minimum_OBJECTID_12"
 NORMALIZER_VERSION = "broward-folio-centroid-sale-date-v2"
+FAILURE_EVIDENCE_MANIFEST_SCHEMA = (
+    "FloridaSignalTerminalFailureEvidenceManifestV1"
+)
 SALE_DATE_FIELD = "SALE_DATE_1"
 SALE_DATE_MIN = "0001-01-01"
 SALE_DATE_MAX = "9999-12-31"
@@ -174,15 +177,54 @@ def hash_lines(values: Iterable[str]) -> str:
 
 
 def fsync_directory(path: Path) -> None:
-    descriptor = os.open(path, os.O_RDONLY)
+    descriptor = os.open(
+        path,
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+    )
     try:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
 
 
+def create_durable_directory(
+    path: Path,
+    *,
+    mode: int = 0o700,
+    exist_ok: bool = False,
+) -> None:
+    """Create each missing directory and durably persist its parent entry."""
+
+    path = Path(path)
+    if path.exists():
+        if exist_ok and path.is_dir():
+            return
+        raise FileExistsError(path)
+    missing: list[Path] = []
+    cursor = path
+    while not cursor.exists():
+        missing.append(cursor)
+        parent = cursor.parent
+        if parent == cursor:
+            raise ParcelGenerationError(
+                f"no existing parent for evidence directory: {path}"
+            )
+        cursor = parent
+    if not cursor.is_dir():
+        raise ParcelGenerationError(
+            f"evidence directory parent is not a directory: {cursor}"
+        )
+    try:
+        for directory in reversed(missing):
+            os.mkdir(directory, mode)
+            fsync_directory(directory.parent)
+    except FileExistsError:
+        if not (exist_ok and path.is_dir()):
+            raise
+
+
 def write_once(path: Path, body: bytes) -> str:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    create_durable_directory(path.parent, exist_ok=True)
     try:
         descriptor = os.open(
             path,
@@ -873,7 +915,7 @@ class EvidenceBundle:
             raise ParcelGenerationError("run_id must be a lowercase UUID")
         self.root = root / run_id
         try:
-            self.root.mkdir(parents=True, exist_ok=False)
+            create_durable_directory(self.root)
         except FileExistsError as exc:
             raise ParcelGenerationError(f"run evidence already exists: {run_id}") from exc
         self.objects: list[dict[str, Any]] = []
@@ -901,7 +943,7 @@ class EvidenceBundle:
         self, relative_path: str, rows: Iterable[Mapping[str, Any]]
     ) -> tuple[str, str, int]:
         path = self.root / relative_path
-        path.parent.mkdir(parents=True, exist_ok=True)
+        create_durable_directory(path.parent, exist_ok=True)
         digest = hashlib.sha256()
         byte_count = 0
         row_count = 0
@@ -940,16 +982,30 @@ class EvidenceBundle:
     def capture_source_json(
         self, relative_path: str, value: Mapping[str, Any]
     ) -> tuple[str, str]:
+        path, sha = self.capture_source_body(relative_path, value)
+        self.capture_source_request_receipt(relative_path, value, sha)
+        return path, sha
+
+    def capture_source_body(
+        self, relative_path: str, value: Mapping[str, Any]
+    ) -> tuple[str, str]:
         if isinstance(value, CapturedJson):
-            path, sha = self.write_bytes(
+            return self.write_bytes(
                 f"raw/{relative_path}", value.raw_body, "application/json"
             )
+        return self.capture_json(relative_path, value)
+
+    def capture_source_request_receipt(
+        self,
+        relative_path: str,
+        value: Mapping[str, Any],
+        response_sha256: str,
+    ) -> None:
+        if isinstance(value, CapturedJson):
             self.write_json(
                 f"raw/{relative_path}.request.json",
-                value.request_receipt | {"response_sha256": sha},
+                value.request_receipt | {"response_sha256": response_sha256},
             )
-            return path, sha
-        return self.capture_json(relative_path, value)
 
     def finish_manifest(self, context: Mapping[str, Any]) -> tuple[str, str]:
         manifest = {
@@ -959,6 +1015,41 @@ class EvidenceBundle:
             "schema_version": "FloridaSignalImmutableEvidenceManifestV1",
         }
         return self.write_json("manifest.json", manifest)
+
+    def finish_failure_manifest(self) -> dict[str, Any]:
+        objects = sorted(
+            (dict(item) for item in self.objects),
+            key=lambda item: (
+                str(item["path"]),
+                str(item["sha256"]),
+                int(item["bytes"]),
+                str(item["media_type"]),
+            ),
+        )
+        paths = [str(item["path"]) for item in objects]
+        if len(paths) != len(set(paths)):
+            raise ParcelGenerationError(
+                "failure evidence manifest contains duplicate immutable paths"
+            )
+        manifest = {
+            "object_count": len(objects),
+            "objects": objects,
+            "run_id": self.root.name,
+            "schema_version": FAILURE_EVIDENCE_MANIFEST_SCHEMA,
+        }
+        body = canonical_json_bytes(manifest) + b"\n"
+        path, sha256 = self.write_bytes(
+            "failure-manifest.json",
+            body,
+            "application/json",
+        )
+        return {
+            "bytes": len(body),
+            "object_count": len(objects),
+            "path": path,
+            "schema_version": FAILURE_EVIDENCE_MANIFEST_SCHEMA,
+            "sha256": sha256,
+        }
 
 
 class Source:
@@ -1445,7 +1536,7 @@ def collect_generation(
             failure_stage = "page_fetch"
             payload = source.page(page_index, expected_ids)
             failure_stage = "raw_page_capture"
-            page_path, page_sha = evidence.capture_source_json(
+            page_path, page_sha = evidence.capture_source_body(
                 f"page-{page_index:06d}.json", payload
             )
             active_raw_page_path = page_path
@@ -1454,6 +1545,11 @@ def collect_generation(
             raw_features = payload.get("features")
             if isinstance(raw_features, list):
                 raw_rows_captured += len(raw_features)
+            evidence.capture_source_request_receipt(
+                f"page-{page_index:06d}.json",
+                payload,
+                page_sha,
+            )
             failure_stage = "page_normalization"
             observations = validate_page(payload, expected_ids)
             failure_stage = "page_index_commit"
@@ -1616,7 +1712,11 @@ def collect_generation(
                     "p_manifest_key": f"{object_prefix}/{manifest_path}",
                     "p_manifest_sha256": manifest_sha,
                     "p_range_manifests": [
-                        item.as_dict()
+                        {
+                            key: value
+                            for key, value in item.as_dict().items()
+                            if key != "manifest_path"
+                        }
                         | {
                             "manifest_object_key": (
                                 f"{object_prefix}/{item.manifest_path}"
@@ -1708,8 +1808,17 @@ def collect_generation(
             and raw_rows_captured == indexed_rows
             and finalization is not None
         )
+        try:
+            failure_evidence_manifest = evidence.finish_failure_manifest()
+        except Exception as manifest_exc:
+            raise ParcelGenerationError(
+                "collector failed and its terminal evidence manifest could not be "
+                f"durably written: {type(exc).__name__}: {exc}; "
+                f"manifest error: {type(manifest_exc).__name__}: {manifest_exc}"
+            ) from manifest_exc
         failure = {
             "completed_at": utc_now(),
+            "evidence_manifest": failure_evidence_manifest,
             "error_class": type(exc).__name__,
             "error_message": str(exc),
             "failure_stage": failure_stage,

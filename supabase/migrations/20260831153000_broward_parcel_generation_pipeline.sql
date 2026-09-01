@@ -1211,6 +1211,123 @@ grant execute on function public.fs_stage_broward_parcel_page(
   uuid, integer, bigint, bigint, text, text, jsonb
 ) to service_role;
 
+create or replace function public.fs_broward_parcel_range_manifests_match(
+  p_generation_id uuid,
+  p_range_manifests jsonb
+)
+returns boolean
+language plpgsql
+stable
+set search_path = ''
+as $$
+declare
+  malformed_count bigint;
+begin
+  if p_generation_id is null
+     or jsonb_typeof(p_range_manifests) is distinct from 'array' then
+    raise exception using errcode = '22023',
+      message = 'invalid parcel range manifest payload';
+  end if;
+
+  select count(*) into malformed_count
+  from jsonb_array_elements(p_range_manifests) item
+  where case
+    when jsonb_typeof(item) <> 'object' then true
+    else
+      (select array_agg(key order by key) from jsonb_object_keys(item) key)
+        is distinct from array[
+          'duplicates_within_or_across_ranges',
+          'manifest_object_key',
+          'manifest_sha256',
+          'range_end',
+          'range_start',
+          'rejected_bad_folio_format',
+          'rejected_missing_centroid',
+          'rejected_missing_folio',
+          'rejected_out_of_bounds_centroid',
+          'rows_accepted',
+          'rows_received',
+          'rows_rejected'
+        ]::text[]
+      or jsonb_typeof(item->'manifest_object_key') <> 'string'
+      or (item->>'manifest_object_key') !~ (
+        '^broward-parcel-generations/' || p_generation_id::text || '/'
+      )
+      or position('?' in item->>'manifest_object_key') <> 0
+      or position(E'\n' in item->>'manifest_object_key') <> 0
+      or jsonb_typeof(item->'manifest_sha256') <> 'string'
+      or (item->>'manifest_sha256') !~ '^[0-9a-f]{64}$'
+      or exists (
+        select 1
+        from unnest(array[
+          'duplicates_within_or_across_ranges',
+          'range_end',
+          'range_start',
+          'rejected_bad_folio_format',
+          'rejected_missing_centroid',
+          'rejected_missing_folio',
+          'rejected_out_of_bounds_centroid',
+          'rows_accepted',
+          'rows_received',
+          'rows_rejected'
+        ]::text[]) field_name
+        where jsonb_typeof(item->field_name) <> 'number'
+           or (item->>field_name) !~ '^[0-9]+$'
+      )
+    end;
+  if malformed_count <> 0 then
+    raise exception using errcode = '22023',
+      message = 'invalid parcel range manifest payload';
+  end if;
+
+  return not exists (
+    with supplied as (
+      select *
+      from jsonb_to_recordset(p_range_manifests) as x(
+        range_start bigint,
+        range_end bigint,
+        rows_received integer,
+        rows_accepted integer,
+        rows_rejected integer,
+        rejected_missing_folio integer,
+        rejected_bad_folio_format integer,
+        rejected_missing_centroid integer,
+        rejected_out_of_bounds_centroid integer,
+        duplicates_within_or_across_ranges integer,
+        manifest_object_key text,
+        manifest_sha256 text
+      )
+    ), stored as (
+      select
+        r.oid_min as range_start,
+        r.oid_max as range_end,
+        r.rows_received,
+        r.rows_accepted,
+        r.rows_rejected,
+        r.rejected_missing_folio,
+        r.rejected_bad_folio_format,
+        r.rejected_missing_centroid,
+        r.rejected_out_of_bounds as rejected_out_of_bounds_centroid,
+        r.duplicate_folios as duplicates_within_or_across_ranges,
+        r.raw_manifest_object_key as manifest_object_key,
+        r.raw_manifest_sha256 as manifest_sha256
+      from public.broward_parcel_generation_ranges r
+      where r.generation_id = p_generation_id
+    )
+    (select * from supplied except all select * from stored)
+    union all
+    (select * from stored except all select * from supplied)
+  );
+exception
+  when data_exception then
+    raise exception using errcode = '22023',
+      message = 'invalid parcel range manifest payload';
+end
+$$;
+
+revoke all on function public.fs_broward_parcel_range_manifests_match(uuid, jsonb)
+  from public, anon, authenticated, service_role;
+
 create or replace function public.fs_finalize_broward_parcel_generation(
   p_generation_id uuid,
   p_manifest_key text,
@@ -1243,6 +1360,7 @@ declare
   missing_centroid_count bigint;
   out_of_bounds_count bigint;
   sale_date_field_null_count bigint;
+  replay_range_manifests_match boolean;
   range_count bigint;
   bad_range_count bigint;
   observed_source_object_hash text;
@@ -1257,7 +1375,7 @@ begin
      or p_duplicate_manifest_sha256 !~ '^[0-9a-f]{64}$'
      or p_source_object_id_set_sha256 !~ '^[0-9a-f]{64}$'
      or p_system_object_id_set_sha256 !~ '^[0-9a-f]{64}$'
-     or jsonb_typeof(p_range_manifests) <> 'array' then
+     or jsonb_typeof(p_range_manifests) is distinct from 'array' then
     raise exception using errcode = '22023', message = 'invalid parcel finalization payload';
   end if;
   if p_manifest_key !~ ('^broward-parcel-generations/' || p_generation_id::text || '/')
@@ -1289,6 +1407,12 @@ begin
     raise exception using errcode = '23514', message = 'generation is not single-stream v1';
   end if;
 
+  replay_range_manifests_match :=
+    public.fs_broward_parcel_range_manifests_match(
+      p_generation_id,
+      p_range_manifests
+    );
+
   if g.status in ('canary_complete', 'ready') then
     if g.raw_manifest_sha256 = p_manifest_sha256
        and g.raw_manifest_object_key = p_manifest_key
@@ -1297,7 +1421,8 @@ begin
        and g.duplicate_manifest_sha256 = p_duplicate_manifest_sha256
        and g.duplicate_manifest_object_key = p_duplicate_manifest_key
        and g.source_object_id_set_sha256 = p_source_object_id_set_sha256
-       and g.system_object_id_set_sha256 = p_system_object_id_set_sha256 then
+       and g.system_object_id_set_sha256 = p_system_object_id_set_sha256
+       and replay_range_manifests_match then
       return jsonb_build_object(
         'duplicate_rows', g.duplicate_folios,
         'folio_set_sha256', g.folio_set_sha256,
