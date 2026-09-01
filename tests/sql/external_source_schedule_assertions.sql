@@ -25,6 +25,30 @@ select public.test_assert(
   'service_role must not execute the owner-only dispatcher'
 );
 select public.test_assert(
+  not has_sequence_privilege(
+    'service_role',
+    'public.external_source_collector_dispatches_id_seq',
+    'usage'
+  ) and not has_sequence_privilege(
+    'service_role',
+    'public.external_source_collector_dispatches_id_seq',
+    'select'
+  ),
+  'read-only dispatch access must not grant service_role sequence privileges'
+);
+select public.test_assert(
+  not has_sequence_privilege(
+    'service_role',
+    'public.external_source_run_alerts_id_seq',
+    'usage'
+  ) and not has_sequence_privilege(
+    'service_role',
+    'public.external_source_run_alerts_id_seq',
+    'select'
+  ),
+  'read-only alert access must not grant service_role sequence privileges'
+);
+select public.test_assert(
   not has_function_privilege(
     'anon', 'public.fs_activate_external_source_schedules()', 'execute'
   ),

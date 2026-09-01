@@ -30,8 +30,6 @@ revoke all on table public.external_source_collector_dispatches
 grant select on table public.external_source_collector_dispatches to service_role;
 revoke all on sequence public.external_source_collector_dispatches_id_seq
   from public, anon, authenticated, service_role;
-grant usage, select on sequence public.external_source_collector_dispatches_id_seq
-  to service_role;
 
 create table if not exists public.external_source_run_alerts (
   id bigint generated always as identity primary key,
@@ -64,8 +62,6 @@ revoke all on table public.external_source_run_alerts
 grant select on table public.external_source_run_alerts to service_role;
 revoke all on sequence public.external_source_run_alerts_id_seq
   from public, anon, authenticated, service_role;
-grant usage, select on sequence public.external_source_run_alerts_id_seq
-  to service_role;
 
 create or replace function public.fs_dispatch_external_source(
   p_source_id text,

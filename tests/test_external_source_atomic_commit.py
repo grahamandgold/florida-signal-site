@@ -231,6 +231,11 @@ class ExternalSourceAtomicCommitTests(unittest.TestCase):
         self.assertIn("'missing_dispatch'", sql)
         self.assertNotIn("jrjewmzkyluxdywyusrw", sql)
         self.assertNotRegex(sql, r"https://[a-z0-9-]+\.supabase\.co/functions/v1")
+        self.assertNotRegex(
+            sql,
+            r"grant\s+(?:usage|select|usage,\s*select).*"
+            r"external_source_(?:collector_dispatches|run_alerts)_id_seq",
+        )
         self.assertIn(
             "$job$select public.fs_dispatch_external_source('fdep_erp');$job$",
             sql,
@@ -249,6 +254,12 @@ class ExternalSourceAtomicCommitTests(unittest.TestCase):
             ROOT / "tests/sql/external_source_schedule_assertions.sql"
         ).read_text()
         self.assertIn("postgres:17-alpine", runner)
+        self.assertIn("FL_SIGNAL_TEST_DATABASE_URL", runner)
+        self.assertIn("FL_SIGNAL_DISPOSABLE_TEST_CONFIRM", runner)
+        self.assertIn("fl_signal_atomic_test", runner)
+        self.assertIn("locally managed fallback requires PostgreSQL 17 tools", runner)
+        self.assertIn("hosted/linked Supabase endpoints", runner)
+        self.assertIn("target is not an empty disposable PostgreSQL database", runner)
         self.assertIn(str(MIGRATION.relative_to(ROOT)), runner)
         self.assertIn(str(SCHEDULE_MIGRATION.relative_to(ROOT)), runner)
         self.assertIn("external_source_schedule_assertions.sql", runner)
@@ -262,6 +273,14 @@ class ExternalSourceAtomicCommitTests(unittest.TestCase):
         self.assertIn("schedule migration must be default-off", schedule_assertions)
         self.assertIn("watchdog must require the exact scheduled dispatch UUID", schedule_assertions)
         self.assertIn("rollback must still preserve unrelated cron jobs", schedule_assertions)
+        self.assertIn(
+            "read-only dispatch access must not grant service_role sequence privileges",
+            schedule_assertions,
+        )
+        self.assertIn(
+            "read-only alert access must not grant service_role sequence privileges",
+            schedule_assertions,
+        )
 
     def test_fdep_layer_specific_normalizer_fixture(self):
         script = f"""

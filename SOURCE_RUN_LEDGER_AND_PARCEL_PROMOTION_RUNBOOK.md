@@ -482,47 +482,80 @@ schedules after both pass. No parcel backfill or promotion.
 
    ```bash
    export FL_SIGNAL_FUNCTIONS_BASE_URL="https://${FL_SIGNAL_PROJECT_REF}.supabase.co/functions/v1"
-   IFS= read -r -s FL_SIGNAL_SYNC_KEY_INPUT
-   export FL_SIGNAL_SYNC_KEY_INPUT
-   printf '\n'
+   (
+     set +x
+     FL_SIGNAL_SYNC_KEY_INPUT=
+     trap 'unset FL_SIGNAL_SYNC_KEY_INPUT' EXIT
+     trap 'exit 129' HUP
+     trap 'exit 130' INT
+     trap 'exit 143' TERM
+     IFS= read -r -s FL_SIGNAL_SYNC_KEY_INPUT
+     printf '\n'
 
-   supabase functions deploy fdep-erp-sync \
-     --project-ref "$FL_SIGNAL_PROJECT_REF" \
-     --no-verify-jwt
+     supabase functions deploy fdep-erp-sync \
+       --project-ref "$FL_SIGNAL_PROJECT_REF" \
+       --no-verify-jwt
 
-   set +x
-   CANARY_DATE="$(date -u +%F)"
-   {
-     printf 'silent\nshow-error\nfail-with-body\nrequest = "POST"\n'
-     printf 'url = "%s/fdep-erp-sync?layers=0&since=%s"\n' \
-       "$FL_SIGNAL_FUNCTIONS_BASE_URL" "$CANARY_DATE"
-     printf 'header = "x-florida-signal-sync-key: %s"\n' \
-       "$FL_SIGNAL_SYNC_KEY_INPUT"
-   } | curl --config -
+     CANARY_DATE="$(date -u +%F)"
+     {
+       printf 'silent\nshow-error\nfail-with-body\nrequest = "POST"\n'
+       printf 'url = "%s/fdep-erp-sync?layers=0&since=%s"\n' \
+         "$FL_SIGNAL_FUNCTIONS_BASE_URL" "$CANARY_DATE"
+       printf 'header = "x-florida-signal-sync-key: %s"\n' \
+         "$FL_SIGNAL_SYNC_KEY_INPUT"
+     } | curl --config -
+   )
    ```
 
    Invoke one bounded current-day/layer-0 canary through a secret-safe client
-   (header value supplied from a private variable/stdin, never the URL). Verify
+   (header value supplied from an unexported subshell variable/stdin, never the
+   URL or a child-process environment). Verify
    private raw object(s), manifest `terminal_receipt`, exact source/run prefix,
    database canonical manifest/hash, count identities, schema hashes, terminal
-   status, source rows, and exactly one immutable receipt. Also force an invalid
-   update/delete and confirm both fail.
+   status, source rows, and exactly one immutable receipt. Do not test the
+   append-only guard with production DML. Verify it read-only from the catalog:
+
+   ```sql
+   select t.tgname, t.tgenabled, pg_catalog.pg_get_triggerdef(t.oid) as definition,
+          p.proname as trigger_function, p.prosecdef as security_definer
+   from pg_catalog.pg_trigger t
+   join pg_catalog.pg_proc p on p.oid = t.tgfoid
+   where t.tgrelid = 'public.external_source_run_receipts'::regclass
+     and not t.tgisinternal
+   order by t.tgname;
+   ```
+
+   Expected: exactly the tracked row-mutation and truncate triggers, both
+   enabled, both calling `fs_reject_external_source_receipt_mutation`, with the
+   trigger function remaining `SECURITY INVOKER`. Exercise rejected
+   UPDATE/DELETE/TRUNCATE only in the disposable pgTAP suite.
 
 6. Repeat independently for FAA, deploying all three tracked files together:
 
    ```bash
-   supabase functions deploy faa-oeaaa-sync \
-     --project-ref "$FL_SIGNAL_PROJECT_REF" \
-     --no-verify-jwt
+   (
+     set +x
+     FL_SIGNAL_SYNC_KEY_INPUT=
+     trap 'unset FL_SIGNAL_SYNC_KEY_INPUT' EXIT
+     trap 'exit 129' HUP
+     trap 'exit 130' INT
+     trap 'exit 143' TERM
+     IFS= read -r -s FL_SIGNAL_SYNC_KEY_INPUT
+     printf '\n'
 
-   {
-     printf 'silent\nshow-error\nfail-with-body\nrequest = "POST"\n'
-     printf 'url = "%s/faa-oeaaa-sync?types=OE&since=%s"\n' \
-       "$FL_SIGNAL_FUNCTIONS_BASE_URL" "$CANARY_DATE"
-     printf 'header = "x-florida-signal-sync-key: %s"\n' \
-       "$FL_SIGNAL_SYNC_KEY_INPUT"
-   } | curl --config -
-   unset FL_SIGNAL_SYNC_KEY_INPUT
+     supabase functions deploy faa-oeaaa-sync \
+       --project-ref "$FL_SIGNAL_PROJECT_REF" \
+       --no-verify-jwt
+
+     CANARY_DATE="$(date -u +%F)"
+     {
+       printf 'silent\nshow-error\nfail-with-body\nrequest = "POST"\n'
+       printf 'url = "%s/faa-oeaaa-sync?types=OE&since=%s"\n' \
+         "$FL_SIGNAL_FUNCTIONS_BASE_URL" "$CANARY_DATE"
+       printf 'header = "x-florida-signal-sync-key: %s"\n' \
+         "$FL_SIGNAL_SYNC_KEY_INPUT"
+     } | curl --config -
+   )
    ```
 
    Use a current-day OE-only canary. Verify the same receipt/evidence contract,
@@ -665,8 +698,15 @@ real migration against exact source/receipt/generated-column fixtures:
 npm run test:external-source-sql
 ```
 
-That command creates and destroys only its uniquely named Docker test
-container. It covers actual RLS/EXECUTE grants, service-role invocation, both
+That command prefers an explicit `FL_SIGNAL_TEST_DATABASE_URL`, then a working
+Docker daemon, then locally installed PostgreSQL 17 tools. An explicit DSN also
+requires `FL_SIGNAL_DISPOSABLE_TEST_CONFIRM=YES` and is accepted only when
+PostgreSQL reports version 17, superuser/writable state, a database name
+beginning `fl_signal_atomic_test`, and no custom schema or public relation;
+hosted Supabase endpoints are rejected. The local fallback creates
+and destroys only a uniquely named temporary cluster, and the Docker path keeps
+using a uniquely named disposable container. It covers actual RLS/EXECUTE
+grants, service-role invocation, both
 FDEP and FAA DML branches, generated-column omission, atomic rollback, exact
 idempotent replay, failed-stage cleanup, default-off scheduling, exact cadence,
 secret-safe dispatch correlation, watchdog alert transitions and schedule

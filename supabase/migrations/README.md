@@ -90,6 +90,8 @@ operator sequence and recovery boundary.
 
 - Creates private dispatch and durable alert ledgers plus owner-only
   `SECURITY INVOKER` dispatch, health-check, disable and activation functions.
+- `service_role` receives read-only table access to those ledgers and no
+  identity-sequence privilege; only the owner functions create ledger rows.
 - Dispatch resolves only the names `fl_signal_functions_base_url` and
   `fl_signal_external_source_sync_key` from Vault at execution time. Neither
   secret value nor the project URL is present in Git or `cron.job.command`.

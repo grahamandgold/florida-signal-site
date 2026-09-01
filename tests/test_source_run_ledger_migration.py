@@ -254,6 +254,17 @@ class SourceRunLedgerMigrationContractTests(unittest.TestCase):
             self.runbook,
             r"do not\s+point the sql test at production",
         )
+        self.assertRegex(
+            self.runbook,
+            r"do not test the\s+append-only guard with production dml",
+        )
+        self.assertIn("pg_catalog.pg_get_triggerdef", self.runbook)
+        self.assertIn("unexported subshell variable", self.runbook)
+        self.assertGreaterEqual(
+            self.runbook.count("trap 'unset fl_signal_sync_key_input' exit"),
+            2,
+        )
+        self.assertNotIn("export fl_signal_sync_key_input", self.runbook)
 
 
 if __name__ == "__main__":
