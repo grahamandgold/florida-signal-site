@@ -14,6 +14,17 @@ FAA stages only source-owned latitude/longitude fields. PostgreSQL computes the
 stored generated `faa_oeaaa.in_broward` value; the collector and atomic RPC do
 not supply, classify, insert, or update that generated column.
 
+FAA XML is parsed with pinned `fast-xml-parser`, `fast-xml-validator`, and
+`@nodable/entities` versions declared in the function-local `deno.json` and
+the repository lock file. The parser maps the official `caseId` element,
+decodes XML named and numeric entities with bounded expansion, rejects DTDs,
+non-XML media types,
+malformed XML, an unexpected root/case family, unknown case fields, or missing
+required fields. The only zero-row response admitted as `empty` is a valid
+XML `caseList` envelope with no case children. Deploy the FAA function with
+`index.ts`, `parser.ts`, and `deno.json`; omitting a dependency is a failed
+deployment, not a fallback to the old regular-expression parser.
+
 FDEP layer 0 (ERP SPGP) and layer 1 (ERP permits) have different public source
 schemas. The tracked normalizer maps them separately, fails closed when a
 required source field disappears, and binds both expected field sets into the

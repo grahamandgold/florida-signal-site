@@ -71,7 +71,10 @@ operator sequence and recovery boundary.
   layer-0 normalized columns; that history requires a separately previewed,
   explicitly approved repair. The corrected FAA path omits the stored
   generated `in_broward` column from staging, classification, inserts and
-  updates so PostgreSQL remains its sole owner.
+  updates so PostgreSQL remains its sole owner. Its version-3 XML parser uses
+  the official `caseId`, decodes XML entities, admits only a validated
+  `caseList` envelope, and fails closed on error HTML, malformed XML or schema
+  drift instead of misreporting those responses as an empty run.
 - Production application/deployment is blocked until the operator explicitly
   approves the service-role staging DML and RPC EXECUTE privilege. No collector
   canary may precede that approval.

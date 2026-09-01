@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<caseList>
+  <NRACase>
+    <caseId>765432</caseId>
+    <asn>2026-ASO-23456-NRA</asn>
+    <caseType>NRA</caseType>
+    <year>2026</year>
+    <createdDate>2026-08-29</createdDate>
+    <receivedDate>2026-08-29T10:00:00Z</receivedDate>
+    <statusCode>WIP</statusCode>
+    <structureType>BUILDING</structureType>
+    <structureDescription>Office &amp; retail</structureDescription>
+    <sponsor>Example Development LLC</sponsor>
+    <nearestCity>Fort Lauderdale</nearestCity>
+    <nearestState>FL</nearestState>
+    <latitude>26.1001</latitude>
+    <longitude>-80.1502</longitude>
+  </NRACase>
+</caseList>

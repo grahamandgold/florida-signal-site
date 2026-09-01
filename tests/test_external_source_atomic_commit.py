@@ -10,7 +10,10 @@ MIGRATION = ROOT / "supabase/migrations/20260831090000_external_source_atomic_co
 FDEP = ROOT / "supabase/functions/fdep-erp-sync/index.ts"
 FDEP_NORMALIZER = ROOT / "supabase/functions/fdep-erp-sync/normalize.ts"
 FAA = ROOT / "supabase/functions/faa-oeaaa-sync/index.ts"
+FAA_PARSER = ROOT / "supabase/functions/faa-oeaaa-sync/parser.ts"
+FAA_DENO = ROOT / "supabase/functions/faa-oeaaa-sync/deno.json"
 FDEP_FIXTURE = ROOT / "tests/fixtures/fdep_layer_normalization.json"
+FAA_FIXTURES = ROOT / "tests/fixtures"
 
 
 class ExternalSourceAtomicCommitTests(unittest.TestCase):
@@ -223,8 +226,102 @@ class ExternalSourceAtomicCommitTests(unittest.TestCase):
         ]
         self.assertNotIn("in_broward", faa_dml)
 
+    def test_faa_validated_xml_parser_fixtures(self):
+        script = f"""
+          import assert from "node:assert/strict";
+          import fs from "node:fs";
+          import {{ faaContractShape, faaSourceContract, parseFaaCaseList }} from {json.dumps(FAA_PARSER.as_uri())};
+          const read = (name) => fs.readFileSync({json.dumps(str(FAA_FIXTURES))} + "/" + name, "utf8");
+
+          const oe = parseFaaCaseList(
+            read("faa_case_list_oe_valid.xml"), "OE", 2026, "application/xml;charset=UTF-8",
+          );
+          assert.equal(oe.observed, 1);
+          assert.equal(oe.rows.length, 1);
+          assert.equal(oe.rows[0].case_id, 654321);
+          assert.equal(oe.rows[0].sponsor, "Example & Sons");
+          assert.equal(oe.rows[0].structure_description, "Tower < Crane & Lift");
+          assert.equal(oe.rows[0].sponsor_city, 'Fort "Lauderdale"');
+          assert.equal(oe.rows[0].nearest_airport, "Example's Field");
+          assert.equal(oe.rows[0].raw.caseId, "654321");
+          assert.equal(oe.rows[0].raw.sponsor, "Example & Sons");
+          assert(oe.schemaTags.has("field:OE:caseId"));
+
+          const nra = parseFaaCaseList(
+            read("faa_case_list_nra_valid.xml"), "NRA", 2026, "text/xml",
+          );
+          assert.equal(nra.observed, 1);
+          assert.equal(nra.rows[0].case_id, 765432);
+          assert.equal(nra.rows[0].date_entered, "2026-08-29");
+          assert.equal(nra.rows[0].structure_description, "Office & retail");
+
+          const empty = parseFaaCaseList(
+            read("faa_case_list_empty.xml"), "OE", 2026, "application/xml;charset=UTF-8",
+          );
+          assert.deepEqual(empty.rows, []);
+          assert.equal(empty.observed, 0);
+          assert.deepEqual([...empty.schemaTags].sort(), ["envelope:caseList", "expected-case:OECase"]);
+
+          assert.throws(
+            () => parseFaaCaseList(read("faa_case_list_error_200.html"), "OE", 2026, "text/html"),
+            /not an XML media type/,
+          );
+          assert.throws(
+            () => parseFaaCaseList(read("faa_case_list_error_200.html"), "OE", 2026, "application/xml"),
+            /root must be caseList/,
+          );
+          assert.throws(
+            () => parseFaaCaseList(read("faa_case_list_malformed.xml"), "OE", 2026, "application/xml"),
+            /FAA XML is malformed/,
+          );
+          assert.throws(
+            () => parseFaaCaseList(read("faa_case_list_schema_drift.xml"), "OE", 2026, "application/xml"),
+            /schema drift: unknown fields: id/,
+          );
+          assert.throws(
+            () => parseFaaCaseList(
+              '<caseList><OECase><caseId>1</caseId><asn>A</asn><caseType>OE</caseType><year>2026</year><dateEntered>2026-08-30</dateEntered><latitude>1</latitude><longitude>-1</longitude><sponsor>A &bogus; B</sponsor></OECase></caseList>',
+              "OE", 2026, "application/xml",
+            ),
+            /undeclared entity/,
+          );
+          assert.throws(
+            () => parseFaaCaseList(
+              '<!DOCTYPE caseList [<!ENTITY x "unsafe">]><caseList/>',
+              "OE", 2026, "application/xml",
+            ),
+            /DOCTYPE is not allowed/,
+          );
+          assert(!faaContractShape().includes("in_broward"));
+          const contract = faaSourceContract();
+          assert(contract.OE.required_fields.includes("caseId"));
+          assert(!contract.OE.allowed_fields.includes("id"));
+        """
+        subprocess.run(
+            ["node", "--experimental-strip-types", "--input-type=module", "--eval", script],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        self.assertNotIn("matchAll", self.faa)
+        self.assertNotRegex(self.faa, r'tag\(block,\s*["\']id["\']\)')
+        self.assertIn("parseFaaCaseList(rawXml, type, year", self.faa)
+        self.assertIn("faa-xml-v3-validated-envelope", self.faa)
+        self.assertIn("faa-row-v3-official-caseid", self.faa)
+        self.assertIn("source_contract: faaSourceContract()", self.faa)
+        self.assertEqual(json.loads(FAA_DENO.read_text())["imports"], {
+            "@nodable/entities": "npm:@nodable/entities@3.0.0",
+            "fast-xml-parser": "npm:fast-xml-parser@5.11.1",
+            "fast-xml-validator": "npm:fast-xml-validator@1.4.2",
+        })
+        package_dependencies = json.loads((ROOT / "package.json").read_text())["dependencies"]
+        self.assertEqual(package_dependencies["@nodable/entities"], "3.0.0")
+        self.assertEqual(package_dependencies["fast-xml-parser"], "5.11.1")
+        self.assertEqual(package_dependencies["fast-xml-validator"], "1.4.2")
+
     def test_typescript_parses_with_node_type_stripping(self):
-        for path in (FDEP, FDEP_NORMALIZER, FAA):
+        for path in (FDEP, FDEP_NORMALIZER, FAA, FAA_PARSER):
             subprocess.run(
                 ["node", "--experimental-strip-types", "--check", str(path)],
                 check=True,

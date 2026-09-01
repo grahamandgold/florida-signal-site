@@ -1,4 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import {
+  faaContractShape,
+  faaSourceContract,
+  parseFaaCaseList,
+  type FaaCaseType,
+  type Row,
+} from "./parser.ts";
 
 // Configure this through Supabase Edge Function secrets before deployment.
 const SYNC_KEY = Deno.env.get("FL_SIGNAL_SYNC_KEY")?.trim();
@@ -8,9 +15,9 @@ const BUCKET = "fl-signal-source-evidence";
 const BASE = "https://oeaaa.faa.gov/oeaaa/services";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SRK = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const COLLECTOR_VERSION = "faa-edge-v2-atomic-receipts";
-const PARSER_VERSION = "faa-xml-v2";
-const NORMALIZER_VERSION = "faa-row-v2";
+const COLLECTOR_VERSION = "faa-edge-v3-atomic-receipts";
+const PARSER_VERSION = "faa-xml-v3-validated-envelope";
+const NORMALIZER_VERSION = "faa-row-v3-official-caseid";
 const SYNC_KEY_HEADER = "x-florida-signal-sync-key";
 const MAX_LOOKBACK_DAYS = 370;
 const MAX_YEAR_REQUESTS = 2;
@@ -18,7 +25,6 @@ const MAX_RAW_RESPONSE_BYTES = 25_000_000;
 const MAX_TOTAL_RAW_BYTES = 100_000_000;
 const authHeaders = { apikey: SRK, Authorization: `Bearer ${SRK}` };
 
-type Row = Record<string, unknown>;
 type RawObject = Record<string, unknown>;
 
 const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), {
@@ -116,29 +122,6 @@ async function commit(runId: string, receipt: Row, manifest: Row): Promise<Row> 
   return await committed.json();
 }
 
-function tag(block: string, name: string): string | null {
-  const match = block.match(new RegExp(`<${name}>([^<]*)</${name}>`));
-  return match && match[1].trim() ? match[1].trim() : null;
-}
-function numberOrNull(value: string | null): number | null {
-  if (value === null) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-function integerOrNull(value: string | null): number | null {
-  const parsed = numberOrNull(value);
-  return parsed === null ? null : Math.round(parsed);
-}
-function dateOrNull(value: string | null): string | null {
-  if (!value) return null;
-  const candidate = value.slice(0, 10);
-  return /^\d{4}-\d{2}-\d{2}$/.test(candidate) ? candidate : null;
-}
-function timestampOrNull(value: string | null): string | null {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
-}
 function laterClock(current: string | null, ...dates: Array<string | null>): string | null {
   for (const date of dates) {
     if (!date) continue;
@@ -149,55 +132,6 @@ function laterClock(current: string | null, ...dates: Array<string | null>): str
   }
   return current;
 }
-
-function parseCases(xml: string, schemaTags: Set<string>): { rows: Row[]; observed: number } {
-  const rows: Row[] = [];
-  let observed = 0;
-  for (const match of xml.matchAll(/<(OECase|NRACase)>([\s\S]*?)<\/\1>/g)) {
-    observed += 1;
-    const block = match[2];
-    const raw: Record<string, string> = {};
-    for (const field of block.matchAll(/<([A-Za-z0-9_]+)>([^<]*)<\/\1>/g)) {
-      raw[field[1]] = field[2];
-      schemaTags.add(field[1]);
-    }
-    const asn = tag(block, "asn");
-    if (!asn) continue;
-    const lat = numberOrNull(tag(block, "latitude"));
-    const lon = numberOrNull(tag(block, "longitude"));
-    rows.push({
-      asn,
-      case_id: integerOrNull(tag(block, "id")),
-      case_type: tag(block, "caseType"),
-      year: integerOrNull(tag(block, "year")),
-      date_entered: dateOrNull(tag(block, "dateEntered") ?? tag(block, "createdDate")),
-      date_completed: dateOrNull(tag(block, "dateCompleted")),
-      expiration_date: dateOrNull(tag(block, "expirationDate")),
-      received_date: timestampOrNull(tag(block, "receivedDate")),
-      status_code: tag(block, "statusCode"),
-      structure_type: tag(block, "structureType"),
-      structure_description: tag(block, "structureDescription"),
-      agl_height: integerOrNull(tag(block, "aglStructureHeight")),
-      agl_height_det: integerOrNull(tag(block, "aglStructureHeightDet")),
-      amsl_height: integerOrNull(tag(block, "amslOverallHeightProposed")),
-      sponsor: tag(block, "sponsor"),
-      sponsor_city: tag(block, "sponsorCity"),
-      sponsor_state: tag(block, "sponsorState"),
-      nearest_airport: tag(block, "nearestAirportName"),
-      nearest_city: tag(block, "nearestCity"),
-      nearest_state: tag(block, "nearestState"),
-      lat,
-      lon,
-      raw,
-    });
-  }
-  return { rows, observed };
-}
-
-const contractShape = () => Object.keys(parseCases(
-  "<OECase><asn>x</asn><latitude>0</latitude><longitude>0</longitude></OECase>",
-  new Set<string>(),
-).rows[0]).sort();
 
 Deno.serve(async (request: Request) => {
   if (!SYNC_KEY || SYNC_KEY === REJECTED_SYNC_KEY_PLACEHOLDER) {
@@ -247,7 +181,7 @@ Deno.serve(async (request: Request) => {
     if (lastYear - firstYear + 1 > MAX_YEAR_REQUESTS) {
       throw new Error(`request spans more than ${MAX_YEAR_REQUESTS} calendar years`);
     }
-    for (const type of types) {
+    for (const type of types as FaaCaseType[]) {
       let typeAccepted = 0;
       for (let year = firstYear; year <= lastYear; year += 1) {
         pagesAttempted += 1;
@@ -274,9 +208,11 @@ Deno.serve(async (request: Request) => {
           source_path: `${BASE}/caseList/${type}/${year}`,
           observed_at: observedAt,
           http_status: source.status,
+          source_content_type: source.headers.get("content-type"),
         });
         if (!source.ok) throw new Error(`${type}/${year} HTTP ${source.status}`);
-        const parsed = parseCases(rawXml, schemaTags);
+        const parsed = parseFaaCaseList(rawXml, type, year, source.headers.get("content-type"));
+        for (const schemaTag of parsed.schemaTags) schemaTags.add(schemaTag);
         rowsObserved += parsed.observed;
         for (const row of parsed.rows) {
           rows.set(String(row.asn), row);
@@ -292,7 +228,13 @@ Deno.serve(async (request: Request) => {
     const status = rowsRejected > 0 ? "partial" : rows.size ? "ok" : "empty";
     if (rows.size) await stage(runId, rows);
     const sourceSchemaSha = await sha256(JSON.stringify([...schemaTags].sort()));
-    const contractSha = await sha256(JSON.stringify({ source_id: SOURCE_ID, parser: PARSER_VERSION, key: ["asn"], fields: contractShape() }));
+    const contractSha = await sha256(JSON.stringify({
+      source_id: SOURCE_ID,
+      parser: PARSER_VERSION,
+      key: ["asn"],
+      fields: faaContractShape(),
+      source_contract: faaSourceContract(),
+    }));
     const completedAt = new Date().toISOString();
     const manifestKey = `${SOURCE_ID}/${runId}/manifest.json`;
     const manifest: Row = {
@@ -363,7 +305,13 @@ Deno.serve(async (request: Request) => {
         error: safeError(error),
       };
       await upload(failureKey, JSON.stringify(manifest), "application/json");
-      const contractSha = await sha256(JSON.stringify({ source_id: SOURCE_ID, parser: PARSER_VERSION, key: ["asn"], fields: contractShape() }));
+      const contractSha = await sha256(JSON.stringify({
+        source_id: SOURCE_ID,
+        parser: PARSER_VERSION,
+        key: ["asn"],
+        fields: faaContractShape(),
+        source_contract: faaSourceContract(),
+      }));
       const receipt = await commit(runId, {
         collector_name: "faa-oeaaa-sync",
         collector_version: COLLECTOR_VERSION,

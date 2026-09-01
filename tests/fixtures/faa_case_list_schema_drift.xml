@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<caseList>
+  <OECase>
+    <id>654321</id>
+    <asn>2026-ASO-12345-OE</asn>
+    <caseType>OE</caseType>
+    <year>2026</year>
+    <dateEntered>2026-08-30</dateEntered>
+    <latitude>26.1201</latitude>
+    <longitude>-80.1402</longitude>
+  </OECase>
+</caseList>

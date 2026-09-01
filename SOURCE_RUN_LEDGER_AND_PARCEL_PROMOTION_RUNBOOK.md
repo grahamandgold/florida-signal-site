@@ -64,6 +64,13 @@ deployment, collector call, schedule change, parcel import, or promotion.
 - The live FAA `in_broward` field is stored/generated from latitude and
   longitude. The corrected atomic path never stages or writes it; PostgreSQL
   computes it. The earlier pending SQL and collector must not be deployed.
+- The official FAA case identifier is `<caseId>`, not `<id>`. The reviewed
+  parser uses a pinned XML implementation with entity decoding and validates
+  the XML media type plus exact `caseList` envelope. A well-formed empty
+  `<caseList/>` is admissible; error HTML, malformed XML, DTDs, wrong case
+  families and missing/unknown required schema fields terminate the run as a
+  failure with preserved raw evidence. FAA deployment must include its tracked
+  `index.ts`, `parser.ts`, and function-local `deno.json` together.
 
 ## Purpose
 
