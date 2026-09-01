@@ -15,8 +15,9 @@ test.describe("private Florida Signal Newsroom", () => {
     await expect(control).toContainText("Production pipeline health");
     await expect(control).toContainText("UNKNOWN means no current health contract answered");
     await expect(control).toContainText("Preliminary Development Meeting Request (PDMR)");
-    await expect(control).toContainText("Stage reconciled · not admitted");
-    await expect(control).toContainText("File-only canary passed · not connected");
+    await expect(control).toContainText("PDMR LIVE, MIRRORED AND NATURALLY PROVEN");
+    await expect(control).toContainText("Repair Broward parcel freshness without an unrestricted backfill");
+    await expect(control).toContainText("UTILITY + SFWMD NOT CONNECTED");
     await expect(control).toContainText("93-day proven lead");
     await expect(control).toContainText("RUNTIME DRIFT / NEEDS SEPARATE RECONCILIATION");
     await expect(control.locator(".project-health__row")).toHaveCount(13);
