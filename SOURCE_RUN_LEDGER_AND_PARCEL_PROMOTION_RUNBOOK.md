@@ -71,6 +71,11 @@ deployment, collector call, schedule change, parcel import, or promotion.
   families and missing/unknown required schema fields terminate the run as a
   failure with preserved raw evidence. FAA deployment must include its tracked
   `index.ts`, `parser.ts`, and function-local `deno.json` together.
+- The audited 2026-08-31 OE response contained 1,627 valid entity references.
+  Parser v4 admits that live response under a hard 4,096-reference ceiling,
+  retains the 25 MB per-response, 100 MB per-run and eight-level nesting
+  ceilings, and recognizes the five additional current FAA fields recorded in
+  the parser contract. Those fields remain raw evidence only.
 
 ## Purpose
 

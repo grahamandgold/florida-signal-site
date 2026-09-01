@@ -18,13 +18,22 @@ const OUTPUT_FIELDS = [
   "nearest_city", "nearest_state", "lat", "lon", "raw",
 ] as const;
 
+// The audited 2026-08-31 OE response contained 1,627 valid predefined and
+// numeric XML references. Keep finite document-wide limits with roughly 2.5x
+// headroom; the collector separately enforces its raw-response byte ceiling.
+export const FAA_MAX_ENTITY_EXPANSIONS = 4_096;
+export const FAA_MAX_ENTITY_EXPANDED_LENGTH = 1_000_000;
+export const FAA_MAX_NESTED_TAGS = 8;
+
 const ALLOWED_CASE_FIELDS = [
   "aglStructureHeight", "aglStructureHeightDet", "amslOverallHeightProposed",
-  "asn", "asnSequence", "caseId", "caseType", "createdDate",
-  "dateCompleted", "dateEntered", "directionFromNearestAirport",
-  "distanceFromNearestAirport", "expirationDate", "faaGeographyId",
+  "amslOverallHeightDet", "asn", "asnSequence", "caseId", "caseType",
+  "createdDate", "dateBuilt", "dateCompleted", "dateEntered",
+  "directionFromNearestAirport", "distanceFromNearestAirport",
+  "expirationDate", "faaGeographyId", "fccAsrNumber",
   "latLongAccuracy", "latitude", "locatorId", "longitude",
   "nearestAirportName", "nearestCity", "nearestState", "receivedDate",
+  "recommendedMarkLightType", "recommendedMarkLightTypeOther",
   "siteElevationProposed", "sponsor", "sponsorCity", "sponsorState",
   "statusCode", "structureDescription", "structureType", "year",
 ] as const;
@@ -53,8 +62,8 @@ function newXmlParser(): XMLParser {
   const entityDecoder = new EntityDecoder({
     numericAllowed: true,
     limit: {
-      maxTotalExpansions: 1_000,
-      maxExpandedLength: 1_000_000,
+      maxTotalExpansions: FAA_MAX_ENTITY_EXPANSIONS,
+      maxExpandedLength: FAA_MAX_ENTITY_EXPANDED_LENGTH,
       applyLimitsTo: "all",
     },
     ncr: { xmlVersion: 1.0, onNCR: "allow", nullNCR: "throw" },
@@ -79,14 +88,14 @@ function newXmlParser(): XMLParser {
       enabled: true,
       maxEntitySize: 256,
       maxExpansionDepth: 8,
-      maxTotalExpansions: 1_000,
-      maxExpandedLength: 1_000_000,
+      maxTotalExpansions: FAA_MAX_ENTITY_EXPANSIONS,
+      maxExpandedLength: FAA_MAX_ENTITY_EXPANDED_LENGTH,
       maxEntityCount: 16,
     },
     entityDecoder,
     ignoreDeclaration: true,
     ignorePiTags: true,
-    maxNestedTags: 8,
+    maxNestedTags: FAA_MAX_NESTED_TAGS,
     strictReservedNames: true,
     isArray: (tagName) => tagName === "OECase" || tagName === "NRACase",
   });

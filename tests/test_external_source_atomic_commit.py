@@ -230,7 +230,14 @@ class ExternalSourceAtomicCommitTests(unittest.TestCase):
         script = f"""
           import assert from "node:assert/strict";
           import fs from "node:fs";
-          import {{ faaContractShape, faaSourceContract, parseFaaCaseList }} from {json.dumps(FAA_PARSER.as_uri())};
+          import {{
+            FAA_MAX_ENTITY_EXPANDED_LENGTH,
+            FAA_MAX_ENTITY_EXPANSIONS,
+            FAA_MAX_NESTED_TAGS,
+            faaContractShape,
+            faaSourceContract,
+            parseFaaCaseList,
+          }} from {json.dumps(FAA_PARSER.as_uri())};
           const read = (name) => fs.readFileSync({json.dumps(str(FAA_FIXTURES))} + "/" + name, "utf8");
 
           const oe = parseFaaCaseList(
@@ -246,6 +253,45 @@ class ExternalSourceAtomicCommitTests(unittest.TestCase):
           assert.equal(oe.rows[0].raw.caseId, "654321");
           assert.equal(oe.rows[0].raw.sponsor, "Example & Sons");
           assert(oe.schemaTags.has("field:OE:caseId"));
+
+          const liveXml = read("faa_case_list_oe_live_contract_2026_08_31.xml");
+          const liveEntityReferences = liveXml.match(
+            /&(?:amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-f]+);/gi,
+          ) ?? [];
+          assert.equal(liveEntityReferences.length, 1_627);
+          assert.equal(FAA_MAX_ENTITY_EXPANSIONS, 4_096);
+          assert(FAA_MAX_ENTITY_EXPANSIONS > liveEntityReferences.length);
+          assert.equal(FAA_MAX_ENTITY_EXPANDED_LENGTH, 1_000_000);
+          assert.equal(FAA_MAX_NESTED_TAGS, 8);
+          const liveOe = parseFaaCaseList(
+            liveXml, "OE", 2026, "application/xml;charset=UTF-8",
+          );
+          assert.equal(liveOe.observed, 1);
+          assert.equal(liveOe.rows[0].case_id, 876543);
+          assert.equal((liveOe.rows[0].structure_description.match(/&/g) ?? []).length, 1_627);
+          assert.equal(liveOe.rows[0].raw.amslOverallHeightDet, "321");
+          assert.equal(liveOe.rows[0].raw.dateBuilt, "2026-08-01");
+          assert.equal(liveOe.rows[0].raw.fccAsrNumber, "1234567");
+          assert.equal(liveOe.rows[0].raw.recommendedMarkLightType, "MARKED_AND_LIGHTED");
+          assert.equal(liveOe.rows[0].raw.recommendedMarkLightTypeOther, "NONE");
+
+          const overEntityLimit = liveXml.replace(
+            /<structureDescription>[\s\S]*?<\/structureDescription>/,
+            "<structureDescription>" + "&amp; ".repeat(FAA_MAX_ENTITY_EXPANSIONS + 1)
+              + "</structureDescription>",
+          );
+          assert.throws(
+            () => parseFaaCaseList(overEntityLimit, "OE", 2026, "application/xml"),
+            /Entity expansion count limit exceeded/,
+          );
+          const overDepthLimit = liveXml.replace(
+            /<sponsor>[\s\S]*?<\/sponsor>/,
+            "<sponsor><a><b><c><d><e><f><g><h>too deep</h></g></f></e></d></c></b></a></sponsor>",
+          );
+          assert.throws(
+            () => parseFaaCaseList(overDepthLimit, "OE", 2026, "application/xml"),
+            /maximum nested tags exceeded/i,
+          );
 
           const nra = parseFaaCaseList(
             read("faa_case_list_nra_valid.xml"), "NRA", 2026, "text/xml",
@@ -296,6 +342,10 @@ class ExternalSourceAtomicCommitTests(unittest.TestCase):
           const contract = faaSourceContract();
           assert(contract.OE.required_fields.includes("caseId"));
           assert(!contract.OE.allowed_fields.includes("id"));
+          for (const field of [
+            "amslOverallHeightDet", "dateBuilt", "fccAsrNumber",
+            "recommendedMarkLightType", "recommendedMarkLightTypeOther",
+          ]) assert(contract.OE.allowed_fields.includes(field));
         """
         subprocess.run(
             ["node", "--experimental-strip-types", "--input-type=module", "--eval", script],
@@ -307,8 +357,8 @@ class ExternalSourceAtomicCommitTests(unittest.TestCase):
         self.assertNotIn("matchAll", self.faa)
         self.assertNotRegex(self.faa, r'tag\(block,\s*["\']id["\']\)')
         self.assertIn("parseFaaCaseList(rawXml, type, year", self.faa)
-        self.assertIn("faa-xml-v3-validated-envelope", self.faa)
-        self.assertIn("faa-row-v3-official-caseid", self.faa)
+        self.assertIn("faa-xml-v4-bounded-live-contract", self.faa)
+        self.assertIn("faa-row-v4-live-contract", self.faa)
         self.assertIn("source_contract: faaSourceContract()", self.faa)
         self.assertEqual(json.loads(FAA_DENO.read_text())["imports"], {
             "@nodable/entities": "npm:@nodable/entities@3.0.0",

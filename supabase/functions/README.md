@@ -25,6 +25,14 @@ XML `caseList` envelope with no case children. Deploy the FAA function with
 `index.ts`, `parser.ts`, and `deno.json`; omitting a dependency is a failed
 deployment, not a fallback to the old regular-expression parser.
 
+The audited 2026-08-31 OE response contained 1,627 valid XML references, so
+parser v4 uses a finite 4,096-reference document-wide ceiling. It retains the
+one-million-character expansion ceiling, eight-level XML nesting limit, 25 MB
+per-response collector limit and 100 MB per-run limit. Current official raw
+fields `amslOverallHeightDet`, `dateBuilt`, `fccAsrNumber`,
+`recommendedMarkLightType`, and `recommendedMarkLightTypeOther` are accepted
+and contract-hashed but are not promoted into normalized source-owned columns.
+
 FDEP layer 0 (ERP SPGP) and layer 1 (ERP permits) have different public source
 schemas. The tracked normalizer maps them separately, fails closed when a
 required source field disappears, and binds both expected field sets into the
