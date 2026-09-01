@@ -1,4 +1,5 @@
 -- Secret-safe FDEP/FAA collector scheduling and durable source-health alerts.
+-- Reordered after the live 20260901052118 PDMR event-ledger migration.
 --
 -- Applying this migration creates only private schedule infrastructure. It
 -- does not alter cron.job. The owner-only activation function is invoked only

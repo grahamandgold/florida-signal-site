@@ -52,8 +52,8 @@ Before either deployment:
 1. obtain the exact privilege/RPC approval phrase in
    `SOURCE_RUN_LEDGER_AND_PARCEL_PROMOTION_RUNBOOK.md`;
 2. apply and verify
-   `20260901012400_external_source_atomic_commit.sql` and the default-off
-   `20260901012500_external_source_collector_cron_cutover.sql`;
+   `20260901173100_external_source_atomic_commit.sql` and the default-off
+   `20260901173200_external_source_collector_cron_cutover.sql`;
 3. re-export the currently deployed function and retain a private rollback
    copy plus its bundle SHA-256;
 4. rotate the retired URL query secret; configure the new value as the Edge

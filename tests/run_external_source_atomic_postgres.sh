@@ -203,7 +203,7 @@ else
 fi
 
 run_psql < "$repo_dir/tests/sql/external_source_atomic_fixture.sql"
-run_psql < "$repo_dir/supabase/migrations/20260901012400_external_source_atomic_commit.sql"
+run_psql < "$repo_dir/supabase/migrations/20260901173100_external_source_atomic_commit.sql"
 run_psql < "$repo_dir/tests/sql/external_source_atomic_assertions.sql"
-run_psql < "$repo_dir/supabase/migrations/20260901012500_external_source_collector_cron_cutover.sql"
+run_psql < "$repo_dir/supabase/migrations/20260901173200_external_source_collector_cron_cutover.sql"
 run_psql < "$repo_dir/tests/sql/external_source_schedule_assertions.sql"

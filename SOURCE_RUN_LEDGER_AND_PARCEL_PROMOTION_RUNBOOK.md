@@ -12,10 +12,10 @@ deployment, collector call, schedule change, parcel import, or promotion.
 **Migration:**
 `supabase/migrations/20260831052701_source_run_ledgers_and_parcel_generations.sql`
 
-**Pending collector migrations (both newer than live `20260831220548`):**
+**Pending collector migrations (both newer than live `20260901052118`):**
 
-- `supabase/migrations/20260901012400_external_source_atomic_commit.sql`
-- `supabase/migrations/20260901012500_external_source_collector_cron_cutover.sql`
+- `supabase/migrations/20260901173100_external_source_atomic_commit.sql`
+- `supabase/migrations/20260901173200_external_source_collector_cron_cutover.sql`
 
 The second migration creates private scheduling/alert infrastructure but is
 default-off: only the explicit owner-only activation function changes cron.
@@ -212,7 +212,7 @@ receipt's proof boundary.
 
 The applied foundation schema alone does **not** make existing source-table
 writes atomic with the new receipt insert. The pending
-`20260901012400_external_source_atomic_commit.sql` adds private recoverable
+`20260901173100_external_source_atomic_commit.sql` adds private recoverable
 staging and a service-role-only `SECURITY INVOKER` RPC that derives write counts
 and commits source rows plus the terminal receipt together. A collector canary
 remains blocked until that exact privilege migration is approved and applied;
@@ -402,7 +402,7 @@ promote parcels.
 ### C. FDEP/FAA collector canaries
 
 Only after collector-code review and the exact production approval. The two
-new migrations sort after live version `20260831220548`; do not use
+new migrations sort after live version `20260901052118`; do not use
 `--include-all` or migration-history repair to force an older filename.
 
 ```text
@@ -426,8 +426,8 @@ schedules after both pass. No parcel backfill or promotion.
    supabase db push --linked --dry-run
    ```
 
-   Expected pending order is exactly `20260901012400` then `20260901012500`,
-   both after live `20260831220548`. Stop on any additional/unexpected version.
+   Expected pending order is exactly `20260901173100` then `20260901173200`,
+   both after live `20260901052118`. Stop on any additional/unexpected version.
 
 2. Generate one new 64-character hex key in a private shell variable, install
    the same value as Edge secret `FL_SIGNAL_SYNC_KEY` and Vault secret

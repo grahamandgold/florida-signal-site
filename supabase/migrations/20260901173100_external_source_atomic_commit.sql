@@ -1,6 +1,6 @@
 -- Atomic staging + commit path for receipted FDEP ERP and FAA OE/AAA runs.
--- Version generated at 2026-09-01 01:24 UTC, after the live
--- 20260831220548 source-receipt foundation migration.
+-- Version reordered at 2026-09-01 17:31 UTC, after the live
+-- 20260901052118 PDMR event-ledger migration.
 -- No public policy or elevated-privilege function is added. Collectors stage a
 -- complete run and call one SECURITY INVOKER RPC after private raw evidence is
 -- durable; source rows and the terminal receipt then commit together.

@@ -6,8 +6,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = ROOT / "supabase/migrations/20260901012400_external_source_atomic_commit.sql"
-SCHEDULE_MIGRATION = ROOT / "supabase/migrations/20260901012500_external_source_collector_cron_cutover.sql"
+MIGRATION = ROOT / "supabase/migrations/20260901173100_external_source_atomic_commit.sql"
+SCHEDULE_MIGRATION = ROOT / "supabase/migrations/20260901173200_external_source_collector_cron_cutover.sql"
 FDEP = ROOT / "supabase/functions/fdep-erp-sync/index.ts"
 FDEP_NORMALIZER = ROOT / "supabase/functions/fdep-erp-sync/normalize.ts"
 FAA = ROOT / "supabase/functions/faa-oeaaa-sync/index.ts"
@@ -112,7 +112,7 @@ class ExternalSourceAtomicCommitTests(unittest.TestCase):
         self.assertIn("'extensions.digest(bytea,text)', 'execute'", self.sql)
 
     def test_migration_versions_follow_live_history(self):
-        live_latest = 20260831220548
+        live_latest = 20260901052118
         self.assertGreater(int(MIGRATION.name.split("_", 1)[0]), live_latest)
         self.assertGreater(
             int(SCHEDULE_MIGRATION.name.split("_", 1)[0]),
