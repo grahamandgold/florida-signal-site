@@ -250,9 +250,9 @@ def _fsync_directory(path: Path) -> None:
         os.close(descriptor)
 
 
-def _atomic_place(path: Path, raw: bytes) -> None:
-    if path.is_symlink():
-        raise SyncError("refusing symlink snapshot destination")
+def _write_fsynced_temporary(path: Path, raw: bytes) -> Path:
+    """Write private bytes beside *path* without publishing them."""
+
     temporary = path.with_name(f".{path.name}.{os.getpid()}.{uuid4().hex}.tmp")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     if hasattr(os, "O_NOFOLLOW"):
@@ -266,6 +266,7 @@ def _atomic_place(path: Path, raw: bytes) -> None:
             if written <= 0:
                 raise OSError("snapshot write made no forward progress")
             offset += written
+        os.fchmod(descriptor, 0o600)
         os.fsync(descriptor)
     except Exception:
         try:
@@ -274,9 +275,90 @@ def _atomic_place(path: Path, raw: bytes) -> None:
             temporary.unlink(missing_ok=True)
         raise
     os.close(descriptor)
-    os.replace(temporary, path)
-    os.chmod(path, 0o600)
-    _fsync_directory(path.parent)
+    return temporary
+
+
+def _read_immutable_bytes(path: Path) -> bytes:
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as error:
+        raise SyncError("immutable receipt destination is unsafe") from error
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or stat.S_IMODE(before.st_mode) != 0o600
+            or before.st_size > MAX_FILE_BYTES
+        ):
+            raise SyncError("immutable receipt destination is unsafe")
+        chunks: list[bytes] = []
+        remaining = before.st_size
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 64 * 1024))
+            if not chunk:
+                raise SyncError("immutable receipt changed during comparison")
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(descriptor, 1):
+            raise SyncError("immutable receipt changed during comparison")
+        after = os.fstat(descriptor)
+        if (
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+        ) != (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+        ):
+            raise SyncError("immutable receipt changed during comparison")
+        try:
+            current = os.lstat(path)
+        except OSError as error:
+            raise SyncError("immutable receipt changed during comparison") from error
+        if (
+            stat.S_ISLNK(current.st_mode)
+            or current.st_dev != after.st_dev
+            or current.st_ino != after.st_ino
+        ):
+            raise SyncError("immutable receipt changed during comparison")
+        return b"".join(chunks)
+    finally:
+        os.close(descriptor)
+
+
+def _create_or_compare_immutable(path: Path, raw: bytes) -> None:
+    """Publish a receipt once, or prove an existing same-name receipt identical."""
+
+    temporary = _write_fsynced_temporary(path, raw)
+    try:
+        try:
+            # Hard-link publication is atomic and create-only. It can never replace
+            # a prior immutable receipt, including a same-run conflicting receipt.
+            os.link(temporary, path, follow_symlinks=False)
+        except FileExistsError:
+            if _read_immutable_bytes(path) != raw:
+                raise SyncError("immutable receipt conflicts with existing bytes")
+            return
+        _fsync_directory(path.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _atomic_replace_pointer(path: Path, raw: bytes) -> None:
+    if path.is_symlink():
+        raise SyncError("refusing symlink snapshot destination")
+    temporary = _write_fsynced_temporary(path, raw)
+    try:
+        os.replace(temporary, path)
+        _fsync_directory(path.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _sync_receipts_locked(
@@ -314,9 +396,9 @@ def _sync_receipts_locked(
                 continue
 
             for name, raw in receipts.items():
-                _atomic_place(destination / "receipts" / name, raw)
+                _create_or_compare_immutable(destination / "receipts" / name, raw)
             for name in POINTER_NAMES:
-                _atomic_place(destination / name, first[name][1])
+                _atomic_replace_pointer(destination / name, first[name][1])
             return {
                 "status": "synced",
                 "attempt": attempt_number,

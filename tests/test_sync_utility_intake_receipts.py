@@ -136,6 +136,87 @@ class UtilityReceiptSyncTests(unittest.TestCase):
                 (remote / "receipts/utility-natural.verification.json").read_bytes(),
             )
 
+    def test_identical_same_run_receipts_are_compared_without_replacement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            remote = self._remote_fixture(root)
+            destination = root / "local" / "utility-intake"
+            fake_scp = root / "scp"
+            fake_scp.write_text("#!/bin/sh\n", encoding="utf-8")
+            fake_scp.chmod(0o755)
+            known_hosts = self._known_hosts(root)
+
+            def copy(command, **_kwargs):
+                shutil.copyfile(Path(command[-2].split(":", 1)[1]), Path(command[-1]))
+                return subprocess.CompletedProcess(command, 0)
+
+            with mock.patch.object(syncer, "REMOTE_ROOT", remote), \
+                    mock.patch.object(syncer, "REMOTE_RECEIPTS", remote / "receipts"), \
+                    mock.patch.object(syncer.subprocess, "run", side_effect=copy):
+                syncer.sync_receipts(
+                    destination=destination, host="florida",
+                    known_hosts=known_hosts, scp=fake_scp,
+                )
+                outcome = destination / "receipts/utility-natural.json"
+                verification = destination / "receipts/utility-natural.verification.json"
+                before = (outcome.stat().st_ino, verification.stat().st_ino)
+                syncer.sync_receipts(
+                    destination=destination, host="florida",
+                    known_hosts=known_hosts, scp=fake_scp,
+                )
+            self.assertEqual(
+                before,
+                (outcome.stat().st_ino, verification.stat().st_ino),
+            )
+
+    def test_conflicting_same_run_receipt_fails_and_preserves_original_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            remote = self._remote_fixture(root)
+            destination = root / "local" / "utility-intake"
+            fake_scp = root / "scp"
+            fake_scp.write_text("#!/bin/sh\n", encoding="utf-8")
+            fake_scp.chmod(0o755)
+            known_hosts = self._known_hosts(root)
+
+            def copy(command, **_kwargs):
+                shutil.copyfile(Path(command[-2].split(":", 1)[1]), Path(command[-1]))
+                return subprocess.CompletedProcess(command, 0)
+
+            with mock.patch.object(syncer, "REMOTE_ROOT", remote), \
+                    mock.patch.object(syncer, "REMOTE_RECEIPTS", remote / "receipts"), \
+                    mock.patch.object(syncer.subprocess, "run", side_effect=copy):
+                syncer.sync_receipts(
+                    destination=destination, host="florida",
+                    known_hosts=known_hosts, scp=fake_scp,
+                )
+                outcome_path = destination / "receipts/utility-natural.json"
+                original_outcome = outcome_path.read_bytes()
+                original_outcome_inode = outcome_path.stat().st_ino
+                original_pointer = (destination / "latest-attempt.json").read_bytes()
+
+                remote_outcome_path = remote / "receipts/utility-natural.json"
+                remote_outcome = json.loads(remote_outcome_path.read_text(encoding="utf-8"))
+                remote_outcome["conflicting_revision"] = 2
+                replacement_sha = self._write_json(remote_outcome_path, remote_outcome)
+                for pointer_name in ("latest-attempt.json", "latest-success.json"):
+                    pointer_path = remote / pointer_name
+                    pointer = json.loads(pointer_path.read_text(encoding="utf-8"))
+                    pointer["receipt_sha256"] = replacement_sha
+                    self._write_json(pointer_path, pointer)
+
+                with self.assertRaisesRegex(syncer.SyncError, "immutable receipt conflicts"):
+                    syncer.sync_receipts(
+                        destination=destination, host="florida",
+                        known_hosts=known_hosts, scp=fake_scp,
+                    )
+            self.assertEqual(outcome_path.read_bytes(), original_outcome)
+            self.assertEqual(outcome_path.stat().st_ino, original_outcome_inode)
+            self.assertEqual(
+                (destination / "latest-attempt.json").read_bytes(),
+                original_pointer,
+            )
+
     def test_outcome_hash_mismatch_preserves_existing_local_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

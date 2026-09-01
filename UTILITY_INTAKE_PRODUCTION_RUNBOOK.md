@@ -73,6 +73,7 @@ Production paths are:
 - Dedicated env: `/srv/grahamandgold/florida-signal/secrets/florida-utility-intake.env`
 - Active release: `/srv/grahamandgold/florida-signal/utility-intake-releases/current`
 - Dependency helper: `/srv/grahamandgold/florida-signal/utility-intake-releases/current/florida-utility-intake-wait.sh`
+- Failed-install recovery evidence: `/srv/grahamandgold/florida-signal/staging/data/utility-intake/install-recovery-required/`
 
 Every raw/derived shadow evidence file is create-only mode `0600`, fsynced, and
 followed by a run-directory fsync. The run-directory entry itself is fsynced
@@ -100,7 +101,9 @@ The Finder app stores its read-only snapshot under
 the existing `florida` SSH alias, copies only sanitized receipt basenames from
 the fixed producer directory, verifies the complete hash/schema/run binding,
 rereads both pointers for stability, then atomically places the receipt files
-before the pointers. It issues no remote shell and no remote write. The helper
+before the pointers. Immutable same-run receipt names are create-only: a retry
+must compare byte-identical or fail while preserving the original; only the two
+latest pointers use atomic replacement. It issues no remote shell and no remote write. The helper
 requires an explicit absolute, non-symlink, non-writable known-hosts file and
 passes `StrictHostKeyChecking=yes` with only that file trusted. A mode-`0600`
 nonblocking process lock suppresses overlap. The Desk server owns an immediate
@@ -127,7 +130,10 @@ First preserve the current scripts, units, helper, Desk app, and existing
 receipt pointers in a new explicit mode-`0700` backup directory and record a
 SHA-256 inventory. Do not use a broad checkout copy as a runtime replacement.
 The reviewed manifest covers the production script, its sibling shadow module,
-wait helper, service, and timer. Quiesce and prove the service/timer state
+wait helper, service, and timer. The installer freezes the manifest into the
+unreachable stage, copies the five files, and hashes those exact staged bytes
+against that frozen manifest before either validation or switching; later
+repository mutation cannot change the candidate generation. Quiesce and prove the service/timer state
 **before** invoking the installer:
 
 ```bash
@@ -156,6 +162,12 @@ generation; one atomic `current` symlink then switches every executable code
 path. A post-switch daemon reload, byte-for-byte unit verification, active
 import verification, and strict `inactive/disabled` timer check are mandatory.
 Any late failure restores the prior generation and unit files and reloads them.
+The installer byte-compares every restored unit, verifies the prior `current`
+target/type/mode/ownership, and restores the exact preinstall timer state. A
+restore or daemon-reload error is never ignored: the backup is retained, the
+timer is forced back to inactive/disabled (or absent), and a mode-`0600`,
+fsynced `recovery_required` record is written below
+`install-recovery-required/`. Stop for manual recovery if that record exists.
 Do not continue if the exact hash manifest, staged or active import, self-test
 receipt, unit verification, rollback, or timer-state gate fails.
 
@@ -192,11 +204,18 @@ select private.fs_apply_utility_intake_anon_read_hardening(
 commit;
 ```
 
-The function itself fails and rolls back unless the exact unconditional
-`anon_read_permits` SELECT policy exists and no anon write policy exists. Its
-postcondition requires RLS enabled and forced, `anon` SELECT, and zero anon
-INSERT, UPDATE, DELETE, TRUNCATE, TRIGGER, REFERENCES, or column-level write
-grants. Repeat both read-only queries and preserve the returned attestation.
+Migration application also enumerates the function ACL and removes every
+explicit non-owner EXECUTE grant, including arbitrary custom roles; it does not
+change schema privileges. The function itself fails and rolls back unless the
+exact unconditional `anon_read_permits` SELECT policy exists and no write
+policy applies through `PUBLIC`, `anon`, or any inherited/member role. Its
+postcondition requires RLS enabled and forced, effective `anon` SELECT, and
+zero effective INSERT, UPDATE, DELETE, TRUNCATE, TRIGGER, REFERENCES, or
+column-level write grants through any reachable role. Inherited write grants
+are not silently changed: they fail the transaction and must be reviewed and
+removed separately. Repeat both read-only queries, inspect role memberships,
+and preserve the returned attestation. As a final canary, `SET ROLE anon` must
+be unable to write `public.permits`.
 Do not waive this gate or weaken RLS to make the canary pass.
 
 ## Manual canary and Desk gate

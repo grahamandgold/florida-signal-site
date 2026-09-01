@@ -674,7 +674,9 @@ class UtilityIntakeProductionTests(unittest.TestCase):
         installer = (ROOT / "ops/droplet/install_utility_intake.sh").read_text()
         manifest = (ROOT / "ops/droplet/utility-intake-install.sha256").read_text()
         self.assertIn("utility-intake-install.sha256", installer)
-        self.assertIn("sha256sum --check --strict", installer)
+        self.assertIn("freeze_manifest", installer)
+        self.assertIn("verify_staged_release_manifest", installer)
+        self.assertIn(".source-manifest.sha256", installer)
         self.assertIn("I_APPROVE_EXACT_UTILITY_INTAKE_ATOMIC_INSTALL", installer)
         self.assertIn("utility_intake_production.SHADOW_IMPORT_ERROR is None", installer)
         self.assertIn("intentionally-absent.env", installer)
@@ -700,6 +702,66 @@ class UtilityIntakeProductionTests(unittest.TestCase):
         for line in manifest.splitlines():
             expected, relative = line.split("  ", 1)
             self.assertEqual(hashlib.sha256((ROOT / relative).read_bytes()).hexdigest(), expected)
+
+    def test_frozen_manifest_rejects_source_mutation_before_staging(self):
+        installer = ROOT / "ops/droplet/install_utility_intake.sh"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repository = root / "repository"
+            droplet = repository / "ops/droplet"
+            droplet.mkdir(parents=True)
+            relative_names = (
+                "utility_intake_production.py",
+                "utility_intake_shadow.py",
+                "florida-utility-intake-wait.sh",
+                "florida-utility-intake.service",
+                "florida-utility-intake.timer",
+            )
+            original = {}
+            manifest_lines = []
+            for name in relative_names:
+                raw = f"reviewed:{name}\n".encode()
+                original[name] = raw
+                (droplet / name).write_bytes(raw)
+                digest = hashlib.sha256(raw).hexdigest()
+                manifest_lines.append(f"{digest}  ops/droplet/{name}\n")
+            manifest = droplet / "utility-intake-install.sha256"
+            manifest.write_text("".join(manifest_lines), encoding="ascii")
+            rejected_stage = root / "rejected-stage"
+            pinned_stage = root / "pinned-stage"
+            result = subprocess.run(
+                [
+                    "/bin/bash", "-c",
+                    r'''source "$1"
+/usr/bin/install -d -m 0755 "$3"
+freeze_manifest "$2/ops/droplet/utility-intake-install.sha256" \
+  "$3/.source-manifest.sha256"
+printf 'mutated-before-copy\n' >"$2/ops/droplet/utility_intake_production.py"
+copy_release_files "$2" "$3"
+if verify_staged_release_manifest "$3/.source-manifest.sha256" "$3"; then
+  exit 91
+fi
+printf 'reviewed:utility_intake_production.py\n' \
+  >"$2/ops/droplet/utility_intake_production.py"
+/usr/bin/install -d -m 0755 "$4"
+freeze_manifest "$2/ops/droplet/utility-intake-install.sha256" \
+  "$4/.source-manifest.sha256"
+copy_release_files "$2" "$4"
+verify_staged_release_manifest "$4/.source-manifest.sha256" "$4"
+printf 'mutated-after-copy\n' >"$2/ops/droplet/utility_intake_production.py"
+verify_staged_release_manifest "$4/.source-manifest.sha256" "$4"''',
+                    "manifest-pin-test", str(installer), str(repository),
+                    str(rejected_stage), str(pinned_stage),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                (pinned_stage / "utility_intake_production.py").read_bytes(),
+                original["utility_intake_production.py"],
+            )
 
     def test_release_switch_late_failure_restores_one_complete_prior_generation(self):
         installer = ROOT / "ops/droplet/install_utility_intake.sh"
@@ -740,6 +802,12 @@ class UtilityIntakeProductionTests(unittest.TestCase):
                 [
                     "/bin/bash", "-c",
                     r'''source "$1"
+timer_is_preinstall_safe() { return 0; }
+service_is_preinstall_safe() { return 0; }
+systemd_active_state() { printf 'inactive\n'; }
+systemd_enabled_state() { printf 'disabled\n'; }
+reload_systemd() { return 0; }
+restore_timer_state() { return 0; }
 install_post_switch_guard() {
   [[ "$(/usr/bin/readlink "$TEST_RELEASE_CURRENT")" == "$1" ]] || return 2
   /usr/bin/cmp -s "$1/florida-utility-intake.service" \
@@ -749,11 +817,11 @@ install_post_switch_guard() {
   : >"$TEST_LATE_GUARD_MARKER"
   return 1
 }
-if switch_release "$2" "$3" "$4" "$5" "$6"; then
+if switch_release "$2" "$3" "$4" "$5" "$6" "$7"; then
   exit 90
 fi''',
                     "release-switch-test", str(installer), str(stage), str(final),
-                    str(releases), str(current), str(units),
+                    str(releases), str(current), str(units), str(root / "recovery"),
                 ],
                 env=env,
                 capture_output=True,
@@ -806,6 +874,12 @@ fi''',
                 [
                     "/bin/bash", "-c",
                     r'''source "$1"
+timer_is_preinstall_safe() { return 0; }
+service_is_preinstall_safe() { return 0; }
+systemd_active_state() { printf 'inactive\n'; }
+systemd_enabled_state() { printf 'disabled\n'; }
+reload_systemd() { return 0; }
+restore_timer_state() { return 0; }
 install_post_switch_guard() {
   [[ "$(/usr/bin/readlink "$TEST_RELEASE_CURRENT")" == "$1" ]] || return 2
   /usr/bin/cmp -s "$1/florida-utility-intake.service" \
@@ -814,11 +888,11 @@ install_post_switch_guard() {
     "$TEST_RELEASE_UNITS/florida-utility-intake.timer" || return 2
   return 1
 }
-if switch_release "$2" "$3" "$4" "$5" "$6"; then
+if switch_release "$2" "$3" "$4" "$5" "$6" "$7"; then
   exit 90
 fi''',
                     "release-switch-test", str(installer), str(stage), str(final),
-                    str(releases), str(current), str(units),
+                    str(releases), str(current), str(units), str(root / "recovery"),
                 ],
                 env={
                     **os.environ,
@@ -836,6 +910,95 @@ fi''',
                 self.assertFalse((units / name).exists())
                 self.assertFalse((units / name).is_symlink())
             self.assertTrue(final.is_dir())
+
+    def test_each_restore_or_reload_failure_is_durable_and_preserves_backup(self):
+        installer = ROOT / "ops/droplet/install_utility_intake.sh"
+        for failure in ("current", "service", "timer", "daemon_reload"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                releases = root / "releases"
+                units = root / "units"
+                recovery = root / "recovery-required"
+                old_release = releases / "old"
+                stage = releases / ".stage-new"
+                final = releases / "new"
+                current = releases / "current"
+                timer_safe_marker = root / "timer-safe"
+                units.mkdir(parents=True)
+                old_release.mkdir(parents=True)
+                stage.mkdir()
+                names = (
+                    "utility_intake_production.py",
+                    "utility_intake_shadow.py",
+                    "florida-utility-intake-wait.sh",
+                    "florida-utility-intake.service",
+                    "florida-utility-intake.timer",
+                )
+                for name in names:
+                    (old_release / name).write_text(f"old:{name}\n", encoding="utf-8")
+                    (stage / name).write_text(f"new:{name}\n", encoding="utf-8")
+                current.symlink_to(old_release)
+                (units / "florida-utility-intake.service").write_text(
+                    "old:florida-utility-intake.service\n", encoding="utf-8"
+                )
+                (units / "florida-utility-intake.timer").write_text(
+                    "old:florida-utility-intake.timer\n", encoding="utf-8"
+                )
+                result = subprocess.run(
+                    [
+                        "/bin/bash", "-c",
+                        r'''source "$1"
+timer_is_preinstall_safe() { return 0; }
+service_is_preinstall_safe() { return 0; }
+systemd_active_state() { printf 'inactive\n'; }
+systemd_enabled_state() { printf 'disabled\n'; }
+eval "$(declare -f restore_path | /usr/bin/sed '1s/restore_path/original_restore_path/')"
+restore_path() {
+  if [[ "$3" == "$FAIL_POINT" ]]; then
+    return 71
+  fi
+  original_restore_path "$@"
+}
+reload_systemd() {
+  [[ "$FAIL_POINT" != "daemon_reload" ]]
+}
+restore_timer_state() {
+  : >"$TIMER_SAFE_MARKER"
+  return 0
+}
+install_post_switch_guard() { return 1; }
+if switch_release "$2" "$3" "$4" "$5" "$6" "$7"; then
+  exit 90
+fi
+[[ -f "$TIMER_SAFE_MARKER" ]]''',
+                        "rollback-injection-test", str(installer), str(stage),
+                        str(final), str(releases), str(current), str(units),
+                        str(recovery),
+                    ],
+                    env={
+                        **os.environ,
+                        "FAIL_POINT": failure,
+                        "TIMER_SAFE_MARKER": str(timer_safe_marker),
+                    },
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                evidence_files = list(recovery.glob("recovery-required-*.json"))
+                self.assertEqual(len(evidence_files), 1)
+                evidence = json.loads(evidence_files[0].read_text(encoding="utf-8"))
+                self.assertEqual(evidence["status"], "recovery_required")
+                expected_failure = (
+                    "daemon_reload" if failure == "daemon_reload" else f"restore_{failure}"
+                )
+                self.assertIn(expected_failure, evidence["failures"])
+                self.assertEqual(evidence["timer_active"], "inactive")
+                self.assertEqual(evidence["timer_enabled"], "disabled")
+                backup_dirs = list(releases.glob(".rollback.*"))
+                self.assertEqual(len(backup_dirs), 1)
+                self.assertTrue((backup_dirs[0] / "current.present").is_file())
+                self.assertTrue(timer_safe_marker.is_file())
 
 
 if __name__ == "__main__":

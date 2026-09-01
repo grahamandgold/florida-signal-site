@@ -15,8 +15,10 @@ security invoker
 set search_path = ''
 as $function$
 declare
+  v_anon_oid oid;
+  v_permits_oid oid;
   v_select_policy_count integer;
-  v_write_policy_count integer;
+  v_applicable_write_policy_count integer;
   v_column text;
   v_rls_enabled boolean;
   v_rls_forced boolean;
@@ -28,6 +30,17 @@ begin
   if pg_catalog.to_regclass('public.permits') is null then
     raise exception 'public.permits is absent';
   end if;
+
+  select r.oid
+    into v_anon_oid
+    from pg_catalog.pg_roles r
+   where r.rolname = 'anon'
+     and not r.rolsuper
+     and not r.rolbypassrls;
+  if v_anon_oid is null then
+    raise exception 'anon role is absent, superuser, or bypasses RLS';
+  end if;
+  v_permits_oid := 'public.permits'::pg_catalog.regclass;
 
   select count(*)
     into v_select_policy_count
@@ -42,15 +55,30 @@ begin
      and with_check is null;
 
   select count(*)
-    into v_write_policy_count
-    from pg_catalog.pg_policies
-   where schemaname = 'public'
-     and tablename = 'permits'
-     and 'anon' = any (roles)
-     and cmd in ('ALL', 'INSERT', 'UPDATE', 'DELETE');
+    into v_applicable_write_policy_count
+    from pg_catalog.pg_policies p
+   where p.schemaname = 'public'
+     and p.tablename = 'permits'
+     and p.cmd in ('ALL', 'INSERT', 'UPDATE', 'DELETE')
+     and exists (
+       select 1
+         from pg_catalog.unnest(p.roles) as policy_role(role_name)
+        where policy_role.role_name = 'public'::pg_catalog.name
+           or policy_role.role_name = 'anon'::pg_catalog.name
+           or exists (
+             select 1
+               from pg_catalog.pg_roles inherited_role
+              where inherited_role.rolname = policy_role.role_name
+                and pg_catalog.pg_has_role(
+                  v_anon_oid,
+                  inherited_role.oid,
+                  'MEMBER'
+                )
+           )
+     );
 
-  if v_select_policy_count <> 1 or v_write_policy_count <> 0 then
-    raise exception 'public.permits anon RLS policy contract is not exact';
+  if v_select_policy_count <> 1 or v_applicable_write_policy_count <> 0 then
+    raise exception 'public.permits effective anon RLS policy contract is not exact';
   end if;
 
   -- The exact approved mutation: RLS remains forced and anon retains only
@@ -89,17 +117,48 @@ begin
      or pg_catalog.has_table_privilege('anon', 'public.permits', 'TRIGGER')
      or exists (
        select 1
-         from information_schema.column_privileges
-        where table_schema = 'public'
-          and table_name = 'permits'
-          and grantee = 'anon'
-          and privilege_type <> 'SELECT'
+         from pg_catalog.pg_roles reachable_role
+        where (
+          reachable_role.oid = v_anon_oid
+          or pg_catalog.pg_has_role(v_anon_oid, reachable_role.oid, 'MEMBER')
+        )
+          and (
+            pg_catalog.has_table_privilege(reachable_role.oid, v_permits_oid, 'INSERT')
+            or pg_catalog.has_table_privilege(reachable_role.oid, v_permits_oid, 'UPDATE')
+            or pg_catalog.has_table_privilege(reachable_role.oid, v_permits_oid, 'DELETE')
+            or pg_catalog.has_table_privilege(reachable_role.oid, v_permits_oid, 'TRUNCATE')
+            or pg_catalog.has_table_privilege(reachable_role.oid, v_permits_oid, 'REFERENCES')
+            or pg_catalog.has_table_privilege(reachable_role.oid, v_permits_oid, 'TRIGGER')
+          )
+     )
+     or exists (
+       select 1
+         from pg_catalog.pg_roles reachable_role
+         cross join pg_catalog.pg_attribute a
+        where (
+          reachable_role.oid = v_anon_oid
+          or pg_catalog.pg_has_role(v_anon_oid, reachable_role.oid, 'MEMBER')
+        )
+          and a.attrelid = v_permits_oid
+          and a.attnum > 0
+          and not a.attisdropped
+          and (
+            pg_catalog.has_column_privilege(
+              reachable_role.oid, v_permits_oid, a.attnum, 'INSERT'
+            )
+            or pg_catalog.has_column_privilege(
+              reachable_role.oid, v_permits_oid, a.attnum, 'UPDATE'
+            )
+            or pg_catalog.has_column_privilege(
+              reachable_role.oid, v_permits_oid, a.attnum, 'REFERENCES'
+            )
+          )
      ) then
-    raise exception 'public.permits anon grants did not converge to SELECT-only';
+    raise exception 'public.permits effective anon grants did not converge to SELECT-only';
   end if;
 
   return pg_catalog.jsonb_build_object(
-    'schema_version', 'FloridaSignalUtilityIntakeAnonGrantAttestationV1',
+    'schema_version', 'FloridaSignalUtilityIntakeAnonGrantAttestationV2',
     'table', 'public.permits',
     'anon_select', true,
     'anon_write', false,
@@ -110,8 +169,56 @@ begin
 end;
 $function$;
 
-revoke execute on function private.fs_apply_utility_intake_anon_read_hardening(text)
-  from public, anon, authenticated, service_role;
+-- CREATE OR REPLACE preserves an existing function ACL. Remove PUBLIC and
+-- every arbitrary explicit grantee so migration application ends owner-only,
+-- even if an earlier object was granted to a custom role.
+do $function_acl$
+declare
+  v_function_oid oid := pg_catalog.to_regprocedure(
+    'private.fs_apply_utility_intake_anon_read_hardening(text)'
+  );
+  v_owner_oid oid;
+  v_grantee_name pg_catalog.name;
+begin
+  if v_function_oid is null then
+    raise exception 'utility-intake hardening function is absent';
+  end if;
+  select p.proowner
+    into v_owner_oid
+    from pg_catalog.pg_proc p
+   where p.oid = v_function_oid;
+
+  execute 'revoke all privileges on function '
+    || 'private.fs_apply_utility_intake_anon_read_hardening(text) from public';
+  for v_grantee_name in
+    select distinct r.rolname
+      from pg_catalog.pg_proc p
+      cross join lateral pg_catalog.aclexplode(
+        coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))
+      ) acl
+      join pg_catalog.pg_roles r on r.oid = acl.grantee
+     where p.oid = v_function_oid
+       and acl.grantee <> p.proowner
+  loop
+    execute pg_catalog.format(
+      'revoke all privileges on function private.fs_apply_utility_intake_anon_read_hardening(text) from %I',
+      v_grantee_name
+    );
+  end loop;
+
+  if exists (
+    select 1
+      from pg_catalog.pg_proc p
+      cross join lateral pg_catalog.aclexplode(
+        coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))
+      ) acl
+     where p.oid = v_function_oid
+       and acl.grantee <> v_owner_oid
+  ) then
+    raise exception 'utility-intake hardening function ACL is not owner-only';
+  end if;
+end;
+$function_acl$;
 
 comment on function private.fs_apply_utility_intake_anon_read_hardening(text) is
   'Default-off owner gate: exact approval hardens public.permits anon access to RLS-forced SELECT-only and returns an attestation.';
