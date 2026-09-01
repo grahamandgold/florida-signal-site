@@ -13,6 +13,7 @@ Tracked, idempotent SQL mirroring live production. No secrets in this directory.
 | `20260830233000_acclaim_run_receipts.sql` | append-only `broward_clerk_preliminary_run` receipts separating event, attempted-source and system clocks; public read, service-role insert only; no schedule | **2026-08-31 — applied remotely as `20260831005904 acclaim_run_receipts`** |
 | `20260831052701_source_run_ledgers_and_parcel_generations.sql` | private append-only FDEP/FAA terminal run receipts; generation-bound Broward parcel range/staging receipts and locked atomic promotion gate; no collector, schedule, or promotion | **2026-08-31 — applied; empty/default-off** |
 | `20260831090000_external_source_atomic_commit.sql` | private RLS-forced recoverable stage plus service-role-only SECURITY INVOKER RPC that commits FDEP/FAA source rows and one immutable receipt atomically | **NO — exact production privilege approval required** |
+| `20260831153000_broward_parcel_generation_pipeline.sql` | fixed parcel quality contracts; immutable page/observation evidence; global deterministic folio finalizer; preview/backup-bound atomic promotion wrapper; private Desk/alert health | **NO — code only; legacy writer retirement, backup, migration approval and canary required** |
 
 **Pre-existing / other work:** `fdep_erp`, `faa_oeaaa` tables and primary
 pg_cron jobs; `refresh_dashboard_cache`. The exact deployed FDEP/FAA version-1
@@ -70,6 +71,36 @@ operator sequence and recovery boundary.
   approves the service-role staging DML and RPC EXECUTE privilege. No collector
   canary may precede that approval.
 
+## 20260831153000 — current-generation Broward parcel pipeline (pending)
+
+- `broward_parcel_generation_pages` and
+  `broward_parcel_generation_observations` preserve every current-source row
+  before deduplication. The database finalizer applies one global winner rule:
+  minimum numeric stable `OBJECTID`, then system `OBJECTID_12`.
+- `broward_parcel_evidence_objects` is a private append-only ledger. The
+  collector must download every uploaded object, recompute SHA-256/size, and
+  fence that read with identical before/after object info before binding the
+  receipt to the exact observed Storage object ID/update clock and
+  Storage-owned byte count before page staging or finalization can proceed.
+- The fixed migration-owned production contract admits 550,000–560,000 raw
+  rows, requires at least 530,000 winners, and allows at most 200 rejects and
+  25,000 duplicate source rows. The 1–25-row canary contract is permanently
+  non-promotable.
+- The service role may call four narrow staging/finalization RPCs; direct DML
+  on staging or `broward_parcel_geography`, contract mutation and promotion
+  are revoked.
+- Promotion requires an immutable add/remove/change preview and an independently
+  downloaded/hashed private backup whose exact Storage ID, update clock and byte
+  count are bound into owner authorization before the existing atomic foundation
+  is invoked.
+- `broward_parcel_pipeline_health` and `_alerts` are private aggregate hooks
+  for the server-side Desk and freshness alert. The tracked monthly systemd
+  timer is default-off and additionally marker/env gated.
+
+See `BROWARD_PARCEL_GENERATION_RUNBOOK.md`. Applying the migration, deploying
+the collector, writing a canary, staging a full generation, authorizing a
+promotion and enabling the timer are distinct approval gates.
+
 ## 2026-08-11 — durable editorial loop
 
 - `property-transfer-refresh`: `20 19 * * 1-5` UTC; refreshes the deed/parcel snapshot and
@@ -96,11 +127,16 @@ See `EDITORIAL_LOOP_RUNBOOK.md` at the repository root for operation and recover
 ## 20260719_004 — countywide parcel authority (Phases 2–5)
 | Object | Purpose |
 |---|---|
-| `broward_parcel_geography` | Countywide parcel centroids (WGS84) from Broward County GIS `PARCEL_POLY_BCPA_TAXROLL/FeatureServer/0` (org `_BCGIS`, public, 554,358 parcels). PK `parcel_id_normalized`. Broward bbox CHECK. RLS read. **Separate from `gis_enrichment`** (permit-derived) to preserve provenance. |
+| `broward_parcel_geography` | Countywide parcel centroids (WGS84) from Broward County GIS `PARCEL_POLY_BCPA_TAXROLL/FeatureServer/0`. The verified baseline reconciles 554,358 raw polygons minus 50 bbox rejects minus 21,838 duplicate-folio rows to exactly 532,470 unique live parcels; the difference is not unexplained missing coverage, but the snapshot is stale/unreceipted. PK `parcel_id_normalized`. Broward bbox CHECK. RLS read. **Separate from `gis_enrichment`** (permit-derived) to preserve provenance. |
 | `broward_parcel_import_runs` | Import audit: pages/rows/rejections by reason, failed pages, COMPLETE/PARTIAL/FAILED. A partial run can never record COMPLETE. |
 | `fs_normalize_folio(text)` | Canonical folio normalization. |
 
-**Edge function `broward-parcel-sync`** — DEPLOYED, **no schedule created** (one-time/resumable; `?offset=&pages=`, `?probe=1` for read-only inspection).
+**Legacy Edge function `broward-parcel-sync` v5** — DEPLOYED, exported and
+hashed, **no schedule created**. Its actual controls are `?stats=1`, `?batch=N`
+and `?range=min-max`; older `?offset=&pages=` / `?probe=1` notes are wrong. It
+writes range/page-local winners directly to the live table and cannot safely
+perform a current refresh. Retire it before applying the current-generation
+integration migration; never run it concurrently with the new collector.
 
 ### Folio rule (binding)
 Broward folios are **canonical 12-character ALPHANUMERIC** identifiers (`484306BH0010`). Letters and

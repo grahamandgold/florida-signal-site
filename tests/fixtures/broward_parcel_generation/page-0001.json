@@ -1,0 +1,31 @@
+{
+  "features": [
+    {
+      "attributes": {
+        "OBJECTID_12": 5,
+        "OBJECTID": 20003,
+        "FOLIO": "BAD",
+        "FOLIO_NUMBER": "BAD"
+      },
+      "centroid": {"x": -80.17, "y": 26.15}
+    },
+    {
+      "attributes": {
+        "OBJECTID_12": 6,
+        "OBJECTID": 20004,
+        "FOLIO": "504200000006",
+        "FOLIO_NUMBER": "504200000006"
+      },
+      "centroid": null
+    },
+    {
+      "attributes": {
+        "OBJECTID_12": 7,
+        "OBJECTID": 20005,
+        "FOLIO": "504200000007",
+        "FOLIO_NUMBER": "504200000007"
+      },
+      "centroid": {"x": -81.0, "y": 26.16}
+    }
+  ]
+}

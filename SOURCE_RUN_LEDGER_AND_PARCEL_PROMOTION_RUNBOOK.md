@@ -9,6 +9,14 @@ parcel import or promotion.
 Nothing in this runbook authorizes the remaining atomic migration, Edge
 deployment, collector call, schedule change, parcel import, or promotion.
 
+**Current parcel integration package:**
+`supabase/migrations/20260831153000_broward_parcel_generation_pipeline.sql`
+and `ops/droplet/broward_parcel_generation.py` now implement the previously
+missing current-generation collector boundary in code only. They are not
+applied or deployed. The authoritative deployment, canary, preview, backup,
+promotion and default-off timer procedure is
+`BROWARD_PARCEL_GENERATION_RUNBOOK.md`.
+
 **Migration:**
 `supabase/migrations/20260831052701_source_run_ledgers_and_parcel_generations.sql`
 
@@ -46,6 +54,10 @@ deployment, collector call, schedule change, parcel import, or promotion.
 - The unbound legacy range ledger is not promotable: it reports 539,213
   accepted rows, while the live unique set is 532,470. Its page/range-local
   duplicate accounting misses 6,743 cross-page/range duplicate source rows.
+- The 21,888-row raw/live difference is fully explained by 50 rejects plus
+  21,838 duplicate source rows. It must not be labeled unexplained missing
+  coverage. The remaining defect is freshness and the absence of a durable
+  current-generation receipt.
 
 ## Purpose
 
@@ -265,7 +277,10 @@ under the prior import, and 532,470 final unique parcels. Therefore:
 - any unexplained drift beyond approved contract bounds blocks promotion.
 
 This migration accounts for legitimate, explicitly bounded rejections and
-duplicate collapses; it does not silently waive them.
+duplicate collapses; it does not silently waive them. The companion
+current-generation integration fixes the old range-local winner bug by ranking
+every valid observation globally before attributing each accepted/rejected/
+duplicate row back to its stable `OBJECTID` range.
 
 ### Promotion gate
 
@@ -440,7 +455,8 @@ Static contract tests:
 ```bash
 python3 -m unittest \
   tests.test_source_run_ledger_migration \
-  tests.test_external_source_atomic_commit
+  tests.test_external_source_atomic_commit \
+  tests.test_broward_parcel_generation
 ```
 
 Database contract tests, when a disposable local Supabase/Postgres test stack
@@ -451,6 +467,6 @@ supabase test db
 ```
 
 This includes
-`supabase/tests/source_run_ledgers_and_parcel_generations.test.sql`. Do not
-point the SQL test at production. The test uses transaction-local fixtures and
-rolls back.
+`supabase/tests/source_run_ledgers_and_parcel_generations.test.sql` and
+`supabase/tests/broward_parcel_generation_pipeline.test.sql`.
+Do not point the SQL test at production. Both use transaction-local fixtures and roll back.

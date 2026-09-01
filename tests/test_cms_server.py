@@ -301,6 +301,35 @@ class DataWireServerTests(unittest.TestCase):
         self.assertEqual(code, 502)
         self.assertIn("No timer status was inferred", payload["contract"])
 
+    def test_private_parcel_health_proxy_preserves_database_state(self):
+        row = {
+            "latest_run_status": "ready",
+            "latest_rows_attempted": 554358,
+            "latest_rows_written": 532470,
+            "latest_rows_rejected": 50,
+            "latest_duplicate_rows": 21838,
+            "live_rows": 532470,
+            "alert_state": "AWAITING_REVIEWED_PROMOTION",
+            "alert_detail": "A ready generation awaits review.",
+        }
+        with mock.patch.object(
+            cms_server, "supabase_request", return_value=(200, [row])
+        ) as request:
+            code, payload = cms_server.broward_parcel_health_payload()
+        self.assertEqual(code, 200)
+        self.assertEqual(payload["health"], row)
+        self.assertEqual(payload["record_count"], 532470)
+        self.assertEqual(payload["status"], "delayed")
+        self.assertIn("broward_parcel_pipeline_health?select=", request.call_args.args[0])
+        self.assertIn("exact live row/generation parity", payload["contract"])
+
+    def test_parcel_health_is_private_and_visible_in_data_desk(self):
+        html = (ROOT / "cms" / "data.html").read_text(encoding="utf-8")
+        server = (ROOT / "cms" / "server.py").read_text(encoding="utf-8")
+        self.assertIn('/api/admin/broward-parcel-health', html)
+        self.assertIn('CURRENT · RECEIPTED / PARITY VERIFIED', html)
+        self.assertIn('if not self.require_admin()', server)
+
     def test_early_intel_orders_pdmr_planning_intent_before_permits(self):
         def public_payload(url):
             if url.endswith("/api/meetings"):

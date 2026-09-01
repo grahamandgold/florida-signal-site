@@ -126,7 +126,7 @@ select ok(
   not has_table_privilege(
     'service_role', 'public.broward_parcel_geography_stage', 'insert'
   ),
-  'parcel staging remains disconnected from service role'
+  'parcel staging remains behind the reviewed collector RPC boundary'
 );
 select ok(
   not has_function_privilege(
@@ -340,7 +340,7 @@ select throws_ok(
     where generation_id = '33333333-3333-3333-3333-333333333333'
   $sql$,
   '55000',
-  'ready/promoted parcel generation receipts are immutable outside the promotion gate',
+  'terminal parcel generation receipts are immutable outside promotion',
   'a non-owner cannot make a promotion-only state transition directly'
 );
 reset role;
@@ -348,7 +348,7 @@ revoke select, update on public.broward_parcel_import_generations from service_r
 
 select lives_ok(
   $sql$
-    select public.fs_promote_broward_parcel_generation(
+    select public.fs_promote_broward_parcel_generation_foundation(
       '33333333-3333-3333-3333-333333333333'
     )
   $sql$,
@@ -364,7 +364,7 @@ select is(
 );
 
 select is(
-  (select public.fs_promote_broward_parcel_generation(
+  (select public.fs_promote_broward_parcel_generation_foundation(
     '33333333-3333-3333-3333-333333333333'
   ) ->> 'status'),
   'already_promoted'::text,
@@ -408,7 +408,7 @@ select lives_ok(
 
 select throws_ok(
   $sql$
-    select public.fs_promote_broward_parcel_generation(
+    select public.fs_promote_broward_parcel_generation_foundation(
       '44444444-4444-4444-4444-444444444444'
     )
   $sql$,

@@ -556,8 +556,8 @@
 
       { name: "County parcel authority", table: "broward_parcel_geography",
         event: null, collected: "fetched_at", countCol: "parcel_id_normalized",
-        authority: true,
-        note: "Broward County GIS PARCEL_POLY_BCPA_TAXROLL — the official countywide parcel layer. One-time import, no schedule." },
+        authority: true, privateHealthPath: "/api/admin/broward-parcel-health",
+        note: "Broward County GIS PARCEL_POLY_BCPA_TAXROLL — official countywide authority. The legacy snapshot is not current merely because rows exist; the private generation receipt proves collection, parity and freshness." },
 
       { name: "Permit GIS coverage", table: "gis_enrichment",
         event: null, collected: "enriched_at",
@@ -633,7 +633,7 @@
       return `<div class="health-card${f.authority ? " health-card--authority" : ""}" data-feed="${esc(f.table)}">
         <span class="feed">${esc(f.name)}</span>
         <span class="clock clock--event"><i>latest source event</i><b class="event loading">loading…</b></span>
-        <span class="clock clock--collected"><i>${f.receiptTable ? "latest collector run" : "last successful collection"}</i><b class="collected">—</b></span>
+        <span class="clock clock--collected"><i>${f.receiptTable || f.privateHealthPath ? "latest collector run" : "last successful collection"}</i><b class="collected">—</b></span>
         <span class="rows"></span>
         <span class="badge badge--unknown">checking</span>
         <span class="note">${esc(f.note || "")}</span>
@@ -696,6 +696,12 @@
         try {
           let eventVal = await newestValue(f.table, f.event);
           let receipt = null;
+          let privateHealth = null;
+          if (f.privateHealthPath) {
+            const payload = await window.FloridaSignalNewsroom.admin(f.privateHealthPath);
+            privateHealth = payload && payload.health;
+            if (!privateHealth || typeof privateHealth !== "object") throw new Error("Parcel health receipt unavailable");
+          }
           if (f.receiptTable) {
             const receiptRows = await rows(f.receiptTable, {
               select: "status,completed_at,observed_at,attempted_through,event_through,rows_observed,rows_new,reason",
@@ -706,7 +712,9 @@
               eventVal = receipt.event_through;
             }
           }
-          const collectedVal = receipt ? receipt.completed_at : await newestValue(f.table, f.collected);
+          const collectedVal = privateHealth
+            ? (privateHealth.latest_run_completed_at || privateHealth.promoted_source_observed_at)
+            : receipt ? receipt.completed_at : await newestValue(f.table, f.collected);
           const total        = await tableCount(f.table, f.countCol);
 
           const evEl = card.querySelector(".event");
@@ -714,13 +722,36 @@
           evEl.textContent = f.event ? (eventVal ? dateish(eventVal) : "no rows")
                                      : "n/a — snapshot, not an event stream";
           card.querySelector(".collected").textContent = collectedVal ?
-            (f.receiptTable ? dateTimeish(collectedVal) : dateish(collectedVal)) : "not recorded";
+            (f.receiptTable ? dateTimeish(collectedVal) :
+              f.privateHealthPath ? dateTimeish(collectedVal) : dateish(collectedVal)) : "not recorded";
           setRows(card, total);
 
           const badge = card.querySelector(".badge");
           let key = "HEALTHY", label = null;
 
-          if (f.receiptTable) {
+          if (privateHealth) {
+            const state = String(privateHealth.alert_state || "UNKNOWN").toUpperCase();
+            if (state === "CURRENT") {
+              key = "HEALTHY"; label = "CURRENT · RECEIPTED / PARITY VERIFIED";
+            } else if (state === "RUNNING") {
+              key = "DELAY"; label = "COLLECTION IN PROGRESS";
+            } else if (state === "AWAITING_REVIEWED_PROMOTION") {
+              key = "DELAY"; label = "READY · AWAITING REVIEWED PROMOTION";
+            } else if (state === "STALE") {
+              key = "STALE"; label = "STALE · CURRENT GENERATION REQUIRED";
+            } else {
+              key = "FAILED"; label = state.replaceAll("_", " ");
+            }
+            const attempted = Number(privateHealth.latest_rows_attempted || 0).toLocaleString();
+            const written = Number(privateHealth.latest_rows_written || 0).toLocaleString();
+            const rejected = Number(privateHealth.latest_rows_rejected || 0).toLocaleString();
+            const duplicates = Number(privateHealth.latest_duplicate_rows || 0).toLocaleString();
+            card.querySelector(".note").textContent = f.note + " Latest generation: " +
+              attempted + " attempted / " + written + " winners / " + rejected +
+              " rejected / " + duplicates + " duplicate source rows. " +
+              (privateHealth.alert_detail || "No active limitation reported.");
+          }
+          else if (f.receiptTable) {
             const runStatus = String((receipt || {}).status || "").toLowerCase();
             const runHours = hoursSince(collectedVal);
             const eventBusinessDays = businessCalendarAge(eventVal);
@@ -1125,7 +1156,7 @@
         { label: "Verified Clerk recordings", note: "Deeds, mortgages, liens, NOCs and judgments", table: "broward_clerk_records_doc", receiptId: "broward", refresh: "automated" },
         { label: "Mapped transfers", note: "Deeds and easements linked to parcels", table: "broward_property_transfer_map", componentId: "property-transfers", refresh: "automated" },
         { label: "BCPA property cards", note: "Owners, values and property facts", table: "bcpa_property_card", componentId: "property-context", refresh: "snapshot" },
-        { label: "Countywide parcel map", note: "Official parcel centroids and latest sale cross-check", table: "broward_parcel_geography", componentId: "property-context", refresh: "snapshot" },
+        { label: "Countywide parcel map", note: "Official parcel centroids plus private generation freshness/parity receipt", table: "broward_parcel_geography", privatePath: "/api/admin/broward-parcel-health", connection: "broward-parcel-generation", refresh: "automated" },
         { label: "GIS permit enrichment", note: "Permit-to-parcel ownership and sale context; independent health receipt not configured", table: "gis_enrichment", refresh: "automated" }
       ]},
       { eyebrow: "S4 · Regulatory evidence", title: "Environment + airspace", items: [
@@ -1216,7 +1247,11 @@
               ? payload.items
               : await (await sbFetch(item.table, { select: cfg.probe || cfg.select.split(",")[0], limit: "1" })).json();
           const hasRows = Array.isArray(data) && data.length > 0;
-          const receipt = item.receiptId ? sourceHealth.get(item.receiptId) : item.componentId ? componentHealth.get(item.componentId) : null;
+          const receipt = payload && payload.health
+            ? { status: payload.status, event_through: payload.event_through,
+                system_time: payload.system_time, detail: payload.detail }
+            : item.receiptId ? sourceHealth.get(item.receiptId)
+              : item.componentId ? componentHealth.get(item.componentId) : null;
           const liveStatus = String(receipt && receipt.status || "UNKNOWN").toLowerCase();
           const refresh = String(item.refresh || "connected").toLowerCase();
           if (hasRows) {

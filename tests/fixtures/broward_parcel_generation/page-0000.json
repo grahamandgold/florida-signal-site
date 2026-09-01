@@ -1,0 +1,59 @@
+{
+  "features": [
+    {
+      "attributes": {
+        "OBJECTID_12": 1,
+        "OBJECTID": 19999,
+        "FOLIO": "504200000001",
+        "FOLIO_NUMBER": "5042-00-00-0001",
+        "PARCEL_TYP": "REAL",
+        "USE_CODE": "01",
+        "USE_TYPE": "RESIDENTIAL",
+        "MUNICIPALITY": "FT LAUDERDALE",
+        "SITUS_STREET_NUMBER": "100",
+        "SITUS_STREET_NAME": "LAS OLAS",
+        "SITUS_STREET_TYPE": "BLVD",
+        "SITUS_CITY": "FORT LAUDERDALE",
+        "SITUS_ZIP_CODE": "33301",
+        "SALE_DATE_1": 1767225600000,
+        "DEED_TYPE_1": "WD",
+        "STAMP_AMOUNT_1": 1000,
+        "SALE1_CIN": "123"
+      },
+      "centroid": {"x": -80.14, "y": 26.12}
+    },
+    {
+      "attributes": {
+        "OBJECTID_12": 2,
+        "OBJECTID": 20000,
+        "FOLIO": "504200000002",
+        "FOLIO_NUMBER": "504200000002",
+        "SITUS_STREET_NUMBER": "200",
+        "SITUS_STREET_NAME": "BROWARD",
+        "SITUS_STREET_TYPE": "BLVD"
+      },
+      "centroid": {"x": -80.15, "y": 26.13}
+    },
+    {
+      "attributes": {
+        "OBJECTID_12": 3,
+        "OBJECTID": 20001,
+        "FOLIO": "504200000001",
+        "FOLIO_NUMBER": "504200000001",
+        "SITUS_STREET_NUMBER": "102",
+        "SITUS_STREET_NAME": "LAS OLAS",
+        "SITUS_STREET_TYPE": "BLVD"
+      },
+      "centroid": {"x": -80.141, "y": 26.121}
+    },
+    {
+      "attributes": {
+        "OBJECTID_12": 4,
+        "OBJECTID": 20002,
+        "FOLIO": null,
+        "FOLIO_NUMBER": null
+      },
+      "centroid": {"x": -80.16, "y": 26.14}
+    }
+  ]
+}

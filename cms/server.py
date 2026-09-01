@@ -82,6 +82,7 @@ PIPELINE_LABELS = {
     "florida-broward.timer": "Broward verified pull",
     "florida-clerk-catchup.timer": "Broward catch-up",
     "florida-gisrefresh.timer": "County GIS refresh",
+    "florida-broward-parcel-generation.timer": "Broward parcel current generation",
     "florida-sunbiz-quarterly.timer": "Sunbiz full refresh",
 }
 
@@ -866,6 +867,57 @@ def supabase_request(path: str, method: str = "GET", body: Any = None, prefer: s
         return error.code, {"error": error.read().decode()[:400]}
     except OSError as error:
         return 502, {"error": str(error)[:200]}
+
+
+def broward_parcel_health_payload() -> tuple[int, dict[str, Any]]:
+    """Proxy the private aggregate parcel receipt without exposing raw evidence."""
+    fields = (
+        "latest_run_id,latest_run_status,latest_run_completed_at,"
+        "latest_rows_attempted,latest_rows_written,latest_rows_rejected,"
+        "latest_duplicate_rows,promoted_generation_id,promoted_source_observed_at,"
+        "promoted_rows,live_rows,live_generation_count,latest_fetched_at,"
+        "alert_state,alert_detail"
+    )
+    code, rows = supabase_request(
+        "broward_parcel_pipeline_health?select=" + fields + "&limit=1"
+    )
+    if code >= 400 or not isinstance(rows, list):
+        detail = rows if isinstance(rows, dict) else {"error": "Parcel health unavailable"}
+        return 502, {
+            **detail,
+            "status": "UNKNOWN",
+            "contract": "No parcel freshness, parity or connection state was inferred.",
+        }
+    if not rows or not isinstance(rows[0], dict):
+        return 503, {
+            "error": "Parcel health returned no aggregate receipt",
+            "status": "UNKNOWN",
+            "contract": "No parcel freshness, parity or connection state was inferred.",
+        }
+    health = rows[0]
+    state = str(health.get("alert_state") or "UNKNOWN").upper()
+    desk_status = {
+        "CURRENT": "current",
+        "RUNNING": "delayed",
+        "AWAITING_REVIEWED_PROMOTION": "delayed",
+        "STALE": "stale",
+    }.get(state, "error")
+    return 200, {
+        "health": health,
+        "record_count": int(health.get("live_rows") or 0),
+        "status": desk_status,
+        "system_time": health.get("latest_run_completed_at"),
+        "event_through": health.get("promoted_source_observed_at"),
+        "detail": health.get("alert_detail"),
+        "generated_at": now_iso(),
+        "contract": (
+            "Private aggregate only. CURRENT requires a promoted single-stream "
+            "generation, exact live row/generation parity and a source observation "
+            "no older than 45 days."
+        ),
+    }
+
+
 MARKET_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,39}$")
 CITY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,59}$")
 COUNTY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,79}$")
@@ -1459,6 +1511,12 @@ class Handler(SimpleHTTPRequestHandler):
             if not self.require_admin():
                 return
             code, payload = pipeline_schedule()
+            self.reply(payload, HTTPStatus.OK if code == 200 else HTTPStatus.BAD_GATEWAY)
+            return
+        if route == "/api/admin/broward-parcel-health":
+            if not self.require_admin():
+                return
+            code, payload = broward_parcel_health_payload()
             self.reply(payload, HTTPStatus.OK if code == 200 else HTTPStatus.BAD_GATEWAY)
             return
         if route == "/api/admin/pdmr-intent":

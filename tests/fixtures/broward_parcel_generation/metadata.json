@@ -1,0 +1,30 @@
+{
+  "capabilities": "Query",
+  "fields": [
+    {"name": "OBJECTID_12", "type": "esriFieldTypeOID"},
+    {"name": "OBJECTID", "type": "esriFieldTypeDouble"},
+    {"name": "FOLIO", "type": "esriFieldTypeString"},
+    {"name": "FOLIO_NUMBER", "type": "esriFieldTypeString"},
+    {"name": "PARCEL_TYP", "type": "esriFieldTypeString"},
+    {"name": "USE_CODE", "type": "esriFieldTypeString"},
+    {"name": "USE_TYPE", "type": "esriFieldTypeString"},
+    {"name": "MUNICIPALITY", "type": "esriFieldTypeString"},
+    {"name": "SITUS_STREET_NUMBER", "type": "esriFieldTypeString"},
+    {"name": "SITUS_STREET_NUMBER_END", "type": "esriFieldTypeString"},
+    {"name": "SITUS_STREET_DIRECTION", "type": "esriFieldTypeString"},
+    {"name": "SITUS_STREET_POST_DIR", "type": "esriFieldTypeString"},
+    {"name": "SITUS_STREET_NAME", "type": "esriFieldTypeString"},
+    {"name": "SITUS_STREET_TYPE", "type": "esriFieldTypeString"},
+    {"name": "SITUS_CITY", "type": "esriFieldTypeString"},
+    {"name": "SITUS_ZIP_CODE", "type": "esriFieldTypeString"},
+    {"name": "SITUS_UNIT_NUMBER", "type": "esriFieldTypeString"},
+    {"name": "SALE_DATE_1", "type": "esriFieldTypeDate"},
+    {"name": "DEED_TYPE_1", "type": "esriFieldTypeString"},
+    {"name": "STAMP_AMOUNT_1", "type": "esriFieldTypeDouble"},
+    {"name": "SALE1_CIN", "type": "esriFieldTypeString"}
+  ],
+  "geometryType": "esriGeometryPolygon",
+  "maxRecordCount": 2000,
+  "objectIdField": "OBJECTID_12",
+  "serviceItemId": "4b6c15240fdc492a87b8f984b11d2854"
+}
