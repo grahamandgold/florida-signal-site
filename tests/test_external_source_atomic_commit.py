@@ -6,7 +6,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = ROOT / "supabase/migrations/20260831090000_external_source_atomic_commit.sql"
+MIGRATION = ROOT / "supabase/migrations/20260901012400_external_source_atomic_commit.sql"
+SCHEDULE_MIGRATION = ROOT / "supabase/migrations/20260901012500_external_source_collector_cron_cutover.sql"
 FDEP = ROOT / "supabase/functions/fdep-erp-sync/index.ts"
 FDEP_NORMALIZER = ROOT / "supabase/functions/fdep-erp-sync/normalize.ts"
 FAA = ROOT / "supabase/functions/faa-oeaaa-sync/index.ts"
@@ -22,6 +23,7 @@ class ExternalSourceAtomicCommitTests(unittest.TestCase):
         cls.sql = MIGRATION.read_text()
         cls.fdep = FDEP.read_text()
         cls.faa = FAA.read_text()
+        cls.schedule_sql = SCHEDULE_MIGRATION.read_text()
 
     def test_stage_is_private_and_forced_rls(self):
         self.assertIn("external_source_run_stage force row level security", self.sql)
@@ -56,6 +58,8 @@ class ExternalSourceAtomicCommitTests(unittest.TestCase):
         self.assertIn("'/manifest.json'", self.sql)
         self.assertIn("extensions.digest", self.sql)
         self.assertIn("'raw_manifest', p_manifest", self.sql)
+        self.assertIn("p_manifest -> 'terminal_receipt' is distinct from p_receipt", self.sql)
+        self.assertIn("manifest terminal receipt does not match", self.sql)
         self.assertIn("a manifest-referenced raw evidence object does not exist", self.sql)
         self.assertIn("idempotent replay payload differs", self.sql)
         self.assertIn("receipt contains unknown fields", self.sql)
@@ -99,6 +103,22 @@ class ExternalSourceAtomicCommitTests(unittest.TestCase):
             "has_table_privilege(\n       'service_role', 'storage.objects', 'select'",
             self.sql,
         )
+        for schema in ("public", "storage", "extensions"):
+            self.assertIn(
+                f"has_schema_privilege('service_role', '{schema}', 'usage')",
+                self.sql,
+            )
+        self.assertIn("has_sequence_privilege(", self.sql)
+        self.assertIn("'extensions.digest(bytea,text)', 'execute'", self.sql)
+
+    def test_migration_versions_follow_live_history(self):
+        live_latest = 20260831220548
+        self.assertGreater(int(MIGRATION.name.split("_", 1)[0]), live_latest)
+        self.assertGreater(
+            int(SCHEDULE_MIGRATION.name.split("_", 1)[0]),
+            int(MIGRATION.name.split("_", 1)[0]),
+        )
+        self.assertFalse((MIGRATION.parent / "20260831090000_external_source_atomic_commit.sql").exists())
 
     def test_source_rows_and_receipt_share_one_rpc_transaction(self):
         fdep_upsert = self.sql.index("insert into public.fdep_erp")
@@ -141,6 +161,107 @@ class ExternalSourceAtomicCommitTests(unittest.TestCase):
             self.assertIn('SYNC_KEY_HEADER = "x-florida-signal-sync-key"', source)
             self.assertIn("request.headers.get(SYNC_KEY_HEADER)", source)
             self.assertNotIn('url.searchParams.get("key")', source)
+
+    def test_collectors_bound_every_fetch_and_recover_ambiguous_commit(self):
+        for source in (self.fdep, self.faa):
+            self.assertEqual(source.count("await fetch("), 1)
+            self.assertIn("async function fetchBounded(", source)
+            self.assertIn("OVERALL_RUN_BUDGET_MS = 115_000", source)
+            self.assertIn("FAILURE_RECEIPT_RESERVE_MS = 20_000", source)
+            self.assertIn("COMMIT_ATTEMPTS = 3", source)
+            self.assertIn("async function readCommittedReceipt(", source)
+            self.assertIn("/rest/v1/external_source_run_receipts?", source)
+            self.assertIn("recovered_after_ambiguous_response: true", source)
+            self.assertIn("manifest.terminal_receipt = terminalReceipt", source)
+            self.assertIn('"source_metadata",', source)
+            self.assertIn("canonicalJson(retainedManifest) !== canonicalJson(expectedManifest)", source)
+            self.assertIn("canonicalJson(expectedReceipt)", source)
+            self.assertIn("retained payload is not the attempted terminal commit", source)
+            self.assertIn('url.searchParams.get("dispatch_id")', source)
+            self.assertIn('dispatch_id: dispatchId', source)
+            self.assertIn('commit_state: "unknown"', source)
+            self.assertIn("do not write a contradictory failure receipt", source)
+            unknown_guard = source.index("if (error instanceof CommitStateUnknownError)")
+            failure_manifest = source.index("failure-manifest.json", unknown_guard)
+            self.assertLess(unknown_guard, failure_manifest)
+
+    def test_fdep_pagination_fails_closed_on_zero_progress(self):
+        self.assertIn("payload.exceededTransferLimit && features.length === 0", self.fdep)
+        self.assertIn("pagination made no progress while more rows were reported", self.fdep)
+        self.assertIn("payload.exceededTransferLimit && rows.size === identitiesBeforePage", self.fdep)
+        self.assertIn("pagination produced no new identities while more rows were reported", self.fdep)
+        unsafe_break = "if (!payload.exceededTransferLimit || features.length === 0) break"
+        self.assertNotIn(unsafe_break, self.fdep)
+
+    def test_schedule_cutover_is_secret_safe_and_default_off(self):
+        sql = self.schedule_sql
+        for table in (
+            "external_source_collector_dispatches",
+            "external_source_run_alerts",
+        ):
+            self.assertIn(f"alter table public.{table} force row level security", sql)
+            self.assertRegex(
+                sql,
+                rf"revoke all on table public\.{table}\s+from public, anon, authenticated, service_role",
+            )
+        for function in (
+            "fs_dispatch_external_source",
+            "fs_check_external_source_health",
+            "fs_disable_external_source_schedules",
+            "fs_activate_external_source_schedules",
+        ):
+            self.assertIn(f"function public.{function}", sql)
+        self.assertNotIn("security definer", sql.lower())
+        self.assertNotIn("select cron.schedule(", sql.lower())
+        self.assertIn("perform cron.schedule(", sql.lower())
+        self.assertIn("20 9 * * *", sql)
+        self.assertIn("40 9 * * *", sql)
+        self.assertIn("10 10,11 * * *", sql)
+        self.assertIn("0 12 * * *", sql)
+        self.assertIn("fl_signal_functions_base_url", sql)
+        self.assertIn("fl_signal_external_source_sync_key", sql)
+        self.assertIn("cron.schedule(text,text,text)", sql)
+        self.assertIn("cron.unschedule(bigint)", sql)
+        self.assertIn("net.http_post(text,jsonb,jsonb,jsonb,integer)", sql)
+        self.assertIn("vault.decrypted_secrets", sql)
+        self.assertIn("dispatch_id uuid not null unique", sql)
+        self.assertIn("'?dispatch_id=' || v_dispatch_id::text", sql)
+        self.assertIn("dispatch_kind = 'scheduled'", sql)
+        self.assertIn("source_metadata ->> 'dispatch_id' = v_dispatch_id::text", sql)
+        self.assertIn("'missing_dispatch'", sql)
+        self.assertNotIn("jrjewmzkyluxdywyusrw", sql)
+        self.assertNotRegex(sql, r"https://[a-z0-9-]+\.supabase\.co/functions/v1")
+        self.assertIn(
+            "$job$select public.fs_dispatch_external_source('fdep_erp');$job$",
+            sql,
+        )
+        self.assertIn(
+            "$job$select public.fs_dispatch_external_source('faa_oeaaa');$job$",
+            sql,
+        )
+        self.assertIn("command ilike '%key=%'", sql)
+        self.assertIn("'missing_receipt'", sql)
+
+    def test_disposable_postgres_harness_executes_real_migration(self):
+        runner = (ROOT / "tests/run_external_source_atomic_postgres.sh").read_text()
+        assertions = (ROOT / "tests/sql/external_source_atomic_assertions.sql").read_text()
+        schedule_assertions = (
+            ROOT / "tests/sql/external_source_schedule_assertions.sql"
+        ).read_text()
+        self.assertIn("postgres:17-alpine", runner)
+        self.assertIn(str(MIGRATION.relative_to(ROOT)), runner)
+        self.assertIn(str(SCHEDULE_MIGRATION.relative_to(ROOT)), runner)
+        self.assertIn("external_source_schedule_assertions.sql", runner)
+        self.assertIn("fs_commit_external_source_run", assertions)
+        self.assertIn("generated in_broward", assertions)
+        self.assertIn("receipt failure must roll back source upsert", assertions)
+        self.assertIn("exact replay must be idempotent", assertions)
+        self.assertIn("failed terminal commit must discard staged prefix", assertions)
+        self.assertIn("FDEP exact replay must be idempotent", assertions)
+        self.assertIn("FDEP receipt failure must roll back", assertions)
+        self.assertIn("schedule migration must be default-off", schedule_assertions)
+        self.assertIn("watchdog must require the exact scheduled dispatch UUID", schedule_assertions)
+        self.assertIn("rollback must still preserve unrelated cron jobs", schedule_assertions)
 
     def test_fdep_layer_specific_normalizer_fixture(self):
         script = f"""

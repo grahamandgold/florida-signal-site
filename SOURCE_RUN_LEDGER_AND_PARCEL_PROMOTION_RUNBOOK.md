@@ -12,8 +12,13 @@ deployment, collector call, schedule change, parcel import, or promotion.
 **Migration:**
 `supabase/migrations/20260831052701_source_run_ledgers_and_parcel_generations.sql`
 
-**Pending atomic collector migration:**
-`supabase/migrations/20260831090000_external_source_atomic_commit.sql`
+**Pending collector migrations (both newer than live `20260831220548`):**
+
+- `supabase/migrations/20260901012400_external_source_atomic_commit.sql`
+- `supabase/migrations/20260901012500_external_source_collector_cron_cutover.sql`
+
+The second migration creates private scheduling/alert infrastructure but is
+default-off: only the explicit owner-only activation function changes cron.
 
 ## 2026-08-31 production evidence
 
@@ -88,8 +93,10 @@ collectors are tracked locally:
 2. Broward parcel imports are bound to one exact source generation. A range or
    staged parcel from another generation cannot satisfy the promotion gate.
 
-The package creates no cron job, Edge function, collector implementation, Desk
-status change, or service-role access to parcel staging/promotion.
+The applied foundation creates no cron job, Edge function, collector
+implementation, Desk status change, or service-role access to parcel
+staging/promotion. The later tracked schedule migration remains default-off
+until its owner-only activation function is explicitly invoked.
 
 ## Export-first prerequisite
 
@@ -205,7 +212,7 @@ receipt's proof boundary.
 
 The applied foundation schema alone does **not** make existing source-table
 writes atomic with the new receipt insert. The pending
-`20260831090000_external_source_atomic_commit.sql` adds private recoverable
+`20260901012400_external_source_atomic_commit.sql` adds private recoverable
 staging and a service-role-only `SECURITY INVOKER` RPC that derives write counts
 and commits source rows plus the terminal receipt together. A collector canary
 remains blocked until that exact privilege migration is approved and applied;
@@ -394,34 +401,197 @@ promote parcels.
 
 ### C. FDEP/FAA collector canaries
 
-Only after a separate collector-code review and deployment approval:
+Only after collector-code review and the exact production approval. The two
+new migrations sort after live version `20260831220548`; do not use
+`--include-all` or migration-history repair to force an older filename.
 
 ```text
-Approved: apply the production external_source_atomic_commit migration,
+Approved: apply the production external-source atomic and default-off schedule
+migrations,
 granting service_role SELECT/INSERT/UPDATE/DELETE on the private RLS-forced
 staging table and EXECUTE on the SECURITY INVOKER
 fs_commit_external_source_run RPC; rotate the retired URL query secret,
-configure FL_SIGNAL_SYNC_KEY and the matching Vault-backed
-x-florida-signal-sync-key cron header without storing its value in cron SQL;
-then deploy FDEP and FAA collectors one at a time and run bounded live
-canaries. No parcel backfill or promotion.
+configure FL_SIGNAL_SYNC_KEY and the matching Vault values; disable legacy
+FDEP/FAA schedules; then deploy FDEP and FAA collectors one at a time, run
+bounded live canaries, and activate only the tracked header-authenticated
+schedules after both pass. No parcel backfill or promotion.
 ```
 
-1. Confirm the old secret is absent from every active cron URL and new request
-   log, and that `cron.job.command` contains only the Vault secret name. Keep
-   the existing schedules disabled until that check and the matching collector
-   deployment are complete.
-2. Start with one source and one bounded, non-overlapping canary invocation.
-3. Verify private raw object(s), exact source/run-bound manifest key, every
-   referenced object, the database-computed canonical manifest hash/copy,
-   exact count identities, schema hash, terminal status, and one immutable
-   receipt row.
-4. Attempting to update/delete that receipt must fail.
-5. Observe two ordinary scheduled runs without changing cadence.
-6. Repeat independently for the other source.
-7. Change Desk health to receipt-backed `UNKNOWN`/attention/healthy semantics
-   only after those natural observations. Never infer a collector run from
-   `MAX(last_fetched_at)` alone.
+1. From the clean reviewed worktree, prove migration order before any write:
+
+   ```bash
+   export FL_SIGNAL_PROJECT_REF=jrjewmzkyluxdywyusrw
+   supabase link --project-ref "$FL_SIGNAL_PROJECT_REF"
+   supabase migration list --linked
+   supabase db push --linked --dry-run
+   ```
+
+   Expected pending order is exactly `20260901012400` then `20260901012500`,
+   both after live `20260831220548`. Stop on any additional/unexpected version.
+
+2. Generate one new 64-character hex key in a private shell variable, install
+   the same value as Edge secret `FL_SIGNAL_SYNC_KEY` and Vault secret
+   `fl_signal_external_source_sync_key`, and set Vault
+   `fl_signal_functions_base_url` to the project URL ending `/functions/v1`.
+   Use the Supabase secret/Vault UI or a no-echo operator channel; never place
+   the value in Git, a URL, a `curl` argument, cron SQL, or saved transcript.
+   Verify by name/length only:
+
+   ```sql
+   select name, length(decrypted_secret) as secret_length
+   from vault.decrypted_secrets
+   where name in (
+     'fl_signal_functions_base_url',
+     'fl_signal_external_source_sync_key'
+   )
+   order by name;
+   ```
+
+   Expected: exactly two rows; sync-key length at least 32; base URL contains
+   no query string. Rotate and remove the retired URL-query credential.
+
+3. Apply both migrations. The schedule migration is default-off and must leave
+   `cron.job` unchanged:
+
+   ```bash
+   supabase db push --linked
+   supabase migration list --linked
+   ```
+
+4. Stop legacy source calls before changing either Edge bundle:
+
+   ```sql
+   select public.fs_disable_external_source_schedules();
+
+   select jobid, jobname, schedule, command
+   from cron.job
+   where jobname in (
+     'fdep-erp-daily', 'faa-oeaaa-daily', 'faa-oeaaa-retry',
+     'fl-signal-external-source-health'
+   )
+      or command ilike '%fdep-erp-sync%'
+      or command ilike '%faa-oeaaa-sync%';
+   ```
+
+   Expected: the disable result is retained as the operator receipt and the
+   second query returns zero rows.
+
+5. Deploy and canary FDEP first. Keep the exact pre-deploy bundle/hash as the
+   private rollback copy. The function performs its own header authentication,
+   so preserve the existing gateway setting explicitly:
+
+   ```bash
+   export FL_SIGNAL_FUNCTIONS_BASE_URL="https://${FL_SIGNAL_PROJECT_REF}.supabase.co/functions/v1"
+   IFS= read -r -s FL_SIGNAL_SYNC_KEY_INPUT
+   export FL_SIGNAL_SYNC_KEY_INPUT
+   printf '\n'
+
+   supabase functions deploy fdep-erp-sync \
+     --project-ref "$FL_SIGNAL_PROJECT_REF" \
+     --no-verify-jwt
+
+   set +x
+   CANARY_DATE="$(date -u +%F)"
+   {
+     printf 'silent\nshow-error\nfail-with-body\nrequest = "POST"\n'
+     printf 'url = "%s/fdep-erp-sync?layers=0&since=%s"\n' \
+       "$FL_SIGNAL_FUNCTIONS_BASE_URL" "$CANARY_DATE"
+     printf 'header = "x-florida-signal-sync-key: %s"\n' \
+       "$FL_SIGNAL_SYNC_KEY_INPUT"
+   } | curl --config -
+   ```
+
+   Invoke one bounded current-day/layer-0 canary through a secret-safe client
+   (header value supplied from a private variable/stdin, never the URL). Verify
+   private raw object(s), manifest `terminal_receipt`, exact source/run prefix,
+   database canonical manifest/hash, count identities, schema hashes, terminal
+   status, source rows, and exactly one immutable receipt. Also force an invalid
+   update/delete and confirm both fail.
+
+6. Repeat independently for FAA, deploying all three tracked files together:
+
+   ```bash
+   supabase functions deploy faa-oeaaa-sync \
+     --project-ref "$FL_SIGNAL_PROJECT_REF" \
+     --no-verify-jwt
+
+   {
+     printf 'silent\nshow-error\nfail-with-body\nrequest = "POST"\n'
+     printf 'url = "%s/faa-oeaaa-sync?types=OE&since=%s"\n' \
+       "$FL_SIGNAL_FUNCTIONS_BASE_URL" "$CANARY_DATE"
+     printf 'header = "x-florida-signal-sync-key: %s"\n' \
+       "$FL_SIGNAL_SYNC_KEY_INPUT"
+   } | curl --config -
+   unset FL_SIGNAL_SYNC_KEY_INPUT
+   ```
+
+   Use a current-day OE-only canary. Verify the same receipt/evidence contract,
+   and verify PostgreSQL—not the collector—computed `in_broward`.
+
+7. Activate the reviewed schedules only after both canaries pass:
+
+   ```sql
+   select public.fs_activate_external_source_schedules();
+
+   select jobname, schedule, command
+   from cron.job
+   where jobname in (
+     'fdep-erp-daily', 'faa-oeaaa-daily', 'faa-oeaaa-retry',
+     'fl-signal-external-source-health'
+   )
+   order by jobname;
+   ```
+
+   Expected schedules are FDEP `20 9 * * *`, FAA `40 9 * * *`, FAA retries
+   `10 10,11 * * *`, and watchdog `0 12 * * *` UTC. Collector job commands must
+   contain only calls to `fs_dispatch_external_source`; they must contain no
+   URL, Vault lookup, header name, query `key=`, or credential value.
+
+8. Observe two ordinary scheduled runs per source. Correlate dispatches with
+   short-lived pg_net responses and durable receipts/alerts:
+
+   ```sql
+   select dispatch_id, source_id, request_id, dispatched_at, dispatch_kind
+   from public.external_source_collector_dispatches
+   order by dispatched_at desc
+   limit 20;
+
+   select source_id, run_id, status, completed_at, rows_observed,
+          rows_accepted, rows_inserted, rows_updated, rows_unchanged,
+          rows_rejected, source_metadata ->> 'dispatch_id' as dispatch_id,
+          raw_manifest_object_key
+   from public.external_source_run_receipts
+   order by completed_at desc
+   limit 20;
+
+   select source_id, alert_date, reason_code, receipt_run_id,
+          receipt_status, checked_at, resolved_at
+   from public.external_source_run_alerts
+   where resolved_at is null
+   order by checked_at desc;
+   ```
+
+   A natural run is proven only when the receipt carries the exact scheduled
+   `dispatch_id`; an unrelated manual receipt from the same UTC day does not
+   satisfy the watchdog. The watchdog creates a durable private database
+   alert. It does not send an email, page or chat notification; that external
+   notification route remains a separately reviewed connection and must not be
+   claimed as configured.
+   A `commit_state=unknown` response must never be rewritten as a failure.
+   Replay only the exact `terminal_receipt` retained in that run's private
+   manifest; the RPC/readback is idempotent. Investigate any run-bound stage
+   rows left older than the collector budget.
+
+9. Rollback is fail-closed: immediately call
+   `fs_disable_external_source_schedules()`, verify zero matching jobs, and
+   redeploy only the exact hashed private rollback bundle. Do not delete source
+   rows, raw evidence, terminal receipts, dispatches, alerts, or the two schema
+   migrations. Rotate the sync key if exposure is suspected; never restore the
+   retired URL-query secret.
+
+10. Change Desk health to receipt-backed `UNKNOWN`/attention/healthy semantics
+    only after the two natural observations. Never infer a collector run from
+    `MAX(last_fetched_at)` alone.
 
 ### D. Parcel staging canary and full generation
 
@@ -487,6 +657,18 @@ supabase test db
 ```
 
 This includes
-`supabase/tests/source_run_ledgers_and_parcel_generations.test.sql`. Do not
-point the SQL test at production. The test uses transaction-local fixtures and
-rolls back.
+`supabase/tests/source_run_ledgers_and_parcel_generations.test.sql`. The atomic
+RPC also has a self-contained disposable PostgreSQL harness that executes the
+real migration against exact source/receipt/generated-column fixtures:
+
+```bash
+npm run test:external-source-sql
+```
+
+That command creates and destroys only its uniquely named Docker test
+container. It covers actual RLS/EXECUTE grants, service-role invocation, both
+FDEP and FAA DML branches, generated-column omission, atomic rollback, exact
+idempotent replay, failed-stage cleanup, default-off scheduling, exact cadence,
+secret-safe dispatch correlation, watchdog alert transitions and schedule
+rollback. Do not point the SQL test at production; this prohibition applies to
+both harnesses. The pgTAP test uses transaction-local fixtures and rolls back.

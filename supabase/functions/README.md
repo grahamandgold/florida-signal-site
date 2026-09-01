@@ -52,20 +52,31 @@ Before either deployment:
 1. obtain the exact privilege/RPC approval phrase in
    `SOURCE_RUN_LEDGER_AND_PARCEL_PROMOTION_RUNBOOK.md`;
 2. apply and verify
-   `20260831090000_external_source_atomic_commit.sql`;
+   `20260901012400_external_source_atomic_commit.sql` and the default-off
+   `20260901012500_external_source_collector_cron_cutover.sql`;
 3. re-export the currently deployed function and retain a private rollback
    copy plus its bundle SHA-256;
 4. rotate the retired URL query secret; configure the new value as the Edge
    secret `FL_SIGNAL_SYNC_KEY` and as a private Vault value used by pg_cron to
    construct the `x-florida-signal-sync-key` header at execution time; verify
-   the tracked cron command contains only the Vault secret name, never its
-   value; keep `verify_jwt=false` because the function performs this custom
-   header authentication, and verify missing/placeholder credentials fail
-   closed before a canary;
-5. deploy one function, run its bounded canary, and verify its private raw
-   objects, exact run-bound manifest, database-computed canonical manifest
-   hash, atomic source write, immutable receipt, and advisor diff before
-   touching the other function.
+   the tracked cron command calls only the owner dispatcher and contains no
+   Vault reference or value; keep `verify_jwt=false` because the function
+   performs this custom header authentication, and verify missing/placeholder
+   credentials fail closed before a canary;
+5. call the owner-only schedule-disable function, deploy one function, run its
+   bounded canary, and verify its private raw objects, exact run-bound manifest,
+   database-computed canonical manifest hash, atomic source write, immutable
+   receipt, and advisor diff before touching the other function; activate the
+   tracked schedules only after both source canaries pass.
+
+Every network request has a bounded deadline and every collector reserves time
+for a failure receipt. A normal manifest retains the exact terminal receipt
+payload used by the RPC. If the RPC response is lost, the collector retries the
+same payload and reads the immutable receipt back. If the state still cannot be
+proven, it returns `commit_state=unknown` and does not write a contradictory
+failed receipt; the private manifest/stage remain recoverable and the watchdog
+opens an alert when no receipt with that scheduled dispatch's exact UUID
+follows.
 
 Do not deploy these functions against only the receipt foundation migration:
 they intentionally have no direct source-table write fallback. Never add one.

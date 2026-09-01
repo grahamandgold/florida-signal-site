@@ -12,7 +12,8 @@ Tracked, idempotent SQL mirroring live production. No secrets in this directory.
 | `20260815172000_sunbiz_private_health_receipt.sql` | aggregate-only Sunbiz freshness receipt and daily post-ingest refresh; raw entity rows stay private | 2026-08-15 |
 | `20260830233000_acclaim_run_receipts.sql` | append-only `broward_clerk_preliminary_run` receipts separating event, attempted-source and system clocks; public read, service-role insert only; no schedule | **2026-08-31 — applied remotely as `20260831005904 acclaim_run_receipts`** |
 | `20260831052701_source_run_ledgers_and_parcel_generations.sql` | private append-only FDEP/FAA terminal run receipts; generation-bound Broward parcel range/staging receipts and locked atomic promotion gate; no collector, schedule, or promotion | **2026-08-31 — applied; empty/default-off** |
-| `20260831090000_external_source_atomic_commit.sql` | private RLS-forced recoverable stage plus service-role-only SECURITY INVOKER RPC that commits FDEP/FAA source rows and one immutable receipt atomically | **NO — exact production privilege approval required** |
+| `20260901012400_external_source_atomic_commit.sql` | private RLS-forced recoverable stage plus service-role-only SECURITY INVOKER RPC that commits FDEP/FAA source rows and one immutable receipt atomically | **NO — exact production privilege approval required; safely orders after live `20260831220548`** |
+| `20260901012500_external_source_collector_cron_cutover.sql` | private dispatch/alert ledgers, owner-only Vault-backed dispatcher, daily watchdog, and owner-only disable/activate functions preserving existing FDEP/FAA cadence | **NO — default-off; applying it alone does not change cron** |
 
 **Pre-existing / other work:** `fdep_erp`, `faa_oeaaa` tables and primary
 pg_cron jobs; `refresh_dashboard_cache`. The exact deployed FDEP/FAA version-1
@@ -48,7 +49,7 @@ schedule added on 2026-08-15 is recorded in the operations handoff.
 See `SOURCE_RUN_LEDGER_AND_PARCEL_PROMOTION_RUNBOOK.md` for the approval-gated
 operator sequence and recovery boundary.
 
-## 20260831090000 — atomic FDEP/FAA collector commit (pending)
+## 20260901012400 — atomic FDEP/FAA collector commit (pending)
 
 - `external_source_run_stage` is private, RLS-forced, recoverable staging.
   Only `service_role` receives row privileges; client roles receive none.
@@ -66,6 +67,10 @@ operator sequence and recovery boundary.
   manifest, stage a complete run, and call only the atomic RPC. They read
   `FL_SIGNAL_SYNC_KEY` from Edge Function secrets and fail closed if it is
   unset or still the rejected placeholder.
+- Every external request is bounded by a per-request and overall deadline with
+  reserved failure-receipt time. The exact terminal payload is retained in the
+  private manifest; ambiguous RPC responses retry the same payload and read the
+  immutable receipt back instead of attempting a contradictory failure.
 - The corrected FDEP replacement uses distinct layer-0 and layer-1 source
   contracts and a bounded 90-day default. It does not repair older malformed
   layer-0 normalized columns; that history requires a separately previewed,
@@ -80,6 +85,24 @@ operator sequence and recovery boundary.
 - Production application/deployment is blocked until the operator explicitly
   approves the service-role staging DML and RPC EXECUTE privilege. No collector
   canary may precede that approval.
+
+## 20260901012500 — secret-safe schedule cutover (pending/default-off)
+
+- Creates private dispatch and durable alert ledgers plus owner-only
+  `SECURITY INVOKER` dispatch, health-check, disable and activation functions.
+- Dispatch resolves only the names `fl_signal_functions_base_url` and
+  `fl_signal_external_source_sync_key` from Vault at execution time. Neither
+  secret value nor the project URL is present in Git or `cron.job.command`.
+- Activation preserves FDEP `20 9 * * *`, FAA `40 9 * * *`, FAA retry
+  `10 10,11 * * *`, and installs the receipt watchdog at `0 12 * * *` UTC.
+- Each scheduled dispatch receives a UUID that is carried into the collector's
+  terminal receipt. The watchdog accepts only that exact correlation; a manual
+  or unrelated same-day receipt cannot mask a missing natural run.
+- The watchdog persists private database alerts; it does not itself send an
+  external email/page/chat notification.
+- Applying the migration does not alter any cron job. An owner must first call
+  the disable function, deploy and canary both collectors, then explicitly call
+  the activation function. The same disable function is the rollback boundary.
 
 ## 2026-08-11 — durable editorial loop
 

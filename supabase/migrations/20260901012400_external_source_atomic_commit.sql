@@ -1,4 +1,6 @@
 -- Atomic staging + commit path for receipted FDEP ERP and FAA OE/AAA runs.
+-- Version generated at 2026-09-01 01:24 UTC, after the live
+-- 20260831220548 source-receipt foundation migration.
 -- No public policy or elevated-privilege function is added. Collectors stage a
 -- complete run and call one SECURITY INVOKER RPC after private raw evidence is
 -- durable; source rows and the terminal receipt then commit together.
@@ -42,6 +44,15 @@ begin
      )
      or not has_table_privilege(
        'service_role', 'storage.objects', 'select'
+     )
+     or not has_schema_privilege('service_role', 'public', 'usage')
+     or not has_schema_privilege('service_role', 'storage', 'usage')
+     or not has_schema_privilege('service_role', 'extensions', 'usage')
+     or not has_sequence_privilege(
+       'service_role', 'public.external_source_run_receipts_id_seq', 'usage'
+     )
+     or not has_function_privilege(
+       'service_role', 'extensions.digest(bytea,text)', 'execute'
      ) then
     raise exception using
       errcode = '42501',
@@ -151,6 +162,11 @@ begin
     raise exception using
       errcode = '23514',
       message = 'manifest identity or raw object contract is invalid';
+  end if;
+  if p_manifest -> 'terminal_receipt' is distinct from p_receipt then
+    raise exception using
+      errcode = '23514',
+      message = 'manifest terminal receipt does not match the attempted receipt';
   end if;
   if p_manifest ->> 'started_at' is distinct from p_receipt ->> 'started_at'
      or p_manifest ->> 'observed_at' is distinct from p_receipt ->> 'observed_at'

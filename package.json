@@ -4,7 +4,8 @@
   "scripts": {
     "test": "npm run test:unit && npm run test:browser",
     "test:unit": "node tests/signals.test.js && python3 -m unittest discover -s tests -v",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "test:external-source-sql": "bash tests/run_external_source_atomic_postgres.sh"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1"
