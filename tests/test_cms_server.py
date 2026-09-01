@@ -38,7 +38,10 @@ def utility_row(permit_number: str, **values):
     return row
 
 
-def utility_health(rows, *, system_time="2026-09-01T01:00:00Z", metrics_override=None):
+def utility_health(
+    rows, *, system_time="2026-09-01T01:00:00Z", metrics_override=None,
+    natural_schedule_verified=True,
+):
     exact = [row for row in rows if cms_server.utility_intake_family(row.get("permit_number"))]
     proof = cms_server.utility_intake_projection_proof(exact)
     metrics = {
@@ -68,6 +71,18 @@ def utility_health(rows, *, system_time="2026-09-01T01:00:00Z", metrics_override
         "latest_attempt_status": "ok",
         "latest_successful_run_at": system_time,
         "latest_successful_run_id": "utility-test-run",
+        "natural_schedule_verified": natural_schedule_verified,
+        "natural_admission_run_id": (
+            "utility-test-natural-run" if natural_schedule_verified else None
+        ),
+        "natural_admission_verified_at": (
+            system_time if natural_schedule_verified else None
+        ),
+        "natural_admission_reason": (
+            "independent_natural_run_admitted"
+            if natural_schedule_verified
+            else "independent_natural_run_admission_missing"
+        ),
         "detail": "Bound declared projection parity",
         "metrics": metrics,
     }]
@@ -926,6 +941,7 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
             }
             proof = cms_server.utility_intake_projection_proof(rows)
             parity = {"status": "passed", "sqlite": proof, "supabase": proof}
+            versions = {"collector": "utility/1", "query": "q/1", "parser": "p/1"}
             execution = {
                 "execution_context": "systemd_timer_expected",
                 "systemd_invocation_id": "a" * 32,
@@ -942,6 +958,7 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
                 "completed_at": "2026-09-01T01:00:00Z",
                 "counts": counts,
                 "parity": parity,
+                "versions": versions,
                 "execution": execution,
             }, sort_keys=True) + "\n", encoding="utf-8")
             verification_sha = hashlib.sha256(verification_path.read_bytes()).hexdigest()
@@ -961,6 +978,7 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
                     "receipt_sha256": verification_sha,
                 },
                 "health": health,
+                "versions": versions,
                 "execution": execution,
             }
             outcome_path = receipts / "utility-local-binding.json"
@@ -983,6 +1001,69 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
             latest_success.write_text(
                 json.dumps(success_pointer, sort_keys=True) + "\n", encoding="utf-8",
             )
+            natural_attestation_path = receipts / "utility-local-binding.natural.json"
+            natural_schedule = {
+                "timer_unit": cms_server.UTILITY_INTAKE_TIMER_UNIT,
+                "service_unit": cms_server.UTILITY_INTAKE_SERVICE_UNIT,
+                "timer_active": True,
+                "timer_enabled": True,
+                "timer_target": cms_server.UTILITY_INTAKE_SERVICE_UNIT,
+                "timer_last_trigger": "Mon 2026-09-01 01:00:00 UTC",
+                "timer_last_trigger_realtime_usec": 100,
+                "timer_last_trigger_monotonic": "123456",
+                "timer_next_elapse": "Mon 2026-09-01 01:27:00 UTC",
+                "trigger_realtime_usec": 100,
+                "outcome_started_realtime_usec": 103,
+                "trigger_to_outcome_start_usec": 3,
+                "service_journal_first_realtime_usec": 101,
+                "service_journal_last_realtime_usec": 104,
+            }
+            natural_attestation = {
+                "schema_version": cms_server.UTILITY_INTAKE_NATURAL_SCHEMA,
+                "status": "verified",
+                "run_id": "utility-local-binding",
+                "verified_at": "2026-09-01T01:05:00Z",
+                "outcome": {
+                    "receipt_path": str(producer_receipts / outcome_path.name),
+                    "receipt_sha256": pointer["receipt_sha256"],
+                    "completed_at": outcome["completed_at"],
+                    "counts": counts,
+                    "versions": versions,
+                },
+                "verification": outcome["verification"],
+                "execution": execution,
+                "schedule": natural_schedule,
+                "evidence": {
+                    "latest_attempt_sha256": hashlib.sha256(
+                        latest_attempt.read_bytes()
+                    ).hexdigest(),
+                    "latest_success_sha256": hashlib.sha256(
+                        latest_success.read_bytes()
+                    ).hexdigest(),
+                    "timer_show_sha256": "3" * 64,
+                    "timer_journal_sha256": "4" * 64,
+                    "service_journal_sha256": "5" * 64,
+                },
+                "contract": "Independent test-only natural admission.",
+            }
+            natural_attestation_path.write_text(
+                json.dumps(natural_attestation, sort_keys=True) + "\n", encoding="utf-8",
+            )
+            latest_natural = root / "latest-natural.json"
+            latest_natural.write_text(json.dumps({
+                "schema_version": cms_server.UTILITY_INTAKE_NATURAL_LATEST_SCHEMA,
+                "pointer_kind": "natural",
+                "run_id": "utility-local-binding",
+                "status": "verified",
+                "updated_at": natural_attestation["verified_at"],
+                "receipt_path": str(producer_receipts / natural_attestation_path.name),
+                "receipt_sha256": hashlib.sha256(
+                    natural_attestation_path.read_bytes()
+                ).hexdigest(),
+                "outcome_receipt_path": str(producer_receipts / outcome_path.name),
+                "outcome_receipt_sha256": pointer["receipt_sha256"],
+                "execution": execution,
+            }, sort_keys=True) + "\n", encoding="utf-8")
 
             with mock.patch.object(
                 cms_server, "UTILITY_INTAKE_RECEIPT_DIR", receipts,
@@ -992,10 +1073,16 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
                 cms_server, "UTILITY_INTAKE_LATEST_ATTEMPT_POINTER", latest_attempt,
             ), mock.patch.object(
                 cms_server, "UTILITY_INTAKE_LATEST_SUCCESS_POINTER", latest_success,
+            ), mock.patch.object(
+                cms_server, "UTILITY_INTAKE_LATEST_NATURAL_POINTER", latest_natural,
             ):
                 loaded = cms_server.load_utility_intake_local_health()
                 self.assertEqual(loaded["status"], "current")
                 self.assertEqual(loaded["metrics"]["verification_receipt_sha256"], verification_sha)
+                self.assertTrue(loaded["natural_schedule_verified"])
+                self.assertEqual(
+                    loaded["natural_admission_run_id"], "utility-local-binding",
+                )
 
                 outcome["health"]["metrics"]["sqlite_rows"] = 2
                 outcome_path.write_text(
@@ -1071,6 +1158,77 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         self.assertEqual(health["latest_successful_run_id"], "utility-prior-success")
         self.assertEqual(health["latest_successful_run_at"], "2026-09-01T00:57:00Z")
         self.assertEqual(health["latest_success_execution"], success["execution"])
+
+    def test_prior_natural_run_cannot_admit_a_new_manual_success(self):
+        outcome = {
+            "run_id": "utility-new-manual-success",
+            "status": "ok",
+            "completed_at": "2026-09-01T01:00:00Z",
+            "execution": {"systemd_invocation_id": "a" * 32},
+            "versions": {"collector": "utility/1", "query": "q/1", "parser": "p/1"},
+            "_local_receipt_sha256": "1" * 64,
+            "_latest_pointer_sha256": "2" * 64,
+            "health": {
+                "component": "utility-intake",
+                "status": "current",
+                "system_time": "2026-09-01T01:00:00Z",
+                "metrics": {},
+            },
+        }
+        admission = {
+            "run_id": "utility-prior-natural",
+            "verified_at": "2026-09-01T00:30:00Z",
+            "versions": outcome["versions"],
+            "outcome_receipt_sha256": outcome["_local_receipt_sha256"],
+            "latest_success_pointer_sha256": outcome["_latest_pointer_sha256"],
+            "schedule": {"timer_enabled": True},
+        }
+        with mock.patch.object(
+            cms_server, "_load_utility_pointer", side_effect=[outcome, outcome],
+        ), mock.patch.object(
+            cms_server, "_load_utility_natural_admission", return_value=admission,
+        ):
+            health = cms_server.load_utility_intake_local_health()
+        self.assertFalse(health["natural_schedule_verified"])
+        self.assertEqual(
+            health["natural_admission_reason"], "latest_success_not_naturally_admitted",
+        )
+
+    def test_same_run_label_cannot_substitute_changed_success_bytes(self):
+        outcome = {
+            "run_id": "utility-shared-label",
+            "status": "ok",
+            "completed_at": "2026-09-01T01:00:00Z",
+            "execution": {"systemd_invocation_id": "a" * 32},
+            "versions": {"collector": "utility/1", "query": "q/1", "parser": "p/1"},
+            "_local_receipt_sha256": "1" * 64,
+            "_latest_pointer_sha256": "2" * 64,
+            "health": {
+                "component": "utility-intake",
+                "status": "current",
+                "system_time": "2026-09-01T01:00:00Z",
+                "metrics": {},
+            },
+        }
+        admission = {
+            "run_id": outcome["run_id"],
+            "verified_at": "2026-09-01T01:05:00Z",
+            "versions": outcome["versions"],
+            "outcome_receipt_sha256": "3" * 64,
+            "latest_success_pointer_sha256": outcome["_latest_pointer_sha256"],
+            "schedule": {"timer_enabled": True},
+        }
+        with mock.patch.object(
+            cms_server, "_load_utility_pointer", side_effect=[outcome, outcome],
+        ), mock.patch.object(
+            cms_server, "_load_utility_natural_admission", return_value=admission,
+        ):
+            health = cms_server.load_utility_intake_local_health()
+        self.assertFalse(health["natural_schedule_verified"])
+        self.assertEqual(
+            health["natural_admission_reason"],
+            "latest_success_bytes_not_naturally_admitted",
+        )
 
     def test_utility_receipt_refresher_repeats_after_failure_and_stops_with_desk(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1277,6 +1435,26 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         self.assertEqual(stale_health["status"], "stale")
         self.assertEqual(stale_health["validation"]["reason"], "scheduled_receipt_overdue")
 
+    def test_utility_intake_manual_canary_cannot_render_current_or_automated(self):
+        rows = [utility_row("ENG-CR-260001", applied_date="2026-08-30")]
+        health = utility_health(
+            rows,
+            system_time="2026-09-01T01:00:00Z",
+            natural_schedule_verified=False,
+        )[0]
+        checked = cms_server.validate_utility_intake_health(
+            health,
+            cms_server.utility_intake_projection_proof(rows),
+            observed_at=UTILITY_NOW,
+        )
+        self.assertEqual(checked["reported_status"], "current")
+        self.assertEqual(checked["status"], "unverified")
+        self.assertFalse(checked["validation"]["natural_schedule_verified"])
+        self.assertEqual(
+            checked["validation"]["reason"],
+            "independent_natural_run_admission_missing",
+        )
+
     def test_utility_intake_health_rejects_unexpected_empty_projection(self):
         health = utility_health([], system_time=UTILITY_NOW.isoformat())[0]
         proof = cms_server.utility_intake_projection_proof([])
@@ -1345,6 +1523,8 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         self.assertIn('data-receipt-total', html)
         self.assertIn('data-receipt-event', html)
         self.assertIn('data-receipt-collected', html)
+        self.assertIn('data-receipt-automation', html)
+        self.assertIn('manual canary does not establish automation', html)
         self.assertIn('data-receipt-attempt', html)
         self.assertIn('Latest successful parity run', html)
         self.assertIn('data-receipt-health', html)
@@ -1361,6 +1541,7 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         self.assertIn('FL_SIGNAL_UTILITY_LOCAL_ROOT="$utility_local_root"', launcher)
         self.assertIn('FL_SIGNAL_UTILITY_LATEST_ATTEMPT_POINTER="$utility_local_root/latest-attempt.json"', launcher)
         self.assertIn('FL_SIGNAL_UTILITY_LATEST_SUCCESS_POINTER="$utility_local_root/latest-success.json"', launcher)
+        self.assertIn('FL_SIGNAL_UTILITY_LATEST_NATURAL_POINTER="$utility_local_root/latest-natural.json"', launcher)
         self.assertIn('FL_SIGNAL_UTILITY_SYNC_SCRIPT="$utility_sync_script"', launcher)
         self.assertIn('FL_SIGNAL_UTILITY_KNOWN_HOSTS="$utility_known_hosts"', launcher)
         self.assertIn('FL_SIGNAL_UTILITY_SYNC_INTERVAL_SECONDS="$utility_sync_interval"', launcher)

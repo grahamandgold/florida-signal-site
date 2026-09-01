@@ -34,8 +34,10 @@ class UtilityIntakeGrantMigrationTests(unittest.TestCase):
         self.assertIn("grant select on table public.permits to anon", sql)
         self.assertRegex(sql, re.compile(r"revoke insert .*update .*references", re.S))
         self.assertIn("has_column_privilege", sql)
+        self.assertIn("has_schema_privilege", sql)
         self.assertIn("pg_has_role", sql)
         self.assertIn("policyname = 'anon_read_permits'", sql)
+        self.assertIn("p.permissive = 'restrictive'", sql)
         self.assertIn("cmd in ('all', 'insert', 'update', 'delete')", sql)
         self.assertIn("anon_write', false", sql)
 
@@ -165,6 +167,42 @@ class UtilityIntakeGrantMigrationPostgresTests(unittest.TestCase):
         self.assertIn("effective anon RLS policy contract", policy_attack.stderr)
 
         self._psql("drop policy inherited_insert on public.permits;")
+        self._psql("""
+            create policy inherited_restrictive_select on public.permits
+              as restrictive for select to inherited_writer using (false);
+        """)
+        restrictive_select_attack = self._psql("""
+            select private.fs_apply_utility_intake_anon_read_hardening(
+              'I_APPROVE_EXACT_UTILITY_INTAKE_ANON_READ_HARDENING'
+            );
+        """, succeeds=False)
+        self.assertIn("effective anon RLS policy contract", restrictive_select_attack.stderr)
+
+        self._psql("""
+            drop policy inherited_restrictive_select on public.permits;
+            create policy public_restrictive_select on public.permits
+              as restrictive for select to public using (false);
+        """)
+        public_restrictive_attack = self._psql("""
+            select private.fs_apply_utility_intake_anon_read_hardening(
+              'I_APPROVE_EXACT_UTILITY_INTAKE_ANON_READ_HARDENING'
+            );
+        """, succeeds=False)
+        self.assertIn("effective anon RLS policy contract", public_restrictive_attack.stderr)
+
+        self._psql("""
+            drop policy public_restrictive_select on public.permits;
+            create policy anon_restrictive_select on public.permits
+              as restrictive for select to anon using (false);
+        """)
+        anon_restrictive_attack = self._psql("""
+            select private.fs_apply_utility_intake_anon_read_hardening(
+              'I_APPROVE_EXACT_UTILITY_INTAKE_ANON_READ_HARDENING'
+            );
+        """, succeeds=False)
+        self.assertIn("effective anon RLS policy contract", anon_restrictive_attack.stderr)
+
+        self._psql("drop policy anon_restrictive_select on public.permits;")
         table_attack = self._psql("""
             select private.fs_apply_utility_intake_anon_read_hardening(
               'I_APPROVE_EXACT_UTILITY_INTAKE_ANON_READ_HARDENING'
@@ -210,7 +248,13 @@ class UtilityIntakeGrantMigrationPostgresTests(unittest.TestCase):
             select private.fs_apply_utility_intake_anon_read_hardening(
               'I_APPROVE_EXACT_UTILITY_INTAKE_ANON_READ_HARDENING'
             );
+            insert into public.permits values (1, 'visible');
         """)
+        visible = self._psql("""
+            set role anon;
+            select count(*) from public.permits;
+        """).stdout.strip().splitlines()[-1]
+        self.assertEqual(visible, "1")
         write = self._psql("""
             set role anon;
             insert into public.permits values (1, 'blocked');

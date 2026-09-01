@@ -76,6 +76,7 @@ class UtilityReceiptSyncTests(unittest.TestCase):
                 "receipt_sha256": verification_sha,
             },
             "health": {"component": "utility-intake", "status": "current"},
+            "versions": {"collector": "utility/1", "query": "q/1", "parser": "p/1"},
             "execution": execution,
         }
         outcome_sha = self._write_json(receipts / outcome_name, outcome)
@@ -93,6 +94,70 @@ class UtilityReceiptSyncTests(unittest.TestCase):
         self._write_json(remote / "latest-attempt.json", pointer)
         self._write_json(remote / "latest-success.json", {**pointer, "pointer_kind": "success"})
         return remote
+
+    def _add_natural_fixture(self, remote: Path):
+        success = json.loads((remote / "latest-success.json").read_text(encoding="utf-8"))
+        outcome = json.loads(
+            (remote / "receipts" / Path(success["receipt_path"]).name).read_text(encoding="utf-8")
+        )
+        schedule = {
+            "timer_unit": syncer.TIMER_UNIT,
+            "service_unit": syncer.SERVICE_UNIT,
+            "timer_active": True,
+            "timer_enabled": True,
+            "timer_target": syncer.SERVICE_UNIT,
+            "timer_last_trigger": "Mon 2026-09-01 02:26:00 UTC",
+            "timer_last_trigger_realtime_usec": 100,
+            "timer_last_trigger_monotonic": "123456",
+            "timer_next_elapse": "Mon 2026-09-01 02:57:00 UTC",
+            "trigger_realtime_usec": 100,
+            "outcome_started_realtime_usec": 103,
+            "trigger_to_outcome_start_usec": 3,
+            "service_journal_first_realtime_usec": 101,
+            "service_journal_last_realtime_usec": 104,
+        }
+        attestation_name = "utility-natural.natural.json"
+        attestation = {
+            "schema_version": syncer.NATURAL_SCHEMA,
+            "status": "verified",
+            "run_id": success["run_id"],
+            "verified_at": "2026-09-01T02:30:00Z",
+            "outcome": {
+                "receipt_path": success["receipt_path"],
+                "receipt_sha256": success["receipt_sha256"],
+                "completed_at": success["updated_at"],
+                "counts": success["counts"],
+                "versions": outcome["versions"],
+            },
+            "verification": outcome["verification"],
+            "execution": success["execution"],
+            "schedule": schedule,
+            "evidence": {
+                "latest_attempt_sha256": "1" * 64,
+                "latest_success_sha256": "2" * 64,
+                "timer_show_sha256": "3" * 64,
+                "timer_journal_sha256": "4" * 64,
+                "service_journal_sha256": "5" * 64,
+            },
+            "contract": "Independent test-only natural admission.",
+        }
+        attestation_sha = self._write_json(
+            remote / "receipts" / attestation_name, attestation,
+        )
+        pointer = {
+            "schema_version": syncer.NATURAL_LATEST_SCHEMA,
+            "pointer_kind": "natural",
+            "run_id": success["run_id"],
+            "status": "verified",
+            "updated_at": attestation["verified_at"],
+            "receipt_path": str(remote / "receipts" / attestation_name),
+            "receipt_sha256": attestation_sha,
+            "outcome_receipt_path": success["receipt_path"],
+            "outcome_receipt_sha256": success["receipt_sha256"],
+            "execution": success["execution"],
+        }
+        self._write_json(remote / syncer.NATURAL_POINTER_NAME, pointer)
+        return pointer
 
     def test_stable_hash_bound_chain_is_atomically_placed_for_localhost(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -121,7 +186,7 @@ class UtilityReceiptSyncTests(unittest.TestCase):
             self.assertEqual(result["status"], "synced")
             self.assertEqual(result["latest_attempt_run_id"], "utility-natural")
             self.assertEqual(result["latest_success_run_id"], "utility-natural")
-            self.assertEqual(len(calls), 6)  # two pointers, outcome, verification, two pointers
+            self.assertEqual(len(calls), 7)  # base chain plus optional natural-pointer probe
             self.assertTrue(all(command[0] == str(fake_scp) for command in calls))
             self.assertTrue(all("BatchMode=yes" in command for command in calls))
             self.assertTrue(all("StrictHostKeyChecking=yes" in command for command in calls))
@@ -135,6 +200,71 @@ class UtilityReceiptSyncTests(unittest.TestCase):
                 (destination / "receipts/utility-natural.verification.json").read_bytes(),
                 (remote / "receipts/utility-natural.verification.json").read_bytes(),
             )
+
+    def test_natural_admission_chain_is_hash_validated_and_synced(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            remote = self._remote_fixture(root)
+            natural = self._add_natural_fixture(remote)
+            destination = root / "local" / "utility-intake"
+            fake_scp = root / "scp"
+            fake_scp.write_text("#!/bin/sh\n", encoding="utf-8")
+            fake_scp.chmod(0o755)
+            known_hosts = self._known_hosts(root)
+
+            def copy(command, **_kwargs):
+                shutil.copyfile(Path(command[-2].split(":", 1)[1]), Path(command[-1]))
+                return subprocess.CompletedProcess(command, 0)
+
+            with mock.patch.object(syncer, "REMOTE_ROOT", remote), \
+                    mock.patch.object(syncer, "REMOTE_RECEIPTS", remote / "receipts"), \
+                    mock.patch.object(syncer.subprocess, "run", side_effect=copy):
+                result = syncer.sync_receipts(
+                    destination=destination, host="florida",
+                    known_hosts=known_hosts, scp=fake_scp,
+                )
+            self.assertEqual(result["natural_admission_run_id"], natural["run_id"])
+            self.assertEqual(
+                (destination / syncer.NATURAL_POINTER_NAME).read_bytes(),
+                (remote / syncer.NATURAL_POINTER_NAME).read_bytes(),
+            )
+            self.assertEqual(
+                (destination / "receipts/utility-natural.natural.json").read_bytes(),
+                (remote / "receipts/utility-natural.natural.json").read_bytes(),
+            )
+
+    def test_malformed_natural_admission_preserves_existing_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            remote = self._remote_fixture(root)
+            self._add_natural_fixture(remote)
+            natural_pointer = json.loads(
+                (remote / syncer.NATURAL_POINTER_NAME).read_text(encoding="utf-8")
+            )
+            natural_pointer["execution"]["natural_schedule_verified"] = True
+            self._write_json(remote / syncer.NATURAL_POINTER_NAME, natural_pointer)
+            destination = root / "local" / "utility-intake"
+            destination.mkdir(parents=True)
+            prior = destination / "latest-attempt.json"
+            prior.write_text("preserve me\n", encoding="utf-8")
+            fake_scp = root / "scp"
+            fake_scp.write_text("#!/bin/sh\n", encoding="utf-8")
+            fake_scp.chmod(0o755)
+            known_hosts = self._known_hosts(root)
+
+            def copy(command, **_kwargs):
+                shutil.copyfile(Path(command[-2].split(":", 1)[1]), Path(command[-1]))
+                return subprocess.CompletedProcess(command, 0)
+
+            with mock.patch.object(syncer, "REMOTE_ROOT", remote), \
+                    mock.patch.object(syncer, "REMOTE_RECEIPTS", remote / "receipts"), \
+                    mock.patch.object(syncer.subprocess, "run", side_effect=copy):
+                with self.assertRaisesRegex(syncer.SyncError, "natural-run pointer contract"):
+                    syncer.sync_receipts(
+                        destination=destination, host="florida",
+                        known_hosts=known_hosts, scp=fake_scp,
+                    )
+            self.assertEqual(prior.read_text(encoding="utf-8"), "preserve me\n")
 
     def test_identical_same_run_receipts_are_compared_without_replacement(self):
         with tempfile.TemporaryDirectory() as tmp:

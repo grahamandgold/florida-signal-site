@@ -117,6 +117,7 @@ if [[ "${1:-}" == "--serve" ]]; then
   FL_SIGNAL_UTILITY_RECEIPT_DIR="$utility_local_root/receipts" \
   FL_SIGNAL_UTILITY_LATEST_ATTEMPT_POINTER="$utility_local_root/latest-attempt.json" \
   FL_SIGNAL_UTILITY_LATEST_SUCCESS_POINTER="$utility_local_root/latest-success.json" \
+  FL_SIGNAL_UTILITY_LATEST_NATURAL_POINTER="$utility_local_root/latest-natural.json" \
   FL_SIGNAL_UTILITY_SYNC_SCRIPT="$utility_sync_script" \
   FL_SIGNAL_UTILITY_SSH_HOST="$utility_ssh_host" \
   FL_SIGNAL_UTILITY_KNOWN_HOSTS="$utility_known_hosts" \

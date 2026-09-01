@@ -18,6 +18,7 @@ declare
   v_anon_oid oid;
   v_permits_oid oid;
   v_select_policy_count integer;
+  v_applicable_restrictive_select_policy_count integer;
   v_applicable_write_policy_count integer;
   v_column text;
   v_rls_enabled boolean;
@@ -77,7 +78,37 @@ begin
            )
      );
 
-  if v_select_policy_count <> 1 or v_applicable_write_policy_count <> 0 then
+  -- A permissive USING (true) policy is not sufficient by itself: every
+  -- applicable restrictive SELECT policy is ANDed with the permissive result.
+  -- Reject all such policies instead of returning an anon_select=true
+  -- attestation for a role that can in fact see zero rows.
+  select count(*)
+    into v_applicable_restrictive_select_policy_count
+    from pg_catalog.pg_policies p
+   where p.schemaname = 'public'
+     and p.tablename = 'permits'
+     and p.cmd in ('ALL', 'SELECT')
+     and p.permissive = 'RESTRICTIVE'
+     and exists (
+       select 1
+         from pg_catalog.unnest(p.roles) as policy_role(role_name)
+        where policy_role.role_name = 'public'::pg_catalog.name
+           or policy_role.role_name = 'anon'::pg_catalog.name
+           or exists (
+             select 1
+               from pg_catalog.pg_roles inherited_role
+              where inherited_role.rolname = policy_role.role_name
+                and pg_catalog.pg_has_role(
+                  v_anon_oid,
+                  inherited_role.oid,
+                  'MEMBER'
+                )
+           )
+     );
+
+  if v_select_policy_count <> 1
+     or v_applicable_restrictive_select_policy_count <> 0
+     or v_applicable_write_policy_count <> 0 then
     raise exception 'public.permits effective anon RLS policy contract is not exact';
   end if;
 
@@ -108,6 +139,7 @@ begin
 
   if not v_rls_enabled
      or not v_rls_forced
+     or not pg_catalog.has_schema_privilege('anon', 'public', 'USAGE')
      or not pg_catalog.has_table_privilege('anon', 'public.permits', 'SELECT')
      or pg_catalog.has_table_privilege('anon', 'public.permits', 'INSERT')
      or pg_catalog.has_table_privilege('anon', 'public.permits', 'UPDATE')

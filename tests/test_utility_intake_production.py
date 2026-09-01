@@ -679,6 +679,7 @@ class UtilityIntakeProductionTests(unittest.TestCase):
         self.assertIn(".source-manifest.sha256", installer)
         self.assertIn("I_APPROVE_EXACT_UTILITY_INTAKE_ATOMIC_INSTALL", installer)
         self.assertIn("utility_intake_production.SHADOW_IMPORT_ERROR is None", installer)
+        self.assertIn("utility_intake_natural_admission.APPROVAL", installer)
         self.assertIn("intentionally-absent.env", installer)
         self.assertIn('receipt["startup_stage"] == "credential_file"', installer)
         self.assertIn("timer_is_preinstall_safe", installer)
@@ -713,6 +714,7 @@ class UtilityIntakeProductionTests(unittest.TestCase):
             relative_names = (
                 "utility_intake_production.py",
                 "utility_intake_shadow.py",
+                "utility_intake_natural_admission.py",
                 "florida-utility-intake-wait.sh",
                 "florida-utility-intake.service",
                 "florida-utility-intake.timer",
@@ -780,6 +782,7 @@ verify_staged_release_manifest "$4/.source-manifest.sha256" "$4"''',
             names = (
                 "utility_intake_production.py",
                 "utility_intake_shadow.py",
+                "utility_intake_natural_admission.py",
                 "florida-utility-intake-wait.sh",
                 "florida-utility-intake.service",
                 "florida-utility-intake.timer",
@@ -865,6 +868,7 @@ fi''',
             for name in (
                 "utility_intake_production.py",
                 "utility_intake_shadow.py",
+                "utility_intake_natural_admission.py",
                 "florida-utility-intake-wait.sh",
                 "florida-utility-intake.service",
                 "florida-utility-intake.timer",
@@ -930,6 +934,7 @@ fi''',
                 names = (
                     "utility_intake_production.py",
                     "utility_intake_shadow.py",
+                    "utility_intake_natural_admission.py",
                     "florida-utility-intake-wait.sh",
                     "florida-utility-intake.service",
                     "florida-utility-intake.timer",

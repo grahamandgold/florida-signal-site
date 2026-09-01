@@ -105,6 +105,7 @@ finally:
 expected = {
     "ops/droplet/utility_intake_production.py",
     "ops/droplet/utility_intake_shadow.py",
+    "ops/droplet/utility_intake_natural_admission.py",
     "ops/droplet/florida-utility-intake-wait.sh",
     "ops/droplet/florida-utility-intake.service",
     "ops/droplet/florida-utility-intake.timer",
@@ -144,6 +145,8 @@ copy_release_files() {
     "$stage_dir/utility_intake_production.py" 0644
   copy_candidate "$repo_root/ops/droplet/utility_intake_shadow.py" \
     "$stage_dir/utility_intake_shadow.py" 0644
+  copy_candidate "$repo_root/ops/droplet/utility_intake_natural_admission.py" \
+    "$stage_dir/utility_intake_natural_admission.py" 0644
   copy_candidate "$repo_root/ops/droplet/florida-utility-intake-wait.sh" \
     "$stage_dir/florida-utility-intake-wait.sh" 0755
   copy_candidate "$repo_root/ops/droplet/$service_name" "$stage_dir/$service_name" 0644
@@ -159,6 +162,7 @@ stage = pathlib.Path(sys.argv[2])
 mapping = {
     "ops/droplet/utility_intake_production.py": "utility_intake_production.py",
     "ops/droplet/utility_intake_shadow.py": "utility_intake_shadow.py",
+    "ops/droplet/utility_intake_natural_admission.py": "utility_intake_natural_admission.py",
     "ops/droplet/florida-utility-intake-wait.sh": "florida-utility-intake-wait.sh",
     "ops/droplet/florida-utility-intake.service": "florida-utility-intake.service",
     "ops/droplet/florida-utility-intake.timer": "florida-utility-intake.timer",
@@ -220,8 +224,11 @@ root = pathlib.Path(sys.argv[1])
 sys.path.insert(0, str(root))
 import utility_intake_shadow
 import utility_intake_production
+import utility_intake_natural_admission
 assert utility_intake_production.SHADOW_IMPORT_ERROR is None
-assert utility_intake_production.shadow is utility_intake_shadow' "$stage_dir"
+assert utility_intake_production.shadow is utility_intake_shadow
+assert utility_intake_natural_admission.APPROVAL == \
+  "I_APPROVE_EXACT_UTILITY_INTAKE_NATURAL_ADMISSION"' "$stage_dir"
 
   /usr/bin/systemd-analyze verify "$stage_dir/$service_name" "$stage_dir/$timer_name"
 

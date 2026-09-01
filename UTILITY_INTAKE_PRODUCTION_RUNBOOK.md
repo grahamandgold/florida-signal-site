@@ -70,6 +70,7 @@ Production paths are:
 - Receipts: `/srv/grahamandgold/florida-signal/staging/data/utility-intake/receipts/`
 - Latest attempt: `/srv/grahamandgold/florida-signal/staging/data/utility-intake/latest-attempt.json`
 - Latest success: `/srv/grahamandgold/florida-signal/staging/data/utility-intake/latest-success.json`
+- Latest independently admitted natural run: `/srv/grahamandgold/florida-signal/staging/data/utility-intake/latest-natural.json`
 - Dedicated env: `/srv/grahamandgold/florida-signal/secrets/florida-utility-intake.env`
 - Active release: `/srv/grahamandgold/florida-signal/utility-intake-releases/current`
 - Dependency helper: `/srv/grahamandgold/florida-signal/utility-intake-releases/current/florida-utility-intake-wait.sh`
@@ -89,8 +90,9 @@ the utility route never calls the Desk's generic service-role helper. It rereads
 the complete all-lane projection twice and verifies count, primary
 key hash, declared projection hash/version, two-read declaration, the
 latest-attempt/outcome hash and identity, the outcome/health/verification
-binding, the accessible verification receipt hash/schema/run identity, and a
-75-minute collection freshness threshold. It separately displays the latest
+binding, the accessible verification receipt hash/schema/run identity, a
+separate hash-bound natural-run admission for the installed collector versions,
+and a 75-minute collection freshness threshold. It separately displays the latest
 attempt and latest successful parity clocks, so a failed attempt cannot be
 mislabelled as the last verification. Missing, stale, empty, changing, unbound,
 or mismatched evidence is warning state, never green.
@@ -100,10 +102,12 @@ The Finder app stores its read-only snapshot under
 `ops/mac/sync_utility_intake_receipts.py` copies fixed remote pointer names over
 the existing `florida` SSH alias, copies only sanitized receipt basenames from
 the fixed producer directory, verifies the complete hash/schema/run binding,
-rereads both pointers for stability, then atomically places the receipt files
-before the pointers. Immutable same-run receipt names are create-only: a retry
-must compare byte-identical or fail while preserving the original; only the two
-latest pointers use atomic replacement. It issues no remote shell and no remote write. The helper
+rereads both production pointers for stability and, when present, validates and
+rereads the independent natural-run pointer and its complete outcome/verification
+chain. It then atomically places the receipt files before the pointers. Immutable
+same-run receipt names are create-or-compare: a retry must be byte-identical or
+fail while preserving the original; only the three latest pointers use atomic
+replacement. It issues no remote shell and no remote write. The helper
 requires an explicit absolute, non-symlink, non-writable known-hosts file and
 passes `StrictHostKeyChecking=yes` with only that file trusted. A mode-`0600`
 nonblocking process lock suppresses overlap. The Desk server owns an immediate
@@ -130,8 +134,9 @@ First preserve the current scripts, units, helper, Desk app, and existing
 receipt pointers in a new explicit mode-`0700` backup directory and record a
 SHA-256 inventory. Do not use a broad checkout copy as a runtime replacement.
 The reviewed manifest covers the production script, its sibling shadow module,
-wait helper, service, and timer. The installer freezes the manifest into the
-unreachable stage, copies the five files, and hashes those exact staged bytes
+independent natural-run admission tool, wait helper, service, and timer. The
+installer freezes the manifest into the unreachable stage, copies the six files,
+and hashes those exact staged bytes
 against that frozen manifest before either validation or switching; later
 repository mutation cannot change the candidate generation. Quiesce and prove the service/timer state
 **before** invoking the installer:
@@ -152,7 +157,7 @@ systemctl is-enabled florida-utility-intake.timer
 The first state check may report `unknown/not-found` only when the timer unit is
 absent; otherwise require `inactive/disabled`. The installer rechecks before
 creating a stage and fails on any active service or enabled timer. It copies all
-five hash-reviewed files into an unreachable generation, validates the sibling
+six hash-reviewed files into an unreachable generation, validates the sibling
 imports and both units there, then runs an empty-environment/missing-credential
 self-test there. That self-test must exit 3 and preserve a
 `startup_stage=credential_file` receipt under the printed `install-checks/`
@@ -207,9 +212,10 @@ commit;
 Migration application also enumerates the function ACL and removes every
 explicit non-owner EXECUTE grant, including arbitrary custom roles; it does not
 change schema privileges. The function itself fails and rolls back unless the
-exact unconditional `anon_read_permits` SELECT policy exists and no write
-policy applies through `PUBLIC`, `anon`, or any inherited/member role. Its
-postcondition requires RLS enabled and forced, effective `anon` SELECT, and
+exact unconditional permissive `anon_read_permits` SELECT policy exists, no
+restrictive SELECT policy applies, and no write policy applies through `PUBLIC`,
+`anon`, or any inherited/member role. Its postcondition requires RLS enabled and
+forced, effective schema usage and `anon` SELECT, and
 zero effective INSERT, UPDATE, DELETE, TRUNCATE, TRIGGER, REFERENCES, or
 column-level write grants through any reachable role. Inherited write grants
 are not silently changed: they fail the transaction and must be reviewed and
@@ -251,7 +257,9 @@ Verify sewer/utility and outside-agency engineering cards, exact live rows,
 search, paging through an explicit empty page, exact total, event clock,
 collection clock, receipt health/detail, and mobile readability. Mutate a test
 copy of each hash/metric/clock and require `unverified` or `stale`. No failed or
-absent receipt may render current.
+absent receipt may render current. At this point the manual canary must still
+render `unverified · automation unverified`; it cannot create or substitute for
+the independent natural-run admission below.
 
 ## Natural scheduled-run gate
 
@@ -265,21 +273,50 @@ parity, GET-only, Desk, and freshness checks using that natural run. A manual
 canary alone is not completion. The receipt's `execution` object must contain a
 valid 32-hex `systemd_invocation_id`, expected service/timer unit names, and
 `natural_schedule_verified=false`—the collector does not attest itself. Prove
-the natural run independently and preserve these outputs together:
+the natural run independently and preserve machine-readable bounded outputs
+together. The admission tool is separate from the collector, requires its own
+exact approval, writes no source or mirror row, and publishes a create-or-compare
+immutable attestation before advancing `latest-natural.json`:
 
 ```bash
+umask 077
+evidence_dir="$(mktemp -d \
+  /srv/grahamandgold/florida-signal/staging/data/utility-intake/natural-admission.XXXXXX)"
 invocation_id="$(sudo jq -r .execution.systemd_invocation_id \
   /srv/grahamandgold/florida-signal/staging/data/utility-intake/latest-attempt.json)"
 systemctl show florida-utility-intake.timer \
-  -p LastTriggerUSec -p LastTriggerUSecMonotonic -p NextElapseUSecRealtime
-sudo journalctl _SYSTEMD_INVOCATION_ID="$invocation_id" --no-pager
-sudo journalctl -u florida-utility-intake.timer --since '-90 minutes' --no-pager
+  -p Id -p LoadState -p ActiveState -p UnitFileState -p Unit \
+  -p LastTriggerUSec -p LastTriggerUSecMonotonic -p NextElapseUSecRealtime \
+  >"$evidence_dir/timer-show.properties"
+sudo journalctl _SYSTEMD_INVOCATION_ID="$invocation_id" --since '-90 minutes' \
+  --no-pager --output=json >"$evidence_dir/service-journal.jsonl"
+sudo journalctl -u florida-utility-intake.timer --since '-90 minutes' \
+  --no-pager --output=json >"$evidence_dir/timer-journal.jsonl"
+sudo -u andy /srv/grahamandgold/florida-signal/app/.venv/bin/python3 \
+  /srv/grahamandgold/florida-signal/utility-intake-releases/current/utility_intake_natural_admission.py \
+  --latest-attempt-pointer /srv/grahamandgold/florida-signal/staging/data/utility-intake/latest-attempt.json \
+  --latest-success-pointer /srv/grahamandgold/florida-signal/staging/data/utility-intake/latest-success.json \
+  --receipt-dir /srv/grahamandgold/florida-signal/staging/data/utility-intake/receipts \
+  --latest-natural-pointer /srv/grahamandgold/florida-signal/staging/data/utility-intake/latest-natural.json \
+  --timer-show "$evidence_dir/timer-show.properties" \
+  --timer-journal "$evidence_dir/timer-journal.jsonl" \
+  --service-journal "$evidence_dir/service-journal.jsonl" \
+  --approval I_APPROVE_EXACT_UTILITY_INTAKE_NATURAL_ADMISSION
 ```
 
-Require the timer trigger clock, timer journal, service invocation ID, outcome
+Require the timer's `LastTriggerUSec` clock to match the timer-journal trigger,
+along with the timer journal, service invocation ID, outcome
 receipt, and latest-success run ID to identify the same natural window. Confirm
 `OnFailure=florida-healthreport.service` is installed and that a controlled
 failed-config canary invokes the existing alert path without exposing values.
+Run the read-only Mac receipt sync and Desk checks again. The Desk may render
+`current · automated` only when it independently validates `latest-natural.json`,
+the immutable attestation, its admitted outcome/verification hashes, exact
+timer/service identities, and the exact run ID plus collector/query/parser
+versions, outcome hash, and latest-success pointer hash of the current
+successful receipt. Any missing, malformed,
+self-attested, prior-run, or older-code admission remains
+`unverified · automation unverified`.
 
 ## Rollback
 

@@ -1083,9 +1083,19 @@ UTILITY_INTAKE_LATEST_SUCCESS_POINTER = Path(os.getenv(
     "FL_SIGNAL_UTILITY_LATEST_SUCCESS_POINTER",
     str(UTILITY_INTAKE_LOCAL_ROOT / "latest-success.json"),
 ))
+UTILITY_INTAKE_LATEST_NATURAL_POINTER = Path(os.getenv(
+    "FL_SIGNAL_UTILITY_LATEST_NATURAL_POINTER",
+    str(UTILITY_INTAKE_LOCAL_ROOT / "latest-natural.json"),
+))
 UTILITY_INTAKE_LATEST_SCHEMA = "FloridaSignalUtilityIntakeProductionLatestV2"
 UTILITY_INTAKE_RECEIPT_SCHEMA = "FloridaSignalUtilityIntakeProductionReceiptV3"
 UTILITY_INTAKE_VERIFICATION_SCHEMA = "FloridaSignalUtilityIntakeProductionVerificationV1"
+UTILITY_INTAKE_NATURAL_SCHEMA = "FloridaSignalUtilityIntakeNaturalRunAttestationV1"
+UTILITY_INTAKE_NATURAL_LATEST_SCHEMA = "FloridaSignalUtilityIntakeNaturalRunLatestV1"
+UTILITY_INTAKE_SERVICE_UNIT = "florida-utility-intake.service"
+UTILITY_INTAKE_TIMER_UNIT = "florida-utility-intake.timer"
+UTILITY_INTAKE_MAX_TRIGGER_TO_OUTCOME_START_USEC = 15 * 60 * 1_000_000
+UTILITY_INTAKE_MAX_SYSTEMD_TRIGGER_CLOCK_SKEW_USEC = 5 * 1_000_000
 UTILITY_INTAKE_LOCAL_FILE_CAP = 2_000_000
 UTILITY_INTAKE_REMOTE_RESPONSE_CAP = 8_000_000
 UTILITY_INTAKE_REMOTE_SCAN_CAP = 10_000
@@ -1609,6 +1619,9 @@ def _utility_unavailable_health() -> dict[str, Any]:
         "latest_attempt_status": None,
         "latest_successful_run_at": None,
         "latest_successful_run_id": None,
+        "natural_schedule_verified": False,
+        "natural_admission_run_id": None,
+        "natural_admission_verified_at": None,
         "detail": "Local utility intake receipt chain is unavailable or invalid.",
         "metrics": {},
     }
@@ -1748,7 +1761,175 @@ def _load_utility_pointer(pointer_path: Path, pointer_kind: str) -> dict[str, An
     _, pointer_after = _utility_read_private_json(pointer_path)
     if pointer_after != pointer_raw:
         raise ValueError("utility latest pointer changed during receipt validation")
+    outcome["_local_receipt_sha256"] = outcome_sha
+    outcome["_latest_pointer_sha256"] = hashlib.sha256(pointer_raw).hexdigest()
     return outcome
+
+
+def _load_utility_natural_admission() -> dict[str, Any]:
+    """Validate the independently admitted natural timer-run chain."""
+    pointer, pointer_raw = _utility_read_private_json(
+        UTILITY_INTAKE_LATEST_NATURAL_POINTER,
+    )
+    if set(pointer) != {
+        "schema_version", "pointer_kind", "run_id", "status", "updated_at",
+        "receipt_path", "receipt_sha256", "outcome_receipt_path",
+        "outcome_receipt_sha256", "execution",
+    }:
+        raise ValueError("utility natural-run pointer has the wrong shape")
+    run_id = str(pointer.get("run_id") or "")
+    receipt_sha = str(pointer.get("receipt_sha256") or "")
+    outcome_sha = str(pointer.get("outcome_receipt_sha256") or "")
+    execution = pointer.get("execution")
+    if (
+        pointer.get("schema_version") != UTILITY_INTAKE_NATURAL_LATEST_SCHEMA
+        or pointer.get("pointer_kind") != "natural"
+        or pointer.get("status") != "verified"
+        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,159}", run_id)
+        or not re.fullmatch(r"[0-9a-f]{64}", receipt_sha)
+        or not re.fullmatch(r"[0-9a-f]{64}", outcome_sha)
+        or not isinstance(execution, dict)
+        or execution.get("natural_schedule_verified") is not False
+        or execution.get("execution_context") != "systemd_timer_expected"
+        or execution.get("service_unit") != UTILITY_INTAKE_SERVICE_UNIT
+        or execution.get("expected_timer_unit") != UTILITY_INTAKE_TIMER_UNIT
+        or not re.fullmatch(
+            r"[0-9a-f]{32}", str(execution.get("systemd_invocation_id") or ""),
+        )
+    ):
+        raise ValueError("utility natural-run pointer contract failed")
+
+    attestation_path = _utility_recorded_receipt_to_local(pointer.get("receipt_path"))
+    attestation, attestation_raw = _utility_read_private_json(attestation_path)
+    if hashlib.sha256(attestation_raw).hexdigest() != receipt_sha:
+        raise ValueError("utility natural-run attestation hash mismatch")
+    if set(attestation) != {
+        "schema_version", "status", "run_id", "verified_at", "outcome",
+        "verification", "execution", "schedule", "evidence", "contract",
+    }:
+        raise ValueError("utility natural-run attestation has the wrong shape")
+    outcome_ref = attestation.get("outcome")
+    verification_ref = attestation.get("verification")
+    schedule = attestation.get("schedule")
+    evidence = attestation.get("evidence")
+    if (
+        attestation.get("schema_version") != UTILITY_INTAKE_NATURAL_SCHEMA
+        or attestation.get("status") != "verified"
+        or attestation.get("run_id") != run_id
+        or attestation.get("verified_at") != pointer.get("updated_at")
+        or attestation.get("execution") != execution
+        or not isinstance(outcome_ref, dict)
+        or set(outcome_ref) != {
+            "receipt_path", "receipt_sha256", "completed_at", "counts", "versions",
+        }
+        or not isinstance(outcome_ref.get("versions"), dict)
+        or set(outcome_ref["versions"]) != {"collector", "query", "parser"}
+        or any(
+            not isinstance(value, str) or not value
+            for value in outcome_ref["versions"].values()
+        )
+        or not isinstance(verification_ref, dict)
+        or set(verification_ref) != {"receipt_path", "receipt_sha256"}
+        or not isinstance(schedule, dict)
+        or set(schedule) != {
+            "timer_unit", "service_unit", "timer_active", "timer_enabled",
+            "timer_target", "timer_last_trigger", "timer_last_trigger_realtime_usec",
+            "timer_last_trigger_monotonic",
+            "timer_next_elapse", "trigger_realtime_usec",
+            "outcome_started_realtime_usec", "trigger_to_outcome_start_usec",
+            "service_journal_first_realtime_usec",
+            "service_journal_last_realtime_usec",
+        }
+        or not isinstance(evidence, dict)
+        or set(evidence) != {
+            "latest_attempt_sha256", "latest_success_sha256", "timer_show_sha256",
+            "timer_journal_sha256", "service_journal_sha256",
+        }
+        or any(
+            not re.fullmatch(r"[0-9a-f]{64}", str(value or ""))
+            for value in evidence.values()
+        )
+        or outcome_ref.get("receipt_path") != pointer.get("outcome_receipt_path")
+        or outcome_ref.get("receipt_sha256") != outcome_sha
+        or schedule.get("timer_unit") != UTILITY_INTAKE_TIMER_UNIT
+        or schedule.get("service_unit") != UTILITY_INTAKE_SERVICE_UNIT
+        or schedule.get("timer_target") != UTILITY_INTAKE_SERVICE_UNIT
+        or schedule.get("timer_active") is not True
+        or schedule.get("timer_enabled") is not True
+        or not str(schedule.get("timer_last_trigger") or "").strip()
+        or not str(schedule.get("timer_last_trigger_monotonic") or "").strip()
+        or not str(schedule.get("timer_next_elapse") or "").strip()
+    ):
+        raise ValueError("utility natural-run attestation contract failed")
+    for key in (
+        "timer_last_trigger_realtime_usec", "trigger_realtime_usec",
+        "outcome_started_realtime_usec",
+        "trigger_to_outcome_start_usec",
+        "service_journal_first_realtime_usec", "service_journal_last_realtime_usec",
+    ):
+        if type(schedule.get(key)) is not int or schedule[key] < 0:
+            raise ValueError("utility natural-run schedule evidence is malformed")
+    if (
+        schedule["outcome_started_realtime_usec"]
+        != schedule["trigger_realtime_usec"]
+        + schedule["trigger_to_outcome_start_usec"]
+        or schedule["service_journal_first_realtime_usec"]
+        < schedule["trigger_realtime_usec"]
+        or schedule["service_journal_last_realtime_usec"]
+        < schedule["service_journal_first_realtime_usec"]
+        or schedule["trigger_to_outcome_start_usec"]
+        > UTILITY_INTAKE_MAX_TRIGGER_TO_OUTCOME_START_USEC
+        or abs(
+            schedule["timer_last_trigger_realtime_usec"]
+            - schedule["trigger_realtime_usec"]
+        ) > UTILITY_INTAKE_MAX_SYSTEMD_TRIGGER_CLOCK_SKEW_USEC
+    ):
+        raise ValueError("utility natural-run schedule evidence is internally inconsistent")
+
+    outcome_path = _utility_recorded_receipt_to_local(outcome_ref.get("receipt_path"))
+    outcome, outcome_raw = _utility_read_private_json(outcome_path)
+    if (
+        hashlib.sha256(outcome_raw).hexdigest() != outcome_sha
+        or outcome.get("schema_version") != UTILITY_INTAKE_RECEIPT_SCHEMA
+        or outcome.get("run_id") != run_id
+        or outcome.get("status") != "ok"
+        or outcome.get("completed_at") != outcome_ref.get("completed_at")
+        or outcome.get("counts") != outcome_ref.get("counts")
+        or outcome.get("versions") != outcome_ref.get("versions")
+        or outcome.get("execution") != execution
+        or outcome.get("verification") != verification_ref
+    ):
+        raise ValueError("utility natural-run outcome is not attestation-bound")
+
+    verification_path = _utility_recorded_receipt_to_local(
+        verification_ref.get("receipt_path"),
+    )
+    verification_sha = str(verification_ref.get("receipt_sha256") or "")
+    verification, verification_raw = _utility_read_private_json(verification_path)
+    if (
+        not re.fullmatch(r"[0-9a-f]{64}", verification_sha)
+        or hashlib.sha256(verification_raw).hexdigest() != verification_sha
+        or verification.get("schema_version") != UTILITY_INTAKE_VERIFICATION_SCHEMA
+        or verification.get("run_id") != run_id
+        or verification.get("status") != "verified"
+        or verification.get("completed_at") != outcome.get("completed_at")
+        or verification.get("counts") != outcome.get("counts")
+        or verification.get("parity") != outcome.get("parity")
+        or verification.get("execution") != execution
+    ):
+        raise ValueError("utility natural-run verification is not outcome-bound")
+    _, pointer_after = _utility_read_private_json(UTILITY_INTAKE_LATEST_NATURAL_POINTER)
+    if pointer_after != pointer_raw:
+        raise ValueError("utility natural-run pointer changed during validation")
+    return {
+        "run_id": run_id,
+        "verified_at": pointer.get("updated_at"),
+        "versions": outcome.get("versions"),
+        "outcome_receipt_sha256": outcome_sha,
+        "latest_success_pointer_sha256": evidence["latest_success_sha256"],
+        "execution": execution,
+        "schedule": schedule,
+    }
 
 
 def load_utility_intake_local_health() -> dict[str, Any]:
@@ -1772,6 +1953,39 @@ def load_utility_intake_local_health() -> dict[str, Any]:
         health["latest_successful_run_id"] = success.get("run_id") if success else None
         health["execution"] = attempt.get("execution")
         health["latest_success_execution"] = success.get("execution") if success else None
+        health["natural_schedule_verified"] = False
+        health["natural_admission_run_id"] = None
+        health["natural_admission_verified_at"] = None
+        health["natural_admission_reason"] = "independent_natural_run_admission_missing"
+        try:
+            admission = _load_utility_natural_admission()
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            admission = None
+        if admission is not None and success is not None:
+            if (
+                admission.get("run_id") == success.get("run_id")
+                and admission.get("versions") == success.get("versions")
+                and admission.get("outcome_receipt_sha256")
+                == success.get("_local_receipt_sha256")
+                and admission.get("latest_success_pointer_sha256")
+                == success.get("_latest_pointer_sha256")
+            ):
+                health["natural_schedule_verified"] = True
+                health["natural_admission_run_id"] = admission.get("run_id")
+                health["natural_admission_verified_at"] = admission.get("verified_at")
+                health["natural_admission_reason"] = "independent_natural_run_admitted"
+                health["natural_admission_schedule"] = admission.get("schedule")
+            elif admission.get("run_id") != success.get("run_id"):
+                health["natural_admission_reason"] = "latest_success_not_naturally_admitted"
+            elif (
+                admission.get("outcome_receipt_sha256")
+                != success.get("_local_receipt_sha256")
+                or admission.get("latest_success_pointer_sha256")
+                != success.get("_latest_pointer_sha256")
+            ):
+                health["natural_admission_reason"] = "latest_success_bytes_not_naturally_admitted"
+            else:
+                health["natural_admission_reason"] = "collector_version_not_naturally_admitted"
         return health
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return _utility_unavailable_health()
@@ -1792,11 +2006,21 @@ def validate_utility_intake_health(
         "projection_bound": False,
         "fresh": False,
         "verification_receipt": "not_checked",
+        "natural_schedule_verified": health.get("natural_schedule_verified") is True,
         "reason": None,
     }
     if reported_status != "current":
         validated["status"] = reported_status
         validation["reason"] = "health_receipt_not_current"
+        validated["validation"] = validation
+        return validated
+
+    if health.get("natural_schedule_verified") is not True:
+        validated["status"] = "unverified"
+        validation["reason"] = str(
+            health.get("natural_admission_reason")
+            or "independent_natural_run_admission_missing"
+        )
         validated["validation"] = validation
         return validated
 

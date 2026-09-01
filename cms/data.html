@@ -1319,28 +1319,41 @@
               : payload && payload.health;
           const liveStatus = String(receipt && receipt.status || "UNKNOWN").toLowerCase();
           const refresh = String(item.refresh || "connected").toLowerCase();
+          const naturalAutomationRequired = item.componentId === "utility-intake";
+          const naturalAutomationVerified = !naturalAutomationRequired || Boolean(
+            receipt && receipt.natural_schedule_verified === true &&
+            receipt.validation && receipt.validation.natural_schedule_verified === true
+          );
+          const displayedRefresh = naturalAutomationVerified
+            ? refresh
+            : "automation unverified";
+          const displayedLiveStatus = naturalAutomationRequired && !naturalAutomationVerified && liveStatus === "current"
+            ? "unverified"
+            : liveStatus;
           if (hasRows) {
             connected += 1;
             const rowOnlyHealthUnknown = Boolean(
               receipt && liveStatus === "unavailable" &&
               String(receipt.status_basis || "").includes("no_terminal_receipt")
             );
-            if (liveStatus !== "unknown" && !rowOnlyHealthUnknown) freshness[liveStatus] = (freshness[liveStatus] || 0) + 1;
+            if (displayedLiveStatus !== "unknown" && !rowOnlyHealthUnknown) freshness[displayedLiveStatus] = (freshness[displayedLiveStatus] || 0) + 1;
             if (refresh === "manual" || refresh === "snapshot") manualOrSnapshot += 1;
-            const healthy = liveStatus === "current";
-            const warning = ["delayed", "stale", "error", "unavailable", "suppressed", "unverified"].includes(liveStatus);
-            const text = liveStatus !== "unknown" && !rowOnlyHealthUnknown
-              ? `${liveStatus} · ${refresh}`
-              : `connected · ${refresh} · health unknown`;
+            const healthy = displayedLiveStatus === "current";
+            const warning = ["delayed", "stale", "error", "unavailable", "suppressed", "unverified"].includes(displayedLiveStatus);
+            const text = displayedLiveStatus !== "unknown" && !rowOnlyHealthUnknown
+              ? `${displayedLiveStatus} · ${displayedRefresh}`
+              : naturalAutomationRequired
+                ? `connected · ${displayedRefresh} · health unknown`
+                : `connected · ${refresh} · health unknown`;
             labels.forEach(label => {
               label.textContent = text;
-              label.dataset.state = healthy ? "connected" : warning || liveStatus === "unknown" ? "warning" : "manual";
+              label.dataset.state = healthy ? "connected" : warning || displayedLiveStatus === "unknown" ? "warning" : "manual";
               label.title = receipt ? `Event through ${receipt.event_through || "not exposed"}; fetched ${receipt.fetched_at || "not exposed"}; health receipt ${receipt.health_receipt_at || "not exposed"}${receipt.health_receipt_status ? ` (${receipt.health_receipt_status})` : ""}; basis ${receipt.status_basis || "not exposed"}. ${receipt.detail || ""}` : `Rows are available; no live freshness receipt is configured. Refresh mode: ${refresh}.`;
             });
           } else {
-            if (liveStatus !== "unknown") freshness[liveStatus] = (freshness[liveStatus] || 0) + 1;
-            const warning = ["delayed", "stale", "error", "unavailable", "suppressed", "unverified"].includes(liveStatus);
-            const text = liveStatus !== "unknown" ? `${liveStatus} · empty · ${refresh}` : `connected · empty · health unknown`;
+            if (displayedLiveStatus !== "unknown") freshness[displayedLiveStatus] = (freshness[displayedLiveStatus] || 0) + 1;
+            const warning = ["delayed", "stale", "error", "unavailable", "suppressed", "unverified"].includes(displayedLiveStatus);
+            const text = displayedLiveStatus !== "unknown" ? `${displayedLiveStatus} · empty · ${displayedRefresh}` : `connected · empty · ${displayedRefresh} · health unknown`;
             labels.forEach(label => {
               label.textContent = text;
               label.dataset.state = warning ? "warning" : "empty";
@@ -1443,13 +1456,23 @@
       const collectedText = collected && !Number.isNaN(collected.getTime()) ? collected.toLocaleString() : "not exposed";
       const attempted = result.latest_attempt_at ? new Date(result.latest_attempt_at) : null;
       const attemptedText = attempted && !Number.isNaN(attempted.getTime()) ? attempted.toLocaleString() : "not exposed";
+      const naturalVerified = health.natural_schedule_verified === true && validation.natural_schedule_verified === true;
+      const naturalVerifiedAt = health.natural_admission_verified_at ? new Date(health.natural_admission_verified_at) : null;
+      const naturalVerifiedAtText = naturalVerifiedAt && !Number.isNaN(naturalVerifiedAt.getTime()) ? naturalVerifiedAt.toLocaleString() : "not verified";
+      const automationText = naturalVerified
+        ? `verified · run ${health.natural_admission_run_id || "not exposed"} · ${naturalVerifiedAtText}`
+        : "not verified · manual canary does not establish automation";
+      const displayedHealthStatus = !naturalVerified && String(health.status || "").toLowerCase() === "current"
+        ? "unverified"
+        : String(health.status || "unknown").toLowerCase();
       const detail = [health.detail, validation.reason ? `Validation: ${validation.reason}` : ""].filter(Boolean).join(" · ") || "No independent health detail was returned.";
       target.innerHTML =
         `<span>Exact matching rows<b data-receipt-total>${esc(result.record_count == null ? "unknown" : result.record_count)}</b></span>` +
         `<span>Newest applied date<b data-receipt-event>${esc(result.newest_event || "not exposed")}</b></span>` +
         `<span>Latest successful parity run<b data-receipt-collected>${esc(collectedText)}</b></span>` +
         `<span>Latest attempt<b data-receipt-attempt>${esc(attemptedText)} · ${esc(result.latest_attempt_status || "unknown")}</b></span>` +
-        `<span>Receipt health<b data-receipt-health>${esc(String(health.status || "unknown").toLowerCase())}</b></span>` +
+        `<span>Natural schedule<b data-receipt-automation>${esc(automationText)}</b></span>` +
+        `<span>Receipt health<b data-receipt-health>${esc(displayedHealthStatus)}</b></span>` +
         `<span class="receipt-detail">Health detail<b data-receipt-detail>${esc(detail)}</b></span>`;
       target.hidden = false;
     }

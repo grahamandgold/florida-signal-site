@@ -261,8 +261,11 @@ test.describe("private Florida Signal Newsroom", () => {
       reported_status: "current",
       event_through: "2026-08-31",
       system_time: "2026-09-01T01:00:00Z",
+      natural_schedule_verified: true,
+      natural_admission_run_id: "utility-natural-test",
+      natural_admission_verified_at: "2026-09-01T01:01:00Z",
       detail: "Bound declared 16-column projection parity",
-      validation: { projection_bound: true, fresh: true, verification_receipt: "remote_hash_declared" },
+      validation: { projection_bound: true, fresh: true, verification_receipt: "remote_hash_declared", natural_schedule_verified: true },
     };
 
     await page.route("**/api/local-session", route => route.fulfill({ json: { token: "offline-test" } }));
@@ -301,6 +304,7 @@ test.describe("private Florida Signal Newsroom", () => {
     await expect(page.locator("[data-receipt-total]")).toHaveText("26");
     await expect(page.locator("[data-receipt-event]")).toHaveText("2026-08-31");
     await expect(page.locator("[data-receipt-collected]")).not.toHaveText("not exposed");
+    await expect(page.locator("[data-receipt-automation]")).toContainText("verified · run utility-natural-test");
     await expect(page.locator("[data-receipt-health]")).toHaveText("current");
     await expect(page.locator("[data-receipt-detail]")).toContainText("declared 16-column projection parity");
     await expect(page.locator("#page-note")).toHaveText("rows 1–25 of 26");
@@ -316,5 +320,56 @@ test.describe("private Florida Signal Newsroom", () => {
     await expect(page.locator("#data-table tbody tr[data-i]")).toHaveCount(1);
     await expect(page.locator("#page-note")).toHaveText("rows 26–26 of 26");
     expect(await page.evaluate(() => document.body.scrollWidth)).toBe(390);
+  });
+
+  test("manual utility canary stays visibly unverified and is never labeled automated", async ({ page }) => {
+    const row = {
+      permit_number: "ENG-CR-26010001", report_source: "opened_permits",
+      permit_type: "Capacity request", status: "Applied", applied_date: "2026-08-31",
+      first_seen_at: "2026-08-31T00:00:00Z", last_seen_at: "2026-09-01T01:00:00Z",
+      last_updated_at: "2026-09-01T01:00:00Z", family_id: "ENG-CR",
+      family_label: "water_wastewater_capacity_request",
+    };
+    const health = {
+      component: "utility-intake", status: "current", reported_status: "current",
+      event_through: "2026-08-31", system_time: "2026-09-01T01:00:00Z",
+      natural_schedule_verified: false, natural_admission_run_id: null,
+      natural_admission_verified_at: null,
+      detail: "Manual parity canary passed; natural schedule is not admitted.",
+      validation: {
+        projection_bound: false, fresh: false, verification_receipt: "not_checked",
+        natural_schedule_verified: false,
+        reason: "independent_natural_run_admission_missing",
+      },
+    };
+    await page.route("**/api/local-session", route => route.fulfill({ json: { token: "offline-test" } }));
+    await page.route("**/api/admin/**", route => {
+      const path = new URL(route.request().url()).pathname;
+      if (path === "/api/admin/utility-intake") {
+        return route.fulfill({ json: {
+          status: "available", lane: "all", items: [row], record_count: 1,
+          all_lane_record_count: 1, limit: 25, offset: 0, has_more: false,
+          newest_event: "2026-08-31", last_collected: "2026-09-01T01:00:00Z",
+          latest_attempt_at: "2026-09-01T01:00:00Z", latest_attempt_status: "ok",
+          health,
+        } });
+      }
+      if (path === "/api/admin/project-state") {
+        return route.fulfill({ json: { operational_health: [], source_receipts: [] } });
+      }
+      return route.fulfill({ json: { items: [], record_count: 0, has_more: false } });
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${dataWireBase}/data.html`);
+    const utilityCard = page.locator('.source-option[data-source-table="utility_sewer_intake"]');
+    await expect(utilityCard.locator(".source-option__status")).toContainText(
+      "unverified · automation unverified", { timeout: 15_000 },
+    );
+    await expect(utilityCard.locator(".source-option__status")).not.toContainText("automated");
+    await utilityCard.click();
+    await expect(page.locator("[data-receipt-automation]")).toHaveText(
+      "not verified · manual canary does not establish automation",
+    );
+    await expect(page.locator("[data-receipt-health]")).toHaveText("unverified");
   });
 });

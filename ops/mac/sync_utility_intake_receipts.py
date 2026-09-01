@@ -2,11 +2,12 @@
 """Replicate the bounded utility-intake receipt chain for the localhost Desk.
 
 The source is a fixed read-only SSH alias and fixed producer directory.  The
-script copies two pointer snapshots, validates every hash-bound receipt between
-them, and atomically installs only stable bytes into the private Desk data
-directory. A cross-process lock prevents overlapping refreshes, and scp trusts
-only the caller's explicit, protected known-hosts file. It never contacts
-Supabase and never issues a remote write.
+script copies the two production pointer snapshots plus the optional independent
+natural-run admission pointer, validates every hash-bound receipt between them,
+and atomically installs only stable bytes into the private Desk data directory.
+A cross-process lock prevents overlapping refreshes, and scp trusts only the
+caller's explicit, protected known-hosts file. It never contacts Supabase and
+never issues a remote write.
 """
 
 from __future__ import annotations
@@ -28,11 +29,18 @@ from uuid import uuid4
 LATEST_SCHEMA = "FloridaSignalUtilityIntakeProductionLatestV2"
 RECEIPT_SCHEMA = "FloridaSignalUtilityIntakeProductionReceiptV3"
 VERIFICATION_SCHEMA = "FloridaSignalUtilityIntakeProductionVerificationV1"
+NATURAL_SCHEMA = "FloridaSignalUtilityIntakeNaturalRunAttestationV1"
+NATURAL_LATEST_SCHEMA = "FloridaSignalUtilityIntakeNaturalRunLatestV1"
+TIMER_UNIT = "florida-utility-intake.timer"
+SERVICE_UNIT = "florida-utility-intake.service"
+MAX_TRIGGER_TO_OUTCOME_START_USEC = 15 * 60 * 1_000_000
+MAX_SYSTEMD_TRIGGER_CLOCK_SKEW_USEC = 5 * 1_000_000
 REMOTE_ROOT = Path("/srv/grahamandgold/florida-signal/staging/data/utility-intake")
 REMOTE_RECEIPTS = REMOTE_ROOT / "receipts"
 MAX_FILE_BYTES = 2_000_000
 MAX_KNOWN_HOSTS_BYTES = 1_000_000
 POINTER_NAMES = ("latest-attempt.json", "latest-success.json")
+NATURAL_POINTER_NAME = "latest-natural.json"
 SAFE_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,220}")
 
 
@@ -117,6 +125,32 @@ def _copy_remote(
         raise SyncError("bounded read-only receipt copy failed")
 
 
+def _copy_optional_remote(
+    scp: Path, host: str, known_hosts: Path, remote_name: str, destination: Path,
+) -> bool:
+    """Copy an optional fixed-name producer pointer without weakening base sync."""
+    if not SAFE_NAME_RE.fullmatch(remote_name):
+        raise SyncError("remote filename is unsafe")
+    try:
+        result = subprocess.run(
+            [
+                str(scp), "-q", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+                "-o", "StrictHostKeyChecking=yes",
+                "-o", f"UserKnownHostsFile={known_hosts}",
+                "-o", "GlobalKnownHostsFile=/dev/null",
+                f"{host}:{REMOTE_ROOT / remote_name}", str(destination),
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0
+
+
 def _copy_remote_receipt(
     scp: Path, host: str, known_hosts: Path, name: str, destination: Path,
 ) -> None:
@@ -146,7 +180,7 @@ def _copy_remote_receipt(
 def _validate_outcome(
     path: Path, pointer: dict[str, Any], copied: dict[str, bytes], *, scp: Path, host: str,
     known_hosts: Path, scratch: Path,
-) -> None:
+) -> dict[str, Any]:
     outcome_name = _remote_receipt_name(pointer.get("receipt_path"))
     outcome, raw = _read_json(path)
     if hashlib.sha256(raw).hexdigest() != pointer["receipt_sha256"]:
@@ -162,7 +196,7 @@ def _validate_outcome(
         raise SyncError("outcome receipt is not bound to latest")
     copied[outcome_name] = raw
     if outcome.get("status") != "ok":
-        return
+        return outcome
     verification = outcome.get("verification")
     if not isinstance(verification, dict):
         raise SyncError("successful outcome lacks verification binding")
@@ -186,6 +220,161 @@ def _validate_outcome(
     ):
         raise SyncError("verification receipt is not bound to outcome")
     copied[verification_name] = verification_raw
+    return outcome
+
+
+def _validate_natural_pointer(path: Path) -> tuple[dict[str, Any], bytes]:
+    pointer, raw = _read_json(path)
+    if set(pointer) != {
+        "schema_version", "pointer_kind", "run_id", "status", "updated_at",
+        "receipt_path", "receipt_sha256", "outcome_receipt_path",
+        "outcome_receipt_sha256", "execution",
+    }:
+        raise SyncError("natural-run pointer has the wrong shape")
+    execution = pointer.get("execution")
+    if (
+        pointer.get("schema_version") != NATURAL_LATEST_SCHEMA
+        or pointer.get("pointer_kind") != "natural"
+        or pointer.get("status") != "verified"
+        or not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9._-]{0,159}", str(pointer.get("run_id") or ""),
+        )
+        or not re.fullmatch(r"[0-9a-f]{64}", str(pointer.get("receipt_sha256") or ""))
+        or not re.fullmatch(
+            r"[0-9a-f]{64}", str(pointer.get("outcome_receipt_sha256") or ""),
+        )
+        or not isinstance(execution, dict)
+        or execution.get("natural_schedule_verified") is not False
+        or execution.get("execution_context") != "systemd_timer_expected"
+        or execution.get("service_unit") != SERVICE_UNIT
+        or execution.get("expected_timer_unit") != TIMER_UNIT
+        or not re.fullmatch(
+            r"[0-9a-f]{32}", str(execution.get("systemd_invocation_id") or ""),
+        )
+    ):
+        raise SyncError("natural-run pointer contract failed")
+    _remote_receipt_name(pointer.get("receipt_path"))
+    _remote_receipt_name(pointer.get("outcome_receipt_path"))
+    return pointer, raw
+
+
+def _validate_natural_chain(
+    path: Path, pointer: dict[str, Any], copied: dict[str, bytes], *, scp: Path,
+    host: str, known_hosts: Path, scratch: Path,
+) -> None:
+    attestation_name = _remote_receipt_name(pointer.get("receipt_path"))
+    attestation, raw = _read_json(path)
+    if hashlib.sha256(raw).hexdigest() != pointer["receipt_sha256"]:
+        raise SyncError("natural-run attestation hash mismatch")
+    if set(attestation) != {
+        "schema_version", "status", "run_id", "verified_at", "outcome",
+        "verification", "execution", "schedule", "evidence", "contract",
+    }:
+        raise SyncError("natural-run attestation has the wrong shape")
+    outcome_ref = attestation.get("outcome")
+    verification_ref = attestation.get("verification")
+    schedule = attestation.get("schedule")
+    evidence = attestation.get("evidence")
+    execution = attestation.get("execution")
+    if (
+        attestation.get("schema_version") != NATURAL_SCHEMA
+        or attestation.get("status") != "verified"
+        or attestation.get("run_id") != pointer.get("run_id")
+        or attestation.get("verified_at") != pointer.get("updated_at")
+        or execution != pointer.get("execution")
+        or not isinstance(outcome_ref, dict)
+        or not isinstance(verification_ref, dict)
+        or not isinstance(schedule, dict)
+        or not isinstance(evidence, dict)
+        or set(outcome_ref) != {
+            "receipt_path", "receipt_sha256", "completed_at", "counts", "versions",
+        }
+        or not isinstance(outcome_ref.get("versions"), dict)
+        or set(outcome_ref["versions"]) != {"collector", "query", "parser"}
+        or any(
+            not isinstance(value, str) or not value
+            for value in outcome_ref["versions"].values()
+        )
+        or set(verification_ref) != {"receipt_path", "receipt_sha256"}
+        or set(schedule) != {
+            "timer_unit", "service_unit", "timer_active", "timer_enabled",
+            "timer_target", "timer_last_trigger", "timer_last_trigger_realtime_usec",
+            "timer_last_trigger_monotonic",
+            "timer_next_elapse", "trigger_realtime_usec",
+            "outcome_started_realtime_usec", "trigger_to_outcome_start_usec",
+            "service_journal_first_realtime_usec",
+            "service_journal_last_realtime_usec",
+        }
+        or outcome_ref.get("receipt_path") != pointer.get("outcome_receipt_path")
+        or outcome_ref.get("receipt_sha256") != pointer.get("outcome_receipt_sha256")
+        or schedule.get("timer_unit") != TIMER_UNIT
+        or schedule.get("service_unit") != SERVICE_UNIT
+        or schedule.get("timer_target") != SERVICE_UNIT
+        or schedule.get("timer_active") is not True
+        or schedule.get("timer_enabled") is not True
+        or not str(schedule.get("timer_last_trigger") or "").strip()
+        or not str(schedule.get("timer_last_trigger_monotonic") or "").strip()
+        or not str(schedule.get("timer_next_elapse") or "").strip()
+        or any(
+            not re.fullmatch(r"[0-9a-f]{64}", str(value or ""))
+            for value in evidence.values()
+        )
+        or set(evidence) != {
+            "latest_attempt_sha256", "latest_success_sha256", "timer_show_sha256",
+            "timer_journal_sha256", "service_journal_sha256",
+        }
+    ):
+        raise SyncError("natural-run attestation contract failed")
+    for key in (
+        "timer_last_trigger_realtime_usec", "trigger_realtime_usec",
+        "outcome_started_realtime_usec",
+        "trigger_to_outcome_start_usec",
+        "service_journal_first_realtime_usec", "service_journal_last_realtime_usec",
+    ):
+        if type(schedule.get(key)) is not int or schedule[key] < 0:
+            raise SyncError("natural-run schedule evidence is malformed")
+    if (
+        schedule["outcome_started_realtime_usec"]
+        != schedule["trigger_realtime_usec"]
+        + schedule["trigger_to_outcome_start_usec"]
+        or schedule["service_journal_first_realtime_usec"]
+        < schedule["trigger_realtime_usec"]
+        or schedule["service_journal_last_realtime_usec"]
+        < schedule["service_journal_first_realtime_usec"]
+        or schedule["trigger_to_outcome_start_usec"]
+        > MAX_TRIGGER_TO_OUTCOME_START_USEC
+        or abs(
+            schedule["timer_last_trigger_realtime_usec"]
+            - schedule["trigger_realtime_usec"]
+        ) > MAX_SYSTEMD_TRIGGER_CLOCK_SKEW_USEC
+    ):
+        raise SyncError("natural-run schedule evidence is internally inconsistent")
+
+    outcome_name = _remote_receipt_name(outcome_ref.get("receipt_path"))
+    outcome_path = scratch / f"natural-outcome-{uuid4().hex}-{outcome_name}"
+    _copy_remote_receipt(scp, host, known_hosts, outcome_name, outcome_path)
+    outcome = _validate_outcome(
+        outcome_path,
+        {
+            "run_id": pointer["run_id"],
+            "status": "ok",
+            "updated_at": outcome_ref.get("completed_at"),
+            "receipt_path": outcome_ref.get("receipt_path"),
+            "receipt_sha256": outcome_ref.get("receipt_sha256"),
+            "counts": outcome_ref.get("counts"),
+            "execution": execution,
+        },
+        copied,
+        scp=scp,
+        host=host,
+        known_hosts=known_hosts,
+        scratch=scratch,
+    )
+    if outcome.get("verification") != verification_ref:
+        raise SyncError("natural-run verification reference is not outcome-bound")
+    if outcome.get("versions") != outcome_ref.get("versions"):
+        raise SyncError("natural-run collector versions are not outcome-bound")
+    copied[attestation_name] = raw
 
 
 def _real_private_directory(path: Path) -> None:
@@ -373,6 +562,13 @@ def _sync_receipts_locked(
                 _copy_remote(scp, host, known_hosts, name, copied_path)
                 first[name] = _validate_pointer(copied_path, kind)
 
+            natural: tuple[dict[str, Any], bytes] | None = None
+            natural_path = scratch / f"first-{NATURAL_POINTER_NAME}"
+            if _copy_optional_remote(
+                scp, host, known_hosts, NATURAL_POINTER_NAME, natural_path,
+            ):
+                natural = _validate_natural_pointer(natural_path)
+
             receipts: dict[str, bytes] = {}
             for pointer, _raw in first.values():
                 outcome_name = _remote_receipt_name(pointer["receipt_path"])
@@ -385,6 +581,17 @@ def _sync_receipts_locked(
                     known_hosts=known_hosts, scratch=scratch,
                 )
 
+            if natural is not None:
+                attestation_name = _remote_receipt_name(natural[0]["receipt_path"])
+                attestation_path = scratch / f"natural-{uuid4().hex}-{attestation_name}"
+                _copy_remote_receipt(
+                    scp, host, known_hosts, attestation_name, attestation_path,
+                )
+                _validate_natural_chain(
+                    attestation_path, natural[0], receipts, scp=scp, host=host,
+                    known_hosts=known_hosts, scratch=scratch,
+                )
+
             stable = True
             for name, kind in zip(POINTER_NAMES, ("attempt", "success")):
                 copied_path = scratch / f"second-{name}"
@@ -392,6 +599,18 @@ def _sync_receipts_locked(
                 _pointer, second_raw = _validate_pointer(copied_path, kind)
                 if second_raw != first[name][1]:
                     stable = False
+            if natural is not None:
+                second_natural_path = scratch / f"second-{NATURAL_POINTER_NAME}"
+                if not _copy_optional_remote(
+                    scp, host, known_hosts, NATURAL_POINTER_NAME, second_natural_path,
+                ):
+                    stable = False
+                else:
+                    _natural_pointer, second_natural_raw = _validate_natural_pointer(
+                        second_natural_path,
+                    )
+                    if second_natural_raw != natural[1]:
+                        stable = False
             if not stable:
                 continue
 
@@ -399,12 +618,15 @@ def _sync_receipts_locked(
                 _create_or_compare_immutable(destination / "receipts" / name, raw)
             for name in POINTER_NAMES:
                 _atomic_replace_pointer(destination / name, first[name][1])
+            if natural is not None:
+                _atomic_replace_pointer(destination / NATURAL_POINTER_NAME, natural[1])
             return {
                 "status": "synced",
                 "attempt": attempt_number,
                 "receipt_files": len(receipts),
                 "latest_attempt_run_id": first["latest-attempt.json"][0]["run_id"],
                 "latest_success_run_id": first["latest-success.json"][0]["run_id"],
+                "natural_admission_run_id": natural[0]["run_id"] if natural else None,
             }
     raise SyncError("producer pointers changed during every bounded snapshot attempt")
 
