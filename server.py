@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import base64
 import argparse
+import hmac
 import json
 import hashlib
 import os
 import re
 import sqlite3
+import stat
 import threading
 import time
 import urllib.error
@@ -83,6 +85,18 @@ MAILCHIMP_UTM_MEDIUM_TAG = os.getenv("MAILCHIMP_UTM_MEDIUM_TAG", "UTMMED").strip
 UTM_VALUE_RE = re.compile(r"[^a-zA-Z0-9._-]")
 SUPABASE_URL = (os.getenv("FLORIDA_SIGNAL_SUPABASE_URL", "").strip() or "https://jrjewmzkyluxdywyusrw.supabase.co").rstrip("/")
 SUPABASE_PUBLISHABLE_KEY = os.getenv("FLORIDA_SIGNAL_SUPABASE_PUBLISHABLE_KEY", "").strip() or "sb_publishable_dEyBjKE_vcTj3YYx4p6XvA_xnkVW3Wb"
+PDMR_HEALTH_LATEST_PATH = Path(os.getenv(
+    "FLORIDA_SIGNAL_PDMR_HEALTH_LATEST_PATH",
+    "/srv/grahamandgold/florida-signal/staging/data/pdmr/health-latest.json",
+)).expanduser()
+PDMR_HEALTH_RECEIPT_DIR = Path(os.getenv(
+    "FLORIDA_SIGNAL_PDMR_HEALTH_RECEIPT_DIR",
+    "/srv/grahamandgold/florida-signal/staging/data/pdmr/health-receipts",
+)).expanduser()
+PDMR_COLLECTOR_RECEIPT_DIR = Path(os.getenv(
+    "FLORIDA_SIGNAL_PDMR_COLLECTOR_RECEIPT_DIR",
+    "/srv/grahamandgold/florida-signal/staging/data/pdmr/receipts",
+)).expanduser()
 _health_lock = threading.Lock()
 _health_cache: dict[str, Any] = {"at": 0.0, "payload": None}
 
@@ -534,6 +548,249 @@ def source_clock_row(
     }
 
 
+def _regular_json(path: Path, *, max_bytes: int = 2_000_000) -> tuple[dict[str, Any], bytes]:
+    """Open a small regular JSON file without following its final symlink."""
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    handle = os.fdopen(descriptor, "rb")
+    try:
+        info = os.fstat(handle.fileno())
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError("receipt artifact must be a regular file")
+        if info.st_size > max_bytes:
+            raise ValueError("receipt artifact exceeds the public health size cap")
+        raw = handle.read(max_bytes + 1)
+    finally:
+        handle.close()
+    if len(raw) > max_bytes:
+        raise ValueError("receipt artifact exceeds the public health size cap")
+    value = json.loads(raw)
+    if not isinstance(value, dict):
+        raise ValueError("receipt artifact must be a JSON object")
+    return value, raw
+
+
+def _nonnegative_receipt_int(value: Any, field: str) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"PDMR receipt field is not an integer: {field}") from error
+    if parsed < 0:
+        raise ValueError(f"PDMR receipt field is negative: {field}")
+    return parsed
+
+
+def _bound_receipt(
+    pointer: dict[str, Any],
+    *,
+    receipt_dir: Path,
+    pointer_schema: str,
+    receipt_schema: str,
+    receipt_kind: str,
+) -> tuple[dict[str, Any], str, str]:
+    """Follow one SHA-bound pointer inside its configured private directory."""
+    if pointer.get("schema_version") != pointer_schema:
+        raise ValueError("unexpected receipt-pointer schema")
+    expected_sha = str(pointer.get("receipt_sha256") or "")
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_sha):
+        raise ValueError("receipt pointer has no valid SHA-256")
+    configured_dir = receipt_dir.resolve(strict=True)
+    candidate = Path(str(pointer.get("receipt_path") or ""))
+    if not candidate.is_absolute() or candidate.is_symlink():
+        raise ValueError("receipt pointer path is not an absolute regular-file candidate")
+    resolved = candidate.resolve(strict=True)
+    if resolved.parent != configured_dir:
+        raise ValueError("receipt pointer escaped its configured directory")
+    receipt, raw = _regular_json(resolved)
+    actual_sha = hashlib.sha256(raw).hexdigest()
+    if not hmac.compare_digest(actual_sha, expected_sha):
+        raise ValueError("receipt pointer SHA-256 mismatch")
+    if receipt.get("schema_version") != receipt_schema:
+        raise ValueError("unexpected terminal-receipt schema")
+    if receipt.get("receipt_kind") != receipt_kind:
+        raise ValueError("unexpected terminal-receipt kind")
+    return receipt, resolved.name, actual_sha
+
+
+def pdmr_health_summary() -> dict[str, Any]:
+    """Return only sanitized, hash-verified PDMR health evidence for the Desk."""
+    pointer, _ = _regular_json(PDMR_HEALTH_LATEST_PATH)
+    report, health_name, health_sha = _bound_receipt(
+        pointer,
+        receipt_dir=PDMR_HEALTH_RECEIPT_DIR,
+        pointer_schema="FloridaSignalPdmrHealthLatestV1",
+        receipt_schema="FloridaSignalPdmrHealthReceiptV2",
+        receipt_kind="pdmr_health_terminal",
+    )
+    if pointer.get("status") != report.get("status"):
+        raise ValueError("PDMR health pointer status does not match its receipt")
+    pointer_alert_count = _nonnegative_receipt_int(pointer.get("alert_count"), "pointer.alert_count")
+    report_alert_count = _nonnegative_receipt_int(report.get("alert_count"), "report.alert_count")
+    if pointer_alert_count != report_alert_count:
+        raise ValueError("PDMR health pointer alert count does not match its receipt")
+
+    collector = report.get("collector") if isinstance(report.get("collector"), dict) else {}
+    collector_pointer = (
+        collector.get("latest_pointer")
+        if isinstance(collector.get("latest_pointer"), dict)
+        else {}
+    )
+    collector_receipt, collector_name, collector_sha = _bound_receipt(
+        collector_pointer,
+        receipt_dir=PDMR_COLLECTOR_RECEIPT_DIR,
+        pointer_schema="FloridaSignalPdmrCollectorLatestPointerV1",
+        receipt_schema="FloridaSignalPdmrCollectorReceiptV3",
+        receipt_kind="pdmr_collector_terminal",
+    )
+    if collector_pointer.get("run_id") != collector_receipt.get("run_id"):
+        raise ValueError("PDMR collector pointer run does not match its receipt")
+    if collector_pointer.get("status") != collector_receipt.get("status"):
+        raise ValueError("PDMR collector pointer status does not match its receipt")
+
+    mirror = report.get("mirror") if isinstance(report.get("mirror"), dict) else {}
+    parity = mirror.get("parity") if isinstance(mirror.get("parity"), dict) else {}
+    parity_tables = parity.get("tables") if isinstance(parity.get("tables"), dict) else {}
+    expected_tables = {
+        "parcel_events", "parcel_event_versions",
+        "pdmr_collection_failures", "pdmr_collection_runs",
+    }
+    exact_tables = set(parity_tables) == expected_tables
+    parity_safe: dict[str, Any] = {}
+    for table in sorted(expected_tables):
+        proof = parity_tables.get(table) if isinstance(parity_tables.get(table), dict) else {}
+        local = proof.get("local") if isinstance(proof.get("local"), dict) else {}
+        remote = proof.get("supabase") if isinstance(proof.get("supabase"), dict) else {}
+        local_count = _nonnegative_receipt_int(local.get("count"), f"{table}.local.count")
+        remote_count = _nonnegative_receipt_int(remote.get("count"), f"{table}.supabase.count")
+        local_pk = str(local.get("pk_set_sha256") or "")
+        remote_pk = str(remote.get("pk_set_sha256") or "")
+        local_rows = str(local.get("rowset_sha256") or "")
+        remote_rows = str(remote.get("rowset_sha256") or "")
+        hashes_valid = all(
+            re.fullmatch(r"[0-9a-f]{64}", value)
+            for value in (local_pk, remote_pk, local_rows, remote_rows)
+        )
+        parity_safe[table] = {
+            "status": (
+                "passed"
+                if proof.get("status") == "passed"
+                and local_count == remote_count and hashes_valid
+                and local_pk == remote_pk and local_rows == remote_rows
+                else "unverified"
+            ),
+            "local_count": local_count,
+            "supabase_count": remote_count,
+            "local_pk_sha256": local_pk,
+            "supabase_pk_sha256": remote_pk,
+            "local_rowset_sha256": local_rows,
+            "supabase_rowset_sha256": remote_rows,
+        }
+    parity_passed = bool(
+        parity.get("status") == "passed"
+        and exact_tables
+        and all(item["status"] == "passed" for item in parity_safe.values())
+    )
+
+    automation = (
+        report.get("automation_proof")
+        if isinstance(report.get("automation_proof"), dict)
+        else {}
+    )
+    units = automation.get("units") if isinstance(automation.get("units"), dict) else {}
+    unit_proof_passed = set(units) == {"collector", "mirror", "health"} and all(
+        isinstance(item, dict)
+        and item.get("status") == "passed"
+        and item.get("timer_enabled") is True
+        and item.get("timer_active") is True
+        for item in units.values()
+    )
+    collector_exit_code = _nonnegative_receipt_int(
+        collector_receipt.get("exit_code"), "collector.exit_code"
+    )
+    natural_run_passed = bool(
+        automation.get("status") == "passed"
+        and automation.get("collector_invocation") == "scheduled_live"
+        and automation.get("collector_run_id") == collector_receipt.get("run_id")
+        and collector_receipt.get("invocation") == "scheduled_live"
+        and collector_receipt.get("status") == "ok"
+        and collector_exit_code == 0
+        and unit_proof_passed
+    )
+
+    local = report.get("local") if isinstance(report.get("local"), dict) else {}
+    database_run = (
+        collector_receipt.get("database_run")
+        if isinstance(collector_receipt.get("database_run"), dict)
+        else {}
+    )
+    counts = collector_receipt.get("counts") if isinstance(collector_receipt.get("counts"), dict) else {}
+    records_observed = _nonnegative_receipt_int(database_run.get("records_seen"), "collector.records_observed")
+    records_attempted = _nonnegative_receipt_int(counts.get("attempted"), "collector.records_attempted")
+    records_rejected = _nonnegative_receipt_int(counts.get("rejected"), "collector.records_rejected")
+    collector_errors = _nonnegative_receipt_int(counts.get("errors"), "collector.errors")
+    count_parts = {
+        key: _nonnegative_receipt_int(counts.get(key), f"collector.{key}")
+        for key in ("inserted", "updated", "migrated", "unchanged")
+    }
+    if records_attempted != sum(count_parts.values()) + records_rejected:
+        raise ValueError("PDMR collector attempted accounting does not reconcile")
+    records_written = sum(count_parts[key] for key in ("inserted", "updated", "migrated"))
+    alerts = report.get("alerts") if isinstance(report.get("alerts"), list) else []
+    alert_codes = sorted({
+        str(item.get("code")) for item in alerts
+        if isinstance(item, dict) and item.get("code")
+    })
+    healthy = bool(
+        report.get("status") == "healthy"
+        and report_alert_count == 0
+        and not alert_codes
+        and parity_passed
+    )
+    mirror_pointer = mirror.get("latest_pointer") if isinstance(mirror.get("latest_pointer"), dict) else {}
+    return {
+        "schema_version": "FloridaSignalPublicPdmrHealthV1",
+        "status": "verified" if healthy and natural_run_passed else "unverified",
+        "health_status": report.get("status") or "unavailable",
+        "generated_at": report.get("generated_at"),
+        "alert_count": report_alert_count,
+        "alert_codes": alert_codes,
+        "natural_schedule_proof": "passed" if natural_run_passed else "unverified",
+        "local": {
+            "events": _nonnegative_receipt_int(local.get("events"), "local.events"),
+            "versions": _nonnegative_receipt_int(local.get("versions"), "local.versions"),
+            "unresolved_failures": _nonnegative_receipt_int(local.get("unresolved_failures"), "local.unresolved_failures"),
+            "abandoned_failures": _nonnegative_receipt_int(local.get("abandoned_failures"), "local.abandoned_failures"),
+            "orphan_running_rows": _nonnegative_receipt_int(local.get("orphan_running_rows"), "local.orphan_running_rows"),
+        },
+        "collector": {
+            "run_id": collector_receipt.get("run_id"),
+            "started_at": collector_receipt.get("started_at"),
+            "finished_at": collector_receipt.get("finished_at"),
+            "status": collector_receipt.get("status"),
+            "invocation": collector_receipt.get("invocation"),
+            "records_observed": records_observed,
+            "records_attempted": records_attempted,
+            "records_written": records_written,
+            "records_rejected": records_rejected,
+            "errors": collector_errors,
+        },
+        "mirror": {
+            "status": mirror_pointer.get("status") or mirror.get("latest_terminal_status"),
+            "updated_at": mirror_pointer.get("updated_at"),
+            "cohort_status": (mirror.get("cohort") or {}).get("status") if isinstance(mirror.get("cohort"), dict) else None,
+            "has_more": (mirror.get("cohort") or {}).get("has_more") if isinstance(mirror.get("cohort"), dict) else None,
+            "parity_status": "passed" if parity_passed else "unverified",
+            "tables": parity_safe,
+        },
+        "receipt": {
+            "health_name": health_name,
+            "health_sha256": health_sha,
+            "collector_name": collector_name,
+            "collector_sha256": collector_sha,
+        },
+    }
+
+
 def preliminary_clerk_status(
     event_time: Any,
     run: dict[str, Any],
@@ -583,6 +840,8 @@ def data_health_payload() -> dict[str, Any]:
         faa_fetch: dict[str, Any] = {}
         sunbiz_fetch: dict[str, Any] = {}
         transfer_freshness: dict[str, Any] = {}
+        pdmr_health: dict[str, Any] = {}
+        pdmr_health_error = ""
         editorial_health: list[dict[str, Any]] = []
         try:
             rows = supabase_public_rows("_meta_sync_runs?select=id,completed_at,rows_synced,tables_touched,errors&order=completed_at.desc&limit=1")
@@ -660,6 +919,11 @@ def data_health_payload() -> dict[str, Any]:
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
             errors.append("property-transfer-freshness:" + type(error).__name__)
         try:
+            pdmr_health = pdmr_health_summary()
+        except (OSError, json.JSONDecodeError, ValueError) as error:
+            pdmr_health_error = type(error).__name__
+            errors.append("pdmr-health:" + pdmr_health_error)
+        try:
             editorial_health = supabase_public_rows("editorial_pipeline_health?select=component,status,event_through,source_through,system_time,detail,metrics&order=component.asc")
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
             errors.append("editorial-pipeline:" + type(error).__name__)
@@ -720,6 +984,32 @@ def data_health_payload() -> dict[str, Any]:
         sync_status = health_status(sync.get("completed_at"), 1.25, 3)
         if sync and sync_errors:
             sync_status = "error"
+        pdmr_collector = (
+            pdmr_health.get("collector")
+            if isinstance(pdmr_health.get("collector"), dict)
+            else {}
+        )
+        pdmr_verified = pdmr_health.get("status") == "verified"
+        pdmr_status = (
+            health_status(pdmr_health.get("generated_at"), 0.5, 2)
+            if pdmr_verified
+            else "error"
+            if pdmr_health and pdmr_health.get("health_status") in {"attention", "error"}
+            else "unverified"
+            if pdmr_health
+            else "unavailable"
+        )
+        pdmr_detail = (
+            f"{pdmr_health.get('local', {}).get('events', 0)} events / "
+            f"{pdmr_health.get('local', {}).get('versions', 0)} versions; latest collector "
+            f"{pdmr_collector.get('records_attempted')} attempted / "
+            f"{pdmr_collector.get('records_written')} written / "
+            f"{pdmr_collector.get('records_rejected')} rejected; four-table Supabase parity "
+            f"{pdmr_health.get('mirror', {}).get('parity_status', 'unverified')}; natural schedule proof "
+            f"{pdmr_health.get('natural_schedule_proof', 'unverified')}"
+            if pdmr_health
+            else f"No valid hash-bound PDMR health receipt ({pdmr_health_error or 'unavailable'})"
+        )
         source_rows = [
             source_clock_row(source_id="supabase-sync", label="Public mirror", status=sync_status, health_receipt_at=sync.get("completed_at"), health_receipt_status=(("failed" if sync_errors else "ok") if sync else None), status_basis="terminal_sync_run", cadence="every 30 minutes", detail=f"{sync.get('rows_synced', 0)} rows in latest run · {sync.get('errors', 0)} errors" if sync else "No sync run visible"),
             source_clock_row(source_id="permits", label="Permit applications", status=health_status(latest_seen.get("last_seen_at"), 30, 54), event_through=latest_application.get("applied_date"), fetched_at=latest_seen.get("last_seen_at"), status_basis="row_observation_only", cadence="source intake nightly; mirror every 30 minutes", detail="Analysis uses applied_date; last_seen_at is row freshness metadata, not a terminal collector receipt"),
@@ -728,6 +1018,7 @@ def data_health_payload() -> dict[str, Any]:
             source_clock_row(source_id="clerk-preliminary", label="Broward preliminary recordings", status=preliminary_clerk_status(preliminary_event_time, preliminary_clerk_run), verification="preliminary", event_through=preliminary_event_time, fetched_at=preliminary_fetched_at, health_receipt_at=preliminary_receipt_at, health_receipt_status=preliminary_clerk_run.get("status"), status_basis=preliminary_status_basis, cadence="AcclaimWeb hourly plus 12:30 AM, noon, 7 PM and 10:30 PM", detail=preliminary_detail),
             source_clock_row(source_id="permit-enrichment", label="Permit enrichment", status=health_status(latest_enriched.get("last_enriched_at"), 30, 54), fetched_at=latest_enriched.get("last_enriched_at"), status_basis="processing_clock_only", cadence="continuous queue after permit intake", detail="This is a processing clock, not an event-coverage or terminal-receipt claim; parcel and application clocks remain separate"),
             source_clock_row(source_id="property-transfer-snapshot", label="Deed / parcel snapshot", status=transfer_snapshot_status, event_through=transfer_freshness.get("snapshot_event_through"), health_receipt_at=transfer_receipt.get("system_time"), health_receipt_status=transfer_receipt.get("status"), status_basis="snapshot_freshness_and_terminal_health", cadence="weekdays after verified Clerk catch-up", detail=(f"snapshot lag {transfer_freshness.get('snapshot_lag_business_days')} business day(s) · verified source age {transfer_freshness.get('source_age_business_days')}" if transfer_freshness else "Freshness view unavailable; current deed modules stay suppressed")),
+            source_clock_row(source_id="pdmr", label="Preliminary Development Meeting Request (PDMR)", status=pdmr_status, fetched_at=pdmr_collector.get("finished_at"), health_receipt_at=pdmr_health.get("generated_at"), health_receipt_status=pdmr_health.get("health_status"), status_basis="scheduled_terminal_receipts_and_four_table_parity" if pdmr_verified else "hash_bound_health_without_complete_natural_proof" if pdmr_health else "no_valid_terminal_health_receipt", cadence="collector 05:00/06:15 plus weekday 15:15 ET; mirror :20/:50; health every 15 minutes", detail=pdmr_detail, metrics=pdmr_health, receipt=pdmr_health.get("receipt") if pdmr_health else None),
             source_clock_row(source_id="fdep", label="FDEP environmental permits", status="unavailable", event_through=fdep_event.get("received_date"), fetched_at=fdep_fetch.get("last_fetched_at"), status_basis="row_fetch_only_no_terminal_receipt", cadence="daily at 9:20 UTC", detail="Rows are connected, but row fetch time is not collector health; durable terminal run receipts are not live yet"),
             source_clock_row(source_id="faa", label="FAA obstruction cases", status="unavailable", event_through=faa_event.get("date_entered"), fetched_at=faa_fetch.get("last_fetched_at"), status_basis="row_fetch_only_no_terminal_receipt", cadence="daily at 9:40 UTC", detail="Rows are connected, but row fetch time is not collector health; durable terminal run receipts are not live yet"),
             source_clock_row(source_id="meetings", label="Meeting watch", status=health_status(meetings.get("updated_at"), .5, 2), fetched_at=meetings.get("updated_at"), status_basis="source_check_clock", cadence="Legistar every 15 minutes; DRC and industry editorially checked", detail=f"{len(meetings.get('meetings', []))} upcoming rooms · every row links to its public source"),
