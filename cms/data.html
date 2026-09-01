@@ -854,7 +854,7 @@
     // ---------- explorer config ----------
     const TABLES = {
       pdmr_intent: {
-        label: "Preliminary Development Meeting Request (PDMR) · local evidence",
+        label: "Preliminary Development Meeting Request (PDMR)",
         privatePath: "/api/admin/pdmr-intent",
         privateLabel: "Preliminary Development Meeting Request source record",
         privateSearchRaw: true,
@@ -1157,7 +1157,7 @@
 
     const SOURCE_GROUPS = [
       { eyebrow: "S1 · Earliest built lane", title: "Planning intent before application", items: [
-        { label: "Preliminary Development Meeting Request (PDMR)", note: "LauderBuild pre-application narratives, owners, folios and concept stage; event and source-check clocks stay separate", table: "pdmr_intent", connection: "pdmr-local", receiptId: "pdmr-local", refresh: "manual" },
+        { label: "Preliminary Development Meeting Request (PDMR)", note: "LauderBuild pre-application narratives, owners, folios and concept stage; production mirror is preferred and the bundled snapshot is labeled only as fallback", table: "pdmr_intent", connection: "pdmr", receiptId: "pdmr", refresh: "checking" },
         { label: "Agenda Watch", note: "Legistar items, staff reports and attachments; timing varies by project", href: "/agenda.html", status: "Open view", state: "private" }
       ]},
       { eyebrow: "S2 · Next sensors", title: "Early clues to research + connect", items: [
@@ -1268,8 +1268,16 @@
               : await (await sbFetch(item.table, { select: cfg.probe || cfg.select.split(",")[0], limit: "1" })).json();
           const hasRows = Array.isArray(data) && data.length > 0;
           const receipt = item.receiptId ? sourceHealth.get(item.receiptId) : item.componentId ? componentHealth.get(item.componentId) : null;
-          const liveStatus = String(receipt && receipt.status || "UNKNOWN").toLowerCase();
-          const refresh = String(item.refresh || "connected").toLowerCase();
+          const liveStatus = String(
+            item.key === "pdmr" && payload ? payload.receipt_status : receipt && receipt.status || "UNKNOWN"
+          ).toLowerCase();
+          const refresh = String(
+            item.key === "pdmr" && payload
+              ? payload.automation === "scheduled" ? "automated"
+                : payload.automation === "scheduled_pending_proof" ? "schedule pending proof"
+                : "snapshot"
+              : item.refresh || "connected"
+          ).toLowerCase();
           if (hasRows) {
             connected += 1;
             const rowOnlyHealthUnknown = Boolean(
@@ -1423,7 +1431,15 @@
           q("#count-note").textContent = data.length + (data.length === PAGE ? "+" : "") + " exact match" + (data.length === 1 ? "" : "es") + " shown";
         } else if (cfg.privatePath && state.table === "pdmr_intent") {
           const total = Number(privateResult.record_count || 0);
-          q("#count-note").textContent = `${total.toLocaleString()} public PDMR record${total === 1 ? "" : "s"} · event through ${dateish(privateResult.newest_event) || "not exposed"} · source checked ${dateish(privateResult.last_collected) || "not recorded"}`;
+          const health = privateResult.production_health || {}, collector = health.collector || {}, mirror = health.mirror || {}, local = health.local || {}, receipt = health.receipt || {};
+          const shown = value => value == null ? "not exposed" : Number(value).toLocaleString();
+          const runText = privateResult.connection_mode === "supabase_mirror"
+            ? ` · ${shown(local.events)} events / ${shown(local.versions)} versions · latest detail run ${shown(collector.records_attempted)} attempted / ${shown(collector.records_written)} written / ${shown(collector.records_rejected)} rejected / ${shown(collector.errors)} errors · Supabase parity ${mirror.parity_status || "unverified"} · natural schedule ${health.natural_schedule_proof || "unverified"}`
+            : " · bundled fallback snapshot";
+          const receiptText = receipt.health_name && receipt.health_sha256
+            ? ` · <a href="https://api.thefloridasignal.com/api/data-health" target="_blank" rel="noopener" title="${esc(receipt.health_sha256)}">health receipt ${esc(receipt.health_name)} ↗</a>`
+            : " · health receipt unavailable";
+          q("#count-note").innerHTML = `${total.toLocaleString()} public PDMR record${total === 1 ? "" : "s"} · portal through ${esc(dateish(privateResult.newest_event) || "not exposed")} · source checked ${esc(dateish(privateResult.source_checked_at || privateResult.last_collected) || "not recorded")}${esc(runText)}${receiptText}`;
         } else if (cfg.privatePath) {
           const rowLabel = cfg.privateLabel || "private resolver row";
           q("#count-note").textContent = data.length + (privateResult.has_more ? "+" : "") + " " + rowLabel + (data.length === 1 ? "" : "s") + " shown";

@@ -16,7 +16,7 @@ from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import parse_qs, quote, urlencode, urlparse
 from zoneinfo import ZoneInfo
 
 
@@ -327,6 +327,21 @@ def public_json(url: str) -> dict[str, Any]:
         return {}
 
 
+def pdmr_public_health_proof(document: dict[str, Any] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Read the sanitized, hash-bound PDMR terminal proof from the public API."""
+    health = document if isinstance(document, dict) else public_json(
+        "https://api.thefloridasignal.com/api/data-health"
+    )
+    source = next((
+        row for row in health.get("sources", [])
+        if isinstance(row, dict) and row.get("id") == "pdmr"
+    ), {}) if isinstance(health, dict) else {}
+    metrics = source.get("metrics") if isinstance(source.get("metrics"), dict) else {}
+    if metrics.get("schema_version") != "FloridaSignalPublicPdmrHealthV1":
+        return source, {}
+    return source, metrics
+
+
 def load_project_state_manifest() -> tuple[int, dict[str, Any]]:
     """Read durable project state from Git without treating it as live health."""
     path = PROJECT_STATE_PATH.expanduser()
@@ -455,30 +470,53 @@ def project_state_payload() -> tuple[int, dict[str, Any]]:
         "status_basis": row.get("status_basis") or "receipt_contract_not_exposed",
         "system_time": row.get("system_time"),
         "detail": row.get("detail") or "Public source receipt supplied no detail.",
+        "metrics": row.get("metrics") if isinstance(row.get("metrics"), dict) else None,
+        "receipt": row.get("receipt") if isinstance(row.get("receipt"), dict) else None,
     } for row in health_rows.values()
         if isinstance(row, dict) and row.get("id")
     ]
 
-    # The local PDMR evidence index has its own independently observed clock. It is
-    # intentionally not promoted to production pipeline health, but the Data Explorer
-    # should not call a verified local receipt "health unknown" merely because the
-    # public data-health endpoint cannot see a loopback-only source.
+    # PDMR stays a source receipt rather than inheriting pipeline health from the
+    # tracked manifest. The private mirror may prove rows and terminal runs; only an
+    # explicit, independently recorded natural-run proof may label it automated.
     pdmr_code, pdmr = pdmr_intent_payload(limit=1)
     if pdmr_code == 200 and int(pdmr.get("record_count") or 0) > 0:
+        source_receipts = [row for row in source_receipts if row.get("id") != "pdmr"]
+        connection_mode = str(pdmr.get("connection_mode") or "local_snapshot")
+        automated = str(pdmr.get("automation") or "") == "scheduled"
+        clock = pdmr.get("source_checked_at") or pdmr.get("last_collected")
+        status = str(pdmr.get("receipt_status") or "unverified").upper()
+        production_health = pdmr.get("production_health")
+        production_health = production_health if isinstance(production_health, dict) else {}
+        collector = production_health.get("collector")
+        collector = collector if isinstance(collector, dict) else {}
+        mirror = production_health.get("mirror")
+        mirror = mirror if isinstance(mirror, dict) else {}
         source_receipts.append({
-            "id": "pdmr-local",
+            "id": "pdmr",
             "label": "Preliminary Development Meeting Request (PDMR) evidence index",
-            "status": status_from_clock(pdmr.get("last_collected"), 72, 168).upper(),
+            "status": status,
             "event_through": pdmr.get("newest_event"),
-            "fetched_at": pdmr.get("last_collected"),
-            "health_receipt_at": None,
-            "health_receipt_status": None,
-            "status_basis": "manual_snapshot_observation",
-            "system_time": pdmr.get("last_collected"),
-            "detail": (
-                f"{int(pdmr.get('record_count') or 0)} public source records in the "
-                "read-only local index; refresh remains manual until production admission automation clears its gate."
+            "fetched_at": clock,
+            "health_receipt_at": production_health.get("generated_at"),
+            "health_receipt_status": production_health.get("health_status"),
+            "status_basis": (
+                "terminal_collector_run_and_natural_schedule_proof"
+                if connection_mode == "supabase_mirror" and automated
+                else "terminal_collector_run_without_natural_schedule_proof"
+                if connection_mode == "supabase_mirror"
+                else "manual_snapshot_observation"
             ),
+            "system_time": production_health.get("generated_at") or clock,
+            "detail": (
+                f"{int(pdmr.get('record_count') or 0)} public source records via "
+                f"{pdmr.get('connection_label') or connection_mode}; latest collector "
+                f"attempted {collector.get('records_attempted')}, wrote "
+                f"{collector.get('records_written')}, rejected {collector.get('records_rejected')}; "
+                f"four-table Supabase parity {mirror.get('parity_status') or 'unverified'}."
+            ),
+            "metrics": production_health or None,
+            "receipt": pdmr.get("health_receipt"),
         })
 
     return 200, {
@@ -495,10 +533,10 @@ def project_state_payload() -> tuple[int, dict[str, Any]]:
     }
 
 
-def pdmr_intent_payload(
+def _pdmr_local_intent_payload(
     limit: int = 6, offset: int = 0, search: str = "",
 ) -> tuple[int, dict[str, Any]]:
-    """Read the local LauderBuild evidence mirror without mutating or promoting records."""
+    """Read the bundled LauderBuild snapshot without mutating or promoting records."""
     bounded_limit = bounded_int(limit, 6, 1, 100)
     bounded_offset = bounded_int(offset, 0, 0, 1_000_000)
     search = re.sub(r"[\x00-\x1f\x7f]", "", str(search or "")).strip()[:180]
@@ -624,6 +662,15 @@ def pdmr_intent_payload(
         "status": "available",
         "source": "Fort Lauderdale LauderBuild",
         "lane": "planning_intent",
+        "connection_mode": "local_snapshot",
+        "connection_label": "Bundled local snapshot",
+        "automation": "manual_snapshot",
+        "receipt_status": "unverified",
+        "snapshot_freshness": status_from_clock(summary["last_collected"], 72, 168),
+        "automation_verified_at": None,
+        "automation_verified_run_id": None,
+        "latest_successful_run": None,
+        "mirror_counts": None,
         "record_count": int(summary["record_count"] or 0),
         "recent_count": int(summary["recent_count"] or 0),
         "recent_since": recent_since,
@@ -636,8 +683,330 @@ def pdmr_intent_payload(
         "has_more": bounded_offset + len(items) < matched_count,
         "search": search or None,
         "generated_at": now_iso(),
-        "contract": "Public pre-application source records only. Collection does not nominate a Candidate, verify a Signal or publish a claim.",
+        "contract": (
+            "Bundled read-only fallback snapshot of public pre-application source records. "
+            "It is not production freshness proof and does not nominate a Candidate, verify a Signal or publish a claim."
+        ),
     }
+
+
+def _pdmr_content_range_count(headers: dict[str, str]) -> int | None:
+    value = str(headers.get("content-range") or "")
+    match = re.fullmatch(r"(?:\d+-\d+|\*)/(\d+|\*)", value)
+    if not match or match.group(1) == "*":
+        return None
+    return int(match.group(1))
+
+
+def _pdmr_safe_search(value: str) -> str:
+    # PostgREST's filter grammar treats these characters as syntax. Removing
+    # them keeps a newsroom search term a literal term rather than a filter.
+    return re.sub(r"[%*(),\"\\]", " ", value).strip()[:180]
+
+
+def _pdmr_supabase_intent_payload(
+    limit: int = 6, offset: int = 0, search: str = "",
+) -> tuple[int, dict[str, Any]]:
+    """Read the private production PDMR mirror through the loopback server."""
+    if not SUPABASE_SERVICE_KEY:
+        return 503, {"error": "private PDMR mirror credential unavailable"}
+    bounded_limit = bounded_int(limit, 6, 1, 100)
+    bounded_offset = bounded_int(offset, 0, 0, 1_000_000)
+    search = re.sub(r"[\x00-\x1f\x7f]", "", str(search or "")).strip()[:180]
+    source = "fort_lauderdale_lauderbuild_planning"
+    event_type = "planning_preapplication"
+    recent_since = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
+    base_filters = [
+        ("source", f"eq.{source}"),
+        ("event_type", f"eq.{event_type}"),
+    ]
+
+    def request_rows(
+        *, select: str, filters: list[tuple[str, str]], order: str = "",
+        row_limit: int = 1, row_offset: int = 0, exact_count: bool = False,
+        table: str = "parcel_events",
+    ) -> tuple[int, Any, dict[str, str]]:
+        params: list[tuple[str, str]] = [("select", select), *filters]
+        if order:
+            params.append(("order", order))
+        params.extend((("limit", str(row_limit)), ("offset", str(row_offset))))
+        prefer = "count=exact" if exact_count else ""
+        return supabase_request_with_headers(f"{table}?{urlencode(params)}", prefer=prefer)
+
+    summary_code, summary_rows, summary_headers = request_rows(
+        select="event_date,last_seen_at",
+        filters=base_filters,
+        order="event_date.desc.nullslast,source_record_id.desc",
+        exact_count=True,
+    )
+    total_count = _pdmr_content_range_count(summary_headers)
+    if summary_code >= 400 or not isinstance(summary_rows, list) or total_count is None:
+        return 503, {"error": "private PDMR mirror summary unavailable"}
+    newest_event = summary_rows[0].get("event_date") if summary_rows else None
+
+    latest_seen_code, latest_seen_rows, _ = request_rows(
+        select="last_seen_at",
+        filters=base_filters,
+        order="last_seen_at.desc.nullslast",
+    )
+    if latest_seen_code >= 400 or not isinstance(latest_seen_rows, list):
+        return 503, {"error": "private PDMR observation clock unavailable"}
+    latest_record_observed_at = latest_seen_rows[0].get("last_seen_at") if latest_seen_rows else None
+
+    recent_code, recent_rows, recent_headers = request_rows(
+        select="event_id",
+        filters=[*base_filters, ("event_date", f"gte.{recent_since}")],
+        exact_count=True,
+    )
+    recent_count = _pdmr_content_range_count(recent_headers)
+    if recent_code >= 400 or not isinstance(recent_rows, list) or recent_count is None:
+        return 503, {"error": "private PDMR recent count unavailable"}
+
+    version_code, version_rows, version_headers = request_rows(
+        table="parcel_event_versions", select="version_id",
+        filters=[("event_id", "like.lauderbuild:pdmr:%")], exact_count=True,
+    )
+    version_count = _pdmr_content_range_count(version_headers)
+    failure_code, failure_rows, failure_headers = request_rows(
+        table="pdmr_collection_failures", select="source_record_id",
+        filters=[], exact_count=True,
+    )
+    failure_count = _pdmr_content_range_count(failure_headers)
+    unresolved_code, unresolved_rows, unresolved_headers = request_rows(
+        table="pdmr_collection_failures", select="source_record_id",
+        filters=[("resolved_at", "is.null")], exact_count=True,
+    )
+    unresolved_failure_count = _pdmr_content_range_count(unresolved_headers)
+    if (
+        version_code >= 400 or not isinstance(version_rows, list) or version_count is None
+        or failure_code >= 400 or not isinstance(failure_rows, list) or failure_count is None
+        or unresolved_code >= 400 or not isinstance(unresolved_rows, list)
+        or unresolved_failure_count is None
+    ):
+        return 503, {"error": "private PDMR mirror parity counts unavailable"}
+    run_total_code, run_total_rows, run_total_headers = request_rows(
+        table="pdmr_collection_runs", select="run_id", filters=[], exact_count=True,
+    )
+    run_count = _pdmr_content_range_count(run_total_headers)
+    if run_total_code >= 400 or not isinstance(run_total_rows, list) or run_count is None:
+        return 503, {"error": "private PDMR run count unavailable"}
+
+    match = re.match(r"^(id|folio|addr|owner|project)\s*:\s*(.+)$", search, re.I) if search else None
+    prefix = match.group(1).lower() if match else ""
+    needle = _pdmr_safe_search((match.group(2) if match else search).strip())
+    normalized_needle = re.sub(r"[^A-Z0-9]", "", needle.upper())
+    row_filters = list(base_filters)
+    if search and not needle:
+        row_filters.append(("source_record_id", "eq.__no_safe_literal_search_term__"))
+    elif needle:
+        if prefix == "id":
+            # LauderBuild request IDs are stored canonically uppercase. Using
+            # equality after normalization avoids LIKE's `_` wildcard and
+            # therefore remains a genuinely exact, case-insensitive lookup.
+            row_filters.append(("source_record_id", f"eq.{needle.upper()}"))
+        elif prefix == "folio":
+            # Folios live in evidence JSON. Fetch the bounded source scope and
+            # apply the same normalized exact comparison as the SQLite fallback;
+            # a broad JSON substring can match unrelated evidence fields.
+            pass
+        elif prefix in {"addr", "owner", "project"}:
+            column = {"addr": "address", "owner": "owner_name", "project": "project_name"}[prefix]
+            row_filters.append((column, f"ilike.*{needle}*"))
+        else:
+            row_filters.append((
+                "or",
+                "(" + ",".join(
+                    f"{column}.ilike.*{needle}*" for column in
+                    ("source_record_id", "address", "owner_name", "project_name", "summary", "payload_json")
+                ) + ")",
+            ))
+    columns = (
+        "source_record_id,event_date,address,owner_name,project_name,summary,source_url,"
+        "source_record_hash,detector_version,first_seen_at,last_seen_at,payload_json"
+    )
+    if prefix == "folio" and needle:
+        if total_count > 10_000:
+            return 503, {"error": "exact PDMR folio scope exceeds bounded search cap"}
+        source_rows: list[dict[str, Any]] = []
+        source_offset = 0
+        while source_offset < total_count:
+            page_code, page_rows, page_headers = request_rows(
+                select=columns,
+                filters=base_filters,
+                order="event_date.desc.nullslast,source_record_id.desc",
+                row_limit=min(1000, total_count - source_offset),
+                row_offset=source_offset,
+                exact_count=True,
+            )
+            if (
+                page_code >= 400 or not isinstance(page_rows, list)
+                or _pdmr_content_range_count(page_headers) != total_count
+                or not page_rows
+            ):
+                return 503, {"error": "exact PDMR folio source scope unavailable"}
+            source_rows.extend(page_rows)
+            source_offset += len(page_rows)
+        exact_rows = []
+        for row in source_rows:
+            try:
+                evidence = json.loads(row.get("payload_json") or "{}")
+            except (TypeError, json.JSONDecodeError):
+                evidence = {}
+            fields = evidence.get("fields") if isinstance(evidence, dict) else {}
+            fields = fields if isinstance(fields, dict) else {}
+            if re.sub(r"[^A-Z0-9]", "", str(fields.get("folio") or "").upper()) == normalized_needle:
+                exact_rows.append(row)
+        matched_count = len(exact_rows)
+        rows = exact_rows[bounded_offset:bounded_offset + bounded_limit]
+    else:
+        rows_code, rows, rows_headers = request_rows(
+            select=columns,
+            filters=row_filters,
+            order="event_date.desc.nullslast,source_record_id.desc",
+            row_limit=bounded_limit,
+            row_offset=bounded_offset,
+            exact_count=True,
+        )
+        matched_count = _pdmr_content_range_count(rows_headers)
+        if rows_code >= 400 or not isinstance(rows, list) or matched_count is None:
+            return 503, {"error": "private PDMR mirror rows unavailable"}
+
+    run_columns = "run_id,started_at,finished_at,mode,invocation,status,pages_visited,records_seen,newest_record,inserted,updated,migrated,unchanged,versions_added,retries_resolved,errors,error_message"
+    terminal_run_params = urlencode([
+        ("select", run_columns),
+        ("finished_at", "not.is.null"),
+        ("order", "finished_at.desc.nullslast,run_id.desc"), ("limit", "1"),
+    ])
+    terminal_code, terminal_rows, _ = supabase_request_with_headers(
+        f"pdmr_collection_runs?{terminal_run_params}"
+    )
+    if terminal_code >= 400 or not isinstance(terminal_rows, list):
+        return 503, {"error": "private PDMR latest terminal run unavailable"}
+    latest_terminal_run = terminal_rows[0] if terminal_rows else None
+
+    successful_run_params = urlencode([
+        ("select", run_columns),
+        ("status", "eq.ok"), ("finished_at", "not.is.null"),
+        ("order", "finished_at.desc.nullslast,run_id.desc"), ("limit", "1"),
+    ])
+    run_code, run_rows, _ = supabase_request_with_headers(f"pdmr_collection_runs?{successful_run_params}")
+    if run_code >= 400 or not isinstance(run_rows, list):
+        return 503, {"error": "private PDMR run receipts unavailable"}
+    latest_run = run_rows[0] if run_code < 400 and isinstance(run_rows, list) and run_rows else None
+    source_checked_at = (
+        latest_terminal_run.get("finished_at")
+        if isinstance(latest_terminal_run, dict)
+        else None
+    )
+    health_source, health_proof = pdmr_public_health_proof()
+    health_collector = health_proof.get("collector") if isinstance(health_proof.get("collector"), dict) else {}
+    health_mirror = health_proof.get("mirror") if isinstance(health_proof.get("mirror"), dict) else {}
+    health_tables = health_mirror.get("tables") if isinstance(health_mirror.get("tables"), dict) else {}
+    health_local = health_proof.get("local") if isinstance(health_proof.get("local"), dict) else {}
+    parity_counts_match = bool(
+        health_tables.get("parcel_events", {}).get("supabase_count") == total_count
+        and health_tables.get("parcel_event_versions", {}).get("supabase_count") == version_count
+        and health_tables.get("pdmr_collection_failures", {}).get("supabase_count") == failure_count
+        and health_tables.get("pdmr_collection_runs", {}).get("supabase_count") == run_count
+    )
+    production_verified = bool(
+        health_proof.get("status") == "verified"
+        and health_proof.get("natural_schedule_proof") == "passed"
+        and health_mirror.get("parity_status") == "passed"
+        and parity_counts_match
+        and health_local.get("events") == total_count
+        and health_local.get("versions") == version_count
+        and unresolved_failure_count == 0
+        and int(health_proof.get("alert_count", 1) or 0) == 0
+        and isinstance(latest_terminal_run, dict)
+        and latest_terminal_run.get("status") == "ok"
+        and latest_terminal_run.get("run_id") == health_collector.get("run_id")
+    )
+    public_status = str(health_source.get("status") or "unverified").lower()
+    receipt_status = (
+        public_status
+        if production_verified and public_status in {"current", "delayed", "stale"}
+        else "error"
+        if isinstance(latest_terminal_run, dict) and latest_terminal_run.get("status") in {"partial", "error"}
+        else "unverified"
+    )
+
+    items = []
+    for row in rows:
+        try:
+            evidence = json.loads(row.get("payload_json") or "{}")
+        except (TypeError, json.JSONDecodeError):
+            evidence = {}
+        fields = evidence.get("fields") if isinstance(evidence, dict) else {}
+        fields = fields if isinstance(fields, dict) else {}
+        source_url = str(row.get("source_url") or "")
+        if not source_url.startswith("https://aca-prod.accela.com/FTL/"):
+            source_url = ""
+        items.append({
+            "source_record_id": row.get("source_record_id"), "event_date": row.get("event_date"),
+            "record_status": fields.get("status"), "address": row.get("address"),
+            "owner_name": row.get("owner_name"), "folio": fields.get("folio") or None,
+            "project_name": row.get("project_name"), "project_description": row.get("summary"),
+            "development_stage": fields.get("development_stage") or None,
+            "development_type": fields.get("development_type") or None,
+            "units_text": fields.get("units_text") or None,
+            "parking_spaces": fields.get("parking_spaces") or None,
+            "staff_questions": fields.get("staff_questions") or None,
+            "source_url": source_url, "source_record_hash": row.get("source_record_hash"),
+            "detector_version": row.get("detector_version"), "first_seen_at": row.get("first_seen_at"),
+            "last_seen_at": row.get("last_seen_at"), "editorial_state": "source_record_only",
+        })
+    return 200, {
+        "status": "available", "source": "Fort Lauderdale LauderBuild", "lane": "planning_intent",
+        "connection_mode": "supabase_mirror", "connection_label": "Private production mirror",
+        "automation": "scheduled" if production_verified else "scheduled_pending_proof",
+        "receipt_status": receipt_status,
+        "automation_verified_at": health_proof.get("generated_at") if production_verified else None,
+        "automation_verified_run_id": health_collector.get("run_id") if production_verified else None,
+        "latest_terminal_run": latest_terminal_run,
+        "latest_successful_run": latest_run,
+        "production_health": health_proof or None,
+        "health_receipt": health_proof.get("receipt") if health_proof else None,
+        "mirror_counts": {
+            "parcel_events": total_count,
+            "parcel_event_versions": version_count,
+            "pdmr_collection_failures": failure_count,
+            "pdmr_unresolved_failures": unresolved_failure_count,
+            "pdmr_collection_runs": run_count,
+        },
+        "record_count": total_count, "recent_count": recent_count, "recent_since": recent_since,
+        "newest_event": newest_event, "last_collected": source_checked_at or latest_record_observed_at,
+        "source_checked_at": source_checked_at, "latest_record_observed_at": latest_record_observed_at,
+        "items": items, "matched_count": matched_count, "limit": bounded_limit,
+        "offset": bounded_offset, "has_more": bounded_offset + len(items) < matched_count,
+        "search": search or None, "generated_at": now_iso(),
+        "contract": (
+            "Private production mirror of public pre-application records. Portal date and collector-run time "
+            "are separate; collection does not nominate a Candidate, verify a Signal or publish a claim."
+        ),
+    }
+
+
+def pdmr_intent_payload(
+    limit: int = 6, offset: int = 0, search: str = "",
+) -> tuple[int, dict[str, Any]]:
+    """Prefer the private production mirror; label the bundled snapshot as fallback."""
+    remote_code, remote = _pdmr_supabase_intent_payload(limit, offset, search)
+    if remote_code == 200:
+        return remote_code, remote
+    local_code, local = _pdmr_local_intent_payload(limit, offset, search)
+    if local_code == 200:
+        local["production_mirror_status"] = "unavailable"
+        local["production_mirror_error"] = str(remote.get("error") or "unavailable")[:160]
+        return local_code, local
+    unavailable = dict(remote)
+    unavailable.update({
+        "status": "unavailable", "items": [], "generated_at": now_iso(),
+        "connection_mode": "unavailable", "connection_label": "No PDMR evidence connection",
+        "automation": "unavailable",
+        "contract": "No PDMR state was inferred because neither the private mirror nor bundled snapshot answered.",
+    })
+    return 503, unavailable
 
 
 def pdmr_shadow_candidate_payload(limit: int = 8) -> tuple[int, dict[str, Any]]:
@@ -741,14 +1110,25 @@ def early_intel_payload() -> dict[str, Any]:
     permits = sources.get("permits", {})
     pdmr_code, pdmr = pdmr_intent_payload(limit=1)
     pdmr = pdmr if pdmr_code == 200 else {}
+    pdmr_connection_mode = str(pdmr.get("connection_mode") or "")
+    pdmr_automation = str(pdmr.get("automation") or "")
+    pdmr_clock = pdmr.get("source_checked_at") or pdmr.get("last_collected")
+    pdmr_status = str(pdmr.get("receipt_status") or "unverified").lower()
+    pdmr_health = pdmr.get("production_health") if isinstance(pdmr.get("production_health"), dict) else {}
     pdmr_receipt = ({
-        "status": status_from_clock(pdmr.get("last_collected"), 72, 168),
+        "status": pdmr_status,
         "event_through": pdmr.get("newest_event"),
-        "fetched_at": pdmr.get("last_collected"),
-        "health_receipt_at": None,
-        "health_receipt_status": None,
-        "status_basis": "manual_snapshot_observation",
-        "system_time": pdmr.get("last_collected"),
+        "fetched_at": pdmr_clock,
+        "health_receipt_at": pdmr_health.get("generated_at"),
+        "health_receipt_status": pdmr_health.get("health_status"),
+        "status_basis": (
+            "terminal_collector_run_and_natural_schedule_proof"
+            if pdmr_connection_mode == "supabase_mirror" and pdmr_automation == "scheduled"
+            else "terminal_collector_run_without_natural_schedule_proof"
+            if pdmr_connection_mode == "supabase_mirror"
+            else "manual_snapshot_observation"
+        ),
+        "system_time": pdmr_health.get("generated_at") or pdmr_clock,
     } if pdmr and int(pdmr.get("record_count") or 0) > 0 else ({"status": "unverified"} if pdmr else {}))
     meeting_receipt = ({
         "status": status_from_clock(meetings.get("updated_at"), 24, 72),
@@ -808,17 +1188,27 @@ def early_intel_payload() -> dict[str, Any]:
             "phase": "01 · Planning intent", "label": "Preliminary Development Meeting Request (PDMR) + agenda packets",
             "status": combined_status(pdmr_receipt, meeting_receipt),
             "connection": connection_state(pdmr_receipt, meeting_receipt),
-            "automation": "mixed" if pdmr_receipt and meeting_receipt else "manual" if pdmr_receipt else "automated" if meeting_receipt else "none",
+            "automation": (
+                "automated" if pdmr_automation == "scheduled" and meeting_receipt
+                else "schedule pending proof" if pdmr_connection_mode == "supabase_mirror" and pdmr_receipt
+                else "mixed" if pdmr_receipt and meeting_receipt
+                else "manual snapshot" if pdmr_receipt
+                else "automated" if meeting_receipt else "none"
+            ),
             "event_through": pdmr.get("newest_event") or next_meeting.get("date"),
-            "system_time": pdmr.get("last_collected") or meetings.get("updated_at"),
+            "system_time": pdmr_clock or meetings.get("updated_at"),
             "source_clocks": [
-                source_clock("pdmr-local", "PDMR evidence index", pdmr_receipt),
+                source_clock("pdmr", "PDMR evidence index", pdmr_receipt),
                 source_clock("meetings", "Meetings + agendas", meeting_receipt),
             ],
             "headline": ((f"PDMR reaches {pdmr.get('newest_event')} · {len(agendas)} posted agenda(s)"
                           if pdmr else f"{len(agendas)} posted agenda(s) among {len(government)} upcoming government meetings")
                          if government or pdmr else "Planning-intent sources unavailable"),
-            "note": "Earliest built lane in the current desk. The City's Preliminary Development Meeting Request portal dates precede matched formal applications, but first-public timing remains unresolved; agenda timing varies by project.",
+            "note": (
+                f"Earliest built lane in the current desk. PDMR is reading from "
+                f"{pdmr.get('connection_label') or 'no evidence connection'}; portal dates and collector-run times stay separate. "
+                "The first-public timing remains unresolved; agenda timing varies by project."
+            ),
             "href": "/#planning-intent",
         },
         {
@@ -1113,13 +1503,15 @@ def signal_machine_payload() -> dict[str, Any]:
     }
 
 
-def supabase_request(path: str, method: str = "GET", body: Any = None, prefer: str = "") -> tuple[int, Any]:
-    """Call PostgREST with the service-role key. Returns (status, parsed-or-text)."""
+def supabase_request_with_headers(
+    path: str, method: str = "GET", body: Any = None, prefer: str = "",
+) -> tuple[int, Any, dict[str, str]]:
+    """Call PostgREST server-side and preserve response metadata such as exact counts."""
     import urllib.error
     import urllib.request
 
     if not SUPABASE_SERVICE_KEY:
-        return 503, {"error": "SUPABASE_SERVICE_ROLE_KEY is not set in this shell; queue is read-only"}
+        return 503, {"error": "SUPABASE_SERVICE_ROLE_KEY is not set in this shell; queue is read-only"}, {}
     request = urllib.request.Request(
         f"{SUPABASE_URL}/rest/v1/{path}",
         method=method,
@@ -1133,11 +1525,19 @@ def supabase_request(path: str, method: str = "GET", body: Any = None, prefer: s
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             raw = response.read().decode()
-            return response.status, (json.loads(raw) if raw.strip() else None)
+            headers = {str(key).lower(): str(value) for key, value in response.headers.items()}
+            return response.status, (json.loads(raw) if raw.strip() else None), headers
     except urllib.error.HTTPError as error:
-        return error.code, {"error": error.read().decode()[:400]}
+        headers = {str(key).lower(): str(value) for key, value in error.headers.items()}
+        return error.code, {"error": error.read().decode()[:400]}, headers
     except OSError as error:
-        return 502, {"error": str(error)[:200]}
+        return 502, {"error": str(error)[:200]}, {}
+
+
+def supabase_request(path: str, method: str = "GET", body: Any = None, prefer: str = "") -> tuple[int, Any]:
+    """Call PostgREST with the service-role key. Returns (status, parsed-or-text)."""
+    status, payload, _ = supabase_request_with_headers(path, method, body, prefer)
+    return status, payload
 MARKET_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,39}$")
 CITY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,59}$")
 COUNTY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,79}$")

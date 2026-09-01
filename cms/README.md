@@ -79,7 +79,10 @@ availability separately from source health and refresh mode: `current/delayed/st
 `automated/manual/snapshot`, `Connected · empty`, `Unavailable`, or `health unknown`. Checks run sequentially and
 safe reads receive one bounded retry for transient 5xx responses so concurrent probes cannot make
 healthy Clerk, FAA or Accela sources look unavailable. The default record view is the same-day
-bounded PDMR evidence table. Preliminary Clerk remains clearly separated from verified Clerk
+bounded PDMR evidence table. When the private service-role credential is available, that table
+reads the private production Supabase mirror and shows its exact row counts and latest successful
+collector totals. If the mirror is unavailable, it falls back to the bundled SQLite snapshot and
+labels that fallback as a manual snapshot rather than production freshness. Preliminary Clerk remains clearly separated from verified Clerk
 records, and Accela detail/GIS enrichment do not borrow the permit application's health receipt.
 
 The browser stores the admin token only in the local session. Do not put it in public JavaScript,
@@ -101,6 +104,13 @@ a Finder-launched app is denied Documents access. Re-run the updater after a loc
 to refresh the snapshot. `FL_SIGNAL_SITE_REPO` and `FL_SIGNAL_SOURCE_ROOT` select the source at
 build time; `FL_SIGNAL_SOURCE_ROOT` and the three specific `FL_SIGNAL_*_PATH` variables may still
 override the bundled paths when launching from an environment that can read another checkout.
+The launcher also loads `$HOME/.florida_signal_supabase_env`; the service-role key stays in the
+loopback server and is never returned to browser JavaScript. PDMR is labeled automatic only when
+the public data-health contract exposes a hash-bound terminal health receipt that proves the
+collector, mirror and health services were each started by an enabled, active timer; the latest
+collector succeeded; and all four private Supabase tables have exact count, primary-key-set and
+rowset parity. A manual canary, stale success, failed latest run or incomplete parity remains
+`schedule pending proof` or `error`.
 
 ### If the desk says Locked
 
@@ -129,7 +139,8 @@ Send `Authorization: Bearer $DATA_WIRE_ADMIN_TOKEN`.
 - `GET /api/admin/pipeline-schedule` — read-only upcoming production timers; it never starts a job
 - `GET /api/admin/project-state` — durable tracked state plus independent live source receipts;
   legacy “locked PDMR” language is clarified as a frozen study roster, never access control
-- `GET /api/admin/pdmr-intent` — bounded, paged, read-only local PDMR evidence with fielded search
+- `GET /api/admin/pdmr-intent` — bounded, paged, read-only private PDMR production mirror with
+  fielded search and explicit bundled-snapshot fallback
 - `GET /api/admin/pdmr-candidates` — bounded local shadow ranking with no production writes
 - `GET /api/admin/sunbiz-entities` — bounded private exact-match resolver; raw rows stay server-side
 - `GET /api/admin/early-intel` — source-specific clocks across decisions, companies, capital,
@@ -141,8 +152,9 @@ Send `Authorization: Bearer $DATA_WIRE_ADMIN_TOKEN`.
   with date, time, place and agenda-posted state; historical packet items expose the government
   body, official agenda PDF, exact meeting item and attachment list before the reporting notes.
 - `GET /api/admin/signal-machine` — honest control-plane contract. It separates source health,
-  detector coverage and freshness; permit/execution and local PDMR are shadow-ranked, while PDMR
-  remains disconnected from the production queue.
+  detector coverage and freshness; permit/execution and PDMR are shadow-ranked, while the PDMR
+  Candidate detector remains local and disconnected from the production queue even when its
+  source index is production-connected.
 - `GET /api/admin/brief-bank?market=broward` — private edition selections with resolved target date,
   source receipt, SHA-256 evidence snapshot, score/gate reasons and machine/profile lineage.
 - `POST /api/admin/brief-bank` — saves or reslots one stable source item. It never approves,
@@ -202,7 +214,8 @@ An agenda-property item cannot publish until it has a required city, official pa
 ## Production work still required
 
 - deploy behind authentication and HTTPS;
-- move SQLite to private persistent Postgres/Supabase;
+- move remaining editorial workflow SQLite state to a private persistent store; the PDMR source
+  index already prefers its private Supabase mirror and preserves SQLite only as a labeled fallback;
 - configure backups and audit-log retention;
 - connect the official agenda/record collectors to the private draft API;
 - connect the separate Florida Legislature/LegiScan API lane after its credential and source

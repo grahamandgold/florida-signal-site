@@ -337,6 +337,10 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
                         "record_count": 329,
                         "newest_event": "2026-08-22",
                         "last_collected": "2026-08-23T21:45:00Z",
+                        "connection_mode": "local_snapshot",
+                        "connection_label": "Bundled local snapshot",
+                        "automation": "manual_snapshot",
+                        "receipt_status": "unverified",
                     })):
                 code, payload = cms_server.project_state_payload()
         rows = {row["id"]: row for row in payload["operational_health"]}
@@ -355,12 +359,12 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         self.assertEqual(receipts["clerk-preliminary"]["status_basis"], "event_and_terminal_collector_run")
         self.assertEqual(receipts["broward"]["event_through"], "2026-08-19")
         self.assertEqual(receipts["broward"]["status"], "DELAYED")
-        self.assertEqual(receipts["pdmr-local"]["status"], "CURRENT")
-        self.assertEqual(receipts["pdmr-local"]["event_through"], "2026-08-22")
-        self.assertEqual(receipts["pdmr-local"]["fetched_at"], "2026-08-23T21:45:00Z")
-        self.assertIsNone(receipts["pdmr-local"]["health_receipt_at"])
-        self.assertEqual(receipts["pdmr-local"]["status_basis"], "manual_snapshot_observation")
-        self.assertIn("329 public source records", receipts["pdmr-local"]["detail"])
+        self.assertEqual(receipts["pdmr"]["status"], "UNVERIFIED")
+        self.assertEqual(receipts["pdmr"]["event_through"], "2026-08-22")
+        self.assertEqual(receipts["pdmr"]["fetched_at"], "2026-08-23T21:45:00Z")
+        self.assertIsNone(receipts["pdmr"]["health_receipt_at"])
+        self.assertEqual(receipts["pdmr"]["status_basis"], "manual_snapshot_observation")
+        self.assertIn("329 public source records", receipts["pdmr"]["detail"])
         rendered_state = json.dumps(payload["project_state"])
         self.assertNotIn("locked PDMRs", rendered_state)
         self.assertIn("historical publication metadata", rendered_state)
@@ -452,6 +456,7 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
                         "2026-08-23T18:00:00+00:00", "2026-08-23T18:22:00+00:00",
                     ))
             with mock.patch.object(cms_server, "PDMR_DB_PATH", db_path), \
+                    mock.patch.object(cms_server, "SUPABASE_SERVICE_KEY", ""), \
                     mock.patch.object(cms_server, "now_iso", return_value="2026-08-23T20:00:00+00:00"):
                 code, payload = cms_server.pdmr_intent_payload(limit=1)
                 offset_code, offset_payload = cms_server.pdmr_intent_payload(limit=1, offset=1)
@@ -465,6 +470,10 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
             self.assertEqual(payload["items"][0]["source_record_id"], "UDP-PDMR-26131")
             self.assertEqual(payload["items"][0]["development_stage"], "Conceptual Plan")
             self.assertEqual(payload["items"][0]["editorial_state"], "source_record_only")
+            self.assertEqual(payload["connection_mode"], "local_snapshot")
+            self.assertEqual(payload["automation"], "manual_snapshot")
+            self.assertEqual(payload["receipt_status"], "unverified")
+            self.assertEqual(payload["production_mirror_status"], "unavailable")
             self.assertIn("does not nominate a Candidate", payload["contract"])
             self.assertEqual(offset_code, 200)
             self.assertEqual(offset_payload["items"][0]["source_record_id"], "UDP-PDMR-26130")
@@ -479,11 +488,197 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
     def test_pdmr_intent_does_not_infer_state_when_evidence_db_is_missing(self):
         with tempfile.TemporaryDirectory() as directory:
             missing = Path(directory) / "missing.sqlite"
-            with mock.patch.object(cms_server, "PDMR_DB_PATH", missing):
+            with mock.patch.object(cms_server, "PDMR_DB_PATH", missing), \
+                    mock.patch.object(cms_server, "SUPABASE_SERVICE_KEY", ""):
                 code, payload = cms_server.pdmr_intent_payload()
         self.assertEqual(code, 503)
         self.assertEqual(payload["items"], [])
         self.assertIn("No PDMR state was inferred", payload["contract"])
+
+    def test_pdmr_intent_prefers_private_mirror_and_requires_bound_natural_run_proof(self):
+        from urllib.parse import unquote
+
+        event_row = {
+            "source_record_id": "UDP-PDMR-26131", "event_date": "2026-08-30",
+            "address": "125 N Birch RD", "owner_name": "OWNER ONE",
+            "project_name": "125 N Birch Road", "summary": "Public narrative",
+            "source_url": "https://aca-prod.accela.com/FTL/Cap/CapDetail.aspx?record=one",
+            "source_record_hash": "a" * 64, "detector_version": "pdmr-v1.0.0",
+            "first_seen_at": "2026-08-30T18:00:00+00:00",
+            "last_seen_at": "2026-09-01T05:30:00+00:00",
+            "payload_json": json.dumps({"fields": {
+                "status": "In Process", "folio": "504212BD0010",
+                "development_stage": "Conceptual Plan", "development_type": "Residential",
+            }}),
+        }
+        run = {
+            "run_id": "natural-run-1", "started_at": "2026-09-01T05:20:00+00:00",
+            "finished_at": "2026-09-01T05:30:00+00:00", "mode": "live",
+            "invocation": "local_collector", "status": "ok", "pages_visited": 2,
+            "records_seen": 25, "newest_record": "UDP-PDMR-26131", "inserted": 0,
+            "updated": 1, "migrated": 0, "unchanged": 24, "versions_added": 1,
+            "retries_resolved": 0, "errors": 0, "error_message": None,
+        }
+
+        def private_request(path, method="GET", body=None, prefer=""):
+            decoded = unquote(path)
+            if decoded.startswith("parcel_events?") and "select=event_date,last_seen_at" in decoded:
+                return 200, [{"event_date": "2026-08-30", "last_seen_at": event_row["last_seen_at"]}], {"content-range": "0-0/329"}
+            if decoded.startswith("parcel_events?") and "select=last_seen_at" in decoded:
+                return 200, [{"last_seen_at": event_row["last_seen_at"]}], {}
+            if decoded.startswith("parcel_events?") and "select=event_id" in decoded:
+                return 200, [{"event_id": "one"}], {"content-range": "0-0/3"}
+            if decoded.startswith("parcel_event_versions?"):
+                return 200, [{"version_id": "v1"}], {"content-range": "0-0/329"}
+            if decoded.startswith("pdmr_collection_failures?") and "resolved_at=is.null" in decoded:
+                return 200, [], {"content-range": "*/0"}
+            if decoded.startswith("pdmr_collection_failures?"):
+                return 200, [], {"content-range": "*/0"}
+            if decoded.startswith("pdmr_collection_runs?") and "select=run_id&" in decoded:
+                return 200, [{"run_id": "natural-run-1"}], {"content-range": "0-0/1"}
+            if decoded.startswith("parcel_events?") and "select=source_record_id,event_date" in decoded:
+                return 200, [event_row], {"content-range": "0-0/329"}
+            if decoded.startswith("pdmr_collection_runs?") and "select=run_id,started_at" in decoded:
+                return 200, [run], {}
+            raise AssertionError(decoded)
+
+        health_proof = {
+            "schema_version": "FloridaSignalPublicPdmrHealthV1",
+            "status": "verified", "health_status": "healthy",
+            "generated_at": "2026-09-01T05:31:00Z", "alert_count": 0,
+            "natural_schedule_proof": "passed",
+            "local": {"events": 329, "versions": 329},
+            "collector": {
+                "run_id": "natural-run-1", "records_attempted": 25,
+                "records_written": 1, "records_rejected": 0, "errors": 0,
+            },
+            "mirror": {
+                "parity_status": "passed",
+                "tables": {
+                    "parcel_events": {"supabase_count": 329},
+                    "parcel_event_versions": {"supabase_count": 329},
+                    "pdmr_collection_failures": {"supabase_count": 0},
+                    "pdmr_collection_runs": {"supabase_count": 1},
+                },
+            },
+            "receipt": {"health_name": "health-natural-run-1.json", "health_sha256": "b" * 64},
+        }
+
+        with mock.patch.object(cms_server, "SUPABASE_SERVICE_KEY", "private"), \
+                mock.patch.object(cms_server, "supabase_request_with_headers", side_effect=private_request), \
+                mock.patch.object(cms_server, "pdmr_public_health_proof", return_value=({"status": "current"}, health_proof)), \
+                mock.patch.object(cms_server, "now_iso", return_value="2026-09-01T05:32:00+00:00"):
+            code, payload = cms_server.pdmr_intent_payload(limit=1)
+
+        self.assertEqual(code, 200)
+        self.assertEqual(payload["connection_mode"], "supabase_mirror")
+        self.assertEqual(payload["automation"], "scheduled")
+        self.assertEqual(payload["record_count"], 329)
+        self.assertEqual(payload["mirror_counts"]["parcel_event_versions"], 329)
+        self.assertEqual(payload["mirror_counts"]["pdmr_unresolved_failures"], 0)
+        self.assertEqual(payload["latest_terminal_run"]["run_id"], "natural-run-1")
+        self.assertEqual(payload["latest_successful_run"]["run_id"], "natural-run-1")
+        self.assertEqual(payload["production_health"]["mirror"]["parity_status"], "passed")
+        self.assertEqual(payload["items"][0]["folio"], "504212BD0010")
+        self.assertIn("Portal date and collector-run time are separate", payload["contract"])
+
+        failed_run = {**run, "run_id": "failed-run-2", "status": "error", "errors": 1,
+                      "finished_at": "2026-09-01T05:40:00+00:00"}
+
+        def failed_request(path, method="GET", body=None, prefer=""):
+            decoded = unquote(path)
+            if (
+                decoded.startswith("pdmr_collection_runs?")
+                and "select=run_id,started_at" in decoded
+                and "status=eq.ok" not in decoded
+            ):
+                return 200, [failed_run], {}
+            return private_request(path, method, body, prefer)
+
+        with mock.patch.object(cms_server, "SUPABASE_SERVICE_KEY", "private"), \
+                mock.patch.object(cms_server, "supabase_request_with_headers", side_effect=failed_request), \
+                mock.patch.object(cms_server, "pdmr_public_health_proof", return_value=({"status": "current"}, health_proof)):
+            failed_code, failed_payload = cms_server.pdmr_intent_payload(limit=1)
+        self.assertEqual(failed_code, 200)
+        self.assertEqual(failed_payload["latest_terminal_run"]["run_id"], "failed-run-2")
+        self.assertEqual(failed_payload["latest_successful_run"]["run_id"], "natural-run-1")
+        self.assertEqual(failed_payload["receipt_status"], "error")
+        self.assertEqual(failed_payload["automation"], "scheduled_pending_proof")
+
+        parity_mismatch = json.loads(json.dumps(health_proof))
+        parity_mismatch["mirror"]["tables"]["parcel_events"]["supabase_count"] = 328
+        with mock.patch.object(cms_server, "SUPABASE_SERVICE_KEY", "private"), \
+                mock.patch.object(cms_server, "supabase_request_with_headers", side_effect=private_request), \
+                mock.patch.object(cms_server, "pdmr_public_health_proof", return_value=({"status": "current"}, parity_mismatch)):
+            mismatch_code, mismatch_payload = cms_server.pdmr_intent_payload(limit=1)
+        self.assertEqual(mismatch_code, 200)
+        self.assertEqual(mismatch_payload["receipt_status"], "unverified")
+        self.assertEqual(mismatch_payload["automation"], "scheduled_pending_proof")
+
+    def test_pdmr_remote_folio_search_is_normalized_exact_not_payload_substring(self):
+        from urllib.parse import unquote
+
+        def event(record_id, folio, note):
+            return {
+                "source_record_id": record_id, "event_date": "2026-08-30",
+                "address": "125 N Birch RD", "owner_name": "OWNER",
+                "project_name": "PROJECT", "summary": "Public narrative",
+                "source_url": "https://aca-prod.accela.com/FTL/Cap/CapDetail.aspx?record=one",
+                "source_record_hash": "a" * 64, "detector_version": "pdmr-v1.0.0",
+                "first_seen_at": "2026-08-30T18:00:00+00:00",
+                "last_seen_at": "2026-09-01T05:30:00+00:00",
+                "payload_json": json.dumps({"fields": {"folio": folio, "staff_questions": note}}),
+            }
+
+        exact = event("UDP-PDMR-26131", "5042-12-BD-0010", "none")
+        false_match = event("UDP-PDMR-26130", "999999999999", "mentions 504212BD0010 elsewhere")
+        run = {
+            "run_id": "run-1", "started_at": "2026-09-01T05:20:00+00:00",
+            "finished_at": "2026-09-01T05:30:00+00:00", "mode": "live",
+            "invocation": "local_collector", "status": "ok", "records_seen": 2,
+            "inserted": 0, "updated": 0, "migrated": 0, "unchanged": 2,
+            "versions_added": 0, "retries_resolved": 0, "errors": 0,
+        }
+        observed_paths = []
+
+        def private_request(path, method="GET", body=None, prefer=""):
+            decoded = unquote(path)
+            observed_paths.append(decoded)
+            if decoded.startswith("parcel_events?") and "select=event_date,last_seen_at" in decoded:
+                return 200, [{"event_date": "2026-08-30", "last_seen_at": exact["last_seen_at"]}], {"content-range": "0-0/2"}
+            if decoded.startswith("parcel_events?") and "select=last_seen_at" in decoded:
+                return 200, [{"last_seen_at": exact["last_seen_at"]}], {}
+            if decoded.startswith("parcel_events?") and "select=event_id" in decoded:
+                return 200, [], {"content-range": "*/0"}
+            if decoded.startswith("parcel_event_versions?"):
+                return 200, [], {"content-range": "0-0/2"}
+            if decoded.startswith("pdmr_collection_failures?"):
+                return 200, [], {"content-range": "*/0"}
+            if decoded.startswith("pdmr_collection_runs?") and "select=run_id&" in decoded:
+                return 200, [{"run_id": "run-1"}], {"content-range": "0-0/1"}
+            if decoded.startswith("parcel_events?") and "select=source_record_id,event_date" in decoded:
+                if "source_record_id=eq.UDP-PDMR-26131" in decoded:
+                    return 200, [exact], {"content-range": "0-0/1"}
+                return 200, [exact, false_match], {"content-range": "0-1/2"}
+            if decoded.startswith("pdmr_collection_runs?") and "select=run_id,started_at" in decoded:
+                return 200, [run], {}
+            raise AssertionError(decoded)
+
+        with mock.patch.object(cms_server, "SUPABASE_SERVICE_KEY", "private"), \
+                mock.patch.object(cms_server, "supabase_request_with_headers", side_effect=private_request), \
+                mock.patch.object(cms_server, "pdmr_public_health_proof", return_value=({}, {})):
+            folio_code, folio_payload = cms_server.pdmr_intent_payload(
+                limit=10, search="folio: 5042 12-BD-0010"
+            )
+            id_code, id_payload = cms_server.pdmr_intent_payload(
+                limit=10, search="id: udp-pdmr-26131"
+            )
+        self.assertEqual(folio_code, 200)
+        self.assertEqual(folio_payload["matched_count"], 1)
+        self.assertEqual([row["source_record_id"] for row in folio_payload["items"]], ["UDP-PDMR-26131"])
+        self.assertEqual(id_code, 200)
+        self.assertEqual([row["source_record_id"] for row in id_payload["items"]], ["UDP-PDMR-26131"])
+        self.assertTrue(any("source_record_id=eq.UDP-PDMR-26131" in path for path in observed_paths))
 
     def test_brief_bank_and_weight_profiles_are_versioned_private_workflow_state(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -620,12 +815,14 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
                 mock.patch.object(cms_server, "now_iso", return_value="2026-08-12T03:00:00+00:00"), \
                 mock.patch.object(cms_server, "pdmr_intent_payload", return_value=(200, {
                     "record_count": 1, "newest_event": "2026-08-12", "last_collected": "2026-08-12T02:00:00Z",
+                    "connection_mode": "local_snapshot", "connection_label": "Bundled local snapshot",
+                    "automation": "manual_snapshot", "receipt_status": "unverified",
                 })):
             payload = cms_server.early_intel_payload()
         self.assertEqual(payload["lanes"][0]["phase"], "01 · Planning intent")
         self.assertEqual(payload["lanes"][0]["label"], "Preliminary Development Meeting Request (PDMR) + agenda packets")
         self.assertEqual(payload["lanes"][0]["automation"], "mixed")
-        self.assertEqual(payload["lanes"][0]["status"], "current")
+        self.assertEqual(payload["lanes"][0]["status"], "unverified")
         self.assertEqual(payload["lanes"][1]["connection"], "unavailable")
         self.assertEqual(payload["lanes"][2]["status"], "delayed")
         capital_clocks = {row["id"]: row for row in payload["lanes"][2]["source_clocks"]}

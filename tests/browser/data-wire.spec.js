@@ -78,7 +78,7 @@ test.describe("private Florida Signal Newsroom", () => {
     await expect(page.locator("#lead-story h2")).not.toContainText(/follows/i, { timeout: 15_000 });
     await expect(page.locator("#lead-story .eyebrow")).toContainText("Newest raw Candidate pattern", { timeout: 15_000 });
     await expect(page.locator("#lead-story")).toContainText("extracted assertions", { timeout: 15_000 });
-    await expect(page.getByText(/shadow only: permits \/ execution and local preliminary development meeting request \(PDMR\) planning intent/i)).toBeVisible();
+    await expect(page.getByText(/shadow only: permits \/ execution and preliminary development meeting request \(PDMR\) candidate ranking/i)).toBeVisible();
     await expect(page.getByText(/cross-source expansion is staged, not implied/i)).toBeVisible();
     const decisionTop = await page.getByRole("heading", { name: "Latest items to confirm" }).evaluate(node => node.getBoundingClientRect().top + window.scrollY);
     const protocolTop = await page.getByRole("heading", { name: "Signal Machine pipeline" }).evaluate(node => node.getBoundingClientRect().top + window.scrollY);
@@ -144,6 +144,26 @@ test.describe("private Florida Signal Newsroom", () => {
     expect(await page.locator(".dw-shell").evaluate(node => Math.round(node.getBoundingClientRect().top))).toBe(0);
   });
 
+  test("PDMR labels production mirror, pending schedule proof, or snapshot fallback truthfully", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${dataWireBase}/data.html`);
+    const pdmrStatus = page.locator('[data-source-status="pdmr"]');
+    await expect(pdmrStatus).toContainText(
+      /(current|delayed|stale).*automated|unverified.*(schedule pending proof|snapshot)/i,
+      { timeout: 15_000 },
+    );
+    await expect(page.locator("#table-select")).toHaveValue("pdmr_intent");
+    await expect(page.locator("#count-note")).toContainText(
+      /public PDMR records · portal through .* · source checked /i,
+      { timeout: 15_000 },
+    );
+    const pdmrRow = page.locator("#data-table tbody tr[data-i]").first();
+    await expect(pdmrRow).toContainText(/UDP-PDMR-/i, { timeout: 15_000 });
+    await pdmrRow.focus();
+    await pdmrRow.press("Enter");
+    await expect(page.getByRole("dialog", { name: /PDMR · UDP-PDMR-/i })).toBeVisible();
+  });
+
   test("Newsroom pages keep distinct jobs and fit a 390px field viewport", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     const pages = [
@@ -166,9 +186,9 @@ test.describe("private Florida Signal Newsroom", () => {
         await expect(page.locator(".source-group").nth(1)).toContainText("Shadow observed · not connected");
         await expect(page.locator(".source-group").nth(1)).toContainText("two manual observations each saved receipts for 1,100 official rows");
         await expect(page.locator(".source-group").nth(1)).toContainText("No natural timer, stage, database mirror or detector is connected");
-        await expect(page.locator('[data-source-status="pdmr-local"]')).toContainText(/(current|connected).*manual/i, { timeout: 15_000 });
+        await expect(page.locator('[data-source-status="pdmr"]')).toContainText(/(current|delayed|stale).*automated|unverified.*(schedule pending proof|snapshot)/i, { timeout: 15_000 });
         await expect(page.locator("#table-select")).toHaveValue("pdmr_intent");
-        await expect(page.locator("#count-note")).toContainText(/public PDMR records · event through .* · source checked /i, { timeout: 15_000 });
+        await expect(page.locator("#count-note")).toContainText(/public PDMR records · portal through .* · source checked /i, { timeout: 15_000 });
         const pdmrRow = page.locator("#data-table tbody tr[data-i]").first();
         await expect(pdmrRow).toContainText(/UDP-PDMR-/i, { timeout: 15_000 });
         await pdmrRow.focus();
