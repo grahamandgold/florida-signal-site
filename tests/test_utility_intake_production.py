@@ -127,7 +127,8 @@ class UtilityIntakeProductionTests(unittest.TestCase):
             writer_lock_path=lock,
             evidence_dir=root / "runs",
             receipt_dir=root / "receipts",
-            latest_pointer=root / "latest.json",
+            latest_attempt_pointer=root / "latest-attempt.json",
+            latest_success_pointer=root / "latest-success.json",
             transport=transport,
             run_id="utility-production-test",
             clock=lambda: FIXED,
@@ -145,7 +146,11 @@ class UtilityIntakeProductionTests(unittest.TestCase):
             _, result = self.run_case(root, transport)
             self.assertEqual(result["status"], "ok")
             self.assertEqual(result["exit_code"], 0)
-            pointer = json.loads((root / "latest.json").read_text())
+            pointer = json.loads((root / "latest-attempt.json").read_text())
+            success_pointer = json.loads((root / "latest-success.json").read_text())
+            self.assertEqual(pointer["pointer_kind"], "attempt")
+            self.assertEqual(success_pointer["pointer_kind"], "success")
+            self.assertEqual(success_pointer["run_id"], pointer["run_id"])
             receipt = json.loads(Path(pointer["receipt_path"]).read_text())
             self.assertEqual(receipt["counts"]["records_attempted"], 2)
             self.assertEqual(receipt["counts"]["records_written"], 0)
@@ -172,7 +177,8 @@ class UtilityIntakeProductionTests(unittest.TestCase):
                 verification["receipt_sha256"],
             )
             self.assertEqual(Path(pointer["receipt_path"]).stat().st_mode & 0o777, 0o600)
-            self.assertEqual((root / "latest.json").stat().st_mode & 0o777, 0o600)
+            self.assertEqual((root / "latest-attempt.json").stat().st_mode & 0o777, 0o600)
+            self.assertEqual((root / "latest-success.json").stat().st_mode & 0o777, 0o600)
 
     def test_real_transport_is_get_only_and_exposes_only_the_declared_projection(self):
         exact = {column: None for column in production.PARITY_COLUMNS}
@@ -350,7 +356,8 @@ class UtilityIntakeProductionTests(unittest.TestCase):
                         writer_lock_path=lock,
                         evidence_dir=root / "runs",
                         receipt_dir=root / "receipts",
-                        latest_pointer=root / "latest.json",
+                        latest_attempt_pointer=root / "latest-attempt.json",
+                        latest_success_pointer=root / "latest-success.json",
                         transport=transport,
                         run_id="utility-production-fsync-file",
                         clock=lambda: FIXED,
@@ -367,14 +374,17 @@ class UtilityIntakeProductionTests(unittest.TestCase):
             fixture(root / "permits.sqlite")
             lock = root / ".writer.lock"
             lock.touch()
-            with mock.patch.object(production.os, "fsync", side_effect=[None, OSError("directory fsync")]):
+            with mock.patch.object(
+                production, "_fsync_directory", side_effect=OSError("directory fsync"),
+            ):
                 with self.assertRaisesRegex(OSError, "directory fsync"):
                     production.run_production(
                         sqlite_path=root / "permits.sqlite",
                         writer_lock_path=lock,
                         evidence_dir=root / "runs",
                         receipt_dir=root / "receipts",
-                        latest_pointer=root / "latest.json",
+                        latest_attempt_pointer=root / "latest-attempt.json",
+                        latest_success_pointer=root / "latest-success.json",
                         transport=transport,
                         run_id="utility-production-fsync-directory",
                         clock=lambda: FIXED,
@@ -391,13 +401,13 @@ class UtilityIntakeProductionTests(unittest.TestCase):
             with self.assertRaisesRegex(production.ProductionError, "directory is unsafe"):
                 production.write_configuration_failure(
                     receipt_dir=receipt_link,
-                    latest_pointer=root / "latest.json",
+                    latest_attempt_pointer=root / "latest-attempt.json",
                     run_id="utility-config-symlink-proof",
                     error=ValueError("missing config"),
                     clock=lambda: FIXED,
                 )
             self.assertEqual(list(target.iterdir()), [])
-            self.assertFalse((root / "latest.json").exists())
+            self.assertFalse((root / "latest-attempt.json").exists())
 
     def test_transport_configuration_failure_writes_sanitized_fsynced_receipt_and_pointer(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -410,7 +420,8 @@ class UtilityIntakeProductionTests(unittest.TestCase):
                 "--writer-lock-path", str(root / ".writer.lock"),
                 "--evidence-dir", str(root / "runs"),
                 "--receipt-dir", str(root / "receipts"),
-                "--latest-pointer", str(root / "latest.json"),
+                "--latest-attempt-pointer", str(root / "latest-attempt.json"),
+                "--latest-success-pointer", str(root / "latest-success.json"),
                 "--run-id", "utility-config-failure",
             ]
             with mock.patch.object(
@@ -418,7 +429,7 @@ class UtilityIntakeProductionTests(unittest.TestCase):
             ), redirect_stdout(stdout), redirect_stderr(stderr):
                 code = production.main(args)
             self.assertEqual(code, 3)
-            pointer = json.loads((root / "latest.json").read_text())
+            pointer = json.loads((root / "latest-attempt.json").read_text())
             receipt_path = Path(pointer["receipt_path"])
             receipt = json.loads(receipt_path.read_text())
             combined = stdout.getvalue() + stderr.getvalue() + receipt_path.read_text()
@@ -440,7 +451,7 @@ class UtilityIntakeProductionTests(unittest.TestCase):
             ) as fsynced:
                 result = production.write_configuration_failure(
                     receipt_dir=root / "receipts",
-                    latest_pointer=root / "latest.json",
+                    latest_attempt_pointer=root / "latest-attempt.json",
                     run_id="utility-config-fsync-proof",
                     error=ValueError("sensitive value must not be recorded"),
                     clock=lambda: FIXED,
@@ -452,7 +463,7 @@ class UtilityIntakeProductionTests(unittest.TestCase):
             self.assertEqual(len(create_calls), 2)
             self.assertTrue(all(item.args[2] == 0o600 for item in create_calls))
             self.assertGreaterEqual(fsynced.call_count, 4)
-            pointer = json.loads((root / "latest.json").read_text())
+            pointer = json.loads((root / "latest-attempt.json").read_text())
             receipt_path = Path(pointer["receipt_path"])
             self.assertEqual(result["receipt_sha256"], pointer["receipt_sha256"])
             self.assertNotIn("sensitive value", receipt_path.read_text())
@@ -465,7 +476,8 @@ class UtilityIntakeProductionTests(unittest.TestCase):
                 "--writer-lock-path", str(root / ".writer.lock"),
                 "--evidence-dir", str(root / "runs"),
                 "--receipt-dir", str(root / "receipts"),
-                "--latest-pointer", str(root / "latest.json"),
+                "--latest-attempt-pointer", str(root / "latest-attempt.json"),
+                "--latest-success-pointer", str(root / "latest-success.json"),
                 "--run-id", "utility-missing-scoped-config",
             ]
             with mock.patch.dict(
@@ -473,7 +485,7 @@ class UtilityIntakeProductionTests(unittest.TestCase):
             ), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                 code = production.main(args)
             self.assertEqual(code, 3)
-            receipt = json.loads(Path(json.loads((root / "latest.json").read_text())["receipt_path"]).read_text())
+            receipt = json.loads(Path(json.loads((root / "latest-attempt.json").read_text())["receipt_path"]).read_text())
             self.assertEqual(receipt["reason_code"], "UTILITY_INTAKE_CONFIGURATION_FAILED")
             self.assertEqual(receipt["startup_stage"], "read_only_transport")
 
@@ -488,7 +500,8 @@ class UtilityIntakeProductionTests(unittest.TestCase):
                 "--writer-lock-path", str(root / ".writer.lock"),
                 "--evidence-dir", str(root / "runs"),
                 "--receipt-dir", str(root / "receipts"),
-                "--latest-pointer", str(root / "latest.json"),
+                "--latest-attempt-pointer", str(root / "latest-attempt.json"),
+                "--latest-success-pointer", str(root / "latest-success.json"),
                 "--dependency-wait-command", str(helper),
                 "--run-id", "utility-dependency-failure",
             ]
@@ -501,7 +514,7 @@ class UtilityIntakeProductionTests(unittest.TestCase):
             ), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                 code = production.main(args)
             self.assertEqual(code, 3)
-            receipt = json.loads(Path(json.loads((root / "latest.json").read_text())["receipt_path"]).read_text())
+            receipt = json.loads(Path(json.loads((root / "latest-attempt.json").read_text())["receipt_path"]).read_text())
             self.assertEqual(receipt["reason_code"], "UTILITY_INTAKE_DEPENDENCY_FAILED")
             self.assertEqual(receipt["startup_stage"], "dependency_wait")
 
@@ -513,7 +526,8 @@ class UtilityIntakeProductionTests(unittest.TestCase):
                 "--writer-lock-path", str(root / ".writer.lock"),
                 "--evidence-dir", str(root / "runs"),
                 "--receipt-dir", str(root / "receipts"),
-                "--latest-pointer", str(root / "latest.json"),
+                "--latest-attempt-pointer", str(root / "latest-attempt.json"),
+                "--latest-success-pointer", str(root / "latest-success.json"),
                 "--credential-file", str(root / "missing.env"),
                 "--run-id", "utility-missing-credential-file",
             ]
@@ -522,7 +536,7 @@ class UtilityIntakeProductionTests(unittest.TestCase):
             ), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                 code = production.main(args)
             self.assertEqual(code, 3)
-            pointer = json.loads((root / "latest.json").read_text())
+            pointer = json.loads((root / "latest-attempt.json").read_text())
             receipt = json.loads(Path(pointer["receipt_path"]).read_text())
             self.assertEqual(receipt["startup_stage"], "credential_file")
             self.assertEqual(receipt["health"]["status"], "error")
@@ -545,7 +559,8 @@ class UtilityIntakeProductionTests(unittest.TestCase):
                 writer_lock_path=lock,
                 evidence_dir=root / "runs",
                 receipt_dir=root / "receipts",
-                latest_pointer=root / "latest.json",
+                latest_attempt_pointer=root / "latest-attempt.json",
+                latest_success_pointer=root / "latest-success.json",
                 transport=transport,
                 run_id="utility-production-empty",
                 clock=lambda: FIXED,
@@ -554,6 +569,69 @@ class UtilityIntakeProductionTests(unittest.TestCase):
             receipt = json.loads(Path(result["receipt_path"]).read_text())
             self.assertEqual(receipt["health"]["status"], "error")
             self.assertIn("shadow evidence is not admissible: empty", receipt["reason_detail"])
+
+    def test_failed_attempt_preserves_the_prior_latest_success_pointer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            remote = fixture(root / "remote.sqlite")
+            (root / "remote.sqlite").unlink()
+            self.run_case(root, FakeTransport(remote))
+            success_before = (root / "latest-success.json").read_bytes()
+            remote[0]["status"] = "drifted"
+            result = production.run_production(
+                sqlite_path=root / "permits.sqlite",
+                writer_lock_path=root / ".writer.lock",
+                evidence_dir=root / "runs",
+                receipt_dir=root / "receipts",
+                latest_attempt_pointer=root / "latest-attempt.json",
+                latest_success_pointer=root / "latest-success.json",
+                transport=FakeTransport(remote),
+                run_id="utility-production-failed-attempt",
+                clock=lambda: FIXED,
+            )
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual((root / "latest-success.json").read_bytes(), success_before)
+            self.assertEqual(
+                json.loads((root / "latest-attempt.json").read_text())["run_id"],
+                "utility-production-failed-attempt",
+            )
+
+    def test_systemd_provenance_is_captured_but_never_self_attested(self):
+        provenance = production.execution_provenance({
+            "INVOCATION_ID": "a" * 32,
+            "FL_SIGNAL_UTILITY_EXECUTION_CONTEXT": "systemd_timer_expected",
+            "FL_SIGNAL_UTILITY_SERVICE_UNIT": "florida-utility-intake.service",
+            "FL_SIGNAL_UTILITY_TIMER_UNIT": "florida-utility-intake.timer",
+        })
+        self.assertEqual(provenance["systemd_invocation_id"], "a" * 32)
+        self.assertEqual(provenance["expected_timer_unit"], "florida-utility-intake.timer")
+        self.assertFalse(provenance["natural_schedule_verified"])
+        self.assertIn("Correlate", provenance["verification_contract"])
+
+    def test_sibling_import_failure_is_receipted_before_environment_or_network(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = [
+                "--sqlite-path", str(root / "permits.sqlite"),
+                "--writer-lock-path", str(root / ".writer.lock"),
+                "--evidence-dir", str(root / "runs"),
+                "--receipt-dir", str(root / "receipts"),
+                "--latest-attempt-pointer", str(root / "latest-attempt.json"),
+                "--latest-success-pointer", str(root / "latest-success.json"),
+                "--run-id", "utility-startup-import-failure",
+            ]
+            with mock.patch.object(production, "SHADOW_IMPORT_ERROR", ImportError("missing")), \
+                    mock.patch.object(production, "shadow", None), \
+                    mock.patch.object(production, "ReadOnlySupabaseTransport") as transport, \
+                    redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                code = production.main(args)
+            self.assertEqual(code, 3)
+            transport.assert_not_called()
+            pointer = json.loads((root / "latest-attempt.json").read_text())
+            receipt = json.loads(Path(pointer["receipt_path"]).read_text())
+            self.assertEqual(receipt["startup_stage"], "startup_import")
+            self.assertEqual(receipt["safety"]["remote_methods"], [])
+            self.assertFalse((root / "latest-success.json").exists())
 
     def test_service_uses_one_source_transport_and_failure_alerting(self):
         service = (ROOT / "ops/droplet/florida-utility-intake.service").read_text()
@@ -568,6 +646,10 @@ class UtilityIntakeProductionTests(unittest.TestCase):
         self.assertIn("EnvironmentFile=-/srv/grahamandgold/florida-signal/secrets/florida-utility-intake.env", service)
         self.assertIn("--credential-file /srv/grahamandgold/florida-signal/secrets/florida-utility-intake.env", service)
         self.assertIn("--dependency-wait-command /srv/grahamandgold/florida-signal/tools/florida-utility-intake-wait.sh", service)
+        self.assertIn("--latest-attempt-pointer /srv/grahamandgold/florida-signal/staging/data/utility-intake/latest-attempt.json", service)
+        self.assertIn("--latest-success-pointer /srv/grahamandgold/florida-signal/staging/data/utility-intake/latest-success.json", service)
+        self.assertIn("FL_SIGNAL_UTILITY_EXECUTION_CONTEXT=systemd_timer_expected", service)
+        self.assertIn("FL_SIGNAL_UTILITY_TIMER_UNIT=florida-utility-intake.timer", service)
         self.assertNotIn("secrets/.env", service)
         variables = [line.split("=", 1)[0] for line in environment.splitlines() if line and not line.startswith("#")]
         self.assertEqual(variables, ["SUPABASE_URL", "SUPABASE_ANON_KEY"])
@@ -584,6 +666,21 @@ class UtilityIntakeProductionTests(unittest.TestCase):
         self.assertNotIn("scrape_accela", service)
         self.assertIn("OnCalendar=*:27/30", timer)
         self.assertIn("Persistent=true", timer)
+
+    def test_atomic_installer_is_hash_gated_and_leaves_timer_enablement_untouched(self):
+        installer = (ROOT / "ops/droplet/install_utility_intake.sh").read_text()
+        manifest = (ROOT / "ops/droplet/utility-intake-install.sha256").read_text()
+        self.assertIn("utility-intake-install.sha256", installer)
+        self.assertIn("sha256sum --check --strict", installer)
+        self.assertIn("I_APPROVE_EXACT_UTILITY_INTAKE_ATOMIC_INSTALL", installer)
+        self.assertIn("utility_intake_production.SHADOW_IMPORT_ERROR is None", installer)
+        self.assertIn("intentionally-absent.env", installer)
+        self.assertIn('receipt["startup_stage"] == "credential_file"', installer)
+        self.assertNotIn("systemctl enable", installer)
+        self.assertNotIn("systemctl start", installer)
+        for line in manifest.splitlines():
+            expected, relative = line.split("  ", 1)
+            self.assertEqual(hashlib.sha256((ROOT / relative).read_bytes()).hexdigest(), expected)
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ It performs no remote write.
 from __future__ import annotations
 
 import argparse
+import base64
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -31,13 +32,21 @@ from uuid import uuid4
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
-import utility_intake_shadow as shadow  # noqa: E402
+try:
+    import utility_intake_shadow as shadow  # type: ignore[no-redef]  # noqa: E402
+    SHADOW_IMPORT_ERROR: Exception | None = None
+except Exception as caught_import_error:  # pragma: no cover - exercised by subprocess test
+    # Keep startup receipt code importable even when an atomic install omitted
+    # or damaged the sibling collector.  main() turns this into a durable,
+    # sanitized startup receipt before any network call.
+    shadow = None  # type: ignore[assignment]
+    SHADOW_IMPORT_ERROR = caught_import_error
 
 
 VERIFICATION_SCHEMA = "FloridaSignalUtilityIntakeProductionVerificationV1"
-RECEIPT_SCHEMA = "FloridaSignalUtilityIntakeProductionReceiptV2"
-LATEST_SCHEMA = "FloridaSignalUtilityIntakeProductionLatestV1"
-COLLECTOR_VERSION = "ftl-utility-intake-production/1.0.0"
+RECEIPT_SCHEMA = "FloridaSignalUtilityIntakeProductionReceiptV3"
+LATEST_SCHEMA = "FloridaSignalUtilityIntakeProductionLatestV2"
+COLLECTOR_VERSION = "ftl-utility-intake-production/1.1.0"
 HEALTH_COMPONENT = "utility-intake"
 PARITY_PROJECTION_VERSION = "utility-intake-permits-mirror/1"
 READ_ONLY_TRANSPORT_SCHEMA = "FloridaSignalUtilityIntakeReadOnlyMirrorV1"
@@ -47,6 +56,10 @@ REMOTE_SCAN_CAP = 10000
 MAX_RESPONSE_BYTES = 8_000_000
 REQUEST_TIMEOUT_SECONDS = 25
 DEPENDENCY_TIMEOUT_SECONDS = 620
+RUN_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,159}")
+EXPECTED_SHADOW_COLLECTOR_VERSION = "ftl-utility-intake-shadow/1.4.1"
+EXPECTED_SHADOW_QUERY_VERSION = "ftl-utility-intake-query/1.3.1"
+EXPECTED_SHADOW_PARSER_VERSION = "ftl-utility-intake-parser/1.2.0"
 
 PARITY_COLUMNS = (
     "permit_number",
@@ -80,6 +93,10 @@ class CredentialFileError(ProductionError):
     """The dedicated host secret file failed its metadata boundary."""
 
 
+class StartupImportError(ProductionError):
+    """The atomically installed sibling collector could not be imported."""
+
+
 class ScopedTransport(Protocol):
     def read_projection_page(self, *, cursor: str | None, limit: int) -> object: ...
 
@@ -96,11 +113,61 @@ def now_utc() -> datetime:
 
 
 def iso_utc(value: datetime) -> str:
-    return shadow.iso_utc(value)
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def canonical_json_bytes(value: object) -> bytes:
+    return (
+        json.dumps(
+            value,
+            allow_nan=False,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("utf-8")
 
 
 def canonical_sha256(value: object) -> str:
-    return hashlib.sha256(shadow.canonical_json_bytes(value)).hexdigest()
+    return hashlib.sha256(canonical_json_bytes(value)).hexdigest()
+
+
+def shadow_versions() -> dict[str, str]:
+    return {
+        "collector": str(getattr(shadow, "COLLECTOR_VERSION", EXPECTED_SHADOW_COLLECTOR_VERSION)),
+        "query": str(getattr(shadow, "QUERY_VERSION", EXPECTED_SHADOW_QUERY_VERSION)),
+        "parser": str(getattr(shadow, "PARSER_VERSION", EXPECTED_SHADOW_PARSER_VERSION)),
+    }
+
+
+def execution_provenance(environ: Mapping[str, str] | None = None) -> dict[str, object]:
+    """Capture journal-correlation fields without claiming a timer caused the run."""
+    values = os.environ if environ is None else environ
+    invocation_id = str(values.get("INVOCATION_ID") or "").lower()
+    if not re.fullmatch(r"[0-9a-f]{32}", invocation_id):
+        invocation_id = ""
+    context = str(values.get("FL_SIGNAL_UTILITY_EXECUTION_CONTEXT") or "manual")
+    if context not in {"manual", "systemd_timer_expected"}:
+        context = "unknown"
+    service_unit = str(values.get("FL_SIGNAL_UTILITY_SERVICE_UNIT") or "")
+    timer_unit = str(values.get("FL_SIGNAL_UTILITY_TIMER_UNIT") or "")
+    if service_unit not in {"", "florida-utility-intake.service"}:
+        service_unit = ""
+    if timer_unit not in {"", "florida-utility-intake.timer"}:
+        timer_unit = ""
+    return {
+        "execution_context": context,
+        "systemd_invocation_id": invocation_id or None,
+        "service_unit": service_unit or None,
+        "expected_timer_unit": timer_unit or None,
+        "natural_schedule_verified": False,
+        "verification_contract": (
+            "Correlate systemd_invocation_id with the service journal and the timer's "
+            "LastTriggerUSec/LastTriggerUSecMonotonic; collector metadata alone never proves "
+            "a natural timer trigger."
+        ),
+    }
 
 
 def parity_projection_contract() -> dict[str, object]:
@@ -198,7 +265,7 @@ def _atomic_write_json(path: Path, value: object) -> str:
     _require_real_directory(path.parent, create=True)
     if path.is_symlink():
         raise ProductionError("refusing symlink latest pointer")
-    body = shadow.canonical_json_bytes(value)
+    body = canonical_json_bytes(value)
     temporary = path.with_name(f".{path.name}.{os.getpid()}.{uuid4().hex}.tmp")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     if hasattr(os, "O_NOFOLLOW"):
@@ -265,10 +332,38 @@ def _write_terminal(receipt_dir: Path, filename: str, receipt: object) -> tuple[
     if Path(filename).name != filename:
         raise ProductionError("receipt filename must not contain path components")
     path = receipt_dir / filename
-    body = shadow.canonical_json_bytes(receipt)
+    body = canonical_json_bytes(receipt)
     _write_private_create_only_fsynced(path, body)
     _fsync_directory(receipt_dir)
     return path, hashlib.sha256(body).hexdigest()
+
+
+def _latest_pointer(
+    *,
+    pointer_kind: str,
+    run_id: str,
+    status: str,
+    updated_at: str,
+    receipt_path: Path,
+    receipt_sha256: str,
+    counts: Mapping[str, object],
+    provenance: Mapping[str, object],
+) -> dict[str, object]:
+    if pointer_kind not in {"attempt", "success"}:
+        raise ProductionError("latest pointer kind is invalid")
+    if pointer_kind == "success" and status != "ok":
+        raise ProductionError("latest-success pointer cannot reference a failed run")
+    return {
+        "schema_version": LATEST_SCHEMA,
+        "pointer_kind": pointer_kind,
+        "run_id": run_id,
+        "status": status,
+        "updated_at": updated_at,
+        "receipt_path": str(receipt_path),
+        "receipt_sha256": receipt_sha256,
+        "counts": dict(counts),
+        "execution": dict(provenance),
+    }
 
 
 class ReadOnlySupabaseTransport:
@@ -542,13 +637,20 @@ def run_production(
     writer_lock_path: Path,
     evidence_dir: Path,
     receipt_dir: Path,
-    latest_pointer: Path,
+    latest_attempt_pointer: Path,
+    latest_success_pointer: Path,
     transport: ScopedTransport,
     run_id: str | None = None,
+    provenance: Mapping[str, object] | None = None,
     clock=now_utc,
 ) -> dict[str, object]:
+    if shadow is None:
+        raise StartupImportError("utility_intake_shadow import failed")
     started_at = iso_utc(clock())
     run_id = run_id or f"utility-intake-{started_at.replace(':', '').replace('-', '')}-{uuid4().hex}"
+    if not RUN_ID_RE.fullmatch(run_id):
+        raise ProductionError("run_id contains unsafe characters")
+    execution = dict(provenance or execution_provenance())
     shadow_run_dir: Path | None = None
     shadow_receipt: dict[str, Any] | None = None
     parity: dict[str, object] | None = None
@@ -622,6 +724,7 @@ def run_production(
             "query": shadow.QUERY_VERSION,
             "parser": shadow.PARSER_VERSION,
         },
+        "execution": execution,
         "safety": {
             "source_network_requests": 0,
             "supabase_mirror_requests": "GET-only exact projection",
@@ -712,6 +815,7 @@ def run_production(
         },
         "health": health_row,
         "versions": verification["versions"],
+        "execution": execution,
         "safety": {
             **verification["safety"],
             "supabase_health_pointer_upsert": False,
@@ -719,23 +823,36 @@ def run_production(
         },
     }
     receipt_path, receipt_sha256 = _write_terminal(receipt_dir, f"{run_id}.json", receipt)
-    pointer = {
-        "schema_version": LATEST_SCHEMA,
-        "run_id": run_id,
-        "status": receipt["status"],
-        "updated_at": finished_at,
-        "receipt_path": str(receipt_path),
-        "receipt_sha256": receipt_sha256,
-        "counts": receipt["counts"],
-    }
-    _atomic_write_json(latest_pointer, pointer)
+    pointer = _latest_pointer(
+        pointer_kind="attempt",
+        run_id=run_id,
+        status=str(receipt["status"]),
+        updated_at=finished_at,
+        receipt_path=receipt_path,
+        receipt_sha256=receipt_sha256,
+        counts=receipt["counts"],
+        provenance=execution,
+    )
+    _atomic_write_json(latest_attempt_pointer, pointer)
+    if terminal_error is None:
+        success_pointer = _latest_pointer(
+            pointer_kind="success",
+            run_id=run_id,
+            status="ok",
+            updated_at=finished_at,
+            receipt_path=receipt_path,
+            receipt_sha256=receipt_sha256,
+            counts=receipt["counts"],
+            provenance=execution,
+        )
+        _atomic_write_json(latest_success_pointer, success_pointer)
     return {**pointer, "exit_code": 0 if terminal_error is None else 1}
 
 
 def write_configuration_failure(
     *,
     receipt_dir: Path,
-    latest_pointer: Path,
+    latest_attempt_pointer: Path,
     run_id: str | None,
     error: Exception,
     failure_stage: str = "read_only_transport",
@@ -745,7 +862,7 @@ def write_configuration_failure(
     safe_run_id = run_id or (
         f"utility-intake-{started_at.replace(':', '').replace('-', '')}-{uuid4().hex}"
     )
-    if not shadow.RUN_ID_RE.fullmatch(safe_run_id):
+    if not RUN_ID_RE.fullmatch(safe_run_id):
         safe_run_id = (
             f"utility-intake-config-failure-{started_at.replace(':', '').replace('-', '')}-"
             f"{uuid4().hex}"
@@ -753,7 +870,9 @@ def write_configuration_failure(
     completed_at = iso_utc(clock())
     safe_stage = (
         failure_stage
-        if failure_stage in {"credential_file", "read_only_transport", "dependency_wait"}
+        if failure_stage in {
+            "credential_file", "read_only_transport", "dependency_wait", "startup_import",
+        }
         else "startup_validation"
     )
     reason_code = (
@@ -790,9 +909,10 @@ def write_configuration_failure(
         },
         "versions": {
             "collector": COLLECTOR_VERSION,
-            "query": shadow.QUERY_VERSION,
-            "parser": shadow.PARSER_VERSION,
+            "query": str(getattr(shadow, "QUERY_VERSION", EXPECTED_SHADOW_QUERY_VERSION)),
+            "parser": str(getattr(shadow, "PARSER_VERSION", EXPECTED_SHADOW_PARSER_VERSION)),
         },
+        "execution": execution_provenance(),
         "safety": {
             "source_network_requests": 0,
             "sqlite_writes": 0,
@@ -808,16 +928,17 @@ def write_configuration_failure(
     receipt_path, receipt_sha256 = _write_terminal(
         receipt_dir, f"{safe_run_id}.json", receipt
     )
-    pointer = {
-        "schema_version": LATEST_SCHEMA,
-        "run_id": safe_run_id,
-        "status": "failed",
-        "updated_at": completed_at,
-        "receipt_path": str(receipt_path),
-        "receipt_sha256": receipt_sha256,
-        "counts": receipt["counts"],
-    }
-    _atomic_write_json(latest_pointer, pointer)
+    pointer = _latest_pointer(
+        pointer_kind="attempt",
+        run_id=safe_run_id,
+        status="failed",
+        updated_at=completed_at,
+        receipt_path=receipt_path,
+        receipt_sha256=receipt_sha256,
+        counts=receipt["counts"],
+        provenance=receipt["execution"],
+    )
+    _atomic_write_json(latest_attempt_pointer, pointer)
     return {**pointer, "exit_code": 3}
 
 
@@ -827,7 +948,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--writer-lock-path", required=True, type=Path)
     parser.add_argument("--evidence-dir", required=True, type=Path)
     parser.add_argument("--receipt-dir", required=True, type=Path)
-    parser.add_argument("--latest-pointer", required=True, type=Path)
+    parser.add_argument("--latest-attempt-pointer", required=True, type=Path)
+    parser.add_argument("--latest-success-pointer", required=True, type=Path)
     parser.add_argument("--credential-file", type=Path)
     parser.add_argument("--dependency-wait-command", type=Path)
     parser.add_argument("--run-id")
@@ -836,38 +958,42 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    for name in (
-        "sqlite_path", "writer_lock_path", "evidence_dir", "receipt_dir",
-        "latest_pointer", "credential_file", "dependency_wait_command",
-    ):
-        if getattr(args, name) is None:
-            continue
-        if not getattr(args, name).is_absolute():
-            print(f"FATAL: --{name.replace('_', '-')} must be absolute", file=sys.stderr)
-            return 64
+    if not args.receipt_dir.is_absolute() or not args.latest_attempt_pointer.is_absolute():
+        print(
+            "FATAL: --receipt-dir and --latest-attempt-pointer must be absolute",
+            file=sys.stderr,
+        )
+        return 64
+    startup_stage = "startup_validation"
     try:
+        for name in (
+            "sqlite_path", "writer_lock_path", "evidence_dir", "latest_success_pointer",
+            "credential_file", "dependency_wait_command",
+        ):
+            if getattr(args, name) is not None and not getattr(args, name).is_absolute():
+                raise ProductionError(f"--{name.replace('_', '-')} must be absolute")
+        if args.run_id is not None and not RUN_ID_RE.fullmatch(args.run_id):
+            raise ProductionError("run_id contains unsafe characters")
+        startup_stage = "startup_import"
+        if SHADOW_IMPORT_ERROR is not None or shadow is None:
+            raise StartupImportError("utility_intake_shadow import failed")
+        startup_stage = "credential_file"
         validate_credential_file(args.credential_file)
+        startup_stage = "read_only_transport"
         transport = ReadOnlySupabaseTransport(
             os.environ.get("SUPABASE_URL", ""),
             os.environ.get("SUPABASE_ANON_KEY", ""),
         )
+        startup_stage = "dependency_wait"
         wait_for_dependencies(args.dependency_wait_command)
     except Exception as error:
         try:
             result = write_configuration_failure(
                 receipt_dir=args.receipt_dir,
-                latest_pointer=args.latest_pointer,
+                latest_attempt_pointer=args.latest_attempt_pointer,
                 run_id=args.run_id,
                 error=error,
-                failure_stage=(
-                    "dependency_wait"
-                    if isinstance(error, DependencyWaitError)
-                    else (
-                        "credential_file"
-                        if isinstance(error, CredentialFileError)
-                        else "read_only_transport"
-                    )
-                ),
+                failure_stage=startup_stage,
             )
         except Exception as receipt_error:
             print(
@@ -888,9 +1014,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             writer_lock_path=args.writer_lock_path,
             evidence_dir=args.evidence_dir,
             receipt_dir=args.receipt_dir,
-            latest_pointer=args.latest_pointer,
+            latest_attempt_pointer=args.latest_attempt_pointer,
+            latest_success_pointer=args.latest_success_pointer,
             transport=transport,
             run_id=args.run_id,
+            provenance=execution_provenance(),
         )
     except Exception as error:
         print(

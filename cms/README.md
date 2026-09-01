@@ -70,12 +70,13 @@ independent clocks must reflow at that state; the browser regression suite check
 viewport where those columns previously collided.
 
 Data Explorer opens with a plain-English working discovery sequence before any record table.
-Preliminary Development Meeting Request (PDMR) planning intent is the first built lane;
-sewer/utility capacity, engineering intake, assemblage +
-new LLC, lobbyist registration and SFWMD research lanes remain visible but explicitly unconnected.
-A code-only query-only SQLite shadow view can classify exact `ENG-CR`, `ENG-OAA`, `ROW-SEW`,
-`ROW-WTR` and `PLB-SEWCP-WT` families already stored in a supplied database; that artifact does
-not connect those lanes or change Desk status.
+Preliminary Development Meeting Request (PDMR) planning intent is the first built lane.
+The sewer/utility and engineering-intake implementation can classify exact `ENG-CR`, `ENG-OAA`,
+`ROW-SEW`, `ROW-WTR` and `PLB-SEWCP-WT` families already stored in the Accela lane, prove two-read
+SQLite/Supabase projection parity and expose them through a dedicated publishable-key GET-only
+private endpoint. It still must render warning/unverified until a hash-bound local receipt snapshot
+from a successful scheduled production run validates. Assemblage + new LLC, lobbyist registration
+and SFWMD remain separate and must not inherit this lane's status.
 Connected ownership/capital, regulatory and execution sources follow; permits remain later-stage
 evidence, not the page's identity. Each catalog option performs a real read check and reports
 availability separately from source health and refresh mode: `current/delayed/stale`,
@@ -99,7 +100,10 @@ The Finder app is refreshed from the tracked source with
 signs a complete copy, and restores the prior app if verification fails. Its local editorial
 SQLite data remains in Application Support and is not replaced with the app bundle. The launcher
 reads durable project state, the private PDMR evidence database and the read-only PDMR Candidate
-script from a verified snapshot inside the generated app. This avoids macOS privacy failures when
+script from a verified snapshot inside the generated app. It also bundles the utility receipt-sync
+helper, which copies only the fixed latest-attempt/latest-success chains from the `florida` SSH
+alias, validates them, and atomically stores them under Application Support before the Desk starts.
+This avoids macOS privacy failures when
 a Finder-launched app is denied Documents access. Re-run the updater after a local PDMR collection
 to refresh the snapshot. `FL_SIGNAL_SITE_REPO` and `FL_SIGNAL_SOURCE_ROOT` select the source at
 build time; `FL_SIGNAL_SOURCE_ROOT` and the three specific `FL_SIGNAL_*_PATH` variables may still
@@ -135,6 +139,9 @@ Send `Authorization: Bearer $DATA_WIRE_ADMIN_TOKEN`.
 - `GET /api/admin/pdmr-intent` — bounded, paged, read-only local PDMR evidence with fielded search
 - `GET /api/admin/pdmr-candidates` — bounded local shadow ranking with no production writes
 - `GET /api/admin/sunbiz-entities` — bounded private exact-match resolver; raw rows stay server-side
+- `GET /api/admin/utility-intake` — exact utility/engineering families through a dedicated anon
+  publishable-key GET-only projection plus locally replicated hash-bound attempt/success receipts;
+  the generic service-role helper is not used by this route
 - `GET /api/admin/early-intel` — source-specific clocks across decisions, companies, capital,
   regulatory filings and execution; monitored lanes are not misrepresented as completed detectors
 - `GET /api/admin/agenda-watch` — private, filtered Legistar item/attachment leads with source links,

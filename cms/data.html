@@ -1441,11 +1441,14 @@
       const validation = health.validation || {};
       const collected = result.last_collected ? new Date(result.last_collected) : null;
       const collectedText = collected && !Number.isNaN(collected.getTime()) ? collected.toLocaleString() : "not exposed";
+      const attempted = result.latest_attempt_at ? new Date(result.latest_attempt_at) : null;
+      const attemptedText = attempted && !Number.isNaN(attempted.getTime()) ? attempted.toLocaleString() : "not exposed";
       const detail = [health.detail, validation.reason ? `Validation: ${validation.reason}` : ""].filter(Boolean).join(" · ") || "No independent health detail was returned.";
       target.innerHTML =
         `<span>Exact matching rows<b data-receipt-total>${esc(result.record_count == null ? "unknown" : result.record_count)}</b></span>` +
         `<span>Newest applied date<b data-receipt-event>${esc(result.newest_event || "not exposed")}</b></span>` +
-        `<span>Last parity verification<b data-receipt-collected>${esc(collectedText)}</b></span>` +
+        `<span>Latest successful parity run<b data-receipt-collected>${esc(collectedText)}</b></span>` +
+        `<span>Latest attempt<b data-receipt-attempt>${esc(attemptedText)} · ${esc(result.latest_attempt_status || "unknown")}</b></span>` +
         `<span>Receipt health<b data-receipt-health>${esc(String(health.status || "unknown").toLowerCase())}</b></span>` +
         `<span class="receipt-detail">Health detail<b data-receipt-detail>${esc(detail)}</b></span>`;
       target.hidden = false;

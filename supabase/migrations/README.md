@@ -10,6 +10,7 @@ Tracked, idempotent SQL mirroring live production. No secrets in this directory.
 | `20260811235949_label_source_delay_without_blocking_verified_candidates.sql` | separates snapshot lag from the external Clerk release delay; hardens legacy transfer view and queue trigger search path | 2026-08-11 |
 | `20260812000230_index_health_event_clocks.sql` | partial FDEP event/fetch indexes for bounded public health probes | 2026-08-11 |
 | `20260815172000_sunbiz_private_health_receipt.sql` | aggregate-only Sunbiz freshness receipt and daily post-ingest refresh; raw entity rows stay private | 2026-08-15 |
+| `20260831235500_utility_intake_anon_read_hardening.sql` | default-off private owner gate that, only after the exact approval call, forces RLS and converges `anon` on `public.permits` to SELECT-only with an exact policy/grant attestation | **Not applied** |
 
 **Not tracked here (pre-existing / other work):** `fdep_erp`, `faa_oeaaa` tables + their edge functions and primary pg_cron jobs; `refresh_dashboard_cache`. The FAA transient retry schedule added on 2026-08-15 is recorded in the operations handoff. Those objects otherwise remain as originally applied.
 

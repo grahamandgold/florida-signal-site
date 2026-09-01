@@ -875,6 +875,25 @@ class UtilityIntakeShadowTests(unittest.TestCase):
             self.assertIn("no forward progress", str(caught.exception))
             self.assertFalse(path.exists())
 
+    def test_evidence_file_and_run_directory_are_fsynced_before_return(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            real_fsync = shadow.os.fsync
+            with mock.patch.object(shadow.os, "fsync", wraps=real_fsync) as fsynced:
+                bundle = shadow.EvidenceBundle(Path(tmp), "fsync-proof")
+                path, _ = bundle.write_json("receipt.json", {"ok": True})
+            self.assertTrue(path.is_file())
+            # New run directory, file contents, then the run-directory entry.
+            self.assertGreaterEqual(fsynced.call_count, 3)
+
+    def test_evidence_file_fsync_failure_removes_the_uncommitted_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle = shadow.EvidenceBundle(Path(tmp), "fsync-failure")
+            path = bundle.run_dir / "receipt.json"
+            with mock.patch.object(shadow.os, "fsync", side_effect=OSError("fsync failed")):
+                with self.assertRaisesRegex(OSError, "fsync failed"):
+                    bundle.write_json("receipt.json", {"ok": True})
+            self.assertFalse(path.exists())
+
     def test_supporting_source_modified_clock_is_preferred(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "permits.sqlite"

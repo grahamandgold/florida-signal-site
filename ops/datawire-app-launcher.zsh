@@ -13,6 +13,9 @@ florida_source="${FL_SIGNAL_SOURCE_ROOT:-$resources/florida-signal}"
 project_state_path="${FL_SIGNAL_PROJECT_STATE_PATH:-$florida_source/data/reference/florida_signal_project_state.json}"
 pdmr_db_path="${FL_SIGNAL_PDMR_DB_PATH:-$florida_source/data/pdmr/florida_signal_v1.sqlite}"
 pdmr_candidate_script="${FL_SIGNAL_PDMR_CANDIDATE_SCRIPT:-$florida_source/scripts/nominate_pdmr_candidates.py}"
+utility_local_root="${FL_SIGNAL_UTILITY_LOCAL_ROOT:-$data_dir/utility-intake}"
+utility_sync_script="$resources/scripts/sync_utility_intake_receipts.py"
+utility_ssh_host="${FL_SIGNAL_UTILITY_SSH_HOST:-florida}"
 desk_url="http://127.0.0.1:8788/"
 log_file="/tmp/florida-signal-data-wire-launch.log"
 job_label="com.floridasignal.datawire.server"
@@ -108,7 +111,20 @@ if [[ "${1:-}" == "--serve" ]]; then
   FL_SIGNAL_PROJECT_STATE_PATH="$project_state_path" \
   FL_SIGNAL_PDMR_DB_PATH="$pdmr_db_path" \
   FL_SIGNAL_PDMR_CANDIDATE_SCRIPT="$pdmr_candidate_script" \
+  FL_SIGNAL_UTILITY_LOCAL_ROOT="$utility_local_root" \
+  FL_SIGNAL_UTILITY_RECEIPT_DIR="$utility_local_root/receipts" \
+  FL_SIGNAL_UTILITY_LATEST_ATTEMPT_POINTER="$utility_local_root/latest-attempt.json" \
+  FL_SIGNAL_UTILITY_LATEST_SUCCESS_POINTER="$utility_local_root/latest-success.json" \
   exec /usr/bin/python3 "$resources/cms/server.py" --port 8788
+fi
+
+# Refresh the localhost-only receipt snapshot before starting the Desk. A
+# network or SSH failure preserves the previous immutable snapshot; the Desk
+# then reports it stale/unverified instead of blocking access to other lanes.
+if [[ -f "$utility_sync_script" ]]; then
+  /usr/bin/python3 "$utility_sync_script" \
+    --destination "$utility_local_root" \
+    --ssh-host "$utility_ssh_host" >>"$log_file" 2>&1 || true
 fi
 
 # A Finder-launched shell app's descendants can be reaped when its executable

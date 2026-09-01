@@ -1,6 +1,7 @@
 import importlib.util
 from datetime import datetime, timedelta, timezone
 import hashlib
+import inspect
 import json
 import os
 import sqlite3
@@ -63,6 +64,10 @@ def utility_health(rows, *, system_time="2026-09-01T01:00:00Z", metrics_override
         "status": "current",
         "event_through": "2026-08-31",
         "system_time": system_time,
+        "latest_attempt_at": system_time,
+        "latest_attempt_status": "ok",
+        "latest_successful_run_at": system_time,
+        "latest_successful_run_id": "utility-test-run",
         "detail": "Bound declared projection parity",
         "metrics": metrics,
     }]
@@ -786,10 +791,16 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         ]
         health = utility_health(rows)
 
+        exact_rows = [row for row in rows if cms_server.utility_intake_family(row["permit_number"])]
         with mock.patch.object(
-            cms_server, "supabase_request", side_effect=utility_request(rows),
-        ) as call, mock.patch.object(
+            cms_server, "utility_intake_remote_projection", return_value=exact_rows,
+        ) as read_projection, mock.patch.object(
             cms_server, "load_utility_intake_local_health", return_value=health[0],
+        ), mock.patch.object(
+            cms_server, "validate_utility_intake_health", side_effect=lambda value, *_args, **_kwargs: {
+                **value,
+                "validation": {"projection_bound": True, "fresh": True, "reason": None},
+            },
         ):
             code, sewer = cms_server.utility_intake_payload({
                 "lane": ["sewer_utility"], "limit": ["10"], "offset": ["0"],
@@ -797,8 +808,7 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
             _, engineering = cms_server.utility_intake_payload({
                 "lane": ["engineering"], "limit": ["10"], "offset": ["0"],
             }, observed_at=UTILITY_NOW)
-        permit_queries = [item.args[0] for item in call.call_args_list if item.args[0].startswith("permits?")]
-        self.assertTrue(all(item.args[0].startswith("permits?") for item in call.call_args_list))
+        self.assertEqual(read_projection.call_count, 2)
         self.assertEqual(code, 200)
         self.assertEqual({row["permit_number"] for row in sewer["items"]}, {
             "ENG-CR-260001", "ROW-SEW-260003.D001", "ROW-WTR-260004", "PLB-SEWCP-WT-260005",
@@ -808,16 +818,68 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         self.assertTrue(sewer["health"]["validation"]["projection_bound"])
         self.assertEqual(sewer["all_lane_record_count"], 5)
         self.assertEqual(sewer["last_collected"], "2026-09-01T01:00:00Z")
-        self.assertIn("permit_number.like.ENG-CR-*", permit_queries[0])
         self.assertIn("does not establish the serving utility", sewer["contract"])
         self.assertIn("no claim that a record predates PDMR", sewer["contract"])
+
+    def test_utility_desk_transport_is_publishable_get_only_and_projection_pinned(self):
+        row = utility_row("ENG-CR-260001", applied_date="2026-08-30")
+
+        class Response:
+            headers = {"Content-Range": "0-0/1"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self, _limit):
+                return json.dumps([row]).encode("utf-8")
+
+        opener = mock.Mock()
+        opener.open.return_value = Response()
+        with mock.patch.object(
+            cms_server, "SUPABASE_URL", "https://project-ref.supabase.co",
+        ), mock.patch.object(
+            cms_server, "SUPABASE_ANON_KEY", "sb_publishable_" + "x" * 24,
+        ), mock.patch.object(
+            cms_server.urllib.request, "build_opener", return_value=opener,
+        ) as build_opener:
+            page = cms_server.utility_intake_read_projection_page(cursor=None, limit=10)
+        request = opener.open.call_args.args[0]
+        query = parse_qs(urlparse(request.full_url).query)
+        self.assertIsInstance(build_opener.call_args.args[0], cms_server._UtilityRejectRedirects)
+        self.assertEqual(request.get_method(), "GET")
+        self.assertEqual(urlparse(request.full_url).path, "/rest/v1/permits")
+        self.assertEqual(query["select"], [",".join(cms_server.UTILITY_INTAKE_PARITY_COLUMNS)])
+        self.assertEqual(query["order"], ["permit_number.asc"])
+        self.assertNotIn("offset", query)
+        self.assertEqual(request.get_header("Apikey"), "sb_publishable_" + "x" * 24)
+        self.assertIsNone(request.get_header("Authorization"))
+        self.assertIsNone(request.data)
+        self.assertEqual(page["rows"][0]["permit_number"], "ENG-CR-260001")
+
+    def test_utility_desk_transport_rejects_service_role_or_unpinned_origin(self):
+        with mock.patch.object(cms_server, "SUPABASE_ANON_KEY", "sb_secret_forbidden"):
+            with self.assertRaisesRegex(ValueError, "anon publishable"):
+                cms_server.utility_intake_read_projection_page(cursor=None, limit=10)
+        with mock.patch.object(
+            cms_server, "SUPABASE_URL", "https://supabase.co.evil.example",
+        ), mock.patch.object(
+            cms_server, "SUPABASE_ANON_KEY", "sb_publishable_" + "x" * 24,
+        ):
+            with self.assertRaisesRegex(ValueError, "pinned"):
+                cms_server.utility_intake_read_projection_page(cursor=None, limit=10)
+        payload_source = inspect.getsource(cms_server.utility_intake_payload)
+        self.assertNotIn("supabase_request", payload_source)
+        self.assertIn("utility_intake_remote_projection", payload_source)
 
     def test_utility_intake_duplicate_identity_fails_closed(self):
         duplicate = utility_row("ROW-SEW-260003", applied_date="2026-08-29")
         with mock.patch.object(
             cms_server,
-            "supabase_request",
-            side_effect=utility_request([duplicate, dict(duplicate)]),
+            "utility_intake_remote_projection",
+            return_value=[duplicate, dict(duplicate)],
         ):
             code, payload = cms_server.utility_intake_payload({"lane": ["all"]})
         self.assertEqual(code, 502)
@@ -828,27 +890,25 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
             utility_row(f"ROW-SEW-26000{index}", applied_date="2026-08-29")
             for index in range(3)
         ]
-        health = utility_health(rows)
-        offsets = []
+        cursors = []
 
-        def request(path, *args, **kwargs):
-            query = path.split("?", 1)[1]
-            params = dict(item.split("=", 1) for item in query.split("&") if "=" in item)
-            offset = int(params["offset"])
-            offsets.append(offset)
-            return 200, rows[offset:offset + 2]
+        def page(*, cursor, limit):
+            cursors.append(cursor)
+            remaining = [row for row in rows if cursor is None or row["permit_number"] > cursor]
+            payload = remaining[:2]
+            return {
+                "cursor": cursor,
+                "next_cursor": payload[-1]["permit_number"] if payload else cursor,
+                "scanned_count": len(payload),
+                "declared_total": len(remaining),
+                "exhausted": not payload,
+                "rows": payload,
+            }
 
-        with mock.patch.object(
-            cms_server, "supabase_request", side_effect=request,
-        ), mock.patch.object(
-            cms_server, "load_utility_intake_local_health", return_value=health[0],
-        ):
-            code, payload = cms_server.utility_intake_payload(
-                {"lane": ["all"]}, observed_at=UTILITY_NOW,
-            )
-        self.assertEqual(code, 200)
-        self.assertEqual(payload["record_count"], 3)
-        self.assertEqual(offsets, [0, 2, 3])
+        with mock.patch.object(cms_server, "utility_intake_read_projection_page", side_effect=page):
+            payload = cms_server._utility_remote_projection_once()
+        self.assertEqual(len(payload), 3)
+        self.assertEqual(cursors, [None, rows[1]["permit_number"], rows[2]["permit_number"]])
 
     def test_utility_intake_health_loads_only_from_hash_bound_local_receipts(self):
         rows = [utility_row("ENG-CR-260001", applied_date="2026-08-30")]
@@ -856,6 +916,7 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
             root = Path(tmp)
             receipts = root / "receipts"
             receipts.mkdir()
+            producer_receipts = Path("/producer/utility-intake/receipts")
             counts = {
                 "records_attempted": 1,
                 "records_written": 0,
@@ -865,6 +926,14 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
             }
             proof = cms_server.utility_intake_projection_proof(rows)
             parity = {"status": "passed", "sqlite": proof, "supabase": proof}
+            execution = {
+                "execution_context": "systemd_timer_expected",
+                "systemd_invocation_id": "a" * 32,
+                "service_unit": "florida-utility-intake.service",
+                "expected_timer_unit": "florida-utility-intake.timer",
+                "natural_schedule_verified": False,
+                "verification_contract": "correlate journal",
+            }
             verification_path = receipts / "bound.verification.json"
             verification_path.write_text(json.dumps({
                 "schema_version": cms_server.UTILITY_INTAKE_VERIFICATION_SCHEMA,
@@ -873,10 +942,11 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
                 "completed_at": "2026-09-01T01:00:00Z",
                 "counts": counts,
                 "parity": parity,
+                "execution": execution,
             }, sort_keys=True) + "\n", encoding="utf-8")
             verification_sha = hashlib.sha256(verification_path.read_bytes()).hexdigest()
             health = utility_health(rows, metrics_override={
-                "verification_receipt_path": str(verification_path),
+                "verification_receipt_path": str(producer_receipts / verification_path.name),
                 "verification_receipt_sha256": verification_sha,
             })[0]
             outcome = {
@@ -887,29 +957,41 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
                 "counts": counts,
                 "parity": parity,
                 "verification": {
-                    "receipt_path": str(verification_path),
+                    "receipt_path": str(producer_receipts / verification_path.name),
                     "receipt_sha256": verification_sha,
                 },
                 "health": health,
+                "execution": execution,
             }
             outcome_path = receipts / "utility-local-binding.json"
             outcome_path.write_text(json.dumps(outcome, sort_keys=True) + "\n", encoding="utf-8")
             pointer = {
                 "schema_version": cms_server.UTILITY_INTAKE_LATEST_SCHEMA,
+                "pointer_kind": "attempt",
                 "run_id": "utility-local-binding",
                 "status": "ok",
                 "updated_at": "2026-09-01T01:00:00Z",
-                "receipt_path": str(outcome_path),
+                "receipt_path": str(producer_receipts / outcome_path.name),
                 "receipt_sha256": hashlib.sha256(outcome_path.read_bytes()).hexdigest(),
                 "counts": outcome["counts"],
+                "execution": execution,
             }
-            latest = root / "latest.json"
-            latest.write_text(json.dumps(pointer, sort_keys=True) + "\n", encoding="utf-8")
+            latest_attempt = root / "latest-attempt.json"
+            latest_success = root / "latest-success.json"
+            latest_attempt.write_text(json.dumps(pointer, sort_keys=True) + "\n", encoding="utf-8")
+            success_pointer = {**pointer, "pointer_kind": "success"}
+            latest_success.write_text(
+                json.dumps(success_pointer, sort_keys=True) + "\n", encoding="utf-8",
+            )
 
             with mock.patch.object(
                 cms_server, "UTILITY_INTAKE_RECEIPT_DIR", receipts,
             ), mock.patch.object(
-                cms_server, "UTILITY_INTAKE_LATEST_POINTER", latest,
+                cms_server, "UTILITY_INTAKE_PRODUCER_RECEIPT_DIR", producer_receipts,
+            ), mock.patch.object(
+                cms_server, "UTILITY_INTAKE_LATEST_ATTEMPT_POINTER", latest_attempt,
+            ), mock.patch.object(
+                cms_server, "UTILITY_INTAKE_LATEST_SUCCESS_POINTER", latest_success,
             ):
                 loaded = cms_server.load_utility_intake_local_health()
                 self.assertEqual(loaded["status"], "current")
@@ -922,8 +1004,12 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
                 pointer["receipt_sha256"] = hashlib.sha256(
                     outcome_path.read_bytes()
                 ).hexdigest()
-                latest.write_text(
+                latest_attempt.write_text(
                     json.dumps(pointer, sort_keys=True) + "\n", encoding="utf-8",
+                )
+                success_pointer["receipt_sha256"] = pointer["receipt_sha256"]
+                latest_success.write_text(
+                    json.dumps(success_pointer, sort_keys=True) + "\n", encoding="utf-8",
                 )
                 metric_rejected = cms_server.load_utility_intake_local_health()
                 self.assertEqual(metric_rejected["status"], "unverified")
@@ -933,10 +1019,58 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
                     json.dumps(outcome, sort_keys=True) + "\n", encoding="utf-8",
                 )
                 pointer["receipt_sha256"] = "0" * 64
-                latest.write_text(json.dumps(pointer, sort_keys=True) + "\n", encoding="utf-8")
+                latest_attempt.write_text(
+                    json.dumps(pointer, sort_keys=True) + "\n", encoding="utf-8",
+                )
                 rejected = cms_server.load_utility_intake_local_health()
                 self.assertEqual(rejected["status"], "unverified")
                 self.assertNotIn(str(outcome_path), rejected["detail"])
+
+    def test_utility_intake_health_preserves_latest_success_after_failed_attempt(self):
+        attempt = {
+            "run_id": "utility-failed-attempt",
+            "status": "failed",
+            "completed_at": "2026-09-01T01:27:00Z",
+            "execution": {"systemd_invocation_id": "b" * 32},
+            "health": {
+                "component": "utility-intake",
+                "status": "error",
+                "system_time": "2026-09-01T01:27:00Z",
+                "detail": "bounded failure",
+                "metrics": {},
+            },
+        }
+        success = {
+            "run_id": "utility-prior-success",
+            "status": "ok",
+            "completed_at": "2026-09-01T00:57:00Z",
+            "execution": {"systemd_invocation_id": "a" * 32},
+            "health": {
+                "component": "utility-intake",
+                "status": "current",
+                "system_time": "2026-09-01T00:57:00Z",
+                "metrics": {},
+            },
+        }
+
+        with mock.patch.object(
+            cms_server, "_load_utility_pointer", side_effect=[attempt, success],
+        ) as load_pointer:
+            health = cms_server.load_utility_intake_local_health()
+
+        self.assertEqual(
+            load_pointer.call_args_list,
+            [
+                mock.call(cms_server.UTILITY_INTAKE_LATEST_ATTEMPT_POINTER, "attempt"),
+                mock.call(cms_server.UTILITY_INTAKE_LATEST_SUCCESS_POINTER, "success"),
+            ],
+        )
+        self.assertEqual(health["status"], "error")
+        self.assertEqual(health["latest_attempt_status"], "failed")
+        self.assertEqual(health["latest_attempt_at"], "2026-09-01T01:27:00Z")
+        self.assertEqual(health["latest_successful_run_id"], "utility-prior-success")
+        self.assertEqual(health["latest_successful_run_at"], "2026-09-01T00:57:00Z")
+        self.assertEqual(health["latest_success_execution"], success["execution"])
 
     def test_utility_intake_health_downgrades_projection_mismatch_and_staleness(self):
         rows = [utility_row("ENG-CR-260001", applied_date="2026-08-30")]
@@ -944,16 +1078,24 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         stale = utility_health(rows, system_time="2026-08-31T23:00:00Z")
 
         def run(health):
-            def request(path, *args, **kwargs):
-                return 200, rows if "offset=0" in path else []
-            with mock.patch.object(
-                cms_server, "supabase_request", side_effect=request,
-            ), mock.patch.object(
-                cms_server, "load_utility_intake_local_health", return_value=health[0],
-            ):
-                return cms_server.utility_intake_payload(
-                    {"lane": ["all"]}, observed_at=UTILITY_NOW,
-                )[1]["health"]
+            with tempfile.TemporaryDirectory() as tmp:
+                receipt_dir = Path(tmp)
+                receipt = receipt_dir / "health.verification.json"
+                receipt.write_text("{}\n", encoding="utf-8")
+                health[0]["metrics"].update({
+                    "verification_receipt_path": str(receipt),
+                    "verification_receipt_sha256": hashlib.sha256(receipt.read_bytes()).hexdigest(),
+                })
+                with mock.patch.object(
+                    cms_server, "utility_intake_remote_projection", return_value=rows,
+                ), mock.patch.object(
+                    cms_server, "load_utility_intake_local_health", return_value=health[0],
+                ), mock.patch.object(
+                    cms_server, "UTILITY_INTAKE_RECEIPT_DIR", receipt_dir,
+                ):
+                    return cms_server.utility_intake_payload(
+                        {"lane": ["all"]}, observed_at=UTILITY_NOW,
+                    )[1]["health"]
 
         mismatch_health = run(mismatch)
         stale_health = run(stale)
@@ -976,7 +1118,7 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         with tempfile.TemporaryDirectory() as tmp:
             receipt_dir = Path(tmp)
             receipt_path = receipt_dir / "test.verification.json"
-            receipt_path.write_text("verified\n", encoding="utf-8")
+            receipt_path.write_text("{}\n", encoding="utf-8")
             health = utility_health(rows, metrics_override={
                 "verification_receipt_path": str(receipt_path),
                 "verification_receipt_sha256": "0" * 64,
@@ -1030,6 +1172,8 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         self.assertIn('data-receipt-total', html)
         self.assertIn('data-receipt-event', html)
         self.assertIn('data-receipt-collected', html)
+        self.assertIn('data-receipt-attempt', html)
+        self.assertIn('Latest successful parity run', html)
         self.assertIn('data-receipt-health', html)
         self.assertIn('data-receipt-detail', html)
         self.assertNotIn("ENG-CR, ENG-OAA and TMP workflows; source contract not built", html)
@@ -1041,6 +1185,10 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         self.assertIn('FL_SIGNAL_PROJECT_STATE_PATH="$project_state_path"', launcher)
         self.assertIn('FL_SIGNAL_PDMR_DB_PATH="$pdmr_db_path"', launcher)
         self.assertIn('FL_SIGNAL_PDMR_CANDIDATE_SCRIPT="$pdmr_candidate_script"', launcher)
+        self.assertIn('FL_SIGNAL_UTILITY_LOCAL_ROOT="$utility_local_root"', launcher)
+        self.assertIn('FL_SIGNAL_UTILITY_LATEST_ATTEMPT_POINTER="$utility_local_root/latest-attempt.json"', launcher)
+        self.assertIn('FL_SIGNAL_UTILITY_LATEST_SUCCESS_POINTER="$utility_local_root/latest-success.json"', launcher)
+        self.assertIn('sync_utility_intake_receipts.py', launcher)
         self.assertIn('job_label="com.floridasignal.datawire.server"', launcher)
         self.assertIn('if [[ "${1:-}" == "--serve" ]]', launcher)
         self.assertIn('exec /usr/bin/python3 "$resources/cms/server.py" --port 8788', launcher)
@@ -1104,6 +1252,7 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         self.assertIn("FL_SIGNAL_PROJECT_STATE_SOURCE", updater)
         self.assertIn("FL_SIGNAL_PDMR_DB_SOURCE", updater)
         self.assertIn("FL_SIGNAL_PDMR_CANDIDATE_SOURCE", updater)
+        self.assertIn("sync_utility_intake_receipts.py", updater)
         self.assertIn("pragma quick_check;", updater)
         self.assertIn("coordinate_desk_restart_after_update", updater)
         self.assertIn("is_expected_legacy_desk_pid", updater)

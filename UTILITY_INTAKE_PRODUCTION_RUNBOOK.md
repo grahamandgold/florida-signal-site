@@ -32,11 +32,13 @@ enforces row/scan caps, applies the exact family boundary locally, and repeats
 the complete read for stability. It has no generic request method and no remote
 write method.
 
-The 2026-08-31 policy review found an `anon` SELECT-only `permits` policy named
-`anon_read_permits` with `qual=true`, and SELECT-only `anon` access to
-`editorial_pipeline_health`. The collector does not query or mutate
-`editorial_pipeline_health`. Reconfirm both table grants and policies at every
-deployment; the reviewed state is evidence, not a permanent assumption.
+The 2026-08-31 live review found an `anon` SELECT-only `permits` policy named
+`anon_read_permits` with `qual=true`. It also found broad table-level grants for
+`anon`; therefore the lane is **not authorized for timer enablement** until the
+separately gated least-privilege function below converges `public.permits` to
+SELECT-only and a fresh readback passes. RLS is necessary but is not a reason to
+ignore overbroad grants. The collector does not query or mutate
+`editorial_pipeline_health`.
 
 The dedicated host EnvironmentFile contains exactly:
 
@@ -66,23 +68,39 @@ Production paths are:
 - Writer lock: `/srv/grahamandgold/florida-signal/app/db/.writer.lock`
 - Evidence: `/srv/grahamandgold/florida-signal/staging/data/utility-intake/runs/`
 - Receipts: `/srv/grahamandgold/florida-signal/staging/data/utility-intake/receipts/`
-- Latest pointer: `/srv/grahamandgold/florida-signal/staging/data/utility-intake/latest.json`
+- Latest attempt: `/srv/grahamandgold/florida-signal/staging/data/utility-intake/latest-attempt.json`
+- Latest success: `/srv/grahamandgold/florida-signal/staging/data/utility-intake/latest-success.json`
 - Dedicated env: `/srv/grahamandgold/florida-signal/secrets/florida-utility-intake.env`
 - Dependency helper: `/srv/grahamandgold/florida-signal/tools/florida-utility-intake-wait.sh`
 
-Verification and outcome receipts are create-only mode `0600` files. Each file
-is fsynced and its containing directory is fsynced before it can be referenced.
-Only then is the mode-`0600` latest pointer atomically replaced and the pointer
-directory fsynced. The outcome receipt contains sanitized health and binds the
-verification-receipt path/hash. There is no mutable remote health row.
+Every raw/derived shadow evidence file is create-only mode `0600`, fsynced, and
+followed by a run-directory fsync. The run-directory entry itself is fsynced
+before the bundle is populated. Verification and outcome receipts use the same
+file-plus-directory durability contract. Only then is the mode-`0600`
+latest-attempt pointer atomically replaced. A successful outcome also replaces
+latest-success; a failure never overwrites the prior success. Both pointer
+directories are fsynced. The outcome binds the verification path/hash. There is
+no mutable remote health row.
 
-The Desk rereads the complete all-lane projection and verifies count, primary
+The localhost Desk uses a separate hard-coded publishable-key GET-only client;
+the utility route never calls the Desk's generic service-role helper. It rereads
+the complete all-lane projection twice and verifies count, primary
 key hash, declared projection hash/version, two-read declaration, the
-latest-pointer/outcome hash and identity, the outcome/health/verification
+latest-attempt/outcome hash and identity, the outcome/health/verification
 binding, the accessible verification receipt hash/schema/run identity, and a
-75-minute collection freshness threshold. It renders exact total, event clock,
-collection clock, health status, and detail. Missing, stale, empty, changing,
-unbound, or mismatched evidence is warning state, never green.
+75-minute collection freshness threshold. It separately displays the latest
+attempt and latest successful parity clocks, so a failed attempt cannot be
+mislabelled as the last verification. Missing, stale, empty, changing, unbound,
+or mismatched evidence is warning state, never green.
+
+The Finder app stores its read-only snapshot under
+`~/Library/Application Support/Florida Signal Data Wire/utility-intake/`.
+`ops/mac/sync_utility_intake_receipts.py` copies fixed remote pointer names over
+the existing `florida` SSH alias, copies only sanitized receipt basenames from
+the fixed producer directory, verifies the complete hash/schema/run binding,
+rereads both pointers for stability, then atomically places the receipt files
+before the pointers. It issues no remote shell and no remote write. A failed
+sync preserves the previous snapshot; freshness then fails closed naturally.
 
 ## Hard stops
 
@@ -97,31 +115,41 @@ unbound, or mismatched evidence is warning state, never green.
 - Do not claim a database snapshot. Claim only the complete declared projection
   equality and repeated-read stability actually proven.
 
-## Install disabled
+## Exact atomic install, still disabled
 
-Preserve the current scripts, units, and Desk files in a new mode-`0700` backup
-directory. Install the reviewed files, but keep the timer disabled:
+First preserve the current scripts, units, helper, Desk app, and existing
+receipt pointers in a new explicit mode-`0700` backup directory and record a
+SHA-256 inventory. Do not use a broad checkout copy as a runtime replacement.
+The reviewed manifest covers the production script, its sibling shadow module,
+wait helper, service, and timer. Run the atomic installer with the timer still
+disabled:
 
 ```bash
-sudo install -o root -g root -m 0755 ops/droplet/florida-utility-intake-wait.sh /srv/grahamandgold/florida-signal/tools/florida-utility-intake-wait.sh
-sudo systemd-analyze verify /etc/systemd/system/florida-utility-intake.service /etc/systemd/system/florida-utility-intake.timer
+sudo env FL_SIGNAL_UTILITY_INSTALL_APPROVAL=I_APPROVE_EXACT_UTILITY_INTAKE_ATOMIC_INSTALL \
+  bash ops/droplet/install_utility_intake.sh "$(pwd)"
 sudo systemctl daemon-reload
 sudo systemctl disable --now florida-utility-intake.timer
 systemctl is-enabled florida-utility-intake.timer
 ```
 
+The installer verifies every source hash, atomically renames every installed
+file, imports the installed sibling pair from their exact destination, and runs
+an empty-environment/missing-credential self-test. That self-test must exit 3
+and preserve a `startup_stage=credential_file` receipt under the printed
+`install-checks/` path, with `remote_methods=[]` and no latest-success pointer.
+This closes the pre-environment/startup-import gap. Do not continue if the exact
+hash manifest, installed import, self-test receipt, or `systemd-analyze verify`
+fails.
+
 The helper only performs a bounded wait for the existing Accela and sync
 oneshots. Python invokes it so timeout, missing-helper, and failed-dependency
 states are receipted. It never starts, stops, or restarts a dependency.
 
-Before installing the env file, start the unit once with the timer disabled.
-Require Python to start and produce a sanitized `credential_file` failure
-receipt plus hash-bound latest pointer. Preserve that receipt. If systemd fails
-before `ExecStart`, stop: the optional-env production path is not working.
-
-Install the two-variable env file without printing it. Recheck its metadata and
-the live Supabase authorization boundary with an administrative read-only
-session:
+Install the two-variable env file without printing it. Apply
+`20260831235500_utility_intake_anon_read_hardening.sql`; this creates a private
+owner-only function and changes no grant or row by default. Preview current
+policy/grant state, preserve its output, then invoke the exact function once in
+an explicit transaction:
 
 ```sql
 select schemaname, tablename, policyname, roles, cmd, qual, with_check
@@ -136,12 +164,20 @@ where table_schema = 'public'
   and table_name in ('permits', 'editorial_pipeline_health')
   and grantee = 'anon'
 order by table_name, privilege_type;
+
+begin;
+select private.fs_apply_utility_intake_anon_read_hardening(
+  'I_APPROVE_EXACT_UTILITY_INTAKE_ANON_READ_HARDENING'
+);
+commit;
 ```
 
-Require `anon` SELECT and reject any `anon` INSERT, UPDATE, DELETE, TRUNCATE,
-TRIGGER, or REFERENCES grant/policy for these tables. Require the permits
-SELECT policy to remain unconditional for the complete mirror read. Do not
-weaken RLS to make the canary pass.
+The function itself fails and rolls back unless the exact unconditional
+`anon_read_permits` SELECT policy exists and no anon write policy exists. Its
+postcondition requires RLS enabled and forced, `anon` SELECT, and zero anon
+INSERT, UPDATE, DELETE, TRUNCATE, TRIGGER, REFERENCES, or column-level write
+grants. Repeat both read-only queries and preserve the returned attestation.
+Do not waive this gate or weaken RLS to make the canary pass.
 
 ## Manual canary and Desk gate
 
@@ -151,7 +187,8 @@ After the normal Accela and sync jobs are terminal, run one manual canary:
 sudo systemctl start florida-utility-intake.service
 systemctl show florida-utility-intake.service -p Result -p ExecMainStatus -p ActiveState
 sudo journalctl -u florida-utility-intake.service -n 100 --no-pager
-sudo jq . /srv/grahamandgold/florida-signal/staging/data/utility-intake/latest.json
+sudo jq . /srv/grahamandgold/florida-signal/staging/data/utility-intake/latest-attempt.json
+sudo jq . /srv/grahamandgold/florida-signal/staging/data/utility-intake/latest-success.json
 ```
 
 Require exit zero, `status=ok`, exact family accounting, non-empty source,
@@ -161,11 +198,13 @@ disk. Confirm the terminal safety section declares only `GET`, and verify from
 the reviewed code/network audit that no POST, PATCH, PUT, DELETE, RPC, or health
 request occurred. The record count is discovered by the canary, never hard-coded.
 
-Deploy `cms/server.py` and `cms/data.html` through the existing private Desk
-release process. The Desk process must have read-only access to the receipt
-paths as the same trusted host identity; do not broaden receipt permissions.
-If paths differ, set `FL_SIGNAL_UTILITY_RECEIPT_DIR` and
-`FL_SIGNAL_UTILITY_LATEST_POINTER` to the reviewed read-only locations.
+Deploy only the reviewed utility deltas from a branch descended from current
+Desk authority; never replace whole Desk files from the older utility branch.
+Run `ops/update_datawire_desktop_app.sh`, which bundles the read-only receipt
+sync helper. The Finder launcher refreshes the local snapshot before starting
+the loopback Desk and exports the exact local receipt/pointer paths. Confirm the
+Desk env contains `SUPABASE_ANON_KEY`; the utility route rejects a service-role
+or secret key and sends no Authorization header.
 
 Verify sewer/utility and outside-agency engineering cards, exact live rows,
 search, paging through an explicit empty page, exact total, event clock,
@@ -182,7 +221,22 @@ systemctl list-timers --all florida-utility-intake.timer
 
 Wait for the minute-27 or minute-57 timer run. Repeat the complete receipt,
 parity, GET-only, Desk, and freshness checks using that natural run. A manual
-canary alone is not completion. Confirm
+canary alone is not completion. The receipt's `execution` object must contain a
+valid 32-hex `systemd_invocation_id`, expected service/timer unit names, and
+`natural_schedule_verified=false`—the collector does not attest itself. Prove
+the natural run independently and preserve these outputs together:
+
+```bash
+invocation_id="$(sudo jq -r .execution.systemd_invocation_id \
+  /srv/grahamandgold/florida-signal/staging/data/utility-intake/latest-attempt.json)"
+systemctl show florida-utility-intake.timer \
+  -p LastTriggerUSec -p LastTriggerUSecMonotonic -p NextElapseUSecRealtime
+sudo journalctl _SYSTEMD_INVOCATION_ID="$invocation_id" --no-pager
+sudo journalctl -u florida-utility-intake.timer --since '-90 minutes' --no-pager
+```
+
+Require the timer trigger clock, timer journal, service invocation ID, outcome
+receipt, and latest-success run ID to identify the same natural window. Confirm
 `OnFailure=florida-healthreport.service` is installed and that a controlled
 failed-config canary invokes the existing alert path without exposing values.
 

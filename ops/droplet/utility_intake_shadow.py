@@ -20,6 +20,7 @@ import json
 import os
 import re
 import sqlite3
+import stat
 import sys
 import urllib.parse
 from contextlib import contextmanager
@@ -29,7 +30,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping, Sequence
 
 
-COLLECTOR_VERSION = "ftl-utility-intake-shadow/1.4.0"
+COLLECTOR_VERSION = "ftl-utility-intake-shadow/1.4.1"
 QUERY_VERSION = "ftl-utility-intake-query/1.3.1"
 PARSER_VERSION = "ftl-utility-intake-parser/1.2.0"
 SCHEMA_VERSION = "FloridaSignalUtilityIntakeShadowReceiptV5"
@@ -806,14 +807,38 @@ class EvidenceBundle:
         if not RUN_ID_RE.fullmatch(run_id):
             raise CollectorError("run_id contains unsafe characters")
         output_root.mkdir(parents=True, exist_ok=True)
+        output_metadata = output_root.lstat()
+        if output_root.is_symlink() or not stat.S_ISDIR(output_metadata.st_mode):
+            raise CollectorError("--output-dir must be a real directory")
         self.run_dir = output_root / run_id
         self.run_dir.mkdir(mode=0o700)
+
+        # Make the new run-directory entry durable before any file inside it can
+        # be referenced by a terminal production receipt.
+        self._fsync_directory(output_root)
+
+    @staticmethod
+    def _fsync_directory(path: Path) -> None:
+        flags = os.O_RDONLY | os.O_DIRECTORY
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(path, flags)
+        try:
+            if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+                raise CollectorError("evidence directory is not a directory")
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
 
     @staticmethod
     def _write_private_create_only(path: Path, body: bytes) -> None:
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
         fd = os.open(path, flags, 0o600)
         try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise CollectorError("evidence path is not a regular file")
             view = memoryview(body)
             offset = 0
             while offset < len(body):
@@ -821,14 +846,18 @@ class EvidenceBundle:
                 if written <= 0:
                     raise OSError("evidence-file write made no forward progress")
                 offset += written
+            os.fsync(fd)
         except Exception:
-            os.close(fd)
             try:
-                path.unlink()
-            except OSError:
-                pass
+                os.close(fd)
+            finally:
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
             raise
         os.close(fd)
+        EvidenceBundle._fsync_directory(path.parent)
 
     def write_json(self, name: str, value: Any) -> tuple[Path, str]:
         body = canonical_json_bytes(value)
