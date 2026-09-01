@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<caseList>
+  <OECase>
+    <caseId>654321</caseId>
+    <asn>2026-ASO-12345-OE</asn>
+    <asnSequence>12345</asnSequence>
+    <caseType>OE</caseType>
+    <year>2026</year>
+    <dateEntered>2026-08-30</dateEntered>
+    <dateCompleted>2026-08-31</dateCompleted>
+    <expirationDate>2028-08-31</expirationDate>
+    <receivedDate>2026-08-30T14:15:16Z</receivedDate>
+    <statusCode>EVL-Pending</statusCode>
+    <structureType>CRANE</structureType>
+    <structureDescription>Tower &lt; Crane &#38; Lift</structureDescription>
+    <aglStructureHeight>240</aglStructureHeight>
+    <aglStructureHeightDet>241</aglStructureHeightDet>
+    <amslOverallHeightProposed>255</amslOverallHeightProposed>
+    <sponsor>Example &amp; Sons</sponsor>
+    <sponsorCity>Fort &quot;Lauderdale&quot;</sponsorCity>
+    <sponsorState>FL</sponsorState>
+    <nearestAirportName>Example&apos;s Field</nearestAirportName>
+    <nearestCity>Fort Lauderdale</nearestCity>
+    <nearestState>FL</nearestState>
+    <latitude>26.1201</latitude>
+    <longitude>-80.1402</longitude>
+  </OECase>
+</caseList>
