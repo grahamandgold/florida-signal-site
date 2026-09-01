@@ -160,9 +160,10 @@ test.describe("private Florida Signal Newsroom", () => {
       if (path === "/data.html") {
         await expect(page.getByRole("heading", { name: "Working discovery sequence" })).toBeVisible();
         await expect(page.locator(".source-group").first()).toContainText("Preliminary Development Meeting Request (PDMR)");
-        await expect(page.locator(".source-group").nth(1)).toContainText("Sewer + utility capacity");
-        await expect(page.locator(".source-group").nth(1)).toContainText("Research only");
-        await expect(page.locator(".source-group").nth(1)).toContainText("generic TMP records are downstream/mixed and explicitly excluded");
+        await expect(page.locator(".source-group").nth(1)).toContainText("Sewer + utility intake");
+        await expect(page.locator(".source-group").nth(1)).toContainText("Outside-agency engineering intake");
+        await expect(page.locator('.source-option[data-source-table="utility_sewer_intake"]')).toBeVisible();
+        await expect(page.locator('.source-option[data-source-table="engineering_intake"]')).toBeVisible();
         await expect(page.locator(".source-group").nth(1)).toContainText("Shadow observed · not connected");
         await expect(page.locator(".source-group").nth(1)).toContainText("two manual observations each saved receipts for 1,100 official rows");
         await expect(page.locator(".source-group").nth(1)).toContainText("No natural timer, stage, database mirror or detector is connected");
@@ -231,5 +232,89 @@ test.describe("private Florida Signal Newsroom", () => {
       }
       expect(await page.evaluate(() => document.body.scrollWidth), `${path} page width`).toBe(390);
     }
+  });
+
+  test("utility intake rows, search, paging, bound receipt clocks and mobile layout stay usable", async ({ page }) => {
+    const rows = Array.from({ length: 26 }, (_, index) => ({
+      permit_number: `ROW-SEW-2601${String(index + 1).padStart(4, "0")}`,
+      report_source: "opened_permits",
+      permit_type: "Sewer right-of-way",
+      status: "Applied",
+      applied_date: index === 0 ? "2026-08-31" : "2026-08-30",
+      issued_date: null,
+      opened_date: "2026-08-30",
+      finalized_date: null,
+      address: `${index + 1} Andrews Ave`,
+      parcel_id: null,
+      owner_name: "Example Owner",
+      contractor_name: null,
+      description: index === 0 ? "Pump station connection" : "Sewer connection",
+      first_seen_at: "2026-08-30T10:00:00Z",
+      last_seen_at: "2026-09-01T01:00:00Z",
+      last_updated_at: "2026-09-01T01:00:00Z",
+      family_id: "ROW-SEW",
+      family_label: "sewer_right_of_way",
+    }));
+    const health = {
+      component: "utility-intake",
+      status: "current",
+      reported_status: "current",
+      event_through: "2026-08-31",
+      system_time: "2026-09-01T01:00:00Z",
+      detail: "Bound declared 16-column projection parity",
+      validation: { projection_bound: true, fresh: true, verification_receipt: "remote_hash_declared" },
+    };
+
+    await page.route("**/api/local-session", route => route.fulfill({ json: { token: "offline-test" } }));
+    await page.route("**/api/admin/**", route => {
+      const url = new URL(route.request().url());
+      if (url.pathname === "/api/admin/utility-intake") {
+        const search = String(url.searchParams.get("search") || "").toUpperCase();
+        const matched = search ? rows.filter(row => Object.values(row).join(" ").toUpperCase().includes(search)) : rows;
+        const offset = Number(url.searchParams.get("offset") || 0);
+        const limit = Number(url.searchParams.get("limit") || 25);
+        return route.fulfill({ json: {
+          status: "available", lane: url.searchParams.get("lane") || "all",
+          items: matched.slice(offset, offset + limit), record_count: matched.length,
+          all_lane_record_count: rows.length, limit, offset,
+          has_more: offset + limit < matched.length, search: search || null,
+          newest_event: "2026-08-31", last_collected: "2026-09-01T01:00:00Z",
+          health, generated_at: "2026-09-01T01:01:00Z",
+        } });
+      }
+      if (url.pathname === "/api/admin/project-state") {
+        return route.fulfill({ json: { operational_health: [], source_receipts: [] } });
+      }
+      if (url.pathname === "/api/admin/pipeline-schedule") return route.fulfill({ json: { jobs: [] } });
+      if (url.pathname === "/api/admin/early-intel") return route.fulfill({ json: { lanes: [] } });
+      if (url.pathname === "/api/admin/signal-machine") return route.fulfill({ json: { lanes: [] } });
+      return route.fulfill({ json: { items: [], record_count: 0, has_more: false } });
+    });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${dataWireBase}/data.html`);
+    const utilityCard = page.locator('.source-option[data-source-table="utility_sewer_intake"]');
+    await expect(utilityCard).toBeVisible();
+    await expect(utilityCard.locator(".source-option__status")).toContainText("current · automated", { timeout: 15_000 });
+    await utilityCard.click();
+    await expect(page.locator("#data-table tbody tr[data-i]")).toHaveCount(25);
+    await expect(page.locator("[data-receipt-total]")).toHaveText("26");
+    await expect(page.locator("[data-receipt-event]")).toHaveText("2026-08-31");
+    await expect(page.locator("[data-receipt-collected]")).not.toHaveText("not exposed");
+    await expect(page.locator("[data-receipt-health]")).toHaveText("current");
+    await expect(page.locator("[data-receipt-detail]")).toContainText("declared 16-column projection parity");
+    await expect(page.locator("#page-note")).toHaveText("rows 1–25 of 26");
+
+    await page.locator("#search-input").fill("pump station");
+    await page.getByRole("button", { name: "Search records" }).click();
+    await expect(page.locator("#data-table tbody tr[data-i]")).toHaveCount(1);
+    await expect(page.locator("#count-note")).toHaveText("1 exact match");
+
+    await utilityCard.click();
+    await expect(page.locator("#next-btn")).toBeEnabled();
+    await page.locator("#next-btn").click();
+    await expect(page.locator("#data-table tbody tr[data-i]")).toHaveCount(1);
+    await expect(page.locator("#page-note")).toHaveText("rows 26–26 of 26");
+    expect(await page.evaluate(() => document.body.scrollWidth)).toBe(390);
   });
 });

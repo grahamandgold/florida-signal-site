@@ -1,0 +1,10 @@
+[Unit]
+Description=Verify utility and engineering intake after normal mirror cycles
+
+[Timer]
+OnCalendar=*:27/30
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

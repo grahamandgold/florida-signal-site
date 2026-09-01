@@ -230,6 +230,11 @@
     }
     .explorer__controls input { min-width: min(280px, 60vw); }
     .count-note { margin-left: auto; color: var(--muted); font-size: .85rem; font-family: var(--mono); }
+    .private-receipt-meta { margin: 0 18px 14px; padding: 12px 14px; border: 1px solid var(--line); background: var(--wash); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 16px; }
+    .private-receipt-meta[hidden] { display: none; }
+    .private-receipt-meta span { min-width: 0; color: var(--muted); font-size: .72rem; line-height: 1.35; }
+    .private-receipt-meta b { display: block; margin-top: 3px; color: var(--ink); font-family: var(--mono); font-size: .8rem; overflow-wrap: anywhere; }
+    .private-receipt-meta .receipt-detail { grid-column: 1 / -1; }
     .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table { border-collapse: collapse; width: 100%; font-size: .87rem; min-width: 640px; }
     thead th {
@@ -278,6 +283,7 @@
       .explorer__controls input { min-width: 0; width: 100%; }
       .explorer__controls label { width: 100%; }
       .count-note { margin-left: 0; }
+      .private-receipt-meta { grid-template-columns: 1fr 1fr; margin-inline: 12px; }
       table { font-size: .8rem; }
       .library__head { align-items: flex-start; flex-direction: column; }
       .source-group { grid-template-columns: 1fr; }
@@ -331,6 +337,7 @@
         <span class="count-note" id="count-note" role="status" aria-live="polite">—</span>
       </div>
       <p class="foot-note" id="search-help" style="margin:0 18px 12px">Choose a source above or use a fielded lookup. Preliminary Development Meeting Request (PDMR) records support <code>id:</code> <code>folio:</code> <code>addr:</code> <code>owner:</code> <code>project:</code>; other sources support <code>permit:</code> <code>instrument:</code> <code>license:</code> <code>asn:</code>. Broad text research remains separate.</p>
+      <div class="private-receipt-meta" id="private-receipt-meta" aria-live="polite" hidden></div>
       <div class="table-wrap">
         <table id="data-table">
           <thead></thead>
@@ -872,6 +879,42 @@
         ],
         drawer: "generic"
       },
+      utility_sewer_intake: {
+        label: "Sewer + utility intake · exact Accela families",
+        privatePath: "/api/admin/utility-intake",
+        privateParams: { lane: "sewer_utility" },
+        privateLabel: "utility intake source record",
+        privateSearchRaw: true,
+        select: "applied_date,permit_number,family_id,status,address,owner_name,contractor_name,description,last_seen_at",
+        cols: [
+          ["applied_date", "Applied", dateish],
+          ["permit_number", "Record #", v => `<span class="pill">${esc(v)}</span>`],
+          ["family_id", "Family"],
+          ["status", "Status"],
+          ["address", "Address"],
+          ["owner_name", "Owner / applicant"],
+          ["description", "Description"]
+        ],
+        drawer: "permit"
+      },
+      engineering_intake: {
+        label: "Outside-agency engineering intake · exact Accela family",
+        privatePath: "/api/admin/utility-intake",
+        privateParams: { lane: "engineering" },
+        privateLabel: "engineering intake source record",
+        privateSearchRaw: true,
+        select: "applied_date,permit_number,family_id,status,address,owner_name,contractor_name,description,last_seen_at",
+        cols: [
+          ["applied_date", "Applied", dateish],
+          ["permit_number", "Record #", v => `<span class="pill">${esc(v)}</span>`],
+          ["family_id", "Family"],
+          ["status", "Status"],
+          ["address", "Address"],
+          ["owner_name", "Owner / applicant"],
+          ["description", "Description"]
+        ],
+        drawer: "permit"
+      },
       sunbiz_entities: {
         label: "Sunbiz entity matches · private",
         privatePath: "/api/admin/sunbiz-entities",
@@ -1161,8 +1204,8 @@
         { label: "Agenda Watch", note: "Legistar items, staff reports and attachments; timing varies by project", href: "/agenda.html", status: "Open view", state: "private" }
       ]},
       { eyebrow: "S2 · Next sensors", title: "Early clues to research + connect", items: [
-        { label: "Sewer + utility capacity", note: "Official ENG-CR capacity requests are public Accela records; no dedicated machine-readable letter registry exists", href: "https://www.fortlauderdale.gov/Government/Departments/Development-Services/Permitting-Services/Engineering-Permits-Services/Water-and-Wastewater-Capacity-Availability-Request", status: "Research only · HTML", state: "research" },
-        { label: "Engineering intake", note: "Use exact ENG-OAA outside-agency records; generic TMP records are downstream/mixed and explicitly excluded", href: "https://aca-prod.accela.com/FTL/Cap/CapHome.aspx?module=Permits", status: "Research only · HTML", state: "research" },
+        { label: "Sewer + utility intake", note: "Exact ENG-CR, ROW-SEW, ROW-WTR and PLB-SEWCP-WT records already carried by Accela", table: "utility_sewer_intake", connection: "utility-sewer", componentId: "utility-intake", refresh: "automated" },
+        { label: "Outside-agency engineering intake", note: "Exact parent ENG-OAA records; broad ENG/TMP matches remain excluded", table: "engineering_intake", connection: "engineering-intake", componentId: "utility-intake", refresh: "automated" },
         { label: "Assemblage + new LLC", note: "Join deed assemblage to newly formed entities; detector not connected", href: "/#project-control", status: "Planned join", state: "research" },
         { label: "Lobbyist registrations", note: "Official registration and client HTML can be snapshotted, but the City exposes no durable row ID or API", href: "https://www.fortlauderdale.gov/Government/Departments/City-Clerks-Office/Lobbyist-Information", status: "Research only · HTML", state: "research" },
         { label: "SFWMD filings", note: "File-only shadow collector is pushed; two manual observations each saved receipts for 1,100 official rows, three Fort Lauderdale intersections and zero rejected/duplicate identities. No natural timer, stage, database mirror or detector is connected", href: "https://geoweb.sfwmd.gov/agsext1/rest/services/Regulation_ApplicationPermits/EnvironmentalResourceApplications_RegPermitting/MapServer/14", status: "Shadow observed · not connected", state: "research" }
@@ -1256,10 +1299,12 @@
         const labels = document.querySelectorAll(`[data-source-status="${item.key}"]`);
         try {
           const cfg = item.table ? TABLES[item.table] : null;
+          const cfgPrivateParams = new URLSearchParams({ limit: "1", offset: "0" });
+          Object.entries(cfg && cfg.privateParams || {}).forEach(([key, value]) => cfgPrivateParams.set(key, value));
           const payload = item.privatePath
             ? await window.FloridaSignalNewsroom.admin(item.privatePath)
             : cfg && cfg.privatePath
-              ? await window.FloridaSignalNewsroom.admin(cfg.privatePath + "?limit=1&offset=0")
+              ? await window.FloridaSignalNewsroom.admin(cfg.privatePath + "?" + cfgPrivateParams.toString())
               : null;
           const data = item.privatePath
             ? (Number(payload.record_count || 0) > 0 ? [payload] : [])
@@ -1267,7 +1312,11 @@
               ? payload.items
               : await (await sbFetch(item.table, { select: cfg.probe || cfg.select.split(",")[0], limit: "1" })).json();
           const hasRows = Array.isArray(data) && data.length > 0;
-          const receipt = item.receiptId ? sourceHealth.get(item.receiptId) : item.componentId ? componentHealth.get(item.componentId) : null;
+          const receipt = item.receiptId
+            ? sourceHealth.get(item.receiptId)
+            : item.componentId
+              ? payload && payload.health || componentHealth.get(item.componentId)
+              : payload && payload.health;
           const liveStatus = String(receipt && receipt.status || "UNKNOWN").toLowerCase();
           const refresh = String(item.refresh || "connected").toLowerCase();
           if (hasRows) {
@@ -1289,7 +1338,14 @@
               label.title = receipt ? `Event through ${receipt.event_through || "not exposed"}; fetched ${receipt.fetched_at || "not exposed"}; health receipt ${receipt.health_receipt_at || "not exposed"}${receipt.health_receipt_status ? ` (${receipt.health_receipt_status})` : ""}; basis ${receipt.status_basis || "not exposed"}. ${receipt.detail || ""}` : `Rows are available; no live freshness receipt is configured. Refresh mode: ${refresh}.`;
             });
           } else {
-            labels.forEach(label => { label.textContent = "Connected · empty"; label.dataset.state = "empty"; });
+            if (liveStatus !== "unknown") freshness[liveStatus] = (freshness[liveStatus] || 0) + 1;
+            const warning = ["delayed", "stale", "error", "unavailable", "suppressed", "unverified"].includes(liveStatus);
+            const text = liveStatus !== "unknown" ? `${liveStatus} · empty · ${refresh}` : `connected · empty · health unknown`;
+            labels.forEach(label => {
+              label.textContent = text;
+              label.dataset.state = warning ? "warning" : "empty";
+              label.title = receipt ? `Event ${receipt.event_through || "not exposed"}; system ${receipt.system_time || "not exposed"}. ${receipt.detail || ""}` : "No rows or health receipt were returned.";
+            });
             empty += 1;
           }
         } catch (error) {
@@ -1378,10 +1434,28 @@
     }
     function clearChips() { document.querySelectorAll(".chip").forEach(c => c.dataset.active = "false"); }
 
+    function renderPrivateReceiptMeta(result) {
+      const target = q("#private-receipt-meta");
+      if (!result) { target.hidden = true; target.innerHTML = ""; return; }
+      const health = result.health || {};
+      const validation = health.validation || {};
+      const collected = result.last_collected ? new Date(result.last_collected) : null;
+      const collectedText = collected && !Number.isNaN(collected.getTime()) ? collected.toLocaleString() : "not exposed";
+      const detail = [health.detail, validation.reason ? `Validation: ${validation.reason}` : ""].filter(Boolean).join(" · ") || "No independent health detail was returned.";
+      target.innerHTML =
+        `<span>Exact matching rows<b data-receipt-total>${esc(result.record_count == null ? "unknown" : result.record_count)}</b></span>` +
+        `<span>Newest applied date<b data-receipt-event>${esc(result.newest_event || "not exposed")}</b></span>` +
+        `<span>Last parity verification<b data-receipt-collected>${esc(collectedText)}</b></span>` +
+        `<span>Receipt health<b data-receipt-health>${esc(String(health.status || "unknown").toLowerCase())}</b></span>` +
+        `<span class="receipt-detail">Health detail<b data-receipt-detail>${esc(detail)}</b></span>`;
+      target.hidden = false;
+    }
+
     async function loadTable() {
       const cfg = TABLES[state.table];
       const thead = q("#data-table thead");
       const tbody = q("#data-table tbody");
+      renderPrivateReceiptMeta(null);
       thead.innerHTML = "<tr>" + cfg.cols.map(c => `<th>${esc(c[1])}</th>`).join("") + "</tr>";
       tbody.innerHTML = `<tr class="empty-row"><td colspan="${cfg.cols.length}">Loading…</td></tr>`;
       const params = { select: cfg.select, limit: String(PAGE), offset: String(state.offset) };
@@ -1392,6 +1466,7 @@
         let data, privateResult = null;
         if (cfg.privatePath) {
           const privateParams = new URLSearchParams({ limit: String(PAGE), offset: String(state.offset) });
+          Object.entries(cfg.privateParams || {}).forEach(([key, value]) => privateParams.set(key, value));
           if (term) privateParams.set("search", cfg.privateSearchRaw ? term : term.replace(/^[a-z]+\s*:/i, ""));
           privateResult = await window.FloridaSignalNewsroom.admin(cfg.privatePath + "?" + privateParams.toString());
           data = Array.isArray(privateResult.items) ? privateResult.items : [];
@@ -1416,21 +1491,26 @@
             }).join("") + "</tr>";
           }).join("");
         }
-        q("#page-note").textContent = "rows " + (state.offset + 1) + "–" + (state.offset + data.length);
+        const exactTotal = cfg.privatePath && Number.isFinite(Number(privateResult.record_count)) ? Number(privateResult.record_count) : null;
+        const pageStart = data.length ? state.offset + 1 : 0;
+        q("#page-note").textContent = "rows " + pageStart + "–" + (state.offset + data.length) + (exactTotal == null ? "" : " of " + exactTotal);
         q("#prev-btn").disabled = state.offset === 0;
         q("#next-btn").disabled = cfg.privatePath ? !privateResult.has_more : data.length < PAGE;
-        if (term) {
+        if (term && cfg.privatePath) {
+          q("#count-note").textContent = exactTotal + " exact match" + (exactTotal === 1 ? "" : "es");
+        } else if (term) {
           q("#count-note").textContent = data.length + (data.length === PAGE ? "+" : "") + " exact match" + (data.length === 1 ? "" : "es") + " shown";
         } else if (cfg.privatePath && state.table === "pdmr_intent") {
           const total = Number(privateResult.record_count || 0);
           q("#count-note").textContent = `${total.toLocaleString()} public PDMR record${total === 1 ? "" : "s"} · event through ${dateish(privateResult.newest_event) || "not exposed"} · source checked ${dateish(privateResult.last_collected) || "not recorded"}`;
         } else if (cfg.privatePath) {
           const rowLabel = cfg.privateLabel || "private resolver row";
-          q("#count-note").textContent = data.length + (privateResult.has_more ? "+" : "") + " " + rowLabel + (data.length === 1 ? "" : "s") + " shown";
+          q("#count-note").textContent = exactTotal + " exact " + rowLabel + (exactTotal === 1 ? "" : "s");
         } else {
           const countCol = cfg.select.split(",")[0];
           tableCount(state.table, countCol).then(c => { q("#count-note").textContent = rowsLabel(c); }).catch(() => { q("#count-note").textContent = "—"; });
         }
+        renderPrivateReceiptMeta(privateResult);
         tbody.querySelectorAll("tr[data-i]").forEach(tr => {
           const open = () => openDrawer(state.rows[Number(tr.dataset.i)], cfg, tr);
           tr.addEventListener("click", open);
@@ -1439,6 +1519,7 @@
           });
         });
       } catch (e) {
+        renderPrivateReceiptMeta(null);
         tbody.innerHTML = `<tr class="empty-row"><td colspan="${cfg.cols.length}">Could not load: ${esc(e.message)}</td></tr>`;
       }
     }

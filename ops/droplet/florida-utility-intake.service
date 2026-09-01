@@ -1,0 +1,27 @@
+[Unit]
+Description=Florida Signal utility and engineering intake parity receipt
+After=network-online.target florida-accela.service florida-sync.service
+Wants=network-online.target
+OnFailure=florida-healthreport.service
+
+[Service]
+Type=oneshot
+User=andy
+Group=andy
+WorkingDirectory=/srv/grahamandgold/florida-signal/app
+EnvironmentFile=/srv/grahamandgold/florida-signal/secrets/florida-utility-intake.env
+ExecStartPre=/srv/grahamandgold/florida-signal/tools/florida-utility-intake-wait.sh
+ExecStart=/srv/grahamandgold/florida-signal/app/.venv/bin/python3 /srv/grahamandgold/florida-signal/app/scripts/utility_intake_production.py --sqlite-path /srv/grahamandgold/florida-signal/staging/db/permits.sqlite --writer-lock-path /srv/grahamandgold/florida-signal/app/db/.writer.lock --evidence-dir /srv/grahamandgold/florida-signal/staging/data/utility-intake/runs --receipt-dir /srv/grahamandgold/florida-signal/staging/data/utility-intake/receipts --latest-pointer /srv/grahamandgold/florida-signal/staging/data/utility-intake/latest.json
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+TimeoutStartSec=1200
+Restart=no

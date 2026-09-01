@@ -1,4 +1,6 @@
 import importlib.util
+from datetime import datetime, timedelta, timezone
+import hashlib
 import json
 import os
 import sqlite3
@@ -8,6 +10,7 @@ import unittest
 from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest import mock
+from urllib.parse import parse_qs, urlparse
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,6 +18,62 @@ DESK_SERVICE_TARGET = f"gui/{os.getuid()}/com.floridasignal.datawire.server"
 SPEC = importlib.util.spec_from_file_location("florida_signal_cms_server", ROOT / "cms" / "server.py")
 cms_server = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(cms_server)
+
+
+UTILITY_NOW = datetime(2026, 9, 1, 1, 30, tzinfo=timezone.utc)
+
+
+def utility_row(permit_number: str, **values):
+    row = {column: None for column in cms_server.UTILITY_INTAKE_PARITY_COLUMNS}
+    row.update({
+        "permit_number": permit_number,
+        "report_source": "opened_permits",
+        "status": "Applied",
+        "first_seen_at": "2026-08-30T10:00:00Z",
+        "last_seen_at": "2026-09-01T00:30:00Z",
+        "last_updated_at": "2026-09-01T00:30:00Z",
+    })
+    row.update(values)
+    return row
+
+
+def utility_health(rows, *, system_time="2026-09-01T01:00:00Z", metrics_override=None):
+    exact = [row for row in rows if cms_server.utility_intake_family(row.get("permit_number"))]
+    proof = cms_server.utility_intake_projection_proof(exact)
+    metrics = {
+        "sqlite_rows": proof["count"],
+        "supabase_rows": proof["count"],
+        "sqlite_pk_set_sha256": proof["primary_key_set_sha256"],
+        "supabase_pk_set_sha256": proof["primary_key_set_sha256"],
+        "sqlite_projection_rowset_sha256": proof["declared_projection_rowset_sha256"],
+        "supabase_projection_rowset_sha256": proof["declared_projection_rowset_sha256"],
+        "parity_projection_version": cms_server.UTILITY_INTAKE_PROJECTION_VERSION,
+        "parity_projection_sha256": proof["projection"]["sha256"],
+        "remote_stability_reads": 2,
+        "verification_receipt_path": "/srv/grahamandgold/florida-signal/staging/data/utility-intake/receipts/test.verification.json",
+        "verification_receipt_sha256": "a" * 64,
+    }
+    metrics.update(metrics_override or {})
+    return [{
+        "component": "utility-intake",
+        "status": "current",
+        "event_through": "2026-08-31",
+        "system_time": system_time,
+        "detail": "Bound declared projection parity",
+        "metrics": metrics,
+    }]
+
+
+def utility_request(rows, health=None, *, page_size=None):
+    def request(path, *args, **kwargs):
+        if path.startswith("editorial_pipeline_health?"):
+            return 200, health or []
+        query = parse_qs(urlparse(path).query)
+        offset = int(query.get("offset", ["0"])[0])
+        requested = int(query.get("limit", ["1000"])[0])
+        limit = min(requested, page_size) if page_size else requested
+        return 200, rows[offset:offset + limit]
+    return request
 
 
 class DataWireServerTests(unittest.TestCase):
@@ -711,6 +770,170 @@ printf '%s\n' "kill $*" >> "$FAKE_DESK_LOG"
         self.assertEqual(len(payload["items"]), 1)
         self.assertTrue(payload["has_more"])
         self.assertIn("no fuzzy identity claim", payload["contract"])
+
+    def test_utility_intake_proxy_uses_exact_families_and_health_receipt(self):
+        rows = [
+            utility_row("ENG-CR-260001", applied_date="2026-08-30", address="1 A St"),
+            utility_row("ENG-CR-260001.D001", applied_date="2026-08-30"),
+            utility_row("ENG-OAA-260002", applied_date="2026-08-31", address="2 B St"),
+            utility_row("ENG-OAA-260002.D001", applied_date="2026-08-31"),
+            utility_row("ROW-SEW-260003.D001", applied_date="2026-08-29"),
+            utility_row("ROW-WTR-260004", applied_date="2026-08-28"),
+            utility_row("PLB-SEWCP-WT-260005", applied_date="2026-08-27"),
+            utility_row("ENG-GENERAL-260006", applied_date="2026-08-31"),
+        ]
+        health = utility_health(rows)
+
+        with mock.patch.object(
+            cms_server, "supabase_request", side_effect=utility_request(rows, health),
+        ) as call:
+            code, sewer = cms_server.utility_intake_payload({
+                "lane": ["sewer_utility"], "limit": ["10"], "offset": ["0"],
+            }, observed_at=UTILITY_NOW)
+            _, engineering = cms_server.utility_intake_payload({
+                "lane": ["engineering"], "limit": ["10"], "offset": ["0"],
+            }, observed_at=UTILITY_NOW)
+        permit_queries = [item.args[0] for item in call.call_args_list if item.args[0].startswith("permits?")]
+        self.assertEqual(code, 200)
+        self.assertEqual({row["permit_number"] for row in sewer["items"]}, {
+            "ENG-CR-260001", "ROW-SEW-260003.D001", "ROW-WTR-260004", "PLB-SEWCP-WT-260005",
+        })
+        self.assertEqual([row["permit_number"] for row in engineering["items"]], ["ENG-OAA-260002"])
+        self.assertEqual(sewer["health"]["status"], "current")
+        self.assertTrue(sewer["health"]["validation"]["projection_bound"])
+        self.assertEqual(sewer["all_lane_record_count"], 5)
+        self.assertEqual(sewer["last_collected"], "2026-09-01T01:00:00Z")
+        self.assertIn("permit_number.like.ENG-CR-*", permit_queries[0])
+        self.assertIn("does not establish the serving utility", sewer["contract"])
+        self.assertIn("no claim that a record predates PDMR", sewer["contract"])
+
+    def test_utility_intake_duplicate_identity_fails_closed(self):
+        duplicate = utility_row("ROW-SEW-260003", applied_date="2026-08-29")
+        with mock.patch.object(
+            cms_server,
+            "supabase_request",
+            side_effect=utility_request([duplicate, dict(duplicate)]),
+        ):
+            code, payload = cms_server.utility_intake_payload({"lane": ["all"]})
+        self.assertEqual(code, 502)
+        self.assertIn("Duplicate utility identity", payload["error"])
+
+    def test_utility_intake_pages_until_explicit_empty_even_after_short_page(self):
+        rows = [
+            utility_row(f"ROW-SEW-26000{index}", applied_date="2026-08-29")
+            for index in range(3)
+        ]
+        health = utility_health(rows)
+        offsets = []
+
+        def request(path, *args, **kwargs):
+            if path.startswith("editorial_pipeline_health?"):
+                return 200, health
+            query = path.split("?", 1)[1]
+            params = dict(item.split("=", 1) for item in query.split("&") if "=" in item)
+            offset = int(params["offset"])
+            offsets.append(offset)
+            return 200, rows[offset:offset + 2]
+
+        with mock.patch.object(cms_server, "supabase_request", side_effect=request):
+            code, payload = cms_server.utility_intake_payload(
+                {"lane": ["all"]}, observed_at=UTILITY_NOW,
+            )
+        self.assertEqual(code, 200)
+        self.assertEqual(payload["record_count"], 3)
+        self.assertEqual(offsets, [0, 2, 3])
+
+    def test_utility_intake_health_downgrades_projection_mismatch_and_staleness(self):
+        rows = [utility_row("ENG-CR-260001", applied_date="2026-08-30")]
+        mismatch = utility_health(rows, metrics_override={"supabase_rows": 99})
+        stale = utility_health(rows, system_time="2026-08-31T23:00:00Z")
+
+        def run(health):
+            def request(path, *args, **kwargs):
+                return (200, health) if path.startswith("editorial_pipeline_health?") else (200, rows if "offset=0" in path else [])
+            with mock.patch.object(cms_server, "supabase_request", side_effect=request):
+                return cms_server.utility_intake_payload(
+                    {"lane": ["all"]}, observed_at=UTILITY_NOW,
+                )[1]["health"]
+
+        mismatch_health = run(mismatch)
+        stale_health = run(stale)
+        self.assertEqual(mismatch_health["status"], "unverified")
+        self.assertIn("supabase_rows", mismatch_health["validation"]["reason"])
+        self.assertEqual(stale_health["status"], "stale")
+        self.assertEqual(stale_health["validation"]["reason"], "scheduled_receipt_overdue")
+
+    def test_utility_intake_health_rejects_unexpected_empty_projection(self):
+        health = utility_health([], system_time=UTILITY_NOW.isoformat())[0]
+        proof = cms_server.utility_intake_projection_proof([])
+        checked = cms_server.validate_utility_intake_health(
+            health, proof, observed_at=UTILITY_NOW,
+        )
+        self.assertEqual(checked["status"], "unverified")
+        self.assertEqual(checked["validation"]["reason"], "unexpected_empty_projection")
+
+    def test_utility_intake_health_checks_local_verification_receipt_when_accessible(self):
+        rows = [utility_row("ENG-CR-260001", applied_date="2026-08-30")]
+        with tempfile.TemporaryDirectory() as tmp:
+            receipt_dir = Path(tmp)
+            receipt_path = receipt_dir / "test.verification.json"
+            receipt_path.write_text("verified\n", encoding="utf-8")
+            health = utility_health(rows, metrics_override={
+                "verification_receipt_path": str(receipt_path),
+                "verification_receipt_sha256": "0" * 64,
+            })
+            proof = cms_server.utility_intake_projection_proof(rows)
+            with mock.patch.object(cms_server, "UTILITY_INTAKE_RECEIPT_DIR", receipt_dir):
+                checked = cms_server.validate_utility_intake_health(
+                    health[0], proof, observed_at=UTILITY_NOW,
+                )
+        self.assertEqual(checked["status"], "unverified")
+        self.assertEqual(checked["validation"]["reason"], "verification_receipt_hash_mismatch")
+
+    def test_utility_intake_health_rejects_unsafe_or_missing_configured_receipt(self):
+        rows = [utility_row("ENG-CR-26010001")]
+        proof = cms_server.utility_intake_projection_proof(rows)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "target.json"
+            target.write_text("{}", encoding="utf-8")
+            link = root / "receipt.json"
+            link.symlink_to(target)
+            health = utility_health(rows, system_time=UTILITY_NOW.isoformat())[0]
+            health["metrics"].update({
+                "verification_receipt_path": str(link),
+                "verification_receipt_sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+            })
+            with mock.patch.object(cms_server, "UTILITY_INTAKE_RECEIPT_DIR", root):
+                checked = cms_server.validate_utility_intake_health(
+                    health, proof, observed_at=UTILITY_NOW,
+                )
+                self.assertEqual(checked["status"], "unverified")
+                self.assertEqual(
+                    checked["validation"]["reason"], "verification_receipt_path_unsafe",
+                )
+                health["metrics"]["verification_receipt_path"] = str(root / "missing.json")
+                checked = cms_server.validate_utility_intake_health(
+                    health, proof, observed_at=UTILITY_NOW,
+                )
+                self.assertEqual(checked["status"], "unverified")
+                self.assertEqual(
+                    checked["validation"]["reason"], "verification_receipt_missing",
+                )
+
+    def test_data_explorer_marks_utility_lanes_automated_not_research(self):
+        html = (ROOT / "cms" / "data.html").read_text(encoding="utf-8")
+        self.assertIn('table: "utility_sewer_intake"', html)
+        self.assertIn('table: "engineering_intake"', html)
+        self.assertIn('componentId: "utility-intake", refresh: "automated"', html)
+        self.assertIn('privateParams: { lane: "sewer_utility" }', html)
+        self.assertIn('privateParams: { lane: "engineering" }', html)
+        self.assertIn('data-receipt-total', html)
+        self.assertIn('data-receipt-event', html)
+        self.assertIn('data-receipt-collected', html)
+        self.assertIn('data-receipt-health', html)
+        self.assertIn('data-receipt-detail', html)
+        self.assertNotIn("ENG-CR, ENG-OAA and TMP workflows; source contract not built", html)
 
     def test_desktop_launcher_wires_external_project_state_and_pdmr_paths(self):
         launcher = (ROOT / "ops" / "datawire-app-launcher.zsh").read_text(encoding="utf-8")

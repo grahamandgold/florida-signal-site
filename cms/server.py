@@ -1021,6 +1021,371 @@ def sunbiz_entities_payload(params: dict[str, list[str]]) -> tuple[int, dict[str
     }
 
 
+UTILITY_INTAKE_FAMILIES = {
+    "ENG-CR": "water_wastewater_capacity_request",
+    "ENG-OAA": "outside_agency_engineering_intake",
+    "ROW-SEW": "sewer_right_of_way",
+    "ROW-WTR": "water_right_of_way",
+    "PLB-SEWCP-WT": "sewer_cap_walk_through",
+}
+UTILITY_INTAKE_LANES = {
+    "sewer_utility": {"ENG-CR", "ROW-SEW", "ROW-WTR", "PLB-SEWCP-WT"},
+    "engineering": {"ENG-OAA"},
+    "all": set(UTILITY_INTAKE_FAMILIES),
+}
+UTILITY_INTAKE_REMOTE_CAP = 5_000
+UTILITY_INTAKE_PAGE_SIZE = 1_000
+UTILITY_INTAKE_FRESHNESS_SECONDS = 75 * 60
+UTILITY_INTAKE_PROJECTION_VERSION = "utility-intake-permits-mirror/1"
+UTILITY_INTAKE_PARITY_COLUMNS = (
+    "permit_number",
+    "report_source",
+    "permit_type",
+    "status",
+    "applied_date",
+    "issued_date",
+    "opened_date",
+    "finalized_date",
+    "address",
+    "parcel_id",
+    "owner_name",
+    "contractor_name",
+    "description",
+    "first_seen_at",
+    "last_seen_at",
+    "last_updated_at",
+)
+UTILITY_INTAKE_RECEIPT_DIR = Path(os.getenv(
+    "FL_SIGNAL_UTILITY_RECEIPT_DIR",
+    "/srv/grahamandgold/florida-signal/staging/data/utility-intake/receipts",
+))
+
+
+def utility_intake_family(permit_number: Any) -> str | None:
+    """Apply the same exact-family boundary as the production evidence verifier."""
+    identity = str(permit_number or "")
+    tokens = identity.split("-")
+    for family in sorted(UTILITY_INTAKE_FAMILIES, key=lambda item: len(item.split("-")), reverse=True):
+        family_tokens = family.split("-")
+        if len(tokens) <= len(family_tokens) or tokens[:len(family_tokens)] != family_tokens:
+            continue
+        if any(not token for token in tokens):
+            return None
+        if family in {"ENG-CR", "ENG-OAA"} and "." in identity:
+            return None
+        return family
+    return None
+
+
+def _utility_canonical_sha256(value: Any) -> str:
+    body = (
+        json.dumps(
+            value,
+            allow_nan=False,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("utf-8")
+    return hashlib.sha256(body).hexdigest()
+
+
+def utility_intake_projection_contract() -> dict[str, Any]:
+    projection = {
+        "version": UTILITY_INTAKE_PROJECTION_VERSION,
+        "columns": list(UTILITY_INTAKE_PARITY_COLUMNS),
+    }
+    return {**projection, "sha256": _utility_canonical_sha256(projection)}
+
+
+def _utility_safe_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return str(value)
+
+
+def utility_intake_projection_proof(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    projection_rows = []
+    for row in rows:
+        missing = [column for column in UTILITY_INTAKE_PARITY_COLUMNS if column not in row]
+        if missing:
+            raise ValueError(f"utility mirror projection lacks columns: {missing}")
+        projection_rows.append({
+            column: _utility_safe_text(row.get(column))
+            for column in UTILITY_INTAKE_PARITY_COLUMNS
+        })
+    projection_rows.sort(key=lambda row: str(row.get("permit_number") or ""))
+    identities = [str(row.get("permit_number") or "") for row in projection_rows]
+    if any(not identity for identity in identities) or len(identities) != len(set(identities)):
+        raise ValueError("utility mirror projection requires unique nonblank identities")
+    return {
+        "projection": utility_intake_projection_contract(),
+        "count": len(projection_rows),
+        "primary_key_set_sha256": _utility_canonical_sha256(identities),
+        "declared_projection_rowset_sha256": _utility_canonical_sha256(projection_rows),
+    }
+
+
+def _utility_health_timestamp(value: Any) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
+def validate_utility_intake_health(
+    health: dict[str, Any] | None,
+    proof: dict[str, Any],
+    *,
+    observed_at: datetime | None = None,
+) -> dict[str, Any] | None:
+    if health is None:
+        return None
+    validated = dict(health)
+    reported_status = str(health.get("status") or "UNKNOWN").lower()
+    validated["reported_status"] = reported_status
+    validation = {
+        "projection_bound": False,
+        "fresh": False,
+        "verification_receipt": "not_checked",
+        "reason": None,
+    }
+    if reported_status != "current":
+        validated["status"] = reported_status
+        validation["reason"] = "health_receipt_not_current"
+        validated["validation"] = validation
+        return validated
+
+    metrics = health.get("metrics")
+    metrics = metrics if isinstance(metrics, dict) else {}
+    expected = {
+        "sqlite_rows": proof["count"],
+        "supabase_rows": proof["count"],
+        "sqlite_pk_set_sha256": proof["primary_key_set_sha256"],
+        "supabase_pk_set_sha256": proof["primary_key_set_sha256"],
+        "sqlite_projection_rowset_sha256": proof["declared_projection_rowset_sha256"],
+        "supabase_projection_rowset_sha256": proof["declared_projection_rowset_sha256"],
+        "parity_projection_version": UTILITY_INTAKE_PROJECTION_VERSION,
+        "parity_projection_sha256": proof["projection"]["sha256"],
+        "remote_stability_reads": 2,
+    }
+    mismatches = [key for key, value in expected.items() if metrics.get(key) != value]
+    receipt_path_value = metrics.get("verification_receipt_path")
+    receipt_sha = str(metrics.get("verification_receipt_sha256") or "")
+    if proof["count"] == 0:
+        validated["status"] = "unverified"
+        validation["reason"] = "unexpected_empty_projection"
+        validated["validation"] = validation
+        return validated
+    if mismatches or not receipt_path_value or not re.fullmatch(r"[0-9a-f]{64}", receipt_sha):
+        validated["status"] = "unverified"
+        validation["reason"] = (
+            "projection_metric_mismatch:" + ",".join(mismatches)
+            if mismatches
+            else "verification_receipt_binding_missing"
+        )
+        validated["validation"] = validation
+        return validated
+    validation["projection_bound"] = True
+
+    receipt_path = Path(str(receipt_path_value))
+    configured_root = UTILITY_INTAKE_RECEIPT_DIR.expanduser()
+    try:
+        within_root = receipt_path.is_absolute() and receipt_path.parent.resolve() == configured_root.resolve()
+    except OSError:
+        within_root = False
+    if within_root and receipt_path.is_symlink():
+        validated["status"] = "unverified"
+        validation["verification_receipt"] = "unsafe_local_path"
+        validation["reason"] = "verification_receipt_path_unsafe"
+        validated["validation"] = validation
+        return validated
+    if within_root and receipt_path.is_file():
+        try:
+            actual_sha = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+        except OSError:
+            validated["status"] = "unverified"
+            validation["verification_receipt"] = "local_read_failed"
+            validation["reason"] = "verification_receipt_unreadable"
+            validated["validation"] = validation
+            return validated
+        if actual_sha != receipt_sha:
+            validated["status"] = "unverified"
+            validation["verification_receipt"] = "local_hash_mismatch"
+            validation["reason"] = "verification_receipt_hash_mismatch"
+            validated["validation"] = validation
+            return validated
+        validation["verification_receipt"] = "local_hash_verified"
+    elif within_root and configured_root.is_dir():
+        validated["status"] = "unverified"
+        validation["verification_receipt"] = "local_missing"
+        validation["reason"] = "verification_receipt_missing"
+        validated["validation"] = validation
+        return validated
+    else:
+        validation["verification_receipt"] = "remote_hash_declared"
+
+    timestamp = _utility_health_timestamp(health.get("system_time"))
+    now = (observed_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    if timestamp is None:
+        validated["status"] = "unverified"
+        validation["reason"] = "invalid_system_time"
+    else:
+        age_seconds = (now - timestamp).total_seconds()
+        validation["age_seconds"] = max(0, int(age_seconds))
+        if age_seconds < -300:
+            validated["status"] = "unverified"
+            validation["reason"] = "system_time_in_future"
+        elif age_seconds > UTILITY_INTAKE_FRESHNESS_SECONDS:
+            validated["status"] = "stale"
+            validation["reason"] = "scheduled_receipt_overdue"
+        else:
+            validated["status"] = "current"
+            validation["fresh"] = True
+    validated["validation"] = validation
+    return validated
+
+
+def utility_intake_payload(
+    params: dict[str, list[str]], *, observed_at: datetime | None = None,
+) -> tuple[int, dict[str, Any]]:
+    """Return the exact Accela-derived utility lane plus its independent health receipt."""
+    limit = bounded_int(params.get("limit", [25])[0], 25, 1, 100)
+    offset = bounded_int(params.get("offset", [0])[0], 0, 0, 1_000_000)
+    lane = str(params.get("lane", ["all"])[0] or "all").lower()
+    if lane not in UTILITY_INTAKE_LANES:
+        lane = "all"
+    search = re.sub(r"[\x00-\x1f\x7f]", "", str(params.get("search", [""])[0])).strip()[:180]
+    select = ",".join(UTILITY_INTAKE_PARITY_COLUMNS)
+    broad_filter = "(" + ",".join(
+        f"permit_number.like.{family}-*" for family in UTILITY_INTAKE_FAMILIES
+    ) + ")"
+    rows: list[dict[str, Any]] = []
+    remote_offset = 0
+    payload: list[Any] = []
+    while True:
+        query = (
+            "permits?select=" + quote(select, safe=",")
+            + "&or=" + quote(broad_filter, safe="(),.*-")
+            + "&order=permit_number.asc"
+            + f"&limit={UTILITY_INTAKE_PAGE_SIZE}&offset={remote_offset}"
+        )
+        code, raw_payload = supabase_request(query)
+        if code >= 400 or not isinstance(raw_payload, list):
+            return 502, {
+                "error": "Utility and engineering intake rows are temporarily unavailable",
+                "contract": "No source state was inferred from a failed private database read.",
+            }
+        payload = raw_payload
+        if not payload:
+            break
+        if remote_offset + len(payload) > UTILITY_INTAKE_REMOTE_CAP:
+            return 502, {
+                "error": "Utility and engineering intake safety cap reached",
+                "contract": "The Desk refuses to present a possibly truncated source set.",
+            }
+        if any(not isinstance(row, dict) for row in payload):
+            return 502, {
+                "error": "Utility and engineering intake mirror returned a non-row value",
+                "contract": "The Desk fails closed on malformed mirror responses.",
+            }
+        rows.extend(dict(row) for row in payload)
+        remote_offset += len(payload)
+
+    exact: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in rows:
+        identity = str(row.get("permit_number") or "")
+        family = utility_intake_family(identity)
+        if family is None:
+            continue
+        if identity in seen:
+            return 502, {
+                "error": "Duplicate utility identity in the mirrored source set",
+                "contract": "The Desk fails closed on ambiguous source identity.",
+            }
+        seen.add(identity)
+        item = dict(row)
+        item["family_id"] = family
+        item["family_label"] = UTILITY_INTAKE_FAMILIES[family]
+        exact.append(item)
+    try:
+        all_lane_proof = utility_intake_projection_proof(exact)
+    except ValueError:
+        return 502, {
+            "error": "Utility and engineering intake mirror proof failed",
+            "contract": "The Desk refuses rows that cannot satisfy the declared mirror projection.",
+        }
+
+    selected = [row for row in exact if row.get("family_id") in UTILITY_INTAKE_LANES[lane]]
+    if search:
+        needle = search.upper()
+        selected = [
+            row for row in selected
+            if needle in " ".join(
+                str(row.get(field) or "")
+                for field in (
+                    "permit_number", "permit_type", "status", "address", "parcel_id",
+                    "owner_name", "contractor_name", "description", "family_id",
+                )
+            ).upper()
+        ]
+    selected.sort(
+        key=lambda row: (
+            str(row.get("applied_date") or row.get("opened_date") or ""),
+            str(row.get("permit_number") or ""),
+        ),
+        reverse=True,
+    )
+    family_counts = {
+        family: sum(1 for row in selected if row.get("family_id") == family)
+        for family in sorted(UTILITY_INTAKE_LANES[lane])
+    }
+    health_code, health_rows = supabase_request(
+        "editorial_pipeline_health?select=component,status,event_through,source_through,"
+        "system_time,detail,metrics&component=eq.utility-intake&limit=1"
+    )
+    raw_health = (
+        health_rows[0]
+        if health_code < 400 and isinstance(health_rows, list) and health_rows
+        and isinstance(health_rows[0], dict)
+        else None
+    )
+    health = validate_utility_intake_health(
+        raw_health, all_lane_proof, observed_at=observed_at
+    )
+    page = selected[offset:offset + limit]
+    return 200, {
+        "status": "available",
+        "lane": lane,
+        "items": page,
+        "record_count": len(selected),
+        "all_lane_record_count": all_lane_proof["count"],
+        "projection_proof": all_lane_proof,
+        "family_counts": family_counts,
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + len(page) < len(selected),
+        "search": search or None,
+        "newest_event": max((str(row.get("applied_date") or "") for row in selected), default=None) or None,
+        "last_collected": health.get("system_time") if health else None,
+        "health": health,
+        "generated_at": now_iso(),
+        "contract": (
+            "Exact ENG-CR, ENG-OAA, ROW-SEW, ROW-WTR and PLB-SEWCP-WT records derived "
+            "from the existing Fort Lauderdale Accela intake. This is not a second utility "
+            "inbox, does not establish the serving utility, and makes no claim that a record "
+            "predates PDMR or a permit application."
+        ),
+    }
+
+
 def pipeline_schedule() -> tuple[int, dict[str, Any]]:
     """Read the production host's timer schedule without running or changing a job."""
     command = [
@@ -1772,6 +2137,12 @@ class Handler(SimpleHTTPRequestHandler):
             if not self.require_admin():
                 return
             code, payload = sunbiz_entities_payload(parse_qs(urlparse(self.path).query))
+            self.reply(payload, HTTPStatus.OK if code == 200 else HTTPStatus.BAD_GATEWAY)
+            return
+        if route == "/api/admin/utility-intake":
+            if not self.require_admin():
+                return
+            code, payload = utility_intake_payload(parse_qs(urlparse(self.path).query))
             self.reply(payload, HTTPStatus.OK if code == 200 else HTTPStatus.BAD_GATEWAY)
             return
         if route == "/api/admin/review-queue":
