@@ -664,8 +664,12 @@ def pdmr_health_summary() -> dict[str, Any]:
         remote_count = _nonnegative_receipt_int(remote.get("count"), f"{table}.supabase.count")
         local_pk = str(local.get("pk_set_sha256") or "")
         remote_pk = str(remote.get("pk_set_sha256") or "")
-        local_rows = str(local.get("rowset_sha256") or "")
-        remote_rows = str(remote.get("rowset_sha256") or "")
+        # The health receipt deliberately hashes the sanitized parity
+        # projection, excluding local-only fields such as SQLite rowids and
+        # observation clocks. Bind to that exact receipt contract; accepting
+        # the older generic key silently downgraded valid four-table parity.
+        local_rows = str(local.get("sanitized_rowset_sha256") or "")
+        remote_rows = str(remote.get("sanitized_rowset_sha256") or "")
         hashes_valid = all(
             re.fullmatch(r"[0-9a-f]{64}", value)
             for value in (local_pk, remote_pk, local_rows, remote_rows)
