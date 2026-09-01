@@ -17,6 +17,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, quote, urlparse
+from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parent
@@ -32,6 +33,14 @@ PDMR_CANDIDATE_SCRIPT = Path(os.getenv(
 PROJECT_STATE_PATH = Path(os.getenv(
     "FL_SIGNAL_PROJECT_STATE_PATH",
     str(ROOT.parent / "_source_copies" / "florida-signal" / "data" / "reference" / "florida_signal_project_state.json"),
+))
+SFWMD_RECEIPT_DIR = Path(os.getenv(
+    "FL_SIGNAL_SFWMD_RECEIPT_DIR",
+    str(ROOT.parent / "_source_copies" / "florida-signal" / "data" / "sfwmd" / "receipts"),
+))
+SFWMD_LATEST_PATH = Path(os.getenv(
+    "FL_SIGNAL_SFWMD_LATEST_PATH",
+    str(SFWMD_RECEIPT_DIR / "latest.json"),
 ))
 ADMIN_TOKEN = os.getenv("DATA_WIRE_ADMIN_TOKEN", "").strip()
 MAX_BODY = 1_000_000
@@ -83,6 +92,7 @@ PIPELINE_LABELS = {
     "florida-clerk-catchup.timer": "Broward catch-up",
     "florida-gisrefresh.timer": "County GIS refresh",
     "florida-sunbiz-quarterly.timer": "Sunbiz full refresh",
+    "florida-sfwmd-pending-erp.timer": "SFWMD Pending ERP observation",
 }
 
 
@@ -201,6 +211,386 @@ def load_project_state_manifest() -> tuple[int, dict[str, Any]]:
     return 200, payload
 
 
+def sfwmd_source_receipt() -> dict[str, Any]:
+    """Verify one bounded timer-provenanced receipt without inferring connection."""
+    unknown = {
+        "id": "sfwmd-local",
+        "label": "SFWMD Pending ERP",
+        "status": "UNKNOWN",
+        "connection_state": "not_connected",
+        "natural_run": False,
+        "event_through": None,
+        "system_time": None,
+        "progress_status": None,
+        "detail": (
+            "No verified natural SFWMD production receipt is available. The package is "
+            "default-off and the source remains not connected."
+        ),
+    }
+
+    def clock(value: Any) -> datetime:
+        if (
+            not isinstance(value, str)
+            or re.fullmatch(
+                r"[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+                r"[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z",
+                value,
+            ) is None
+        ):
+            raise ValueError("invalid clock")
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
+            raise ValueError("clock is not UTC")
+        return parsed.astimezone(timezone.utc)
+
+    def sha(value: Any) -> bool:
+        return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+
+    def bounded_count(value: Any, maximum: int) -> bool:
+        return not isinstance(value, bool) and isinstance(value, int) and 0 <= value <= maximum
+
+    def exact_object(value: Any, keys: set[str]) -> bool:
+        return isinstance(value, dict) and set(value) == keys
+
+    try:
+        latest_path = SFWMD_LATEST_PATH.expanduser()
+        receipt_root = SFWMD_RECEIPT_DIR.expanduser().resolve(strict=True)
+        if (
+            latest_path.is_symlink() or not latest_path.is_file()
+            or latest_path.stat().st_size > 128_000
+        ):
+            return unknown
+        pointer_body = latest_path.read_bytes()
+        pointer = json.loads(pointer_body)
+        expected_pointer_keys = {
+            "schema_version", "run_id", "natural_run", "status", "progress_status",
+            "connection_state", "observation_order_key", "completed_at", "event_through",
+            "receipt_path", "receipt_sha256", "provenance_sha256", "counts",
+        }
+        if not exact_object(pointer, expected_pointer_keys):
+            return unknown
+        if pointer_body != (json.dumps(
+            pointer, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ) + "\n").encode("utf-8"):
+            return unknown
+        if pointer.get("schema_version") != "FloridaSignalSfwmdPendingErpLatestV1":
+            return unknown
+        if pointer.get("natural_run") is not True or pointer.get("connection_state") != "not_connected":
+            return unknown
+        run_id = str(pointer.get("run_id") or "")
+        if not re.fullmatch(
+            r"[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
+            run_id,
+        ) or not sha(pointer.get("receipt_sha256")) or not sha(pointer.get("provenance_sha256")):
+            return unknown
+        receipt_path = Path(str(pointer.get("receipt_path") or ""))
+        if (
+            not receipt_path.is_absolute() or receipt_path.is_symlink()
+            or not receipt_path.is_file() or receipt_path.stat().st_size > 1_000_000
+        ):
+            return unknown
+        resolved_receipt = receipt_path.resolve(strict=True)
+        if resolved_receipt.parent != receipt_root or resolved_receipt.name != f"{run_id}.json":
+            return unknown
+        receipt_body = resolved_receipt.read_bytes()
+        if hashlib.sha256(receipt_body).hexdigest() != pointer.get("receipt_sha256"):
+            return unknown
+        receipt = json.loads(receipt_body)
+        if receipt_body != (json.dumps(
+            receipt, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ) + "\n").encode("utf-8"):
+            return unknown
+        expected_receipt_keys = {
+            "schema_version", "run_id", "natural_run", "provenance",
+            "observation_order_key", "status", "reason_code", "progress_status",
+            "connection_state", "started_at", "observed_at",
+            "completed_at", "source_checked_at", "source_modified_at",
+            "source_modified_status", "event_through", "event_through_semantics",
+            "counts", "source_content_index_sha256", "versions", "evidence", "mirror",
+            "safety",
+        }
+        if not exact_object(receipt, expected_receipt_keys):
+            return unknown
+        if receipt.get("schema_version") != "FloridaSignalSfwmdPendingErpProductionReceiptV1":
+            return unknown
+        for field in (
+            "run_id", "status", "progress_status", "observation_order_key",
+            "completed_at", "event_through", "counts",
+        ):
+            if receipt.get(field) != pointer.get(field):
+                return unknown
+        if receipt.get("natural_run") is not True or receipt.get("connection_state") != "not_connected":
+            return unknown
+        if receipt.get("status") not in {"ok", "empty", "partial", "failed"}:
+            return unknown
+        reason_codes = {
+            "ok": {None},
+            "empty": {None},
+            "partial": {
+                "SOURCE_OBJECT_ID_SET_CHANGED_DURING_RUN",
+                "ROW_QUALITY_OR_ACCOUNTING_FAILURE",
+            },
+            "failed": {
+                "SOURCE_ROW_BUDGET_EXCEEDED",
+                "COLLECTOR_OR_CONTRACT_FAILURE",
+            },
+        }
+        if (
+            receipt.get("reason_code") not in reason_codes[receipt["status"]]
+            or receipt.get("event_through_semantics")
+            != "maximum AppReceivedDate among included Fort Lauderdale shadow rows"
+        ):
+            return unknown
+        progress = receipt.get("progress_status")
+        # A superseded observation can never be the monotonic latest pointer.
+        if progress not in {"changed", "unchanged", "empty", "uncommitted"}:
+            return unknown
+        if (receipt["status"] in {"partial", "failed"}) != (progress == "uncommitted"):
+            return unknown
+
+        counts = receipt.get("counts")
+        count_keys = {
+            "rows_observed", "rows_accepted", "rows_inserted", "rows_updated",
+            "rows_unchanged", "rows_retired", "rows_rejected",
+        }
+        if not exact_object(counts, count_keys):
+            return unknown
+        if not bounded_count(counts["rows_observed"], 2_000):
+            return unknown
+        if not bounded_count(counts["rows_accepted"], 500):
+            return unknown
+        if any(not bounded_count(counts[key], 2_000) for key in count_keys - {"rows_accepted"}):
+            return unknown
+        if counts["rows_accepted"] != sum(
+            counts[key] for key in ("rows_inserted", "rows_updated", "rows_unchanged")
+        ):
+            return unknown
+        if (
+            counts["rows_accepted"] > counts["rows_observed"]
+            or counts["rows_rejected"] > counts["rows_observed"]
+            or counts["rows_retired"] > 500
+            or (receipt["status"] == "ok" and counts["rows_observed"] == 0)
+            or (receipt["status"] == "empty" and any(
+                counts[key] != 0 for key in (
+                    "rows_observed", "rows_accepted", "rows_inserted", "rows_updated",
+                    "rows_unchanged", "rows_rejected",
+                )
+            ))
+            or (
+            receipt["status"] in {"ok", "empty"} and counts["rows_rejected"] != 0
+            )
+        ):
+            return unknown
+        if progress in {"uncommitted", "superseded"} and (
+            counts["rows_accepted"] != 0 or counts["rows_retired"] != 0
+        ):
+            return unknown
+        changed_count = (
+            counts["rows_inserted"] + counts["rows_updated"] + counts["rows_retired"]
+        )
+        if (
+            (progress == "changed" and changed_count == 0)
+            or (progress == "unchanged" and (
+                receipt["status"] != "ok"
+                or changed_count != 0
+                or counts["rows_accepted"] == 0
+                or counts["rows_unchanged"] != counts["rows_accepted"]
+            ))
+            or (progress == "empty" and (
+                changed_count != 0
+                or counts["rows_accepted"] != 0
+                or counts["rows_unchanged"] != 0
+            ))
+        ):
+            return unknown
+
+        provenance = receipt.get("provenance")
+        provenance_keys = {
+            "schema_version", "natural_run", "invocation_kind", "verified", "timer_unit",
+            "service_unit", "systemd_invocation_id", "scheduled_for", "canary_path",
+            "canary_sha256", "trigger_timer_realtime_usec", "runtime_cgroup_sha256",
+        }
+        if not exact_object(provenance, provenance_keys):
+            return unknown
+        if (
+            provenance.get("schema_version") != "FloridaSignalSfwmdRunProvenanceV1"
+            or provenance.get("natural_run") is not True
+            or provenance.get("invocation_kind") != "systemd_timer"
+            or provenance.get("verified") is not True
+            or provenance.get("timer_unit") != "florida-sfwmd-pending-erp.timer"
+            or provenance.get("service_unit") != "florida-sfwmd-pending-erp-timer.service"
+            or not isinstance(provenance.get("systemd_invocation_id"), str)
+            or re.fullmatch(r"[0-9a-f]{32}", provenance["systemd_invocation_id"]) is None
+            or not isinstance(provenance.get("trigger_timer_realtime_usec"), str)
+            or re.fullmatch(r"[0-9]{1,20}", provenance["trigger_timer_realtime_usec"]) is None
+            or not isinstance(provenance.get("canary_path"), str)
+            or not sha(provenance.get("runtime_cgroup_sha256"))
+            or not sha(provenance.get("canary_sha256"))
+        ):
+            return unknown
+        if hashlib.sha256((json.dumps(
+            provenance, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ) + "\n").encode("utf-8")).hexdigest() != pointer.get("provenance_sha256"):
+            return unknown
+        canary_path = Path(str(provenance.get("canary_path") or ""))
+        if (
+            not canary_path.is_absolute() or canary_path.is_symlink() or not canary_path.is_file()
+            or canary_path.name != f"{run_id}.json" or canary_path.stat().st_size > 16_000
+            or canary_path.stat().st_mode & 0o777 != 0o400
+        ):
+            return unknown
+        canary_body = canary_path.read_bytes()
+        if hashlib.sha256(canary_body).hexdigest() != provenance["canary_sha256"]:
+            return unknown
+        canary = json.loads(canary_body)
+        canary_keys = {
+            "schema_version", "run_id", "timer_unit", "service_unit",
+            "systemd_invocation_id", "trigger_timer_realtime_usec",
+            "runtime_cgroup_sha256", "runtime_cgroup_evidence", "scheduled_for", "created_at",
+        }
+        if not exact_object(canary, canary_keys) or canary_body != (json.dumps(
+            canary, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ) + "\n").encode("utf-8"):
+            return unknown
+        if (
+            canary.get("schema_version") != "FloridaSignalSfwmdTimerCanaryV1"
+            or canary.get("run_id") != run_id
+            or canary.get("timer_unit") != provenance["timer_unit"]
+            or canary.get("service_unit") != provenance["service_unit"]
+            or canary.get("systemd_invocation_id") != provenance["systemd_invocation_id"]
+            or canary.get("trigger_timer_realtime_usec") != provenance["trigger_timer_realtime_usec"]
+            or canary.get("runtime_cgroup_sha256") != provenance["runtime_cgroup_sha256"]
+            or not isinstance(canary.get("runtime_cgroup_evidence"), str)
+            or len(canary["runtime_cgroup_evidence"].encode("utf-8")) > 8_000
+            or hashlib.sha256(canary["runtime_cgroup_evidence"].encode("utf-8")).hexdigest()
+                != provenance["runtime_cgroup_sha256"]
+            or not any(
+                line.rsplit("/", 1)[-1]
+                == "florida-sfwmd-pending-erp-timer.service"
+                for line in canary["runtime_cgroup_evidence"].splitlines()
+            )
+            or canary.get("scheduled_for") != provenance["scheduled_for"]
+        ):
+            return unknown
+
+        versions = receipt.get("versions")
+        if versions != {
+            "production_collector": "sfwmd-pending-erp-production/1.0.0",
+            "collector": "sfwmd-pending-erp-shadow/1.0.0",
+            "parser": "sfwmd-layer14-parser/1.0.0",
+            "normalizer": "sfwmd-layer14-normalizer/1.0.0",
+            "sqlite_schema": "FloridaSignalSfwmdSqliteV1",
+            "sqlite_migration_sha256": "a8f39dfe2d9dcff1ffe85cce16a5771a58138fa2cf6d1dcfc1e96c69a724d088",
+        }:
+            return unknown
+        evidence = receipt.get("evidence")
+        if not exact_object(evidence, {
+            "bundle_path", "bundle_manifest_sha256", "collection_receipt_sha256",
+            "raw_manifest_sha256", "normalized_records_sha256",
+        }) or not Path(str(evidence.get("bundle_path") or "")).is_absolute():
+            return unknown
+        if any(not sha(evidence.get(key)) for key in set(evidence) - {"bundle_path"}):
+            return unknown
+        mirror = receipt.get("mirror")
+        if not exact_object(mirror, {
+            "eligible", "state", "idempotency", "digest_basis", "row_count",
+            "ordered_rows_sha256", "database_payload_sha256",
+        }):
+            return unknown
+        expected_empty_sha = hashlib.sha256(b"").hexdigest()
+        payload_basis = (
+            "FloridaSignalSfwmdPostgresPayloadV1\n"
+            f"{run_id}\n{receipt['status']}\n{progress}\n{receipt['observed_at']}\n"
+            f"{receipt['source_content_index_sha256']}\n{mirror.get('row_count')}\n"
+            f"{mirror.get('ordered_rows_sha256')}\n"
+        ).encode("utf-8")
+        if (
+            mirror.get("eligible") is not True or mirror.get("state") != "pending"
+            or mirror.get("idempotency") != "run_id_plus_database_computed_payload_sha256"
+            or mirror.get("digest_basis") != "FloridaSignalSfwmdPostgresPayloadV1"
+            or not bounded_count(mirror.get("row_count"), 500)
+            or not sha(mirror.get("ordered_rows_sha256"))
+            or not sha(mirror.get("database_payload_sha256"))
+            or (progress != "uncommitted"
+                and mirror.get("row_count") != counts["rows_accepted"])
+            or not sha(receipt.get("source_content_index_sha256"))
+            or (mirror.get("row_count") == 0 and (
+                mirror.get("ordered_rows_sha256") != expected_empty_sha
+                or receipt.get("source_content_index_sha256") != expected_empty_sha
+            ))
+            or hashlib.sha256(payload_basis).hexdigest()
+                != mirror.get("database_payload_sha256")
+        ):
+            return unknown
+        safety = receipt.get("safety")
+        if safety != {
+            "bounded_current_pending_snapshot_only": True,
+            "unrestricted_backfill": False,
+            "scoring": False,
+            "candidate_or_queue_write": False,
+            "publication": False,
+            "connected_label_allowed": False,
+        }:
+            return unknown
+
+        started = clock(receipt["started_at"])
+        observed = clock(receipt["observed_at"])
+        completed = clock(receipt["completed_at"])
+        checked = clock(receipt["source_checked_at"])
+        scheduled = clock(provenance["scheduled_for"])
+        created = clock(canary["created_at"])
+        trigger_at = datetime.fromtimestamp(
+            int(provenance["trigger_timer_realtime_usec"]) / 1_000_000,
+            timezone.utc,
+        )
+        scheduled_local = scheduled.astimezone(ZoneInfo("America/New_York"))
+        if not (
+            started <= observed <= completed
+            and started <= checked <= completed
+            and scheduled <= trigger_at <= created <= started <= scheduled + timedelta(minutes=15)
+            and scheduled_local.hour == 6 and scheduled_local.minute == 17
+            and scheduled_local.second == 0 and scheduled_local.microsecond == 0
+            and completed <= datetime.now(timezone.utc) + timedelta(minutes=5)
+        ):
+            return unknown
+        expected_order_key = (
+            f"{observed.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}|"
+            f"{completed.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}|{run_id}"
+        )
+        if receipt["observation_order_key"] != (
+            expected_order_key
+        ):
+            return unknown
+        if receipt.get("source_modified_at") is not None or receipt.get("source_modified_status") != "UNKNOWN_NOT_EXPOSED":
+            return unknown
+        if receipt.get("event_through") is not None and clock(receipt["event_through"]) > observed:
+            return unknown
+    except (OSError, OverflowError, ValueError, TypeError, json.JSONDecodeError):
+        return unknown
+
+    terminal_status = str(receipt.get("status") or "failed")
+    if terminal_status in {"partial", "failed"}:
+        live_status = "ERROR"
+    elif datetime.now(timezone.utc) - completed > timedelta(hours=36):
+        live_status = "STALE"
+    else:
+        live_status = "CURRENT"
+    return {
+        "id": "sfwmd-local",
+        "label": "SFWMD Pending ERP",
+        "status": live_status,
+        "connection_state": "not_connected",
+        "natural_run": True,
+        "event_through": receipt.get("event_through"),
+        "system_time": receipt.get("completed_at"),
+        "progress_status": receipt.get("progress_status"),
+        "detail": (
+            f"Verified natural local receipt ({terminal_status}; "
+            f"{receipt.get('progress_status')}). Connection activation remains separately gated."
+        ),
+    }
+
+
 def project_state_payload() -> tuple[int, dict[str, Any]]:
     """Combine canonical project state with independent, fail-closed live health."""
     code, state = load_project_state_manifest()
@@ -269,6 +659,8 @@ def project_state_payload() -> tuple[int, dict[str, Any]]:
     } for row in health.get("sources", [])
         if isinstance(row, dict) and row.get("id")
     ] if isinstance(health, dict) else []
+    source_receipts = [row for row in source_receipts if row["id"] != "sfwmd-local"]
+    source_receipts.append(sfwmd_source_receipt())
 
     return 200, {
         "project_state": state,

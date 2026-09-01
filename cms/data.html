@@ -1115,7 +1115,7 @@
         { label: "Engineering intake", note: "ENG-CR, ENG-OAA and TMP workflows; source contract not built", href: "/#project-control", status: "Research only", state: "research" },
         { label: "Assemblage + new LLC", note: "Join deed assemblage to newly formed entities; detector not connected", href: "/#project-control", status: "Planned join", state: "research" },
         { label: "Lobbyist registrations", note: "Actor and client filings that may precede a public application", href: "/#project-control", status: "Research only", state: "research" },
-        { label: "SFWMD filings", note: "Regional water-management applications separate from the current FDEP feed", href: "/#project-control", status: "Research only", state: "research" }
+        { label: "SFWMD filings", note: "Bounded Pending ERP package is default-off; a natural receipt and separate activation are still required", href: "/#project-control", status: "Not connected · health UNKNOWN", state: "research", receiptId: "sfwmd-local" }
       ]},
       { eyebrow: "S3 · Site control + actors", title: "Ownership, companies + capital", items: [
         { label: "Sunbiz entity matches", note: "Private exact matches from the state SFTP corpus", table: "sunbiz_entities", componentId: "sunbiz", refresh: "automated" },
@@ -1151,7 +1151,7 @@
       const checkable = Boolean(item.table || item.privatePath);
       const status = item.status || (item.state === "empty" ? "Unavailable" : item.state === "historical" ? "Historical" : checkable ? "Checking…" : "Open view");
       const klass = item.state === "empty" ? " source-option--blocked" : item.state === "research" ? " source-option--research" : "";
-      const statusKey = item.connection || item.table || item.state || "view";
+      const statusKey = item.connection || item.receiptId || item.table || item.state || "view";
       return `<${tag} class="source-option${klass}" ${attrs} data-active="${active}"><span class="source-option__copy"><b>${esc(item.label)}</b><small>${esc(item.reason || item.note)}</small></span><span class="source-option__status" data-source-status="${esc(statusKey)}" data-state="${esc(item.state || (checkable ? "checking" : "view"))}">${esc(status)}</span></${tag}>`;
     }
 
@@ -1183,6 +1183,19 @@
       const projectState = await window.FloridaSignalNewsroom.admin("/api/admin/project-state").catch(() => ({}));
       const componentHealth = new Map((projectState.operational_health || []).map(row => [String(row.id), row]));
       const sourceHealth = new Map((projectState.source_receipts || []).map(row => [String(row.id), row]));
+      SOURCE_GROUPS.forEach(group => group.items.forEach(item => {
+        if (!item.receiptId || item.table || item.privatePath) return;
+        const receipt = sourceHealth.get(item.receiptId);
+        const status = String(receipt && receipt.status || "UNKNOWN").toUpperCase();
+        const labels = document.querySelectorAll(`[data-source-status="${item.receiptId}"]`);
+        labels.forEach(label => {
+          label.textContent = `Not connected · health ${status}`;
+          label.dataset.state = status === "UNKNOWN" ? "warning" : status === "ERROR" ? "blocked" : "manual";
+          label.title = receipt && receipt.detail
+            ? receipt.detail
+            : "No verified natural receipt exists; health is UNKNOWN and connection remains off.";
+        });
+      }));
       const checks = [];
       const seen = new Set();
       SOURCE_GROUPS.forEach(group => group.items.forEach(item => {
