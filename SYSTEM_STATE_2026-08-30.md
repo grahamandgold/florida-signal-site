@@ -1,6 +1,8 @@
 # Florida Signal site + Data Wire checkpoint — 2026-08-30
 
-**Verified:** 2026-08-31 19:23:17 ET (checkpoint; later approval-gated actions remain pending)
+> **Dated implementation checkpoint.** Current cross-repository authority lives in the state-reconciliation worktree's `AGENTS.md`, `docs/FLORIDA_SIGNAL_START_HERE.md`, `data/reference/florida_signal_project_state.json`, and `docs/SESSION_HANDOFF_2026-08-30.md`, in that order. Those files win on any conflict below.
+
+**Verified:** 2026-08-31 19:58:59 ET (checkpoint; later approval-gated actions remain pending)
 **Scope:** private Newsroom/Data Explorer, public Data Room behavior, local Finder app, and the
 cross-repository Acclaim, Accela/permit-normalization and PDMR evidence audits.
 **Release state:** the previously approved Acclaim and exactly-25 permit work remains preserved.
@@ -352,11 +354,20 @@ object/write, FDEP/FAA collector deployment, or timer/cron/LaunchAgent cadence c
   parity to exactly one Supabase row. These are the two required successful ordinary observations;
   the receipt release gate is closed. The terms-acceptance result explains the empty poll and does
   not manufacture source advancement.
-- The Finder Desk was rebuilt and opened locally from site head
-  `0a72f53e3a717020eb7d30755c5a559bbb208458` so its separate run, event, verified and
-  attempted-through clocks can be inspected. Its exact user-scoped launchd lifecycle, serialized
-  rebuild/launch path and strict health response are covered by the pushed hardening. That local
-  app state is not a public site deployment.
+- The newest independently checked ordinary run is
+  `f28fe3d7-37f7-4697-b9e5-551296954b67`, from 19:00:05 to 19:00:09 ET on August 31. It exited
+  truthfully as `source_wait` with reason
+  `source_not_authoritative_yet; terms_acceptance_required`, rows 0/0, attempted through
+  2026-08-31, verified through 2026-08-26 and event through 2026-08-28. The 692-byte mode-`0600`
+  local receipt has SHA-256
+  `c08563d34b114959f74cc1876d4c4805a615ecd56f7295518d9f7dfd22ac707d`; Supabase contains exactly
+  one matching row (id 16) with exact selected-field parity. The remote table has no receipt-SHA
+  column, so remote SHA parity is not claimed.
+- The Finder Desk was rebuilt, opened and privately browser-verified from pushed site head
+  `84829b2`. It separates event, fetch and terminal-health clocks; presents row-only FDEP/FAA as
+  connected with health unknown; orders PDMR planning intent before permit execution; and repairs
+  the desktop Project-state squeeze with wrapping status chips and plain-language sensor labels.
+  That local operator surface is not a public site/API deployment.
 
 ## Evidence gaps and current priority
 
@@ -382,14 +393,13 @@ object/write, FDEP/FAA collector deployment, or timer/cron/LaunchAgent cadence c
   natural successes as immutable evidence; keep the existing LaunchAgent plist and cadence.
 - The exact 25-row permit postimage is verified in Supabase through the normal dependency chain;
   this gate is closed. The future owner/parent NULL-fill path is patched, but the existing 97,640-row
-  gap was deliberately left unchanged and the first natural post-patch run did not exercise the
-  path because all 150 detail attempts were `not_found`. Keep the corrected Accela health state
-  YELLOW until useful-work receipts improve; systemd/wrapper success alone is insufficient. Do not
-  alter the timer/dependency chain, run the remaining full backfill or roll back unless a separate
-  decision explicitly requires it.
-- Preserve the exact Accela preimages/live hashes and the natural 18:30–18:40 terminal receipt. It
-  proves useful work returned for one natural run; do not inflate 15/150 into complete discovery,
-  complete coverage or an unverified overall health color.
+  gap was deliberately left unchanged. The earlier all-`not_found` run did not exercise the path;
+  later natural runs returned 15/150 and 13/150 useful details, but no row-window audit established
+  whether owner normalization was exercised, so the current exercise state is `UNKNOWN`. Do not
+  assign an overall health color from wrapper success or useful-work counts alone.
+- Preserve the exact Accela preimages/live hashes and both natural terminal receipts: 15/150 at
+  18:30 and 13/150 with two errors at 19:00, followed by successful normal sync. They prove useful
+  work continued for those runs; they do not prove complete discovery or coverage.
 - Rotate the shared Edge query secret that appeared in request logs; move scheduled calls to named
   secret/header authentication and Vault-backed configuration.
 - Revoke public execution of heavy/writing security-definer RPCs and reduce anonymous/authenticated
@@ -399,15 +409,19 @@ object/write, FDEP/FAA collector deployment, or timer/cron/LaunchAgent cadence c
   deploy FDEP then FAA one at a time and run bounded canaries only after the exact approval. Receipt
   count remains zero. Parcel promotion/backfill remains a separate gate.
 - The PDMR stage's missing-receipt and malformed-folio gates are resolved in the isolated 329/329
-  stage. Next run the pending production schema preflight; schema creation, exact admission,
+  stage. The corrected read-only production schema preflight used the live shared lock but produced
+  no hash before a five-minute safety cutoff; it released the lock, left the main database mtime
+  unchanged, left WAL at zero bytes, and both target tables remain absent. Rerun only in a genuinely
+  long quiet window. Schema creation, exact admission,
   private mirror and automation remain distinct approvals. Apply the same evidence standard before
   connecting the pushed utility/SFWMD shadows or any lobbyist/assemblage collector.
 
 ## Verification receipt
 
-- Site/Desk: 96 JavaScript safety checks and 54 Python tests passed; the six private browser tests
-  passed 6/6 against the rebuilt local Finder app at site head
-  `0a72f53e3a717020eb7d30755c5a559bbb208458`.
+- Site/Desk: 96 JavaScript and 62 Python unit tests passed, 34 focused Desk tests passed, and the
+  browser suite passed 25 with six intentional private skips. The rebuilt local Finder app at
+  pushed head `84829b2` then passed 2/2 current-app private layout/Data Explorer checks; independent
+  inspection found no desktop or mobile readability blocker.
 - Accela/permit: wrapper suite passed, 43 alert-semantic tests passed, and shell syntax/Python
   compile/diff checks were clean. The final owner-normalization safety patch passed 26 focused and
   45 related Python tests plus the pipeline and Accela wrapper suites. The production backup,
@@ -418,9 +432,10 @@ object/write, FDEP/FAA collector deployment, or timer/cron/LaunchAgent cadence c
   The later future-row scraper patch was covered by the combined 45-test focused suite and compile
   checks, retained its own rollback copy, and was installed while the service was idle; read-only
   verification confirmed it changed no existing data and left the live normalization gap at 97,640.
-  The 00:00 natural run then returned systemd/wrapper success but 0/150 useful results; exact SQLite
-  corroboration found all 150 `not_found` and zero owner-field updates, so the future normalization
-  branch remained unexercised and Accela remained YELLOW.
+  The historical 00:00 natural run returned 0/150 useful results and did not exercise the future
+  normalization branch. Later natural runs returned 15/150 and 13/150 useful details; no later
+  owner-row window audit was collected, so current normalization exercise remains `UNKNOWN` and no
+  overall Accela color is asserted.
   The production AI-cleaner safety file was covered by the combined 45-test focused suite plus local and
   remote Python compile checks and was atomically installed with exact expected hash and a byte-for-byte
   backup. Its live size, mode, `andy:andy` ownership and mtime were verified. Read-only systemd
