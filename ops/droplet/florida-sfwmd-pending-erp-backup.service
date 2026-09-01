@@ -1,0 +1,22 @@
+[Unit]
+Description=Verified offsite backup and restore check for SFWMD evidence
+After=florida-sfwmd-pending-erp-timer.service
+ConditionPathExists=/usr/bin/restic
+
+[Service]
+Type=oneshot
+User=andy
+Group=andy
+WorkingDirectory=/srv/grahamandgold/florida-signal/app
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=FLORIDA_SIGNAL_SFWMD_BACKUP_ENABLED=0
+EnvironmentFile=-/srv/grahamandgold/florida-signal/secrets/florida-sfwmd-pending-erp-backup.env
+ExecStart=/srv/grahamandgold/florida-signal/venv/bin/python /srv/grahamandgold/florida-signal/app/ops/droplet/sfwmd_pending_erp_backup.py --sqlite-path /srv/grahamandgold/florida-signal/staging/db/permits.sqlite --writer-lock-path /srv/grahamandgold/florida-signal/app/db/.writer.lock --evidence-dir /srv/grahamandgold/florida-signal/staging/evidence/sfwmd-pending-erp --receipt-dir /srv/grahamandgold/florida-signal/staging/receipts/sfwmd-pending-erp --alert-receipt-dir /srv/grahamandgold/florida-signal/staging/receipts/sfwmd-pending-erp-alerts --failure-dir /srv/grahamandgold/florida-signal/staging/failures/sfwmd-pending-erp --provenance-dir /srv/grahamandgold/florida-signal/staging/provenance/sfwmd-pending-erp --backup-receipt-dir /srv/grahamandgold/florida-signal/staging/receipts/sfwmd-pending-erp-backups --restic-bin /usr/bin/restic
+TimeoutStartSec=2h
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/grahamandgold/florida-signal/staging/receipts/sfwmd-pending-erp-backups /srv/grahamandgold/florida-signal/app/db /srv/grahamandgold/florida-signal/staging/db
+RestrictSUIDSGID=true

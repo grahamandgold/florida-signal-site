@@ -179,6 +179,10 @@ class FetchError(CollectorError):
         self.attempts = list(attempts)
 
 
+class SourceBudgetError(CollectorError):
+    """The live source exceeded a fail-closed collection budget."""
+
+
 @dataclasses.dataclass(frozen=True)
 class FetchAttempt:
     status: int | None
@@ -407,7 +411,9 @@ def utc_now() -> dt.datetime:
 def iso_utc(value: dt.datetime) -> str:
     if value.tzinfo is None:
         raise ValueError("clock must be timezone-aware")
-    return value.astimezone(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+    return value.astimezone(dt.timezone.utc).isoformat(
+        timespec="microseconds"
+    ).replace("+00:00", "Z")
 
 
 def epoch_millis_to_iso(value: Any, *, field: str) -> str | None:
@@ -1264,6 +1270,10 @@ def run_collection(
             params=ids_params,
         )
         start_ids = validate_object_ids(start_payload)
+        if len(start_ids) > MAX_RECORD_COUNT:
+            raise SourceBudgetError(
+                f"source returned {len(start_ids)} object ids; maximum is {MAX_RECORD_COUNT}"
+            )
         chunks = [
             start_ids[index : index + page_size]
             for index in range(0, len(start_ids), page_size)
@@ -1297,7 +1307,12 @@ def run_collection(
                 url=QUERY_URL,
                 params=page_params,
             )
-            features.extend(validate_page(page_payload, object_ids))
+            page_features = validate_page(page_payload, object_ids)
+            if len(features) + len(page_features) > MAX_RECORD_COUNT:
+                raise SourceBudgetError(
+                    f"feature pagination exceeded the {MAX_RECORD_COUNT}-row run budget"
+                )
+            features.extend(page_features)
             counts["pages_succeeded"] += 1
 
         end_payload = fetch_and_capture(
@@ -1308,6 +1323,10 @@ def run_collection(
             params=ids_params,
         )
         end_ids = validate_object_ids(end_payload)
+        if len(end_ids) > MAX_RECORD_COUNT:
+            raise SourceBudgetError(
+                f"end object-id set exceeded the {MAX_RECORD_COUNT}-row run budget"
+            )
         counts["rows_observed"] = len(features)
 
         observed_clock = iso_utc(clock())
@@ -1385,7 +1404,10 @@ def run_collection(
         + counts["rows_rejected"]
     )
     source_count_parity = counts["rows_observed"] == len(start_ids)
-    if terminal_error:
+    if terminal_error and terminal_error.startswith("SourceBudgetError:"):
+        status = "failed"
+        reason_code = "SOURCE_ROW_BUDGET_EXCEEDED"
+    elif terminal_error:
         status = "failed"
         reason_code = "COLLECTOR_OR_CONTRACT_FAILURE"
     elif not identity_stable:

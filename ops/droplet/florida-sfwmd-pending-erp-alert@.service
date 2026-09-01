@@ -1,0 +1,22 @@
+[Unit]
+Description=Alert on SFWMD Pending ERP failure for %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=andy
+Group=andy
+WorkingDirectory=/srv/grahamandgold/florida-signal/app
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=FLORIDA_SIGNAL_SFWMD_ALERT_ENABLED=0
+EnvironmentFile=-/srv/grahamandgold/florida-signal/secrets/florida-sfwmd-pending-erp-alert.env
+ExecStart=/srv/grahamandgold/florida-signal/venv/bin/python /srv/grahamandgold/florida-signal/app/ops/droplet/sfwmd_pending_erp_alert.py --failed-unit %i --failure-ledger-dir /srv/grahamandgold/florida-signal/staging/failures/sfwmd-pending-erp --alert-receipt-dir /srv/grahamandgold/florida-signal/staging/receipts/sfwmd-pending-erp-alerts
+TimeoutStartSec=30s
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/grahamandgold/florida-signal/staging/receipts/sfwmd-pending-erp-alerts
+RestrictSUIDSGID=true

@@ -1,0 +1,24 @@
+[Unit]
+Description=Florida Signal bounded SFWMD Pending ERP collection
+After=network-online.target
+Wants=network-online.target
+OnFailure=florida-sfwmd-pending-erp-alert@%n.service
+
+[Service]
+Type=oneshot
+User=andy
+Group=andy
+WorkingDirectory=/srv/grahamandgold/florida-signal/app
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=FLORIDA_SIGNAL_SFWMD_ENABLED=0
+Environment=FLORIDA_SIGNAL_SFWMD_MIRROR_ENABLED=0
+EnvironmentFile=-/srv/grahamandgold/florida-signal/secrets/florida-sfwmd-pending-erp.env
+ExecStart=/srv/grahamandgold/florida-signal/venv/bin/python /srv/grahamandgold/florida-signal/app/ops/droplet/sfwmd_pending_erp_production.py scheduled-run --invocation-kind manual_service --sqlite-path /srv/grahamandgold/florida-signal/staging/db/permits.sqlite --writer-lock-path /srv/grahamandgold/florida-signal/app/db/.writer.lock --evidence-dir /srv/grahamandgold/florida-signal/staging/evidence/sfwmd-pending-erp --receipt-dir /srv/grahamandgold/florida-signal/staging/receipts/sfwmd-pending-erp --latest-pointer /srv/grahamandgold/florida-signal/staging/receipts/sfwmd-pending-erp/latest.json --failure-ledger-dir /srv/grahamandgold/florida-signal/staging/failures/sfwmd-pending-erp --page-size 2000
+TimeoutStartSec=20min
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/grahamandgold/florida-signal/staging /srv/grahamandgold/florida-signal/app/db
+RestrictSUIDSGID=true

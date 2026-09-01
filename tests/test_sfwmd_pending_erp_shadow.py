@@ -338,6 +338,27 @@ class SfwmdShadowCollectorTests(unittest.TestCase):
             )
             self.assertFalse(receipt["quality"]["source_object_id_set_stable"])
 
+    def test_2001_ids_fail_before_any_feature_page_and_preserve_cap_receipt(self):
+        with tempfile.TemporaryDirectory() as fixture_tmp, tempfile.TemporaryDirectory() as out:
+            fixture_copy = Path(fixture_tmp) / "fixtures"
+            shutil.copytree(FIXTURES, fixture_copy)
+            start = fixture_copy / "object-ids-start.json"
+            payload = json.loads(start.read_text(encoding="utf-8"))
+            payload["objectIds"] = list(range(1, 2002))
+            start.write_text(json.dumps(payload), encoding="utf-8")
+
+            transport, run_dir, receipt = self.run_fixture(out, fixture_copy)
+
+            self.assertEqual(receipt["status"], "failed")
+            self.assertEqual(receipt["reason_code"], "SOURCE_ROW_BUDGET_EXCEEDED")
+            self.assertEqual(receipt["counts"]["rows_observed"], 0)
+            self.assertEqual(receipt["counts"]["pages_expected"], 0)
+            self.assertEqual(receipt["counts"]["pages_succeeded"], 0)
+            self.assertFalse(any(name.startswith("page-") for name, _, _ in transport.calls))
+            self.assertNotIn("object-ids-end", [name for name, _, _ in transport.calls])
+            manifest = json.loads((run_dir / "raw-manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["responses"][-1]["logical_name"], "object-ids-start")
+
     def test_stable_authoritative_empty_run_has_an_empty_receipt(self):
         with tempfile.TemporaryDirectory() as fixture_tmp, tempfile.TemporaryDirectory() as out:
             fixture_copy = Path(fixture_tmp) / "fixtures"
