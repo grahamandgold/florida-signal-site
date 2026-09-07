@@ -1756,7 +1756,9 @@ def utility_intake_read_projection_page(
     query_values = {
         "select": ",".join(UTILITY_INTAKE_PARITY_COLUMNS),
         "or": "(" + ",".join(
-            f"permit_number.like.{family}-*" for family in UTILITY_INTAKE_FAMILIES
+            (f"and(permit_number.gte.{family},"
+                f"permit_number.lt.{family[:-1]}{chr(ord(family[-1]) + 1)},"
+                f"permit_number.like.{family}-*)") for family in UTILITY_INTAKE_FAMILIES
         ) + ")",
         "order": "permit_number.asc",
         "limit": str(limit),

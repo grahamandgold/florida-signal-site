@@ -175,6 +175,8 @@ class UtilityDeskBridgeTests(unittest.TestCase):
         self.assertEqual(urlparse(request.full_url).path, "/rest/v1/permits")
         self.assertEqual(query["select"], [",".join(cms_server.UTILITY_INTAKE_PARITY_COLUMNS)])
         self.assertEqual(query["order"], ["permit_number.asc"])
+        self.assertIn("and(permit_number.gte.ENG-CR,permit_number.lt.ENG-CS,permit_number.like.ENG-CR-*)", query["or"][0])
+        self.assertIn("and(permit_number.gte.PLB-SEWCP-WT,permit_number.lt.PLB-SEWCP-WU,permit_number.like.PLB-SEWCP-WT-*)", query["or"][0])
         self.assertNotIn("offset", query)
         self.assertEqual(request.get_header("Apikey"), "sb_publishable_" + "x" * 24)
         self.assertIsNone(request.get_header("Authorization"))
