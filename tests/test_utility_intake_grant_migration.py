@@ -8,7 +8,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = ROOT / "supabase/migrations/20260831235500_utility_intake_anon_read_hardening.sql"
+MIGRATION = ROOT / "supabase/migrations/20260907165909_utility_intake_anon_read_hardening.sql"
+SCHEMA_MIGRATION = ROOT / "supabase/migrations/20260907164512_utility_private_schema.sql"
 
 
 class UtilityIntakeGrantMigrationTests(unittest.TestCase):
@@ -107,6 +108,38 @@ class UtilityIntakeGrantMigrationPostgresTests(unittest.TestCase):
         else:
             self.assertNotEqual(result.returncode, 0, result.stdout)
         return result
+
+    def test_missing_private_schema_prerequisite_stays_owner_only(self):
+        self._psql("""
+            do $$ begin
+              if not exists (select 1 from pg_roles where rolname = 'postgres') then
+                create role postgres superuser;
+              end if;
+            end $$;
+            create role anon nologin;
+            create role authenticated nologin;
+            create role service_role nologin;
+            create table public.permits (id integer primary key);
+        """)
+        self.assertLess(SCHEMA_MIGRATION.name, MIGRATION.name)
+        self._psql(SCHEMA_MIGRATION.read_text())
+        self._psql("set role postgres; " + MIGRATION.read_text())
+        for role in ("anon", "authenticated", "service_role"):
+            rights = self._psql(f"""
+                select has_schema_privilege('{role}', 'private', 'USAGE'),
+                       has_schema_privilege('{role}', 'private', 'CREATE'),
+                       has_function_privilege('{role}',
+                         'private.fs_apply_utility_intake_anon_read_hardening(text)',
+                         'EXECUTE');
+            """).stdout.strip()
+            self.assertEqual(rights, "f|f|f", role)
+        self.assertEqual(self._psql(
+            "select relrowsecurity, relforcerowsecurity from pg_class "
+            "where oid='public.permits'::regclass"
+        ).stdout.strip(), "f|f")
+        # A pre-existing schema is a conflict, never silently re-owned/revoked.
+        conflict = self._psql(SCHEMA_MIGRATION.read_text(), succeeds=False)
+        self.assertIn('already exists', conflict.stderr)
 
     def test_inherited_grants_policies_and_custom_function_acl_fail_closed(self):
         self._psql("""

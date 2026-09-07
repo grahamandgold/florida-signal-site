@@ -10,7 +10,13 @@ Tracked, idempotent SQL mirroring live production. No secrets in this directory.
 | `20260811235949_label_source_delay_without_blocking_verified_candidates.sql` | separates snapshot lag from the external Clerk release delay; hardens legacy transfer view and queue trigger search path | 2026-08-11 |
 | `20260812000230_index_health_event_clocks.sql` | partial FDEP event/fetch indexes for bounded public health probes | 2026-08-11 |
 | `20260815172000_sunbiz_private_health_receipt.sql` | aggregate-only Sunbiz freshness receipt and daily post-ingest refresh; raw entity rows stay private | 2026-08-15 |
-| `20260831235500_utility_intake_anon_read_hardening.sql` | default-off private owner gate; application creates/replaces only the function, removes every explicit non-owner function ACL, and changes no schema/table state, while only the later exact approval call forces RLS and attests effective SELECT-only `anon` access across PUBLIC, inherited/member roles, applicable policies, and column grants | **Not applied** |
+| `20260907164512_utility_private_schema.sql` | owner-only private schema prerequisite; grants no public/app access and refuses an existing schema | **Not applied; explicit prerequisite approval pending** |
+| `20260907165909_utility_intake_anon_read_hardening.sql` | default-off private owner gate; application creates/replaces only the function, removes every explicit non-owner function ACL, and changes no schema/table state, while only the later exact approval call forces RLS and attests effective SELECT-only `anon` access across PUBLIC, inherited/member roles, applicable policies, and column grants | **Not applied; prerequisite schema missing** |
+
+The utility hardening file was originally named `20260831235500` and never
+applied. Its SQL is unchanged; the CLI-generated replacement timestamp puts it
+after the newly discovered schema prerequisite. Both migrations pass local
+PostgreSQL tests, including effective app-role denial and no default table change.
 
 **Not tracked here (pre-existing / other work):** `fdep_erp`, `faa_oeaaa` tables + their edge functions and primary pg_cron jobs; `refresh_dashboard_cache`. The FAA transient retry schedule added on 2026-08-15 is recorded in the operations handoff. Those objects otherwise remain as originally applied.
 

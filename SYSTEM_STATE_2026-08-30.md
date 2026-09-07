@@ -1,5 +1,15 @@
 # Florida Signal site + Data Wire checkpoint — 2026-08-30
 
+## September 7 utility connection checkpoint — 17:00 UTC
+
+Utility and engineering are now installed and visible in the private Desk: 454 sewer/utility records and 78 engineering records. Runtime `710e414` passed manual canary `utility-intake-20260907T165423.891771Z-ad412555f5e14b9da54a803d42a5402f` at 16:54:54.998363Z: exact 532/532 equality across all 16 declared columns, zero rejected and zero written. Receipt SHA-256 `601643724924e9d91945918c3c83cfb093b9be55d89622dacd1f96797f3a8098`; verification SHA-256 `002d41a219eb0fd3b983a5e8d4ca3ed329b705000fd33ac19f76324206fedb16`.
+
+The Desk bridge `7cff54f` is installed, with successful strict-SSH receipt sync and tested lane selection, search, empty results and mobile layout. PDMR still returns 334 records; FDEP/FAA/PDMR receipt health remains current at the checked boundary. Earlier SQLite-sidecar and Supabase-timeout failures are preserved. The timeout was fixed using the existing permit-number index while retaining exact-family and full-projection checks.
+
+**Not complete:** the utility timer is disabled/inactive and there is no natural-run admission. The owner approved permission hardening, read-only verification, timer activation only after verification and scheduled receipts. The hardening migration failed because the `private` schema is absent. Automatic approval review separately rejected creating that owner-only prerequisite; its approval question is pending. Neither migration was applied. The prepared schema and permission migrations pass four checks, including disposable PostgreSQL effective-access tests. Keep the natural gate closed until this prerequisite, effective SELECT-only grant proof and independently evidenced scheduled run succeed.
+
+Runtime and Desk query-fix commits remain local. Automatic approval review rejected pushing the new utility server/operations code to the public site repository. The existing approved health PR52 is unaffected. No source records, Candidates, scores, stories or newsletter sends were written by this utility work. This checkpoint supersedes the earlier utility “not installed” entries below; those remain dated history.
+
 > **Dated implementation checkpoint.** Current cross-repository authority lives in the state-reconciliation worktree's `AGENTS.md`, `docs/FLORIDA_SIGNAL_START_HERE.md`, `data/reference/florida_signal_project_state.json`, and `docs/SESSION_HANDOFF_2026-08-30.md`, in that order. Those files win on any conflict below.
 
 **Verified:** 2026-08-31 19:58:59 ET (checkpoint; later approval-gated actions remain pending)

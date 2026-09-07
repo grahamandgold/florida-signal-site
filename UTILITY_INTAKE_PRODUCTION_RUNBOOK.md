@@ -1,5 +1,26 @@
 # Utility and engineering intake production runbook
 
+## September 7 installed checkpoint
+
+Release `20260907T165421Z-3017594-fc536189f16984b5` from `710e414` is installed.
+Manual canary `utility-intake-20260907T165423.891771Z-ad412555f5e14b9da54a803d42a5402f`
+passed with 532 SQLite and 532 Supabase records, exact 16-column parity, and zero
+rejects or source writes. Its receipt and verification hashes are recorded in
+the canonical state manifest. Earlier sidecar-change and query-timeout failures
+remain immutable. The indexed query preserves the original family predicate.
+
+The local Desk at `7cff54f` displays 454 sewer/utility and 78 engineering rows;
+strict receipt sync passes. No independently admitted natural run exists. The
+timer remains disabled/inactive and the Desk correctly shows unverified health.
+
+The owner approved the permission migration, verifier and timer after passed
+verification. The migration encountered a missing `private` schema. Automatic
+approval review separately rejected creating that owner-only prerequisite;
+its approval is pending. Neither migration has been applied. The prerequisite
+and unchanged permission function pass disposable PostgreSQL access tests.
+The new runtime/Desk changes are installed but not pushed; public code push was
+also rejected pending explicit approval. Existing health PR52 is unchanged.
+
 ## Scope and source contract
 
 This lane exposes five exact Fort Lauderdale Accela record-number families in
@@ -180,8 +201,13 @@ The helper only performs a bounded wait for the existing Accela and sync
 oneshots. Python invokes it so timeout, missing-helper, and failed-dependency
 states are receipted. It never starts, stops, or restarts a dependency.
 
-Install the two-variable env file without printing it. Apply
-`20260831235500_utility_intake_anon_read_hardening.sql`; this creates a private
+Install the two-variable env file without printing it. Where `private` is absent,
+apply the separately approved `20260907164512_utility_private_schema.sql` first.
+It creates only an owner-only schema, with no usage/create grants for public or
+app roles; it refuses a pre-existing schema. Do not run it over an existing
+schema or infer its approval from permission to apply the function below.
+Apply
+`20260907165909_utility_intake_anon_read_hardening.sql`; this creates a private
 owner-only function and changes no table/schema grant, policy, RLS state, or row
 by default. The canonical `private` schema must already exist; migration
 application does not create it and performs no schema-wide revoke. Preview
