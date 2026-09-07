@@ -250,6 +250,10 @@ trap '/bin/rm -rf "$stage_dir"' EXIT
   "$repo_dir/cms/data.html" "$repo_dir/cms/review.html" "$repo_dir/cms/desk-shell.css" \
   "$repo_dir/cms/desk-shell.js" "$staged_app/Contents/Resources/cms/"
 /bin/cp -L "$repo_dir/cms/mark-full-color.png" "$staged_app/Contents/Resources/cms/mark-full-color.png"
+/bin/mkdir -p "$staged_app/Contents/Resources/scripts"
+/bin/cp "$repo_dir/ops/mac/sync_utility_intake_receipts.py" \
+  "$staged_app/Contents/Resources/scripts/sync_utility_intake_receipts.py"
+/bin/chmod 755 "$staged_app/Contents/Resources/scripts/sync_utility_intake_receipts.py"
 
 # Bundle local-only research lanes so the Finder app does not need Documents access.
 # Re-running this updater refreshes the read-only snapshot.
@@ -262,6 +266,10 @@ for required_page in home.html agenda.html index.html data.html review.html; do
     exit 1
   fi
 done
+if [[ ! -s "$staged_app/Contents/Resources/scripts/sync_utility_intake_receipts.py" ]]; then
+  echo "Staged desktop app is missing the utility receipt sync helper" >&2
+  exit 1
+fi
 for required_snapshot in \
   data/reference/florida_signal_project_state.json \
   data/pdmr/florida_signal_v1.sqlite \

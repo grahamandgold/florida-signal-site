@@ -4,10 +4,17 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
 import re
+import signal
+import stat
+import threading
+import urllib.error
+import urllib.parse
+import urllib.request
 import sqlite3
 import subprocess
 import sys
@@ -42,6 +49,7 @@ MAX_BODY = 1_000_000
 # the browser: every queue read and write is proxied through this loopback server.
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://jrjewmzkyluxdywyusrw.supabase.co").rstrip("/")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
 REVIEW_STATUSES = {"NEW", "REVIEWING", "HOLD", "APPROVED", "REJECTED", "NEEDS_MORE_REPORTING"}
 REVIEW_DESTINATIONS = {
     "live_signals_map", "signals_page", "daily_intel_brief", "neighborhood_page", "broward_record",
@@ -1352,6 +1360,1191 @@ def agenda_relevance(item: dict[str, Any]) -> str:
     return "Matched the desk's development watch terms and needs a source-level significance check."
 
 
+UTILITY_INTAKE_FAMILIES = {
+    "ENG-CR": "water_wastewater_capacity_request",
+    "ENG-OAA": "outside_agency_engineering_intake",
+    "ROW-SEW": "sewer_right_of_way",
+    "ROW-WTR": "water_right_of_way",
+    "PLB-SEWCP-WT": "sewer_cap_walk_through",
+}
+UTILITY_INTAKE_LANES = {
+    "sewer_utility": {"ENG-CR", "ROW-SEW", "ROW-WTR", "PLB-SEWCP-WT"},
+    "engineering": {"ENG-OAA"},
+    "all": set(UTILITY_INTAKE_FAMILIES),
+}
+UTILITY_INTAKE_REMOTE_CAP = 5_000
+UTILITY_INTAKE_PAGE_SIZE = 1_000
+UTILITY_INTAKE_FRESHNESS_SECONDS = 75 * 60
+UTILITY_INTAKE_PROJECTION_VERSION = "utility-intake-permits-mirror/1"
+UTILITY_INTAKE_PARITY_COLUMNS = (
+    "permit_number",
+    "report_source",
+    "permit_type",
+    "status",
+    "applied_date",
+    "issued_date",
+    "opened_date",
+    "finalized_date",
+    "address",
+    "parcel_id",
+    "owner_name",
+    "contractor_name",
+    "description",
+    "first_seen_at",
+    "last_seen_at",
+    "last_updated_at",
+)
+UTILITY_INTAKE_LOCAL_ROOT = Path(os.getenv(
+    "FL_SIGNAL_UTILITY_LOCAL_ROOT",
+    str(DB_PATH.expanduser().parent / "utility-intake"),
+))
+UTILITY_INTAKE_RECEIPT_DIR = Path(os.getenv(
+    "FL_SIGNAL_UTILITY_RECEIPT_DIR",
+    str(UTILITY_INTAKE_LOCAL_ROOT / "receipts"),
+))
+UTILITY_INTAKE_PRODUCER_RECEIPT_DIR = Path(os.getenv(
+    "FL_SIGNAL_UTILITY_PRODUCER_RECEIPT_DIR",
+    "/srv/grahamandgold/florida-signal/staging/data/utility-intake/receipts",
+))
+UTILITY_INTAKE_LATEST_ATTEMPT_POINTER = Path(os.getenv(
+    "FL_SIGNAL_UTILITY_LATEST_ATTEMPT_POINTER",
+    str(UTILITY_INTAKE_LOCAL_ROOT / "latest-attempt.json"),
+))
+UTILITY_INTAKE_LATEST_SUCCESS_POINTER = Path(os.getenv(
+    "FL_SIGNAL_UTILITY_LATEST_SUCCESS_POINTER",
+    str(UTILITY_INTAKE_LOCAL_ROOT / "latest-success.json"),
+))
+UTILITY_INTAKE_LATEST_NATURAL_POINTER = Path(os.getenv(
+    "FL_SIGNAL_UTILITY_LATEST_NATURAL_POINTER",
+    str(UTILITY_INTAKE_LOCAL_ROOT / "latest-natural.json"),
+))
+UTILITY_INTAKE_LATEST_SCHEMA = "FloridaSignalUtilityIntakeProductionLatestV2"
+UTILITY_INTAKE_RECEIPT_SCHEMA = "FloridaSignalUtilityIntakeProductionReceiptV3"
+UTILITY_INTAKE_VERIFICATION_SCHEMA = "FloridaSignalUtilityIntakeProductionVerificationV1"
+UTILITY_INTAKE_NATURAL_SCHEMA = "FloridaSignalUtilityIntakeNaturalRunAttestationV1"
+UTILITY_INTAKE_NATURAL_LATEST_SCHEMA = "FloridaSignalUtilityIntakeNaturalRunLatestV1"
+UTILITY_INTAKE_SERVICE_UNIT = "florida-utility-intake.service"
+UTILITY_INTAKE_TIMER_UNIT = "florida-utility-intake.timer"
+UTILITY_INTAKE_MAX_TRIGGER_TO_OUTCOME_START_USEC = 15 * 60 * 1_000_000
+UTILITY_INTAKE_MAX_SYSTEMD_TRIGGER_CLOCK_SKEW_USEC = 5 * 1_000_000
+UTILITY_INTAKE_LOCAL_FILE_CAP = 2_000_000
+UTILITY_INTAKE_REMOTE_RESPONSE_CAP = 8_000_000
+UTILITY_INTAKE_REMOTE_SCAN_CAP = 10_000
+UTILITY_INTAKE_REQUEST_TIMEOUT_SECONDS = 25
+UTILITY_INTAKE_SYNC_PROCESS_TIMEOUT_SECONDS = 45
+UTILITY_INTAKE_SYNC_DEFAULT_INTERVAL_SECONDS = 300
+
+
+def utility_intake_sync_interval(value: Any) -> int:
+    try:
+        parsed = int(str(value))
+    except (TypeError, ValueError):
+        return UTILITY_INTAKE_SYNC_DEFAULT_INTERVAL_SECONDS
+    return max(60, min(3600, parsed))
+
+
+class UtilityReceiptRefresher:
+    """Refresh the localhost receipt snapshot only for the Desk process lifetime."""
+
+    def __init__(
+        self,
+        *,
+        script: Path,
+        destination: Path,
+        ssh_host: str,
+        known_hosts: Path,
+        interval_seconds: float = UTILITY_INTAKE_SYNC_DEFAULT_INTERVAL_SECONDS,
+        process_timeout_seconds: float = UTILITY_INTAKE_SYNC_PROCESS_TIMEOUT_SECONDS,
+        runner=None,
+    ) -> None:
+        if (
+            not script.is_absolute()
+            or script.is_symlink()
+            or not script.is_file()
+            or not destination.is_absolute()
+            or not known_hosts.is_absolute()
+            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", ssh_host)
+            or interval_seconds <= 0
+            or process_timeout_seconds <= 0
+        ):
+            raise ValueError("utility receipt refresher configuration is unsafe")
+        self.script = script
+        self.destination = destination
+        self.ssh_host = ssh_host
+        self.known_hosts = known_hosts
+        self.interval_seconds = interval_seconds
+        self.process_timeout_seconds = process_timeout_seconds
+        self._runner = runner
+        self._stop = threading.Event()
+        self._cycle_lock = threading.Lock()
+        self._lifecycle_lock = threading.Lock()
+        self._process_lock = threading.Lock()
+        self._active_process: subprocess.Popen | None = None
+        self._thread: threading.Thread | None = None
+        self.last_status = "not_started"
+
+    def command(self) -> list[str]:
+        return [
+            sys.executable,
+            str(self.script),
+            "--destination", str(self.destination),
+            "--ssh-host", self.ssh_host,
+            "--known-hosts", str(self.known_hosts),
+        ]
+
+    @staticmethod
+    def _terminate_process(process: subprocess.Popen) -> None:
+        if process.poll() is not None:
+            return
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+            process.wait(timeout=2)
+        except (OSError, subprocess.SubprocessError):
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except OSError:
+                pass
+            try:
+                process.wait(timeout=2)
+            except (OSError, subprocess.SubprocessError):
+                pass
+
+    def _run_managed_process(self) -> subprocess.CompletedProcess:
+        process = subprocess.Popen(
+            self.command(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
+        with self._process_lock:
+            self._active_process = process
+            should_stop = self._stop.is_set()
+        if should_stop:
+            self._terminate_process(process)
+        try:
+            stdout, stderr = process.communicate(timeout=self.process_timeout_seconds)
+        except subprocess.TimeoutExpired:
+            self._terminate_process(process)
+            stdout, stderr = process.communicate()
+        finally:
+            with self._process_lock:
+                if self._active_process is process:
+                    self._active_process = None
+        return subprocess.CompletedProcess(
+            self.command(), process.returncode, stdout=stdout, stderr=stderr,
+        )
+
+    def sync_once(self) -> bool:
+        if not self._cycle_lock.acquire(blocking=False):
+            self.last_status = "overlap_suppressed"
+            return False
+        try:
+            if self._stop.is_set():
+                self.last_status = "stopped"
+                return False
+            try:
+                if self._runner is None:
+                    result = self._run_managed_process()
+                else:
+                    result = self._runner(
+                        self.command(),
+                        stdin=subprocess.DEVNULL,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=self.process_timeout_seconds,
+                    )
+                payload = json.loads(result.stdout) if result.returncode == 0 else None
+            except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+                if self._stop.is_set():
+                    self.last_status = "stopped"
+                    return False
+                self.last_status = "sync_failed"
+                print("Utility receipt refresh failed; preserving prior local snapshot.", flush=True)
+                return False
+            if self._stop.is_set():
+                self.last_status = "stopped"
+                return False
+            if (
+                result.returncode != 0
+                or not isinstance(payload, dict)
+                or payload.get("status") != "synced"
+            ):
+                self.last_status = "sync_failed"
+                print("Utility receipt refresh failed; preserving prior local snapshot.", flush=True)
+                return False
+            self.last_status = "synced"
+            return True
+        finally:
+            self._cycle_lock.release()
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            self.sync_once()
+            if self._stop.wait(self.interval_seconds):
+                break
+
+    def start(self) -> None:
+        with self._lifecycle_lock:
+            if self._thread is not None and self._thread.is_alive():
+                return
+            self._stop.clear()
+            self._thread = threading.Thread(
+                target=self._run,
+                name="utility-receipt-refresh",
+                daemon=True,
+            )
+            self._thread.start()
+
+    def stop(self) -> None:
+        with self._lifecycle_lock:
+            thread = self._thread
+            self._stop.set()
+        with self._process_lock:
+            process = self._active_process
+        if process is not None:
+            self._terminate_process(process)
+        if thread is not None:
+            timeout = self.process_timeout_seconds + 1.0 if self._runner is not None else 5.0
+            thread.join(timeout=timeout)
+            if thread.is_alive():
+                self.last_status = "stop_timeout"
+                print("Utility receipt refresh did not stop inside its process bound.", flush=True)
+                return
+        with self._lifecycle_lock:
+            self._thread = None
+
+
+def build_utility_receipt_refresher() -> UtilityReceiptRefresher | None:
+    script_value = os.getenv("FL_SIGNAL_UTILITY_SYNC_SCRIPT", "").strip()
+    known_hosts_value = os.getenv("FL_SIGNAL_UTILITY_KNOWN_HOSTS", "").strip()
+    if not script_value or not known_hosts_value:
+        return None
+    try:
+        return UtilityReceiptRefresher(
+            script=Path(script_value),
+            destination=UTILITY_INTAKE_LOCAL_ROOT,
+            ssh_host=os.getenv("FL_SIGNAL_UTILITY_SSH_HOST", "florida").strip(),
+            known_hosts=Path(known_hosts_value),
+            interval_seconds=utility_intake_sync_interval(
+                os.getenv("FL_SIGNAL_UTILITY_SYNC_INTERVAL_SECONDS", "")
+            ),
+        )
+    except ValueError:
+        print(
+            "Utility receipt refresh disabled by unsafe configuration; local health will age stale.",
+            flush=True,
+        )
+        return None
+
+
+def utility_intake_family(permit_number: Any) -> str | None:
+    """Apply the same exact-family boundary as the production evidence verifier."""
+    identity = str(permit_number or "")
+    tokens = identity.split("-")
+    for family in sorted(UTILITY_INTAKE_FAMILIES, key=lambda item: len(item.split("-")), reverse=True):
+        family_tokens = family.split("-")
+        if len(tokens) <= len(family_tokens) or tokens[:len(family_tokens)] != family_tokens:
+            continue
+        if any(not token for token in tokens):
+            return None
+        if family in {"ENG-CR", "ENG-OAA"} and "." in identity:
+            return None
+        return family
+    return None
+
+
+def _utility_canonical_sha256(value: Any) -> str:
+    body = (
+        json.dumps(
+            value,
+            allow_nan=False,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("utf-8")
+    return hashlib.sha256(body).hexdigest()
+
+
+def utility_intake_projection_contract() -> dict[str, Any]:
+    projection = {
+        "version": UTILITY_INTAKE_PROJECTION_VERSION,
+        "columns": list(UTILITY_INTAKE_PARITY_COLUMNS),
+    }
+    return {**projection, "sha256": _utility_canonical_sha256(projection)}
+
+
+def _utility_safe_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return str(value)
+
+
+def utility_intake_projection_proof(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    projection_rows = []
+    for row in rows:
+        missing = [column for column in UTILITY_INTAKE_PARITY_COLUMNS if column not in row]
+        if missing:
+            raise ValueError(f"utility mirror projection lacks columns: {missing}")
+        projection_rows.append({
+            column: _utility_safe_text(row.get(column))
+            for column in UTILITY_INTAKE_PARITY_COLUMNS
+        })
+    projection_rows.sort(key=lambda row: str(row.get("permit_number") or ""))
+    identities = [str(row.get("permit_number") or "") for row in projection_rows]
+    if any(not identity for identity in identities) or len(identities) != len(set(identities)):
+        raise ValueError("utility mirror projection requires unique nonblank identities")
+    return {
+        "projection": utility_intake_projection_contract(),
+        "count": len(projection_rows),
+        "primary_key_set_sha256": _utility_canonical_sha256(identities),
+        "declared_projection_rowset_sha256": _utility_canonical_sha256(projection_rows),
+    }
+
+
+class _UtilityRejectRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, file_pointer, code, message, headers, new_url):
+        return None
+
+
+def _utility_is_publishable_key(value: str) -> bool:
+    if re.fullmatch(r"sb_publishable_[A-Za-z0-9_-]{16,512}", value):
+        return True
+    pieces = value.split(".")
+    if len(pieces) != 3 or any(not piece for piece in pieces):
+        return False
+    try:
+        padding = "=" * (-len(pieces[1]) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(pieces[1] + padding))
+    except (ValueError, json.JSONDecodeError):
+        return False
+    return isinstance(payload, dict) and payload.get("role") == "anon"
+
+
+def _utility_supabase_origin(url: str, publishable_key: str) -> str:
+    parsed = urllib.parse.urlsplit(url.rstrip("/"))
+    if (
+        parsed.scheme != "https"
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.port is not None
+        or not parsed.hostname
+        or not re.fullmatch(r"[a-z0-9-]+\.supabase\.co", parsed.hostname)
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("utility mirror requires a pinned Supabase project origin")
+    if not _utility_is_publishable_key(publishable_key):
+        raise ValueError("utility mirror requires an anon publishable key")
+    return f"https://{parsed.hostname}"
+
+
+def utility_intake_read_projection_page(
+    *, cursor: str | None, limit: int,
+) -> dict[str, Any]:
+    """Issue one pinned publishable-key GET against only public.permits."""
+    if not 1 <= limit <= UTILITY_INTAKE_PAGE_SIZE:
+        raise ValueError("utility mirror page size is outside its bound")
+    origin = _utility_supabase_origin(SUPABASE_URL, SUPABASE_ANON_KEY)
+    query_values = {
+        "select": ",".join(UTILITY_INTAKE_PARITY_COLUMNS),
+        "or": "(" + ",".join(
+            f"permit_number.like.{family}-*" for family in UTILITY_INTAKE_FAMILIES
+        ) + ")",
+        "order": "permit_number.asc",
+        "limit": str(limit),
+    }
+    if cursor is not None:
+        if not cursor or len(cursor) > 128 or re.search(r"[^A-Za-z0-9.-]", cursor):
+            raise ValueError("utility mirror cursor is unsafe")
+        query_values["permit_number"] = f"gt.{cursor}"
+    request = urllib.request.Request(
+        f"{origin}/rest/v1/permits?{urllib.parse.urlencode(query_values)}",
+        method="GET",
+        headers={
+            "Accept": "application/json",
+            "apikey": SUPABASE_ANON_KEY,
+            "Prefer": "count=exact",
+            "User-Agent": "florida-signal-private-desk/utility-intake-readonly-v1",
+        },
+    )
+    try:
+        opener = urllib.request.build_opener(_UtilityRejectRedirects())
+        with opener.open(request, timeout=UTILITY_INTAKE_REQUEST_TIMEOUT_SECONDS) as response:
+            length = response.headers.get("Content-Length")
+            if length and int(length) > UTILITY_INTAKE_REMOTE_RESPONSE_CAP:
+                raise ValueError("utility mirror response exceeded its byte cap")
+            raw = response.read(UTILITY_INTAKE_REMOTE_RESPONSE_CAP + 1)
+            if len(raw) > UTILITY_INTAKE_REMOTE_RESPONSE_CAP:
+                raise ValueError("utility mirror response exceeded its byte cap")
+            content_range = str(response.headers.get("Content-Range") or "").strip()
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        raise ValueError(f"utility mirror GET failed: {type(error).__name__}") from error
+    try:
+        payload = json.loads(raw or b"null")
+    except json.JSONDecodeError as error:
+        raise ValueError("utility mirror returned non-JSON data") from error
+    if not isinstance(payload, list) or len(payload) > limit:
+        raise ValueError("utility mirror returned an invalid row page")
+    count_match = re.fullmatch(r"(?:\d+-\d+|\*)/(\d+)", content_range)
+    if count_match is None:
+        raise ValueError("utility mirror omitted its exact declared count")
+    declared_total = int(count_match.group(1))
+    if declared_total < len(payload):
+        raise ValueError("utility mirror declared count is below its page size")
+    prior = cursor
+    exact_rows: list[dict[str, Any]] = []
+    for row in payload:
+        if not isinstance(row, dict) or set(row) != set(UTILITY_INTAKE_PARITY_COLUMNS):
+            raise ValueError("utility mirror row crossed the declared projection")
+        identity = str(row.get("permit_number") or "")
+        if not identity or (prior is not None and identity <= prior):
+            raise ValueError("utility mirror page is not strictly ordered")
+        prior = identity
+        if utility_intake_family(identity) is not None:
+            exact_rows.append(dict(row))
+    return {
+        "cursor": cursor,
+        "next_cursor": str(payload[-1]["permit_number"]) if payload else cursor,
+        "scanned_count": len(payload),
+        "declared_total": declared_total,
+        "exhausted": not payload,
+        "rows": exact_rows,
+    }
+
+
+def _utility_remote_projection_once() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    cursor: str | None = None
+    scanned_total = 0
+    initial_declared_total: int | None = None
+    expected_remaining: int | None = None
+    while True:
+        page = utility_intake_read_projection_page(
+            cursor=cursor, limit=UTILITY_INTAKE_PAGE_SIZE,
+        )
+        if set(page) != {
+            "cursor", "next_cursor", "scanned_count", "declared_total", "exhausted", "rows",
+        } or page.get("cursor") != cursor:
+            raise ValueError("utility mirror page contract failed")
+        page_rows = page.get("rows")
+        scanned_count = page.get("scanned_count")
+        declared_total = page.get("declared_total")
+        exhausted = page.get("exhausted")
+        next_cursor = page.get("next_cursor")
+        if (
+            not isinstance(page_rows, list)
+            or type(scanned_count) is not int
+            or type(declared_total) is not int
+            or scanned_count < 0
+            or scanned_count > UTILITY_INTAKE_PAGE_SIZE
+            or len(page_rows) > scanned_count
+            or declared_total < scanned_count
+            or declared_total > UTILITY_INTAKE_REMOTE_SCAN_CAP
+        ):
+            raise ValueError("utility mirror page exceeds its bounds")
+        if initial_declared_total is None:
+            initial_declared_total = declared_total
+            expected_remaining = declared_total
+        if declared_total != expected_remaining:
+            raise ValueError("utility mirror declared count changed during pagination")
+        if exhausted is True:
+            if (
+                scanned_count != 0
+                or declared_total != 0
+                or page_rows
+                or next_cursor != cursor
+                or scanned_total != initial_declared_total
+            ):
+                raise ValueError("utility mirror terminal page is not explicitly empty")
+            break
+        if exhausted is not False or scanned_count == 0 or not isinstance(next_cursor, str):
+            raise ValueError("utility mirror did not make bounded progress")
+        if not next_cursor or (cursor is not None and next_cursor <= cursor):
+            raise ValueError("utility mirror cursor did not advance")
+        scanned_total += scanned_count
+        if scanned_total > UTILITY_INTAKE_REMOTE_SCAN_CAP:
+            raise ValueError("utility mirror scan exceeded the safety cap")
+        if len(rows) + len(page_rows) > UTILITY_INTAKE_REMOTE_CAP:
+            raise ValueError("utility mirror exact projection exceeded the safety cap")
+        for row in page_rows:
+            identity = str(row.get("permit_number") or "")
+            if utility_intake_family(identity) is None:
+                raise ValueError("utility mirror crossed the exact family boundary")
+            if (cursor is not None and identity <= cursor) or identity > next_cursor:
+                raise ValueError("utility mirror row is outside its cursor page")
+            rows.append(dict(row))
+        expected_remaining = declared_total - scanned_count
+        cursor = next_cursor
+    rows.sort(key=lambda row: str(row.get("permit_number") or ""))
+    identities = [str(row.get("permit_number") or "") for row in rows]
+    if any(not identity for identity in identities) or len(identities) != len(set(identities)):
+        raise ValueError("utility mirror contains duplicate identities")
+    return rows
+
+
+def utility_intake_remote_projection() -> list[dict[str, Any]]:
+    first = _utility_remote_projection_once()
+    second = _utility_remote_projection_once()
+    if utility_intake_projection_proof(first) != utility_intake_projection_proof(second):
+        raise ValueError("utility mirror changed across complete stability reads")
+    return second
+
+
+def _utility_health_timestamp(value: Any) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
+def _utility_read_private_json(path: Path) -> tuple[dict[str, Any], bytes]:
+    """Read one bounded, regular, non-symlink receipt through a stable fd."""
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(path, flags)
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError("utility receipt is not a regular file")
+        if metadata.st_size <= 0 or metadata.st_size > UTILITY_INTAKE_LOCAL_FILE_CAP:
+            raise ValueError("utility receipt size is outside its bound")
+        chunks = []
+        remaining = UTILITY_INTAKE_LOCAL_FILE_CAP + 1
+        while remaining:
+            chunk = os.read(descriptor, min(65_536, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b"".join(chunks)
+        if len(raw) > UTILITY_INTAKE_LOCAL_FILE_CAP:
+            raise ValueError("utility receipt exceeded its byte cap")
+    finally:
+        os.close(descriptor)
+    payload = json.loads(raw)
+    if not isinstance(payload, dict):
+        raise ValueError("utility receipt is not an object")
+    return payload, raw
+
+
+def _utility_unavailable_health() -> dict[str, Any]:
+    return {
+        "component": "utility-intake",
+        "status": "unverified",
+        "event_through": None,
+        "source_through": None,
+        "system_time": None,
+        "latest_attempt_at": None,
+        "latest_attempt_status": None,
+        "latest_successful_run_at": None,
+        "latest_successful_run_id": None,
+        "natural_schedule_verified": False,
+        "natural_admission_run_id": None,
+        "natural_admission_verified_at": None,
+        "detail": "Local utility intake receipt chain is unavailable or invalid.",
+        "metrics": {},
+    }
+
+
+def _utility_recorded_receipt_to_local(value: Any) -> Path:
+    """Map a producer-host receipt path to its hash-identical local snapshot."""
+    recorded = Path(str(value or ""))
+    local_root = UTILITY_INTAKE_RECEIPT_DIR.expanduser()
+    producer_root = UTILITY_INTAKE_PRODUCER_RECEIPT_DIR.expanduser()
+    if (
+        not recorded.is_absolute()
+        or recorded.name in {"", ".", ".."}
+        or Path(recorded.name).name != recorded.name
+        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,220}", recorded.name)
+    ):
+        raise ValueError("utility receipt path is unsafe")
+    if recorded.parent == local_root:
+        local = recorded
+    elif recorded.parent == producer_root:
+        local = local_root / recorded.name
+    else:
+        raise ValueError("utility receipt path is outside the producer contract")
+    if local.is_symlink():
+        raise ValueError("utility local receipt snapshot is a symlink")
+    return local
+
+
+def _load_utility_pointer(pointer_path: Path, pointer_kind: str) -> dict[str, Any]:
+    pointer, pointer_raw = _utility_read_private_json(pointer_path)
+    if set(pointer) != {
+        "schema_version", "pointer_kind", "run_id", "status", "updated_at",
+        "receipt_path", "receipt_sha256", "counts", "execution",
+    }:
+        raise ValueError("utility latest pointer has the wrong shape")
+    run_id = str(pointer.get("run_id") or "")
+    outcome_status = str(pointer.get("status") or "")
+    outcome_sha = str(pointer.get("receipt_sha256") or "")
+    execution = pointer.get("execution")
+    if (
+        pointer.get("schema_version") != UTILITY_INTAKE_LATEST_SCHEMA
+        or pointer.get("pointer_kind") != pointer_kind
+        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,159}", run_id)
+        or outcome_status not in {"ok", "failed"}
+        or (pointer_kind == "success" and outcome_status != "ok")
+        or not re.fullmatch(r"[0-9a-f]{64}", outcome_sha)
+        or not isinstance(execution, dict)
+    ):
+        raise ValueError("utility latest pointer contract failed")
+
+    outcome_path = _utility_recorded_receipt_to_local(pointer.get("receipt_path"))
+    outcome, outcome_raw = _utility_read_private_json(outcome_path)
+    if hashlib.sha256(outcome_raw).hexdigest() != outcome_sha:
+        raise ValueError("utility outcome receipt hash mismatch")
+    if (
+        outcome.get("schema_version") != UTILITY_INTAKE_RECEIPT_SCHEMA
+        or outcome.get("run_id") != run_id
+        or outcome.get("status") != outcome_status
+        or outcome.get("counts") != pointer.get("counts")
+        or outcome.get("completed_at") != pointer.get("updated_at")
+        or outcome.get("execution") != execution
+    ):
+        raise ValueError("utility outcome receipt is not bound to latest")
+
+    health = outcome.get("health")
+    verification = outcome.get("verification")
+    if not isinstance(health, dict) or not isinstance(verification, dict):
+        raise ValueError("utility outcome receipt lacks bound health")
+    if health.get("component") != "utility-intake":
+        raise ValueError("utility health component mismatch")
+    if (outcome_status == "ok") != (health.get("status") == "current"):
+        raise ValueError("utility health status is not terminal-outcome bound")
+    if health.get("system_time") != outcome.get("completed_at"):
+        raise ValueError("utility health clock is not terminal-outcome bound")
+    metrics = health.get("metrics")
+    if not isinstance(metrics, dict):
+        raise ValueError("utility health metrics are malformed")
+    if (
+        metrics.get("verification_receipt_path") != verification.get("receipt_path")
+        or metrics.get("verification_receipt_sha256") != verification.get("receipt_sha256")
+    ):
+        raise ValueError("utility health verification binding mismatch")
+
+    if outcome_status == "ok":
+        counts = outcome.get("counts")
+        parity = outcome.get("parity")
+        if (
+            not isinstance(counts, dict)
+            or not isinstance(parity, dict)
+            or parity.get("status") != "passed"
+            or not isinstance(parity.get("sqlite"), dict)
+            or parity.get("sqlite") != parity.get("supabase")
+            or parity["sqlite"].get("projection") != utility_intake_projection_contract()
+        ):
+            raise ValueError("utility outcome lacks complete declared parity")
+        proof = parity["sqlite"]
+        expected_metrics = {
+            "rows_attempted": counts.get("records_attempted"),
+            "rows_written": counts.get("records_written"),
+            "rows_rejected": counts.get("records_rejected"),
+            "sqlite_rows": counts.get("sqlite_records"),
+            "supabase_rows": counts.get("supabase_records"),
+            "sqlite_pk_set_sha256": proof.get("primary_key_set_sha256"),
+            "supabase_pk_set_sha256": proof.get("primary_key_set_sha256"),
+            "sqlite_projection_rowset_sha256": proof.get("declared_projection_rowset_sha256"),
+            "supabase_projection_rowset_sha256": proof.get("declared_projection_rowset_sha256"),
+            "parity_projection_version": UTILITY_INTAKE_PROJECTION_VERSION,
+            "parity_projection_sha256": proof["projection"].get("sha256"),
+            "remote_stability_reads": 2,
+            "remote_exact_count_reconciled": True,
+        }
+        if (
+            proof.get("count") != counts.get("sqlite_records")
+            or proof.get("count") != counts.get("supabase_records")
+            or any(metrics.get(key) != value for key, value in expected_metrics.items())
+        ):
+            raise ValueError("utility local health is not outcome-parity bound")
+
+        verification_path = _utility_recorded_receipt_to_local(verification.get("receipt_path"))
+        verification_sha = str(verification.get("receipt_sha256") or "")
+        if not re.fullmatch(r"[0-9a-f]{64}", verification_sha):
+            raise ValueError("utility verification receipt hash is malformed")
+        verification_receipt, verification_raw = _utility_read_private_json(verification_path)
+        if hashlib.sha256(verification_raw).hexdigest() != verification_sha:
+            raise ValueError("utility verification receipt hash mismatch")
+        if (
+            verification_receipt.get("schema_version") != UTILITY_INTAKE_VERIFICATION_SCHEMA
+            or verification_receipt.get("run_id") != run_id
+            or verification_receipt.get("status") != "verified"
+            or verification_receipt.get("completed_at") != outcome.get("completed_at")
+            or verification_receipt.get("counts") != counts
+            or verification_receipt.get("parity") != parity
+            or verification_receipt.get("execution") != execution
+        ):
+            raise ValueError("utility verification receipt is not bound to outcome")
+
+    _, pointer_after = _utility_read_private_json(pointer_path)
+    if pointer_after != pointer_raw:
+        raise ValueError("utility latest pointer changed during receipt validation")
+    outcome["_local_receipt_sha256"] = outcome_sha
+    outcome["_latest_pointer_sha256"] = hashlib.sha256(pointer_raw).hexdigest()
+    return outcome
+
+
+def _load_utility_natural_admission() -> dict[str, Any]:
+    """Validate the independently admitted natural timer-run chain."""
+    pointer, pointer_raw = _utility_read_private_json(
+        UTILITY_INTAKE_LATEST_NATURAL_POINTER,
+    )
+    if set(pointer) != {
+        "schema_version", "pointer_kind", "run_id", "status", "updated_at",
+        "receipt_path", "receipt_sha256", "outcome_receipt_path",
+        "outcome_receipt_sha256", "execution",
+    }:
+        raise ValueError("utility natural-run pointer has the wrong shape")
+    run_id = str(pointer.get("run_id") or "")
+    receipt_sha = str(pointer.get("receipt_sha256") or "")
+    outcome_sha = str(pointer.get("outcome_receipt_sha256") or "")
+    execution = pointer.get("execution")
+    if (
+        pointer.get("schema_version") != UTILITY_INTAKE_NATURAL_LATEST_SCHEMA
+        or pointer.get("pointer_kind") != "natural"
+        or pointer.get("status") != "verified"
+        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,159}", run_id)
+        or not re.fullmatch(r"[0-9a-f]{64}", receipt_sha)
+        or not re.fullmatch(r"[0-9a-f]{64}", outcome_sha)
+        or not isinstance(execution, dict)
+        or execution.get("natural_schedule_verified") is not False
+        or execution.get("execution_context") != "systemd_timer_expected"
+        or execution.get("service_unit") != UTILITY_INTAKE_SERVICE_UNIT
+        or execution.get("expected_timer_unit") != UTILITY_INTAKE_TIMER_UNIT
+        or not re.fullmatch(
+            r"[0-9a-f]{32}", str(execution.get("systemd_invocation_id") or ""),
+        )
+    ):
+        raise ValueError("utility natural-run pointer contract failed")
+
+    attestation_path = _utility_recorded_receipt_to_local(pointer.get("receipt_path"))
+    attestation, attestation_raw = _utility_read_private_json(attestation_path)
+    if hashlib.sha256(attestation_raw).hexdigest() != receipt_sha:
+        raise ValueError("utility natural-run attestation hash mismatch")
+    if set(attestation) != {
+        "schema_version", "status", "run_id", "verified_at", "outcome",
+        "verification", "execution", "schedule", "evidence", "contract",
+    }:
+        raise ValueError("utility natural-run attestation has the wrong shape")
+    outcome_ref = attestation.get("outcome")
+    verification_ref = attestation.get("verification")
+    schedule = attestation.get("schedule")
+    evidence = attestation.get("evidence")
+    if (
+        attestation.get("schema_version") != UTILITY_INTAKE_NATURAL_SCHEMA
+        or attestation.get("status") != "verified"
+        or attestation.get("run_id") != run_id
+        or attestation.get("verified_at") != pointer.get("updated_at")
+        or attestation.get("execution") != execution
+        or not isinstance(outcome_ref, dict)
+        or set(outcome_ref) != {
+            "receipt_path", "receipt_sha256", "completed_at", "counts", "versions",
+        }
+        or not isinstance(outcome_ref.get("versions"), dict)
+        or set(outcome_ref["versions"]) != {"collector", "query", "parser"}
+        or any(
+            not isinstance(value, str) or not value
+            for value in outcome_ref["versions"].values()
+        )
+        or not isinstance(verification_ref, dict)
+        or set(verification_ref) != {"receipt_path", "receipt_sha256"}
+        or not isinstance(schedule, dict)
+        or set(schedule) != {
+            "timer_unit", "service_unit", "timer_active", "timer_enabled",
+            "timer_target", "timer_last_trigger", "timer_last_trigger_realtime_usec",
+            "timer_last_trigger_monotonic",
+            "timer_next_elapse", "trigger_realtime_usec",
+            "outcome_started_realtime_usec", "trigger_to_outcome_start_usec",
+            "service_journal_first_realtime_usec",
+            "service_journal_last_realtime_usec",
+        }
+        or not isinstance(evidence, dict)
+        or set(evidence) != {
+            "latest_attempt_sha256", "latest_success_sha256", "timer_show_sha256",
+            "timer_journal_sha256", "service_journal_sha256",
+        }
+        or any(
+            not re.fullmatch(r"[0-9a-f]{64}", str(value or ""))
+            for value in evidence.values()
+        )
+        or outcome_ref.get("receipt_path") != pointer.get("outcome_receipt_path")
+        or outcome_ref.get("receipt_sha256") != outcome_sha
+        or schedule.get("timer_unit") != UTILITY_INTAKE_TIMER_UNIT
+        or schedule.get("service_unit") != UTILITY_INTAKE_SERVICE_UNIT
+        or schedule.get("timer_target") != UTILITY_INTAKE_SERVICE_UNIT
+        or schedule.get("timer_active") is not True
+        or schedule.get("timer_enabled") is not True
+        or not str(schedule.get("timer_last_trigger") or "").strip()
+        or not str(schedule.get("timer_last_trigger_monotonic") or "").strip()
+        or not str(schedule.get("timer_next_elapse") or "").strip()
+    ):
+        raise ValueError("utility natural-run attestation contract failed")
+    for key in (
+        "timer_last_trigger_realtime_usec", "trigger_realtime_usec",
+        "outcome_started_realtime_usec",
+        "trigger_to_outcome_start_usec",
+        "service_journal_first_realtime_usec", "service_journal_last_realtime_usec",
+    ):
+        if type(schedule.get(key)) is not int or schedule[key] < 0:
+            raise ValueError("utility natural-run schedule evidence is malformed")
+    if (
+        schedule["outcome_started_realtime_usec"]
+        != schedule["trigger_realtime_usec"]
+        + schedule["trigger_to_outcome_start_usec"]
+        or schedule["service_journal_first_realtime_usec"]
+        < schedule["trigger_realtime_usec"]
+        or schedule["service_journal_last_realtime_usec"]
+        < schedule["service_journal_first_realtime_usec"]
+        or schedule["trigger_to_outcome_start_usec"]
+        > UTILITY_INTAKE_MAX_TRIGGER_TO_OUTCOME_START_USEC
+        or abs(
+            schedule["timer_last_trigger_realtime_usec"]
+            - schedule["trigger_realtime_usec"]
+        ) > UTILITY_INTAKE_MAX_SYSTEMD_TRIGGER_CLOCK_SKEW_USEC
+    ):
+        raise ValueError("utility natural-run schedule evidence is internally inconsistent")
+
+    outcome_path = _utility_recorded_receipt_to_local(outcome_ref.get("receipt_path"))
+    outcome, outcome_raw = _utility_read_private_json(outcome_path)
+    if (
+        hashlib.sha256(outcome_raw).hexdigest() != outcome_sha
+        or outcome.get("schema_version") != UTILITY_INTAKE_RECEIPT_SCHEMA
+        or outcome.get("run_id") != run_id
+        or outcome.get("status") != "ok"
+        or outcome.get("completed_at") != outcome_ref.get("completed_at")
+        or outcome.get("counts") != outcome_ref.get("counts")
+        or outcome.get("versions") != outcome_ref.get("versions")
+        or outcome.get("execution") != execution
+        or outcome.get("verification") != verification_ref
+    ):
+        raise ValueError("utility natural-run outcome is not attestation-bound")
+
+    verification_path = _utility_recorded_receipt_to_local(
+        verification_ref.get("receipt_path"),
+    )
+    verification_sha = str(verification_ref.get("receipt_sha256") or "")
+    verification, verification_raw = _utility_read_private_json(verification_path)
+    if (
+        not re.fullmatch(r"[0-9a-f]{64}", verification_sha)
+        or hashlib.sha256(verification_raw).hexdigest() != verification_sha
+        or verification.get("schema_version") != UTILITY_INTAKE_VERIFICATION_SCHEMA
+        or verification.get("run_id") != run_id
+        or verification.get("status") != "verified"
+        or verification.get("completed_at") != outcome.get("completed_at")
+        or verification.get("counts") != outcome.get("counts")
+        or verification.get("parity") != outcome.get("parity")
+        or verification.get("execution") != execution
+    ):
+        raise ValueError("utility natural-run verification is not outcome-bound")
+    _, pointer_after = _utility_read_private_json(UTILITY_INTAKE_LATEST_NATURAL_POINTER)
+    if pointer_after != pointer_raw:
+        raise ValueError("utility natural-run pointer changed during validation")
+    return {
+        "run_id": run_id,
+        "verified_at": pointer.get("updated_at"),
+        "versions": outcome.get("versions"),
+        "outcome_receipt_sha256": outcome_sha,
+        "latest_success_pointer_sha256": evidence["latest_success_sha256"],
+        "execution": execution,
+        "schedule": schedule,
+    }
+
+
+def load_utility_intake_local_health() -> dict[str, Any]:
+    """Load separate latest-attempt/latest-success chains from the local snapshot."""
+    try:
+        attempt = _load_utility_pointer(UTILITY_INTAKE_LATEST_ATTEMPT_POINTER, "attempt")
+        try:
+            success = _load_utility_pointer(UTILITY_INTAKE_LATEST_SUCCESS_POINTER, "success")
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            success = None
+        if attempt.get("status") == "ok" and (
+            success is None or success.get("run_id") != attempt.get("run_id")
+        ):
+            raise ValueError("latest successful utility pointer is missing or divergent")
+        health = dict(attempt["health"])
+        health["latest_attempt_at"] = attempt.get("completed_at")
+        health["latest_attempt_status"] = attempt.get("status")
+        health["latest_successful_run_at"] = (
+            success.get("completed_at") if success is not None else None
+        )
+        health["latest_successful_run_id"] = success.get("run_id") if success else None
+        health["execution"] = attempt.get("execution")
+        health["latest_success_execution"] = success.get("execution") if success else None
+        health["natural_schedule_verified"] = False
+        health["natural_admission_run_id"] = None
+        health["natural_admission_verified_at"] = None
+        health["natural_admission_reason"] = "independent_natural_run_admission_missing"
+        try:
+            admission = _load_utility_natural_admission()
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            admission = None
+        if admission is not None and success is not None:
+            if (
+                admission.get("run_id") == success.get("run_id")
+                and admission.get("versions") == success.get("versions")
+                and admission.get("outcome_receipt_sha256")
+                == success.get("_local_receipt_sha256")
+                and admission.get("latest_success_pointer_sha256")
+                == success.get("_latest_pointer_sha256")
+            ):
+                health["natural_schedule_verified"] = True
+                health["natural_admission_run_id"] = admission.get("run_id")
+                health["natural_admission_verified_at"] = admission.get("verified_at")
+                health["natural_admission_reason"] = "independent_natural_run_admitted"
+                health["natural_admission_schedule"] = admission.get("schedule")
+            elif admission.get("run_id") != success.get("run_id"):
+                health["natural_admission_reason"] = "latest_success_not_naturally_admitted"
+            elif (
+                admission.get("outcome_receipt_sha256")
+                != success.get("_local_receipt_sha256")
+                or admission.get("latest_success_pointer_sha256")
+                != success.get("_latest_pointer_sha256")
+            ):
+                health["natural_admission_reason"] = "latest_success_bytes_not_naturally_admitted"
+            else:
+                health["natural_admission_reason"] = "collector_version_not_naturally_admitted"
+        return health
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return _utility_unavailable_health()
+
+
+def validate_utility_intake_health(
+    health: dict[str, Any] | None,
+    proof: dict[str, Any],
+    *,
+    observed_at: datetime | None = None,
+) -> dict[str, Any] | None:
+    if health is None:
+        return None
+    validated = dict(health)
+    reported_status = str(health.get("status") or "UNKNOWN").lower()
+    validated["reported_status"] = reported_status
+    validation = {
+        "projection_bound": False,
+        "fresh": False,
+        "verification_receipt": "not_checked",
+        "natural_schedule_verified": health.get("natural_schedule_verified") is True,
+        "reason": None,
+    }
+    if reported_status != "current":
+        validated["status"] = reported_status
+        validation["reason"] = "health_receipt_not_current"
+        validated["validation"] = validation
+        return validated
+
+    if health.get("natural_schedule_verified") is not True:
+        validated["status"] = "unverified"
+        validation["reason"] = str(
+            health.get("natural_admission_reason")
+            or "independent_natural_run_admission_missing"
+        )
+        validated["validation"] = validation
+        return validated
+
+    metrics = health.get("metrics")
+    metrics = metrics if isinstance(metrics, dict) else {}
+    expected = {
+        "sqlite_rows": proof["count"],
+        "supabase_rows": proof["count"],
+        "sqlite_pk_set_sha256": proof["primary_key_set_sha256"],
+        "supabase_pk_set_sha256": proof["primary_key_set_sha256"],
+        "sqlite_projection_rowset_sha256": proof["declared_projection_rowset_sha256"],
+        "supabase_projection_rowset_sha256": proof["declared_projection_rowset_sha256"],
+        "parity_projection_version": UTILITY_INTAKE_PROJECTION_VERSION,
+        "parity_projection_sha256": proof["projection"]["sha256"],
+        "remote_stability_reads": 2,
+        "remote_exact_count_reconciled": True,
+    }
+    mismatches = [key for key, value in expected.items() if metrics.get(key) != value]
+    receipt_path_value = metrics.get("verification_receipt_path")
+    receipt_sha = str(metrics.get("verification_receipt_sha256") or "")
+    if proof["count"] == 0:
+        validated["status"] = "unverified"
+        validation["reason"] = "unexpected_empty_projection"
+        validated["validation"] = validation
+        return validated
+    if mismatches or not receipt_path_value or not re.fullmatch(r"[0-9a-f]{64}", receipt_sha):
+        validated["status"] = "unverified"
+        validation["reason"] = (
+            "projection_metric_mismatch:" + ",".join(mismatches)
+            if mismatches
+            else "verification_receipt_binding_missing"
+        )
+        validated["validation"] = validation
+        return validated
+    validation["projection_bound"] = True
+
+    try:
+        receipt_path = _utility_recorded_receipt_to_local(receipt_path_value)
+    except (OSError, ValueError):
+        validated["status"] = "unverified"
+        validation["verification_receipt"] = "unsafe_local_path"
+        validation["reason"] = "verification_receipt_path_unsafe"
+        validated["validation"] = validation
+        return validated
+    if receipt_path.is_file():
+        try:
+            _, receipt_raw = _utility_read_private_json(receipt_path)
+            actual_sha = hashlib.sha256(receipt_raw).hexdigest()
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            validated["status"] = "unverified"
+            validation["verification_receipt"] = "local_read_failed"
+            validation["reason"] = "verification_receipt_unreadable"
+            validated["validation"] = validation
+            return validated
+        if actual_sha != receipt_sha:
+            validated["status"] = "unverified"
+            validation["verification_receipt"] = "local_hash_mismatch"
+            validation["reason"] = "verification_receipt_hash_mismatch"
+            validated["validation"] = validation
+            return validated
+        validation["verification_receipt"] = "local_hash_verified"
+    else:
+        validated["status"] = "unverified"
+        validation["verification_receipt"] = "local_missing"
+        validation["reason"] = "verification_receipt_missing"
+        validated["validation"] = validation
+        return validated
+
+    timestamp = _utility_health_timestamp(health.get("system_time"))
+    now = (observed_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    if timestamp is None:
+        validated["status"] = "unverified"
+        validation["reason"] = "invalid_system_time"
+    else:
+        age_seconds = (now - timestamp).total_seconds()
+        validation["age_seconds"] = max(0, int(age_seconds))
+        if age_seconds < -300:
+            validated["status"] = "unverified"
+            validation["reason"] = "system_time_in_future"
+        elif age_seconds > UTILITY_INTAKE_FRESHNESS_SECONDS:
+            validated["status"] = "stale"
+            validation["reason"] = "scheduled_receipt_overdue"
+        else:
+            validated["status"] = "current"
+            validation["fresh"] = True
+    validated["validation"] = validation
+    return validated
+
+
+def utility_intake_payload(
+    params: dict[str, list[str]], *, observed_at: datetime | None = None,
+) -> tuple[int, dict[str, Any]]:
+    """Return the exact Accela-derived utility lane plus its independent health receipt."""
+    limit = bounded_int(params.get("limit", [25])[0], 25, 1, 100)
+    offset = bounded_int(params.get("offset", [0])[0], 0, 0, 1_000_000)
+    lane = str(params.get("lane", ["all"])[0] or "all").lower()
+    if lane not in UTILITY_INTAKE_LANES:
+        lane = "all"
+    search = re.sub(r"[\x00-\x1f\x7f]", "", str(params.get("search", [""])[0])).strip()[:180]
+    try:
+        rows = utility_intake_remote_projection()
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return 502, {
+            "error": "Utility and engineering intake rows are temporarily unavailable",
+            "contract": (
+                "No source state was inferred because the dedicated anon GET-only mirror "
+                "read did not complete two stable, exactly counted passes."
+            ),
+        }
+
+    exact: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in rows:
+        identity = str(row.get("permit_number") or "")
+        family = utility_intake_family(identity)
+        if family is None:
+            return 502, {
+                "error": "Utility and engineering intake mirror crossed its family boundary",
+                "contract": "The Desk fails closed on an out-of-contract source identity.",
+            }
+        if identity in seen:
+            return 502, {
+                "error": "Duplicate utility identity in the mirrored source set",
+                "contract": "The Desk fails closed on ambiguous source identity.",
+            }
+        seen.add(identity)
+        item = dict(row)
+        item["family_id"] = family
+        item["family_label"] = UTILITY_INTAKE_FAMILIES[family]
+        exact.append(item)
+    try:
+        all_lane_proof = utility_intake_projection_proof(exact)
+    except ValueError:
+        return 502, {
+            "error": "Utility and engineering intake mirror proof failed",
+            "contract": "The Desk refuses rows that cannot satisfy the declared mirror projection.",
+        }
+
+    selected = [row for row in exact if row.get("family_id") in UTILITY_INTAKE_LANES[lane]]
+    if search:
+        needle = search.upper()
+        selected = [
+            row for row in selected
+            if needle in " ".join(
+                str(row.get(field) or "")
+                for field in (
+                    "permit_number", "permit_type", "status", "address", "parcel_id",
+                    "owner_name", "contractor_name", "description", "family_id",
+                )
+            ).upper()
+        ]
+    selected.sort(
+        key=lambda row: (
+            str(row.get("applied_date") or row.get("opened_date") or ""),
+            str(row.get("permit_number") or ""),
+        ),
+        reverse=True,
+    )
+    family_counts = {
+        family: sum(1 for row in selected if row.get("family_id") == family)
+        for family in sorted(UTILITY_INTAKE_LANES[lane])
+    }
+    raw_health = load_utility_intake_local_health()
+    health = validate_utility_intake_health(
+        raw_health, all_lane_proof, observed_at=observed_at
+    )
+    page = selected[offset:offset + limit]
+    return 200, {
+        "status": "available",
+        "lane": lane,
+        "items": page,
+        "record_count": len(selected),
+        "all_lane_record_count": all_lane_proof["count"],
+        "projection_proof": all_lane_proof,
+        "family_counts": family_counts,
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + len(page) < len(selected),
+        "search": search or None,
+        "newest_event": max((str(row.get("applied_date") or "") for row in selected), default=None) or None,
+        "last_collected": health.get("latest_successful_run_at") if health else None,
+        "latest_attempt_at": health.get("latest_attempt_at") if health else None,
+        "latest_attempt_status": health.get("latest_attempt_status") if health else None,
+        "health": health,
+        "generated_at": now_iso(),
+        "contract": (
+            "Exact ENG-CR, ENG-OAA, ROW-SEW, ROW-WTR and PLB-SEWCP-WT records derived "
+            "from the existing Fort Lauderdale Accela intake. This is not a second utility "
+            "inbox, does not establish the serving utility, and makes no claim that a record "
+            "predates PDMR or a permit application."
+        ),
+    }
+
 def agenda_watch_payload() -> tuple[int, dict[str, Any]]:
     """Return actionable Legistar items and attachment links for private reporting review."""
     meetings = public_json("https://api.thefloridasignal.com/api/meetings")
@@ -2238,6 +3431,12 @@ class Handler(SimpleHTTPRequestHandler):
             code, payload = sunbiz_entities_payload(parse_qs(urlparse(self.path).query))
             self.reply(payload, HTTPStatus.OK if code == 200 else HTTPStatus.BAD_GATEWAY)
             return
+        if route == "/api/admin/utility-intake":
+            if not self.require_admin():
+                return
+            code, payload = utility_intake_payload(parse_qs(urlparse(self.path).query))
+            self.reply(payload, HTTPStatus.OK if code == 200 else HTTPStatus.BAD_GATEWAY)
+            return
         if route == "/api/admin/review-queue":
             if not self.require_admin():
                 return
@@ -2657,6 +3856,26 @@ class Handler(SimpleHTTPRequestHandler):
         self.reply({"error": "Not found"}, HTTPStatus.NOT_FOUND)
 
 
+def serve_data_wire(
+    host: str,
+    port: int,
+    *,
+    refresher: UtilityReceiptRefresher | None = None,
+    server_factory=ThreadingHTTPServer,
+) -> None:
+    server = server_factory((host, port), Handler)
+    refresher_started = False
+    try:
+        if refresher is not None:
+            refresher.start()
+            refresher_started = True
+        server.serve_forever()
+    finally:
+        if refresher is not None and refresher_started:
+            refresher.stop()
+        server.server_close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
@@ -2666,7 +3885,22 @@ def main() -> None:
     print(f"The Data Wire running at http://{args.host}:{args.port}")
     if not ADMIN_TOKEN:
         print("Read-only: set DATA_WIRE_ADMIN_TOKEN to enable editorial writes")
-    ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
+    previous_sigterm = signal.getsignal(signal.SIGTERM)
+
+    def stop_for_launchd(_signum, _frame):
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, stop_for_launchd)
+    try:
+        serve_data_wire(
+            args.host,
+            args.port,
+            refresher=build_utility_receipt_refresher(),
+        )
+    except KeyboardInterrupt:
+        pass
+    finally:
+        signal.signal(signal.SIGTERM, previous_sigterm)
 
 
 if __name__ == "__main__":

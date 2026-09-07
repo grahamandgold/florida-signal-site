@@ -13,6 +13,11 @@ florida_source="${FL_SIGNAL_SOURCE_ROOT:-$resources/florida-signal}"
 project_state_path="${FL_SIGNAL_PROJECT_STATE_PATH:-$florida_source/data/reference/florida_signal_project_state.json}"
 pdmr_db_path="${FL_SIGNAL_PDMR_DB_PATH:-$florida_source/data/pdmr/florida_signal_v1.sqlite}"
 pdmr_candidate_script="${FL_SIGNAL_PDMR_CANDIDATE_SCRIPT:-$florida_source/scripts/nominate_pdmr_candidates.py}"
+utility_local_root="${FL_SIGNAL_UTILITY_LOCAL_ROOT:-$data_dir/utility-intake}"
+utility_sync_script="$resources/scripts/sync_utility_intake_receipts.py"
+utility_ssh_host="${FL_SIGNAL_UTILITY_SSH_HOST:-florida}"
+utility_known_hosts="${FL_SIGNAL_UTILITY_KNOWN_HOSTS:-$HOME/.ssh/known_hosts}"
+utility_sync_interval="${FL_SIGNAL_UTILITY_SYNC_INTERVAL_SECONDS:-300}"
 desk_url="http://127.0.0.1:8788/"
 log_file="/tmp/florida-signal-data-wire-launch.log"
 job_label="com.floridasignal.datawire.server"
@@ -108,8 +113,22 @@ if [[ "${1:-}" == "--serve" ]]; then
   FL_SIGNAL_PROJECT_STATE_PATH="$project_state_path" \
   FL_SIGNAL_PDMR_DB_PATH="$pdmr_db_path" \
   FL_SIGNAL_PDMR_CANDIDATE_SCRIPT="$pdmr_candidate_script" \
+  FL_SIGNAL_UTILITY_LOCAL_ROOT="$utility_local_root" \
+  FL_SIGNAL_UTILITY_RECEIPT_DIR="$utility_local_root/receipts" \
+  FL_SIGNAL_UTILITY_LATEST_ATTEMPT_POINTER="$utility_local_root/latest-attempt.json" \
+  FL_SIGNAL_UTILITY_LATEST_SUCCESS_POINTER="$utility_local_root/latest-success.json" \
+  FL_SIGNAL_UTILITY_LATEST_NATURAL_POINTER="$utility_local_root/latest-natural.json" \
+  FL_SIGNAL_UTILITY_SYNC_SCRIPT="$utility_sync_script" \
+  FL_SIGNAL_UTILITY_SSH_HOST="$utility_ssh_host" \
+  FL_SIGNAL_UTILITY_KNOWN_HOSTS="$utility_known_hosts" \
+  FL_SIGNAL_UTILITY_SYNC_INTERVAL_SECONDS="$utility_sync_interval" \
   exec /usr/bin/python3 "$resources/cms/server.py" --port 8788
 fi
+
+# The server owns the bounded receipt-refresh thread. It runs immediately and
+# every five minutes only while this exact Desk job is alive. The helper uses a
+# cross-process lock and strict known-host verification; failures preserve the
+# prior snapshot, whose receipt clock then ages to stale/unverified.
 
 # A Finder-launched shell app's descendants can be reaped when its executable
 # exits. Submit the loopback server to this user's launchd domain so it remains

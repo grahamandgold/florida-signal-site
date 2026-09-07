@@ -230,6 +230,12 @@
     }
     .explorer__controls input { min-width: min(280px, 60vw); }
     .count-note { margin-left: auto; color: var(--muted); font-size: .85rem; font-family: var(--mono); }
+    .private-receipt-meta { margin: 0 18px 14px; padding: 12px 14px; border: 1px solid var(--line); background: var(--wash); }
+    .private-receipt-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 16px; margin-top: 12px; }
+    .private-receipt-meta[hidden] { display: none; }
+    .private-receipt-meta span { min-width: 0; color: var(--muted); font-size: .72rem; line-height: 1.35; }
+    .private-receipt-meta b { display: block; margin-top: 3px; color: var(--ink); font-family: var(--mono); font-size: .8rem; overflow-wrap: anywhere; }
+    .private-receipt-meta .receipt-detail { grid-column: 1 / -1; }
     .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table { border-collapse: collapse; width: 100%; font-size: .87rem; min-width: 640px; }
     thead th {
@@ -278,6 +284,8 @@
       .explorer__controls input { min-width: 0; width: 100%; }
       .explorer__controls label { width: 100%; }
       .count-note { margin-left: 0; }
+      .private-receipt-meta { margin-inline: 12px; }
+      .private-receipt-grid { grid-template-columns: 1fr 1fr; }
       table { font-size: .8rem; }
       .library__head { align-items: flex-start; flex-direction: column; }
       .source-group { grid-template-columns: 1fr; }
@@ -319,6 +327,7 @@
         <span class="count-note" id="count-note" role="status" aria-live="polite">—</span>
       </div>
       <p class="foot-note" id="search-help" style="margin:0 18px 12px">Choose a source and a field. Searches stay within that source.</p>
+      <details class="private-receipt-meta" id="private-receipt-meta" hidden></details>
       <div class="table-wrap">
         <table id="data-table">
           <thead></thead>
@@ -875,6 +884,42 @@
         ],
         drawer: "generic"
       },
+      utility_sewer_intake: {
+        label: "Sewer + utility intake · exact Accela families",
+        privatePath: "/api/admin/utility-intake",
+        privateParams: { lane: "sewer_utility" },
+        privateLabel: "utility intake source record",
+        privateSearchRaw: true,
+        select: "applied_date,permit_number,family_id,status,address,owner_name,contractor_name,description,last_seen_at",
+        cols: [
+          ["applied_date", "Applied", dateish],
+          ["permit_number", "Record #", v => `<span class="pill">${esc(v)}</span>`],
+          ["family_id", "Family"],
+          ["status", "Status"],
+          ["address", "Address"],
+          ["owner_name", "Owner / applicant"],
+          ["description", "Description"]
+        ],
+        drawer: "permit"
+      },
+      engineering_intake: {
+        label: "Outside-agency engineering intake · exact Accela family",
+        privatePath: "/api/admin/utility-intake",
+        privateParams: { lane: "engineering" },
+        privateLabel: "engineering intake source record",
+        privateSearchRaw: true,
+        select: "applied_date,permit_number,family_id,status,address,owner_name,contractor_name,description,last_seen_at",
+        cols: [
+          ["applied_date", "Applied", dateish],
+          ["permit_number", "Record #", v => `<span class="pill">${esc(v)}</span>`],
+          ["family_id", "Family"],
+          ["status", "Status"],
+          ["address", "Address"],
+          ["owner_name", "Owner / applicant"],
+          ["description", "Description"]
+        ],
+        drawer: "permit"
+      },
       sunbiz_entities: {
         label: "Sunbiz entity matches · private",
         privatePath: "/api/admin/sunbiz-entities",
@@ -1164,8 +1209,8 @@
         { label: "Agenda Watch", note: "Legistar items, staff reports and attachments; timing varies by project", href: "/agenda.html", status: "Open view", state: "private" }
       ]},
       { eyebrow: "S2 · Next sensors", title: "Early clues to research + connect", items: [
-        { label: "Sewer + utility capacity", note: "Official ENG-CR capacity requests are public Accela records; no dedicated machine-readable letter registry exists", href: "https://www.fortlauderdale.gov/Government/Departments/Development-Services/Permitting-Services/Engineering-Permits-Services/Water-and-Wastewater-Capacity-Availability-Request", status: "Research only · HTML", state: "research" },
-        { label: "Engineering intake", note: "Use exact ENG-OAA outside-agency records; generic TMP records are downstream/mixed and explicitly excluded", href: "https://aca-prod.accela.com/FTL/Cap/CapHome.aspx?module=Permits", status: "Research only · HTML", state: "research" },
+        { label: "Sewer + utility intake", note: "Exact ENG-CR, ROW-SEW, ROW-WTR and PLB-SEWCP-WT records already carried by Accela", table: "utility_sewer_intake", connection: "utility-sewer", componentId: "utility-intake", refresh: "automated" },
+        { label: "Outside-agency engineering intake", note: "Exact parent ENG-OAA records; broad ENG/TMP matches remain excluded", table: "engineering_intake", connection: "engineering-intake", componentId: "utility-intake", refresh: "automated" },
         { label: "Assemblage + new LLC", note: "Join deed assemblage to newly formed entities; detector not connected", href: "/#project-control", status: "Planned join", state: "research" },
         { label: "Lobbyist registrations", note: "Official registration and client HTML can be snapshotted, but the City exposes no durable row ID or API", href: "https://www.fortlauderdale.gov/Government/Departments/City-Clerks-Office/Lobbyist-Information", status: "Research only · HTML", state: "research" },
         { label: "SFWMD filings", note: "File-only shadow collector is pushed; two manual observations each saved receipts for 1,100 official rows, three Fort Lauderdale intersections and zero rejected/duplicate identities. No natural timer, stage, database mirror or detector is connected", href: "https://geoweb.sfwmd.gov/agsext1/rest/services/Regulation_ApplicationPermits/EnvironmentalResourceApplications_RegPermitting/MapServer/14", status: "Shadow observed · not connected", state: "research" }
@@ -1260,10 +1305,12 @@
         const labels = document.querySelectorAll(`[data-source-status="${item.key}"]`);
         try {
           const cfg = item.table ? TABLES[item.table] : null;
+          const cfgPrivateParams = new URLSearchParams({ limit: "1", offset: "0" });
+          Object.entries(cfg && cfg.privateParams || {}).forEach(([key, value]) => cfgPrivateParams.set(key, value));
           const payload = item.privatePath
             ? await window.FloridaSignalNewsroom.admin(item.privatePath)
             : cfg && cfg.privatePath
-              ? await window.FloridaSignalNewsroom.admin(cfg.privatePath + "?limit=1&offset=0")
+              ? await window.FloridaSignalNewsroom.admin(cfg.privatePath + "?" + cfgPrivateParams.toString())
               : null;
           const data = item.privatePath
             ? (Number(payload.record_count || 0) > 0 ? [payload] : [])
@@ -1271,7 +1318,11 @@
               ? payload.items
               : await (await sbFetch(item.table, { select: cfg.probe || cfg.select.split(",")[0], limit: "1" })).json();
           const hasRows = Array.isArray(data) && data.length > 0;
-          const receipt = item.receiptId ? sourceHealth.get(item.receiptId) : item.componentId ? componentHealth.get(item.componentId) : null;
+          const receipt = item.receiptId
+            ? sourceHealth.get(item.receiptId)
+            : item.componentId
+              ? payload && payload.health || componentHealth.get(item.componentId)
+              : payload && payload.health;
           const liveStatus = String(
             item.key === "pdmr" && payload ? payload.receipt_status : receipt && receipt.status || "UNKNOWN"
           ).toLowerCase();
@@ -1282,26 +1333,46 @@
                 : "snapshot"
               : item.refresh || "connected"
           ).toLowerCase();
+          const naturalAutomationRequired = item.componentId === "utility-intake";
+          const naturalAutomationVerified = !naturalAutomationRequired || Boolean(
+            receipt && receipt.natural_schedule_verified === true &&
+            receipt.validation && receipt.validation.natural_schedule_verified === true
+          );
+          const displayedRefresh = naturalAutomationVerified
+            ? refresh
+            : "automation unverified";
+          const displayedLiveStatus = naturalAutomationRequired && !naturalAutomationVerified && liveStatus === "current"
+            ? "unverified"
+            : liveStatus;
           if (hasRows) {
             connected += 1;
             const rowOnlyHealthUnknown = Boolean(
               receipt && liveStatus === "unavailable" &&
               String(receipt.status_basis || "").includes("no_terminal_receipt")
             );
-            if (liveStatus !== "unknown" && !rowOnlyHealthUnknown) freshness[liveStatus] = (freshness[liveStatus] || 0) + 1;
+            if (displayedLiveStatus !== "unknown" && !rowOnlyHealthUnknown) freshness[displayedLiveStatus] = (freshness[displayedLiveStatus] || 0) + 1;
             if (refresh === "manual" || refresh === "snapshot") manualOrSnapshot += 1;
-            const healthy = liveStatus === "current";
-            const warning = ["delayed", "stale", "error", "unavailable", "suppressed", "unverified"].includes(liveStatus);
-            const text = liveStatus !== "unknown" && !rowOnlyHealthUnknown
-              ? `${liveStatus} · ${refresh}`
-              : `connected · ${refresh} · health unknown`;
+            const healthy = displayedLiveStatus === "current";
+            const warning = ["delayed", "stale", "error", "unavailable", "suppressed", "unverified"].includes(displayedLiveStatus);
+            const text = displayedLiveStatus !== "unknown" && !rowOnlyHealthUnknown
+              ? `${displayedLiveStatus} · ${displayedRefresh}`
+              : naturalAutomationRequired
+                ? `connected · ${displayedRefresh} · health unknown`
+                : `connected · ${refresh} · health unknown`;
             labels.forEach(label => {
               label.textContent = text;
-              label.dataset.state = healthy ? "connected" : warning || liveStatus === "unknown" ? "warning" : "manual";
+              label.dataset.state = healthy ? "connected" : warning || displayedLiveStatus === "unknown" ? "warning" : "manual";
               label.title = receipt ? `Event through ${receipt.event_through || "not exposed"}; fetched ${receipt.fetched_at || "not exposed"}; health receipt ${receipt.health_receipt_at || "not exposed"}${receipt.health_receipt_status ? ` (${receipt.health_receipt_status})` : ""}; basis ${receipt.status_basis || "not exposed"}. ${receipt.detail || ""}` : `Rows are available; no live freshness receipt is configured. Refresh mode: ${refresh}.`;
             });
           } else {
-            labels.forEach(label => { label.textContent = "Connected · empty"; label.dataset.state = "empty"; });
+            if (displayedLiveStatus !== "unknown") freshness[displayedLiveStatus] = (freshness[displayedLiveStatus] || 0) + 1;
+            const warning = ["delayed", "stale", "error", "unavailable", "suppressed", "unverified"].includes(displayedLiveStatus);
+            const text = displayedLiveStatus !== "unknown" ? `${displayedLiveStatus} · empty · ${displayedRefresh}` : `connected · empty · ${displayedRefresh} · health unknown`;
+            labels.forEach(label => {
+              label.textContent = text;
+              label.dataset.state = warning ? "warning" : "empty";
+              label.title = receipt ? `Event ${receipt.event_through || "not exposed"}; system ${receipt.system_time || "not exposed"}. ${receipt.detail || ""}` : "No rows or health receipt were returned.";
+            });
             empty += 1;
           }
         } catch (error) {
@@ -1330,14 +1401,15 @@
     const FIELD_LABELS = {id:"PDMR request number",permit:"Permit number",folio:"Parcel / folio number",instrument:"Clerk instrument number",addr:"Exact address",owner:"Owner / applicant",project:"Project name",license:"License number",asn:"FAA case number",type:"Document type",text:"Entity name"};
     function syncSearchFields() {
       const select=q("#search-field"), previous=select.value;
-      const fields=state.table==="pdmr_intent"?Array.from(PDMR_PREFIXES):state.table==="sunbiz_entities"?["text"]:Object.keys(EXACT_FIELDS[state.table]||{});
-      select.innerHTML=fields.map(key=>`<option value="${key}">${FIELD_LABELS[key]||key}</option>`).join("");
+      const utilityLookup=TABLES[state.table].privatePath === "/api/admin/utility-intake";
+      const fields=utilityLookup?["text"]:state.table==="pdmr_intent"?Array.from(PDMR_PREFIXES):state.table==="sunbiz_entities"?["text"]:Object.keys(EXACT_FIELDS[state.table]||{});
+      select.innerHTML=fields.map(key=>`<option value="${key}">${utilityLookup?"Words or record number":FIELD_LABELS[key]||key}</option>`).join("");
       if(fields.includes(previous))select.value=previous;
       const activePrefix=String(state.search||'').match(/^([a-z]+)\s*:/i);
       if(activePrefix && fields.includes(activePrefix[1].toLowerCase()))select.value=activePrefix[1].toLowerCase();
       select.disabled=!fields.length;
       q("#search-input").disabled=!fields.length;
-      q("#search-help").textContent="Searching only: "+TABLES[state.table].label+". "+(state.table==="pdmr_intent"||state.table==="sunbiz_entities"?"Uses this source’s existing lookup.":fields.length?"Exact values only; partial addresses may return no matches.":"Browse this source using its preset views.");
+      q("#search-help").textContent="Searching only: "+TABLES[state.table].label+". "+(utilityLookup||state.table==="pdmr_intent"||state.table==="sunbiz_entities"?"Uses this source’s existing lookup.":fields.length?"Exact values only; partial addresses may return no matches.":"Browse this source using its preset views.");
     }
     function commitSearch() {
       const value = q("#search-input").value.trim();
@@ -1404,12 +1476,44 @@
     }
     function clearChips() { document.querySelectorAll(".chip").forEach(c => c.dataset.active = "false"); }
 
+    function renderPrivateReceiptMeta(result) {
+      const target = q("#private-receipt-meta");
+      if (!result) { target.hidden = true; target.innerHTML = ""; return; }
+      const health = result.health || {};
+      const validation = health.validation || {};
+      const collected = result.last_collected ? new Date(result.last_collected) : null;
+      const collectedText = collected && !Number.isNaN(collected.getTime()) ? collected.toLocaleString() : "not exposed";
+      const attempted = result.latest_attempt_at ? new Date(result.latest_attempt_at) : null;
+      const attemptedText = attempted && !Number.isNaN(attempted.getTime()) ? attempted.toLocaleString() : "not exposed";
+      const naturalVerified = health.natural_schedule_verified === true && validation.natural_schedule_verified === true;
+      const naturalVerifiedAt = health.natural_admission_verified_at ? new Date(health.natural_admission_verified_at) : null;
+      const naturalVerifiedAtText = naturalVerifiedAt && !Number.isNaN(naturalVerifiedAt.getTime()) ? naturalVerifiedAt.toLocaleString() : "not verified";
+      const automationText = naturalVerified
+        ? `verified · run ${health.natural_admission_run_id || "not exposed"} · ${naturalVerifiedAtText}`
+        : "not verified · manual canary does not establish automation";
+      const displayedHealthStatus = !naturalVerified && String(health.status || "").toLowerCase() === "current"
+        ? "unverified"
+        : String(health.status || "unknown").toLowerCase();
+      const detail = [health.detail, validation.reason ? `Validation: ${validation.reason}` : ""].filter(Boolean).join(" · ") || "No independent health detail was returned.";
+      target.innerHTML =
+        `<summary>Connection verification · ${esc(displayedHealthStatus)}</summary><div class="private-receipt-grid">` +
+        `<span>Matching rows<b data-receipt-total>${esc(result.record_count == null ? "unknown" : result.record_count)}</b></span>` +
+        `<span>Newest applied date<b data-receipt-event>${esc(result.newest_event || "not exposed")}</b></span>` +
+        `<span>Latest successful parity run<b data-receipt-collected>${esc(collectedText)}</b></span>` +
+        `<span>Latest attempt<b data-receipt-attempt>${esc(attemptedText)} · ${esc(result.latest_attempt_status || "unknown")}</b></span>` +
+        `<span>Natural schedule<b data-receipt-automation>${esc(automationText)}</b></span>` +
+        `<span>Receipt health<b data-receipt-health>${esc(displayedHealthStatus)}</b></span>` +
+        `<span class="receipt-detail">Health detail<b data-receipt-detail>${esc(detail)}</b></span></div>`;
+      target.hidden = false;
+    }
+
     let tableLoadVersion=0;
     async function loadTable() {
       const loadVersion=++tableLoadVersion;
       const cfg = TABLES[state.table];
       const thead = q("#data-table thead");
       const tbody = q("#data-table tbody");
+      renderPrivateReceiptMeta(null);
       thead.innerHTML = "<tr>" + cfg.cols.map(c => `<th>${esc(c[1])}</th>`).join("") + "</tr>";
       tbody.innerHTML = `<tr class="empty-row"><td colspan="${cfg.cols.length}">Loading…</td></tr>`;
       const params = { select: cfg.select, limit: String(PAGE), offset: String(state.offset) };
@@ -1420,6 +1524,7 @@
         let data, privateResult = null;
         if (cfg.privatePath) {
           const privateParams = new URLSearchParams({ limit: String(PAGE), offset: String(state.offset) });
+          Object.entries(cfg.privateParams || {}).forEach(([key, value]) => privateParams.set(key, value));
           if (term) privateParams.set("search", cfg.privateSearchRaw ? term : term.replace(/^[a-z]+\s*:/i, ""));
           privateResult = await window.FloridaSignalNewsroom.admin(cfg.privatePath + "?" + privateParams.toString());
           data = Array.isArray(privateResult.items) ? privateResult.items : [];
@@ -1445,10 +1550,14 @@
             }).join("") + "</tr>";
           }).join("");
         }
-        q("#page-note").textContent = data.length ? "rows " + (state.offset + 1) + "–" + (state.offset + data.length) : "0 rows shown";
+        const exactTotal = cfg.privatePath && privateResult.record_count != null && Number.isFinite(Number(privateResult.record_count)) ? Number(privateResult.record_count) : null;
+        const pageStart = data.length ? state.offset + 1 : 0;
+        q("#page-note").textContent = (data.length ? "rows " + pageStart + "–" + (state.offset + data.length) : "0 rows shown") + (exactTotal == null ? "" : " of " + exactTotal);
         q("#prev-btn").disabled = state.offset === 0;
         q("#next-btn").disabled = cfg.privatePath ? !privateResult.has_more : data.length < PAGE;
-        if (term) {
+        if (term && cfg.privatePath && exactTotal != null) {
+          q("#count-note").textContent = exactTotal + " exact match" + (exactTotal === 1 ? "" : "es");
+        } else if (term) {
           q("#count-note").textContent = data.length + (data.length === PAGE ? "+" : "") + " exact match" + (data.length === 1 ? "" : "es") + " shown";
         } else if (cfg.privatePath && state.table === "pdmr_intent") {
           const total = Number(privateResult.record_count || 0);
@@ -1463,11 +1572,12 @@
           q("#count-note").innerHTML = `${total.toLocaleString()} public PDMR record${total === 1 ? "" : "s"} · portal through ${esc(dateish(privateResult.newest_event) || "not exposed")} · source checked ${esc(dateish(privateResult.source_checked_at || privateResult.last_collected) || "not recorded")}${esc(runText)}${receiptText}`;
         } else if (cfg.privatePath) {
           const rowLabel = cfg.privateLabel || "private resolver row";
-          q("#count-note").textContent = data.length + (privateResult.has_more ? "+" : "") + " " + rowLabel + (data.length === 1 ? "" : "s") + " shown";
+          q("#count-note").textContent = exactTotal == null ? data.length + (privateResult.has_more ? "+" : "") + " " + rowLabel + "s shown" : exactTotal + " " + rowLabel + (exactTotal === 1 ? "" : "s");
         } else {
           const countCol = cfg.select.split(",")[0];
           tableCount(state.table, countCol).then(c => { if(loadVersion===tableLoadVersion)q("#count-note").textContent = rowsLabel(c); }).catch(() => { if(loadVersion===tableLoadVersion)q("#count-note").textContent = "Count unavailable"; });
         }
+        renderPrivateReceiptMeta(cfg.privatePath === "/api/admin/utility-intake" ? privateResult : null);
         tbody.querySelectorAll("tr[data-i]").forEach(tr => {
           const open = () => openDrawer(state.rows[Number(tr.dataset.i)], cfg, tr);
           tr.addEventListener("click", open);
@@ -1477,6 +1587,7 @@
         });
       } catch (e) {
         if(loadVersion!==tableLoadVersion)return;
+        renderPrivateReceiptMeta(null);
         tbody.innerHTML = `<tr class="empty-row"><td colspan="${cfg.cols.length}">Could not load: ${esc(e.message)}</td></tr>`;
       }
     }
