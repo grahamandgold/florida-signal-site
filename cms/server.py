@@ -245,6 +245,45 @@ def require_terminal_health(receipt: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def overlay_external_source_health(document: dict[str, Any]) -> dict[str, Any]:
+    """Read only the sanitized terminal summary; never request private receipts."""
+    code, rows = supabase_request(
+        "external_source_desk_health?select=source_id,status,completed_at,event_through,"
+        "rows_observed,rows_accepted,rows_rejected&limit=2"
+    )
+    if code >= 400 or not isinstance(rows, list):
+        return document
+    sources = {row.get("id"): dict(row) for row in document.get("sources", [])
+               if isinstance(row, dict) and row.get("id")}
+    for receipt in rows:
+        if not isinstance(receipt, dict):
+            continue
+        source_id = {"fdep_erp": "fdep", "faa_oeaaa": "faa"}.get(receipt.get("source_id"))
+        if not source_id:
+            continue
+        terminal = receipt.get("status")
+        clock = receipt.get("completed_at")
+        freshness = status_from_clock(clock, 26, 50)
+        status = "unavailable"
+        if terminal in {"ok", "empty"} and receipt.get("rows_rejected") == 0:
+            status = freshness
+        elif terminal == "failed":
+            status = "error"
+        elif terminal in {"partial", "source_wait"}:
+            status = "stale" if freshness == "stale" else "delayed"
+        source = sources.setdefault(source_id, {"id": source_id, "label": source_id.upper()})
+        source.update({
+            "status": status, "health_receipt_at": clock,
+            "health_receipt_status": terminal, "system_time": clock,
+            "status_basis": "sanitized_terminal_receipt",
+            "detail": f"Latest collector: {terminal}; {receipt.get('rows_accepted')} accepted, "
+                      f"{receipt.get('rows_rejected')} rejected. Completion time determines freshness.",
+        })
+        if receipt.get("event_through"):
+            source["event_through"] = receipt["event_through"]
+    return {**document, "sources": list(sources.values())}
+
+
 def review_queue_path(params: dict[str, list[str]]) -> tuple[str, int, int, str]:
     """Build the bounded, indexed review-queue query used by the local desk."""
     status = (params.get("status", ["NEW"])[0] or "NEW").upper()
@@ -322,7 +361,11 @@ def public_json(url: str) -> dict[str, Any]:
     try:
         with urllib.request.urlopen(request, timeout=8) as response:
             payload = json.loads(response.read().decode())
-            return payload if isinstance(payload, dict) else {}
+            if not isinstance(payload, dict):
+                return {}
+            if url == "https://api.thefloridasignal.com/api/data-health":
+                return overlay_external_source_health(payload)
+            return payload
     except (OSError, ValueError):
         return {}
 
@@ -393,7 +436,23 @@ def project_state_payload() -> tuple[int, dict[str, Any]]:
 
     state = clarify_frozen_pdmr_cohort(state)
 
-    health = public_json("https://api.thefloridasignal.com/api/data-health")
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        pending = [
+            pool.submit(public_json, "https://api.thefloridasignal.com/api/data-health"),
+            pool.submit(supabase_request,
+                "broward_clerk_preliminary_run?select=status,completed_at,observed_at,"
+                "attempted_through,event_through,rows_observed,rows_new,reason"
+                "&order=completed_at.desc.nullslast&limit=1"),
+            pool.submit(supabase_request,
+                "broward_clerk_preliminary?select=fetched_at&fetched_at=not.is.null"
+                "&order=fetched_at.desc.nullslast&limit=1"),
+            pool.submit(pdmr_intent_payload, limit=1),
+        ]
+        health_reads = [future.result() for future in pending]
+
+    health = health_reads[0]
     health_rows = {
         str(row.get("id")): row for row in health.get("sources", [])
         if isinstance(row, dict) and row.get("id")
@@ -405,15 +464,8 @@ def project_state_payload() -> tuple[int, dict[str, Any]]:
     # The public API may lag a local Desk build. Overlay only independently read
     # source clocks for the preliminary Clerk lane; this never invents a green
     # state from a timer or from the newest record's first-seen timestamp.
-    preliminary_run_code, preliminary_run_rows = supabase_request(
-        "broward_clerk_preliminary_run?select=status,completed_at,observed_at,"
-        "attempted_through,event_through,rows_observed,rows_new,reason"
-        "&order=completed_at.desc.nullslast&limit=1"
-    )
-    preliminary_fetch_code, preliminary_fetch_rows = supabase_request(
-        "broward_clerk_preliminary?select=fetched_at&fetched_at=not.is.null"
-        "&order=fetched_at.desc.nullslast&limit=1"
-    )
+    (preliminary_run_code, preliminary_run_rows) = health_reads[1]
+    (preliminary_fetch_code, preliminary_fetch_rows) = health_reads[2]
     preliminary_run = (
         preliminary_run_rows[0]
         if preliminary_run_code < 400 and isinstance(preliminary_run_rows, list)
@@ -479,7 +531,7 @@ def project_state_payload() -> tuple[int, dict[str, Any]]:
     # PDMR stays a source receipt rather than inheriting pipeline health from the
     # tracked manifest. The private mirror may prove rows and terminal runs; only an
     # explicit, independently recorded natural-run proof may label it automated.
-    pdmr_code, pdmr = pdmr_intent_payload(limit=1)
+    (pdmr_code, pdmr) = health_reads[3]
     if pdmr_code == 200 and int(pdmr.get("record_count") or 0) > 0:
         source_receipts = [row for row in source_receipts if row.get("id") != "pdmr"]
         connection_mode = str(pdmr.get("connection_mode") or "local_snapshot")
@@ -733,49 +785,63 @@ def _pdmr_supabase_intent_payload(
         prefer = "count=exact" if exact_count else ""
         return supabase_request_with_headers(f"{table}?{urlencode(params)}", prefer=prefer)
 
-    summary_code, summary_rows, summary_headers = request_rows(
-        select="event_date,last_seen_at",
-        filters=base_filters,
-        order="event_date.desc.nullslast,source_record_id.desc",
-        exact_count=True,
-    )
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=7) as pool:
+        pending_0 = pool.submit(request_rows,
+            select="event_date,last_seen_at",
+            filters=base_filters,
+            order="event_date.desc.nullslast,source_record_id.desc",
+            exact_count=True,
+        )
+        pending_1 = pool.submit(request_rows,
+            select="last_seen_at",
+            filters=base_filters,
+            order="last_seen_at.desc.nullslast",
+        )
+        pending_2 = pool.submit(request_rows,
+            select="event_id",
+            filters=[*base_filters, ("event_date", f"gte.{recent_since}")],
+            exact_count=True,
+        )
+        pending_3 = pool.submit(request_rows,
+            table="parcel_event_versions", select="version_id",
+            filters=[("event_id", "like.lauderbuild:pdmr:%")], exact_count=True,
+        )
+        pending_4 = pool.submit(request_rows,
+            table="pdmr_collection_failures", select="source_record_id",
+            filters=[], exact_count=True,
+        )
+        pending_5 = pool.submit(request_rows,
+            table="pdmr_collection_failures", select="source_record_id",
+            filters=[("resolved_at", "is.null")], exact_count=True,
+        )
+        pending_6 = pool.submit(request_rows,
+            table="pdmr_collection_runs", select="run_id", filters=[], exact_count=True,
+        )
+        reads = [future.result() for future in (pending_0, pending_1, pending_2, pending_3, pending_4, pending_5, pending_6,)]
+
+    (summary_code, summary_rows, summary_headers) = reads[0]
     total_count = _pdmr_content_range_count(summary_headers)
     if summary_code >= 400 or not isinstance(summary_rows, list) or total_count is None:
         return 503, {"error": "private PDMR mirror summary unavailable"}
     newest_event = summary_rows[0].get("event_date") if summary_rows else None
 
-    latest_seen_code, latest_seen_rows, _ = request_rows(
-        select="last_seen_at",
-        filters=base_filters,
-        order="last_seen_at.desc.nullslast",
-    )
+    (latest_seen_code, latest_seen_rows, _) = reads[1]
     if latest_seen_code >= 400 or not isinstance(latest_seen_rows, list):
         return 503, {"error": "private PDMR observation clock unavailable"}
     latest_record_observed_at = latest_seen_rows[0].get("last_seen_at") if latest_seen_rows else None
 
-    recent_code, recent_rows, recent_headers = request_rows(
-        select="event_id",
-        filters=[*base_filters, ("event_date", f"gte.{recent_since}")],
-        exact_count=True,
-    )
+    (recent_code, recent_rows, recent_headers) = reads[2]
     recent_count = _pdmr_content_range_count(recent_headers)
     if recent_code >= 400 or not isinstance(recent_rows, list) or recent_count is None:
         return 503, {"error": "private PDMR recent count unavailable"}
 
-    version_code, version_rows, version_headers = request_rows(
-        table="parcel_event_versions", select="version_id",
-        filters=[("event_id", "like.lauderbuild:pdmr:%")], exact_count=True,
-    )
+    (version_code, version_rows, version_headers) = reads[3]
     version_count = _pdmr_content_range_count(version_headers)
-    failure_code, failure_rows, failure_headers = request_rows(
-        table="pdmr_collection_failures", select="source_record_id",
-        filters=[], exact_count=True,
-    )
+    (failure_code, failure_rows, failure_headers) = reads[4]
     failure_count = _pdmr_content_range_count(failure_headers)
-    unresolved_code, unresolved_rows, unresolved_headers = request_rows(
-        table="pdmr_collection_failures", select="source_record_id",
-        filters=[("resolved_at", "is.null")], exact_count=True,
-    )
+    (unresolved_code, unresolved_rows, unresolved_headers) = reads[5]
     unresolved_failure_count = _pdmr_content_range_count(unresolved_headers)
     if (
         version_code >= 400 or not isinstance(version_rows, list) or version_count is None
@@ -784,9 +850,7 @@ def _pdmr_supabase_intent_payload(
         or unresolved_failure_count is None
     ):
         return 503, {"error": "private PDMR mirror parity counts unavailable"}
-    run_total_code, run_total_rows, run_total_headers = request_rows(
-        table="pdmr_collection_runs", select="run_id", filters=[], exact_count=True,
-    )
+    (run_total_code, run_total_rows, run_total_headers) = reads[6]
     run_count = _pdmr_content_range_count(run_total_headers)
     if run_total_code >= 400 or not isinstance(run_total_rows, list) or run_count is None:
         return 503, {"error": "private PDMR run count unavailable"}
