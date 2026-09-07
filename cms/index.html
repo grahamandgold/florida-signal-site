@@ -531,7 +531,7 @@
 <body>
   <div id="desk-shell" data-current="editorial"></div>
 
-  <header class="masthead">
+  <header class="masthead desk-connection" hidden>
     <div class="masthead__inner">
       <form class="connection" id="connection-form">
         <label class="field--compact">
@@ -550,11 +550,11 @@
     </div>
   </header>
 
-  <div class="status-strip">
+  <div class="status-strip desk-connection-status">
     <div class="status-strip__inner">
       <div class="status-copy" role="status" aria-live="polite">
         <span class="status-dot" id="status-dot" data-state="locked" aria-hidden="true"></span>
-        <span id="desk-status">Desk locked · enter the local admin token</span>
+        <span id="desk-status">Opening your private desk…</span> <button type="button" id="retry-connection" class="button button--ghost" hidden>Retry connection</button>
       </div>
       <div class="privacy-note">Token stays in this tab · drafts never enter the public wire</div>
     </div>
@@ -604,7 +604,7 @@
           <span><b>4 · Edit</b>A human clears claims and context.</span>
           <span><b>5 · Send</b>Not connected. No sending path exists in this build.</span>
         </div>
-        <div class="bank-list" id="bank-list" aria-live="polite"><div class="empty"><div><strong>Desk is locked</strong>No Brief bank data is loaded until the private API authorizes this tab.</div></div></div>
+        <div class="bank-list" id="bank-list" aria-live="polite"><div class="empty"><div><strong>Opening Brief bank…</strong>Checking your private session.</div></div></div>
       </div>
     </section>
 
@@ -620,8 +620,9 @@
           <span class="badge">Draft gate</span>
         </header>
         <form class="panel__body" id="story-form">
-          <fieldset class="form-section">
-            <legend>01 · Story</legend>
+          <nav class="brief-form-nav" aria-label="Draft steps"><a href="#brief-write">1 · Write</a><a href="#brief-sources">2 · Sources</a><a href="#brief-checks">3 · Editor checks</a></nav>
+          <section id="brief-write" aria-label="Write">          <fieldset class="form-section">
+            <legend>Write</legend>
             <div class="grid">
               <label>
                 <span class="label">City <span class="required" aria-hidden="true">*</span></span>
@@ -640,17 +641,13 @@
                 </select>
                 <span class="field-help">Required on every brief. Only Fort Lauderdale has a public desk.</span>
               </label>
-              <label>
-                <span class="label">County <span class="required" aria-hidden="true">*</span></span>
-                <input name="county" value="broward-county" required pattern="[a-z0-9][a-z0-9-]{1,79}" autocomplete="off">
-                <span class="field-help">Hidden geography metadata; use the stable county key.</span>
-              </label>
+              <input name="county" type="hidden" value="broward-county">
               <label class="span-2">
                 <span class="label">Headline <span class="required" aria-hidden="true">*</span></span>
                 <input name="headline" required maxlength="300" placeholder="A precise, record-led headline">
               </label>
               <label class="span-2">
-                <span class="label">Summary / dek <span class="required" aria-hidden="true">*</span></span>
+                <span class="label">Summary <span class="required" aria-hidden="true">*</span></span>
                 <textarea name="dek" required maxlength="1000" rows="3" placeholder="What changed, where, and why it matters."></textarea>
               </label>
               <label class="span-2">
@@ -667,9 +664,7 @@
                 <span class="field-help">The event or filing date, not the batch-pull time.</span>
               </label>
             </div>
-          </fieldset>
-
-          <fieldset class="form-section writing-profile">
+          </fieldset><details class="desk-details"><summary>Writing preferences and ethics rules</summary>          <fieldset class="form-section writing-profile">
             <legend>01A · Brief writing profile</legend>
             <p class="writing-profile__promise"><strong>Compelling, never inflated.</strong> These controls guide the draft and remain visible in its packet. They cannot override evidence, attribution or the human approval gate.</p>
             <div class="grid">
@@ -706,40 +701,9 @@
               <label><input type="checkbox" name="ethics_rules" value="no_invented_context" checked required>Never invent background, quotes, motives or connections.</label>
               <label><input type="checkbox" name="ethics_rules" value="role_based_byline_until_launch" checked>Keep the public byline role-based until explicitly changed.</label>
             </div>
-          </fieldset>
-
-          <fieldset class="form-section">
-            <legend>02 · Verification brief</legend>
-            <div class="grid">
-              <label>
-                <span class="label">Verification status <span class="required" aria-hidden="true">*</span></span>
-                <select name="verification_status" required>
-                  <option value="needs_verification">Needs verification</option>
-                  <option value="verified">Verified by editor</option>
-                </select>
-              </label>
-              <label>
-                <span class="label">Current trigger <span class="required" aria-hidden="true">*</span></span>
-                <input name="current_trigger" required maxlength="1000" placeholder="The new filing, vote, application, transaction or other change">
-              </label>
-              <label class="span-2">
-                <span class="label">Project identity basis <span class="required" aria-hidden="true">*</span></span>
-                <textarea name="project_identity_basis" required rows="3" maxlength="3000" placeholder="Explain how the parcel, project, applicant and cited record were matched."></textarea>
-              </label>
-              <label class="span-2">
-                <span class="label">Claim slots (JSON) <span class="required" aria-hidden="true">*</span></span>
-                <textarea name="claim_slots" required rows="6" spellcheck="false" placeholder="Paste a JSON array. Each object should pair one material claim with its source URL and exact document locator."></textarea>
-                <span class="field-help">No unsupported prose: one claim per object, with a public source and page, section, row or record locator.</span>
-              </label>
-              <label class="span-2">
-                <span class="label">Unresolved issues</span>
-                <textarea name="unresolved_issues" rows="3" placeholder="One unresolved reporting issue per line. Leave blank only when all material questions are resolved."></textarea>
-              </label>
-            </div>
-          </fieldset>
-
-          <fieldset class="form-section">
-            <legend>03 · Source</legend>
+          </fieldset></details></section>
+          <section id="brief-sources" aria-label="Sources">          <fieldset class="form-section">
+            <legend>Main source</legend>
             <div class="grid">
               <label class="span-2">
                 <span class="label">Public source URL <span class="required" aria-hidden="true">*</span></span>
@@ -758,10 +722,35 @@
                 <input name="hero_image" type="url" placeholder="https://...">
               </label>
             </div>
-          </fieldset>
-
-          <fieldset class="form-section">
-            <legend>04 · Taxonomy and place</legend>
+          </fieldset>          <fieldset class="form-section">
+            <legend>Match claims to sources</legend>
+            <div class="grid">
+              <label>
+                <span class="label">Verification status <span class="required" aria-hidden="true">*</span></span>
+                <select name="verification_status" required>
+                  <option value="needs_verification">Needs verification</option>
+                  <option value="verified">Verified by editor</option>
+                </select>
+              </label>
+              <label>
+                <span class="label">What changed? <span class="required" aria-hidden="true">*</span></span>
+                <input name="current_trigger" required maxlength="1000" placeholder="The new filing, vote, application, transaction or other change">
+              </label>
+              <label class="span-2">
+                <span class="label">How do the records match this project? <span class="required" aria-hidden="true">*</span></span>
+                <textarea name="project_identity_basis" required rows="3" maxlength="3000" placeholder="Explain how the parcel, project, applicant and cited record were matched."></textarea>
+              </label>
+              <div class="span-2"><p><strong>Claims and evidence *</strong> Add one claim at a time, with its public source and exact page or record location.</p>
+                <input type="hidden" name="claim_slots" value="[]">
+                <div id="claim-editor"></div><button type="button" class="button button--ghost" id="add-claim">Add another claim</button>
+              </div>
+              <label class="span-2">
+                <span class="label">Unresolved issues</span>
+                <textarea name="unresolved_issues" rows="3" placeholder="One unresolved reporting issue per line. Leave blank only when all material questions are resolved."></textarea>
+              </label>
+            </div>
+          </fieldset>          <fieldset class="form-section">
+            <legend>Topics and places</legend>
             <div class="grid">
               <label>
                 <span class="label">Topic tags <span class="required" aria-hidden="true">*</span></span>
@@ -772,7 +761,7 @@
                 <span class="label">Geography tags <span class="required" aria-hidden="true">*</span></span>
                 <input name="geography_tags" required placeholder="city, neighborhood, corridor">
               </label>
-              <label>
+              <details class="desk-details span-2"><summary>Optional tags and map details</summary><div class="grid">              <label>
                 <span class="label">Entity tags</span>
                 <input name="entity_tags" placeholder="agency, applicant, company">
               </label>
@@ -800,14 +789,14 @@
                 <span class="label">Longitude</span>
                 <input name="lon" type="number" step="any" min="-180" max="180">
               </label>
+</div></details>
             </div>
-          </fieldset>
-
-          <fieldset class="form-section">
-            <legend>05 · Editorial checks</legend>
+          </fieldset></section>
+          <section id="brief-checks" aria-label="Editor checks">          <fieldset class="form-section">
+            <legend>Editor checks</legend>
             <div class="grid">
               <label>
-                <span class="label">Claims check (editor attestation) <span class="required" aria-hidden="true">*</span></span>
+                <span class="label">Claims checked <span class="required" aria-hidden="true">*</span></span>
                 <select name="claims_status" required>
                   <option value="pending">Pending review</option>
                   <option value="passed">Passed by editor</option>
@@ -815,7 +804,7 @@
                 </select>
               </label>
               <label>
-                <span class="label">Taxonomy check (editor attestation) <span class="required" aria-hidden="true">*</span></span>
+                <span class="label">Topic and place tags checked <span class="required" aria-hidden="true">*</span></span>
                 <select name="tags_status" required>
                   <option value="pending">Pending review</option>
                   <option value="passed">Passed by editor</option>
@@ -823,7 +812,7 @@
                 </select>
               </label>
               <label>
-                <span class="label">Claim-slot check (self-attested) <span class="required" aria-hidden="true">*</span></span>
+                <span class="label">Claim sources checked <span class="required" aria-hidden="true">*</span></span>
                 <select name="validator_status" required>
                   <option value="pending">Pending editor check</option>
                   <option value="passed">Attested by editor</option>
@@ -831,7 +820,7 @@
                 </select>
               </label>
               <label>
-                <span class="label">Human editor <span class="required" aria-hidden="true">*</span></span>
+                <span class="label">Editor name <span class="required" aria-hidden="true">*</span></span>
                 <input name="editor_name" required maxlength="120" autocomplete="name" placeholder="Full name">
               </label>
               <label>
@@ -839,8 +828,7 @@
                 <input name="editor_note" maxlength="2000" placeholder="What still needs checking?">
               </label>
             </div>
-          </fieldset>
-
+          </fieldset></section>
           <div class="form-footer">
             <p><strong>AI never publishes.</strong> The public wire reads only approved, source-complete packets after a named human editor verifies every material claim.</p>
             <button class="button button--teal" type="submit" id="save-draft">Save private draft</button>
@@ -868,7 +856,7 @@
         </header>
         <div class="panel__body">
           <div class="queue" id="story-queue" aria-live="polite" aria-busy="false">
-            <div class="empty"><div><strong>Desk is locked</strong>Enter the market key and session token above. No data is loaded until the private API authorizes this tab.</div></div>
+            <div class="empty"><div><strong>Opening story queue…</strong>Checking your private session.</div></div>
           </div>
         </div>
       </section>
@@ -973,6 +961,14 @@
       }
 
       function setConnection(status, message) {
+        document.querySelector('.desk-connection').hidden = status !== 'locked';
+        document.querySelector('#retry-connection').hidden = status === 'ready' || status === 'opening';
+        if (status === 'locked' || status === 'error') {
+          queueSummary.textContent='Story queue not loaded. '+message;
+          bankSummary.textContent='Brief bank not loaded. '+message;
+          queue.innerHTML='<div class="empty">Story queue unavailable until the connection is restored.</div>';
+          bankList.innerHTML='<div class="empty">Saved leads are not loaded. Use the connection controls above.</div>';
+        }
         state.connected = status === 'ready';
         statusDot.dataset.state = status;
         deskStatus.textContent = message;
@@ -992,7 +988,11 @@
         const headers = { ...(options.headers || {}) };
         if (token) headers.Authorization = `Bearer ${token}`;
         if (options.body) headers['Content-Type'] = 'application/json';
-        const response = await fetch(path, { ...options, headers });
+        const controller=new AbortController();
+        const timeout=setTimeout(()=>controller.abort(),12000);
+        let response;
+        try { response = await fetch(path, { ...options, headers, signal:controller.signal }); }
+        finally { clearTimeout(timeout); }
         let payload = {};
         try { payload = await response.json(); } catch (_) { payload = { error: 'The desk returned an unreadable response.' }; }
         if (!response.ok) {
@@ -1147,7 +1147,7 @@
         storyForm.elements.source_published_at.value = String(item.event_date || '').slice(0, 10);
         storyForm.elements.current_trigger.value = item.source_title || '';
         storyForm.elements.project_identity_basis.value = 'Not yet established. Cross-check the entity, parcel, project and source links before approval.';
-        storyForm.elements.claim_slots.value = JSON.stringify([{ claim: item.source_title || 'Source record exists', source_url: item.source_url, locator: sourceLocator }], null, 2);
+        renderClaims([{ claim: item.source_title || 'Source record exists', source_url: item.source_url, locator: sourceLocator }]);
         storyForm.elements.unresolved_issues.value = 'Why does this matter now?\nWhat entity or parcel does it affect?\nWhat corroborating source confirms the project identity?';
         storyForm.elements.topic_tags.value = topic;
         storyForm.elements.geography_tags.value = item.city || 'fort-lauderdale';
@@ -1266,7 +1266,7 @@
           return;
         }
         queue.setAttribute('aria-busy', 'true');
-        setConnection('locked', `Authorizing ${currentMarket()} desk…`);
+        setConnection('opening', 'Opening your private desk…');
         try {
           const data = await api(`/api/admin/stories?market=${encodeURIComponent(currentMarket())}`);
           state.stories = Array.isArray(data.stories) ? data.stories : [];
@@ -1275,7 +1275,11 @@
           await loadBank();
         } catch (error) {
           state.stories = [];
-          setConnection('error', error.status === 401 ? 'Authorization failed · check the admin token' : 'Desk unavailable · check the local CMS server');
+          if (error.status === 401) { sessionStorage.removeItem(SESSION_TOKEN_KEY); tokenInput.value=''; }
+          setConnection(error.status === 401 ? 'locked' : 'error', error.status === 401 ? 'Authorization needed. Open the desk using your existing admin token.' : 'Connection unavailable. Retry when the local desk is ready.');
+          bankSummary.textContent='Brief bank not loaded. Retry the connection.';
+          bankList.innerHTML='<div class="empty">Brief bank unavailable. No saved-lead count was inferred.</div>';
+          queueSummary.textContent='Story queue unavailable. No story count was inferred.';
           queue.replaceChildren();
           const empty = makeElement('div', 'empty');
           const copy = makeElement('div');
@@ -1288,7 +1292,45 @@
         }
       }
 
+      const claimEditor=document.querySelector('#claim-editor');
+      function syncClaims() {
+        const claims=Array.from(claimEditor.children).map(row=>Object.assign({},row.claimOriginal||{}, {
+          claim:row.querySelector('[data-claim]').value.trim(),
+          source_url:row.querySelector('[data-source]').value.trim(),
+          locator:row.querySelector('[data-locator]').value.trim()
+        }));
+        storyForm.elements.claim_slots.value=JSON.stringify(claims);
+      }
+      function addClaim(value={}) {
+        const row=document.createElement('fieldset'); row.className='claim-row'; row.claimOriginal=value;
+        const legend=document.createElement('legend');legend.textContent='Claim and evidence';row.append(legend);
+        [['Claim','claim','textarea'],['Public source URL','source','input'],['Page, section or record number','locator','input']].forEach(([label,key,tag])=>{
+          const wrap=document.createElement('label');wrap.textContent=label+' *';
+          const input=document.createElement(tag);input.dataset[key]='';input.required=true;
+          if(tag==='input')input.type=key==='source'?'url':'text';
+          input.value=value[key==='source'?'source_url':key]||'';
+          function validateClaimField(){
+            input.setCustomValidity(input.value.trim()?'':'Enter '+label.toLowerCase()+'.');
+            if(key==='source' && input.value.trim()) {
+              try { if(!['http:','https:'].includes(new URL(input.value).protocol))throw new Error(); }
+              catch(_){input.setCustomValidity('Use a public http or https source URL.');}
+            }
+          }
+          input.addEventListener('input',validateClaimField);validateClaimField();
+          input.addEventListener('input',syncClaims);wrap.append(input);row.append(wrap);
+        });
+        const remove=document.createElement('button');remove.type='button';remove.className='button button--ghost';remove.textContent='Remove claim';
+        remove.addEventListener('click',()=>{if(claimEditor.children.length===1)return;row.remove();syncClaims();updateClaimButtons();document.querySelector('#add-claim').focus();});
+        row.append(remove);claimEditor.append(row);updateClaimButtons();syncClaims();return row;
+      }
+      function updateClaimButtons(){Array.from(claimEditor.children).forEach((row,i)=>{row.querySelector('legend').textContent='Claim '+(i+1);row.querySelector('button').disabled=claimEditor.children.length===1;});}
+      function renderClaims(values){claimEditor.replaceChildren();(values.length?values:[{}]).forEach(addClaim);}
+      document.querySelector('#add-claim').addEventListener('click',()=>addClaim().querySelector('textarea').focus());
+      renderClaims([]);
+      storyForm.addEventListener('invalid',event=>{let parent=event.target.parentElement;while(parent&&parent!==storyForm){if(parent.tagName==='DETAILS')parent.open=true;parent=parent.parentElement;}},true);
+
       function formPayload(form) {
+        if(form===storyForm)syncClaims();
         const data = new FormData(form);
         const payload = Object.fromEntries(data.entries());
         payload.ethics_rules = Array.from(form.querySelectorAll('input[name="ethics_rules"]:checked')).map(input => input.value);
@@ -1301,9 +1343,8 @@
             throw new Error('Claim slots must be a non-empty JSON array of objects.');
           }
         } catch (_) {
-          claimInput.setCustomValidity('Enter a valid, non-empty JSON array of claim objects.');
-          claimInput.reportValidity();
-          throw new Error('Claim slots need valid JSON before this draft can be saved.');
+          claimEditor.querySelector('textarea').focus();
+          throw new Error('Add at least one claim with its public source and location.');
         }
         payload.unresolved_issues = String(payload.unresolved_issues || '').trim();
         ['lat', 'lon'].forEach(key => {
@@ -1349,7 +1390,7 @@
           const result = await api('/api/admin/stories', { method: 'POST', body: JSON.stringify(payload) });
           const editorName = storyForm.elements.editor_name.value;
           const byline = storyForm.elements.byline.value;
-          storyForm.reset();
+          storyForm.reset(); renderClaims([]);
           storyForm.elements.byline.value = byline || 'Florida Signal Desk';
           storyForm.elements.editor_name.value = editorName;
           notify(result.blocks && result.blocks.length ? `Draft saved with ${result.blocks.length} remaining gate block${result.blocks.length === 1 ? '' : 's'}.` : 'Private draft saved.');
@@ -1455,29 +1496,28 @@
         queueCityFilter.append(new Option(option.textContent.replace(' · live desk', '').replace(' · coming soon', ''), option.value));
       });
       if (savedMarket) marketInput.value = savedMarket;
-      if (savedToken) {
-        tokenInput.value = savedToken;
-        loadQueue();
+      if (savedToken) tokenInput.value = savedToken;
+      async function openLocalDesk() {
+        setConnection('opening', 'Opening your private desk…');
+        if (currentToken()) { await loadQueue(); return; }
+        try {
+          const controller=new AbortController();
+          const timeout=setTimeout(()=>controller.abort(),12000);
+          let response;
+          try { response=await fetch('/api/local-session',{signal:controller.signal}); }
+          finally { clearTimeout(timeout); }
+          if(!response.ok && ![401,403].includes(response.status))throw new Error('Connection unavailable');
+          const session=response.ok?await response.json():null;
+          if (!session || !session.token) { setConnection('locked','Authorization needed. Enter your existing admin token to open the desk.'); return; }
+          sessionStorage.setItem(SESSION_TOKEN_KEY,session.token);
+          sessionStorage.setItem(SESSION_MARKET_KEY,session.market || 'broward');
+          tokenInput.value=session.token; marketInput.value=session.market || 'broward';
+          await loadQueue();
+        } catch (_) { setConnection('error','Connection unavailable. Retry when the local desk is ready.'); }
       }
-      storyForm.elements.claim_slots.addEventListener('input', event => event.currentTarget.setCustomValidity(''));
+      document.querySelector('#retry-connection').addEventListener('click',openLocalDesk);
+      openLocalDesk();
     })();
   </script>
-  <script>
-  (function () {
-    var KEY = 'dataWireAdminToken', MKT = 'dataWireMarket';
-    if (sessionStorage.getItem(KEY)) { document.documentElement.setAttribute('data-local-desk', '1'); return; }
-    fetch('/api/local-session').then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
-      if (j && j.token && !sessionStorage.getItem(KEY)) {
-        sessionStorage.setItem(KEY, j.token);
-        sessionStorage.setItem(MKT, j.market || 'broward');
-        location.reload();
-      }
-    }).catch(function () {});
-  })();
-  </script>
-  <style>
-    html[data-local-desk="1"] .connection { display: none; }
-    html[data-local-desk="1"] .privacy-note::after { content: " · local desk auto-unlocked"; }
-  </style>
 </body>
 </html>

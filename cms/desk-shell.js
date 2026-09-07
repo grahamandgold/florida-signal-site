@@ -42,7 +42,7 @@
         '<button class="dw-search-toggle" type="button" aria-expanded="false" aria-controls="dw-global-search">Search</button>' +
         '<form class="dw-global-search" id="dw-global-search" action="/data.html">' +
           '<label hidden for="dw-global-search-input">Search newsroom records</label>' +
-          '<input id="dw-global-search-input" name="search" type="search" placeholder="Search permits, folios, instruments or addresses" autocomplete="off">' +
+          '<input id="dw-global-search-input" name="search" type="search" placeholder="Exact lookup: permit: or folio: + number" autocomplete="off">' +
           '<button type="submit">Go</button>' +
         '</form>' +
         '<button class="dw-status-button" type="button" data-status-open aria-haspopup="dialog"><span class="dw-status-dot"></span><span data-status-label>Checking source clocks</span></button>' +
@@ -56,10 +56,10 @@
       '<p class="dw-sidebar__note"><b>Record → Candidate → Signal → Story</b><br>Nothing becomes public without a human editor and source proof.</p>' +
       '<a class="dw-sidebar__public" href="https://thefloridasignal.com" target="_blank" rel="noopener"><span>PUBLIC FLORIDA SIGNAL</span><span>↗</span></a>' +
     '</aside>' +
-    '<section class="dw-pipeline" aria-label="Upcoming newsroom pipeline"><div class="dw-pipeline__inner">' +
+    '<details class="dw-pipeline"><summary>System details · upcoming refreshes</summary><div class="dw-pipeline__inner">' +
       '<span class="dw-pipeline__title">Next in pipeline</span>' +
       '<div class="dw-pipeline__jobs" data-pipeline-jobs><span class="dw-pipeline__loading">Checking production schedule…</span></div>' +
-    '</div></section>' +
+    '</div></details>' +
     '<dialog class="dw-status-dialog" data-status-dialog aria-labelledby="dw-status-title">' +
       '<div class="dw-status-head"><div><p>Source receipts and independent clocks</p><h2 id="dw-status-title">Newsroom source status</h2></div><button class="dw-status-close" type="button" data-status-close aria-label="Close source status">×</button></div>' +
       '<div class="dw-status-body" data-status-body><p>Checking each monitored source lane. No freshness state will be inferred from a timer alone.</p></div>' +
@@ -89,11 +89,16 @@
     if (tokenPromise) return tokenPromise;
     tokenPromise = (async function () {
       try {
-        var response = await fetch("/api/local-session");
-        if (response.ok) token = (await response.json()).token || "";
+        var sessionController = new AbortController();
+        var sessionTimeout = window.setTimeout(function () { sessionController.abort(); }, 12000);
+        try {
+          var response = await fetch("/api/local-session", {signal:sessionController.signal});
+          if (response.ok) token = (await response.json()).token || "";
+        } finally { window.clearTimeout(sessionTimeout); }
       } catch (error) {}
-      if (!token) token = window.prompt("Private newsroom token") || "";
+      if (!token) token = sessionStorage.getItem("dataWireAdminToken") || "";
       tokenPromise = null;
+      if (!token) throw new Error("Authorization needed. Open Brief to connect your private session.");
       return token;
     })();
     return tokenPromise;
@@ -168,9 +173,9 @@
       if (counts.delayed) pieces.push(counts.delayed + " delayed");
       var attention = (counts.stale || 0) + (counts.suppressed || 0) + (counts.error || 0) + (counts.unavailable || 0) + (counts.unverified || 0);
       if (attention) pieces.push(attention + " need attention");
-      if (scored != null) pieces.push(scored + " shadow-scored");
+      // Scoring detail stays in the source dialog, away from the editorial task.
       label.textContent = pieces.join(" · ") || "Source status unavailable";
-      mount.querySelector(".dw-status-button").dataset.state = attention ? "attention" : counts.delayed ? "delayed" : "current";
+      mount.querySelector(".dw-status-button").dataset.state = attention || !lanes.length || counts.unknown ? "attention" : counts.delayed ? "delayed" : "current";
       target.innerHTML = lanes.length ? lanes.map(function (lane) {
         var status = String(lane.status || "unavailable").toLowerCase();
         var automation = String(lane.automation || "unknown").toLowerCase();
@@ -189,7 +194,7 @@
     } catch (error) {
       label.textContent = "Source status unavailable";
       mount.querySelector(".dw-status-button").dataset.state = "attention";
-      target.innerHTML = '<p>Source status could not be opened. No freshness state was inferred.</p>';
+      target.innerHTML = '<p>Source status could not be opened. No freshness state was inferred.</p><p><a href="/index.html">Open Brief to check the private connection</a></p>';
     } finally {
       statusLoading = false;
       lastStatusLoad = Date.now();
