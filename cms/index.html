@@ -715,7 +715,8 @@
               </label>
               <label>
                 <span class="label">Source publication date</span>
-                <input name="source_published_at" type="date">
+                <input name="source_published_at" type="date" aria-describedby="source-date-help">
+                <span id="source-date-help" class="hint">Use the date the source was published. Leave blank if unknown; a meeting or filing date is different.</span>
               </label>
               <label class="span-2">
                 <span class="label">Hero image URL</span>
@@ -1144,7 +1145,7 @@
         storyForm.elements.event_date.value = String(item.event_date || '').slice(0, 10);
         storyForm.elements.source_url.value = item.source_url || '';
         storyForm.elements.source_title.value = item.body_name ? `${item.body_name} · ${item.source_title}` : item.source_title || '';
-        storyForm.elements.source_published_at.value = String(item.event_date || '').slice(0, 10);
+        storyForm.elements.source_published_at.value = '';
         storyForm.elements.current_trigger.value = item.source_title || '';
         storyForm.elements.project_identity_basis.value = 'Not yet established. Cross-check the entity, parcel, project and source links before approval.';
         renderClaims([{ claim: item.source_title || 'Source record exists', source_url: item.source_url, locator: sourceLocator }]);
