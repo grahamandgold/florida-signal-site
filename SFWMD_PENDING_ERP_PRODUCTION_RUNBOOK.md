@@ -1,5 +1,23 @@
 # SFWMD Pending ERP production package runbook
 
+## September 7 runtime verification
+
+All 73 package tests passed. A fresh bounded official-source observation saw
+1,103 applications, four Fort Lauderdale intersections and zero rejected or
+duplicate identities. It remains a file-only observation, not natural proof.
+
+The runtime has `/usr/bin/python3` (Python 3.12) and systemd 255; its installed
+man page documents timer trigger metadata support since version 252. The old
+`/srv/grahamandgold/florida-signal/venv/bin/python` path does not exist. The four
+service units now use the verified system interpreter; all collector imports
+are standard-library modules or the bundled shadow collector.
+
+The runtime disk had 18 GB free with a 12 GB canonical database. A disposable
+copy plus a new pre-migration backup does not fit safely. Backup-space
+reconciliation is required before schema admission. No unit was activated and
+no source was marked connected by this correction.
+
+
 ## Current truth
 
 This repository contains a production-shaped SFWMD Pending ERP collection
