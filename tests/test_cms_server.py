@@ -18,6 +18,24 @@ SPEC.loader.exec_module(cms_server)
 
 
 class DataWireServerTests(unittest.TestCase):
+    def test_pdmr_summary_reads_overlap_and_fail_closed(self):
+        import threading
+        barrier = threading.Barrier(7)
+        calls = []
+
+        def unavailable(path, **kwargs):
+            calls.append(path)
+            barrier.wait(timeout=2)
+            return 503, {"error": "unavailable"}, {}
+
+        with mock.patch.object(cms_server, "SUPABASE_SERVICE_KEY", "test-only"), \
+                mock.patch.object(cms_server, "supabase_request_with_headers", side_effect=unavailable):
+            code, payload = cms_server._pdmr_supabase_intent_payload(limit=1)
+        self.assertEqual(len(calls), 7)
+        self.assertEqual(code, 503)
+        self.assertNotIn("automation", payload)
+        self.assertIn("unavailable", payload["error"])
+
     @staticmethod
     def _write_executable(path, body):
         path.write_text(body, encoding="utf-8")
