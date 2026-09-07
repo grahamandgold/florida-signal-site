@@ -306,31 +306,19 @@
       <p><strong>Nothing here is public output.</strong> Search preserves the original record, raw text, source identity and independent clocks. A record is not automatically a Signal.</p>
     </section>
 
-    <section class="library" aria-labelledby="library-title">
-      <div class="library__head">
-        <div><div class="eyebrow">Built + planned early-warning lanes</div><h3 id="library-title">Working discovery sequence</h3><p>Fort Lauderdale's Preliminary Development Meeting Request (PDMR) planning-intent records come first. Proposed earlier-signal sensors stay visible and are marked research-only until a collector and evidence contract exist; permits remain later execution evidence.</p></div>
-        <div class="library__tools"><button type="button" id="refresh-sources">Refresh source receipts</button><span class="library__summary" id="library-summary" role="status" aria-live="polite">Checking connections…</span><span class="library__checked" id="library-checked">Not checked yet</span></div>
-      </div>
-      <div class="library-grid" id="library-grid"></div>
-    </section>
-
-    <section class="popular" aria-labelledby="popular-title">
-      <div class="popular__head"><b id="popular-title">Popular questions</b><span>one tap · preset views across the store</span></div>
-      <div class="preset-row" id="preset-row"></div>
-    </section>
-
     <div class="explorer" id="explorer">
       <div class="explorer__controls">
-        <label>Table
+        <label>Source
           <select id="table-select"></select>
         </label>
-        <label>Fielded search
-          <input id="search-input" type="search" placeholder="permit:, folio:, instrument:, addr:…" autocomplete="off" aria-describedby="search-help">
+        <label>Find by<select id="search-field" aria-label="Find by"></select></label>
+        <label>Search value
+          <input id="search-input" type="search" placeholder="Enter a value" autocomplete="off" aria-describedby="search-help">
         </label>
         <button class="button button--teal" id="refresh-btn" type="button">Search records</button>
         <span class="count-note" id="count-note" role="status" aria-live="polite">—</span>
       </div>
-      <p class="foot-note" id="search-help" style="margin:0 18px 12px">Choose a source above or use a fielded lookup. Preliminary Development Meeting Request (PDMR) records support <code>id:</code> <code>folio:</code> <code>addr:</code> <code>owner:</code> <code>project:</code>; other sources support <code>permit:</code> <code>instrument:</code> <code>license:</code> <code>asn:</code>. Broad text research remains separate.</p>
+      <p class="foot-note" id="search-help" style="margin:0 18px 12px">Choose a source and a field. Searches stay within that source.</p>
       <div class="table-wrap">
         <table id="data-table">
           <thead></thead>
@@ -345,6 +333,21 @@
       </div>
     </div>
 
+    <details class="desk-details"><summary>Browse sources and preset searches</summary>
+    <section class="library" aria-labelledby="library-title">
+      <div class="library__head">
+        <div><div class="eyebrow">Built + planned early-warning lanes</div><h3 id="library-title">Working discovery sequence</h3><p>Fort Lauderdale's Preliminary Development Meeting Request (PDMR) planning-intent records come first. Proposed earlier-signal sensors stay visible and are marked research-only until a collector and evidence contract exist; permits remain later execution evidence.</p></div>
+        <div class="library__tools"><button type="button" id="refresh-sources">Refresh source receipts</button><span class="library__summary" id="library-summary" role="status" aria-live="polite">Checking connections…</span><span class="library__checked" id="library-checked">Not checked yet</span></div>
+      </div>
+      <div class="library-grid" id="library-grid"></div>
+    </section>
+
+    <section class="popular" aria-labelledby="popular-title">
+      <div class="popular__head"><b id="popular-title">Popular questions</b><span>one tap · preset views across the store</span></div>
+      <div class="preset-row" id="preset-row"></div>
+    </section>
+
+    </details>
     <details class="health-details" id="source-health">
       <summary>Full feed health <span>latest source event · collector/run clock · row count</span></summary>
       <div class="health-details__body">
@@ -1211,7 +1214,7 @@
         const button = event.target.closest("[data-source-table]");
         if (!button) return;
         state.table = button.dataset.sourceTable; state.extra = {}; state.offset = 0; state.search = "";
-        q("#table-select").value = state.table; q("#search-input").value = ""; clearChips(); markActiveSource(); loadTable();
+        q("#table-select").value = state.table; q("#search-input").value = ""; state.search=""; clearChips(); markActiveSource(); loadTable();
         q("#explorer").scrollIntoView({ behavior: "smooth", block: "start" });
       });
       q("#refresh-sources").addEventListener("click", checkLibraryConnections);
@@ -1219,6 +1222,7 @@
     }
 
     function markActiveSource() {
+      syncSearchFields();
       document.querySelectorAll("[data-source-table]").forEach(button => { button.dataset.active = button.dataset.sourceTable === state.table ? "true" : "false"; });
     }
 
@@ -1323,6 +1327,18 @@
       }
     }
 
+    const FIELD_LABELS = {id:"PDMR request number",permit:"Permit number",folio:"Parcel / folio number",instrument:"Clerk instrument number",addr:"Exact address",owner:"Owner / applicant",project:"Project name",license:"License number",asn:"FAA case number",type:"Document type",text:"Entity name"};
+    function syncSearchFields() {
+      const select=q("#search-field"), previous=select.value;
+      const fields=state.table==="pdmr_intent"?Array.from(PDMR_PREFIXES):state.table==="sunbiz_entities"?["text"]:Object.keys(EXACT_FIELDS[state.table]||{});
+      select.innerHTML=fields.map(key=>`<option value="${key}">${FIELD_LABELS[key]||key}</option>`).join("");
+      if(fields.includes(previous))select.value=previous;
+      const activePrefix=String(state.search||'').match(/^([a-z]+)\s*:/i);
+      if(activePrefix && fields.includes(activePrefix[1].toLowerCase()))select.value=activePrefix[1].toLowerCase();
+      select.disabled=!fields.length;
+      q("#search-input").disabled=!fields.length;
+      q("#search-help").textContent="Searching only: "+TABLES[state.table].label+". "+(state.table==="pdmr_intent"||state.table==="sunbiz_entities"?"Uses this source’s existing lookup.":fields.length?"Exact values only; partial addresses may return no matches.":"Browse this source using its preset views.");
+    }
     function commitSearch() {
       const value = q("#search-input").value.trim();
       const match = value.match(/^([a-z]+)\s*:/i);
@@ -1335,7 +1351,8 @@
         clearChips();
         markActiveSource();
       }
-      state.search = value;
+      state.search = value && !match && q("#search-field").value && q("#search-field").value!=="text" ? q("#search-field").value+":"+value : value;
+      syncSearchFields();
       state.offset = 0;
       loadTable();
     }
@@ -1354,9 +1371,10 @@
         loadTable();
       });
       q("#table-select").value = state.table;
-      q("#table-select").addEventListener("change", () => { state.table = q("#table-select").value; state.extra = {}; state.offset = 0; clearChips(); markActiveSource(); loadTable(); });
+      q("#table-select").addEventListener("change", () => { state.table = q("#table-select").value; state.extra = {}; state.offset = 0; state.search=""; q("#search-input").value=""; clearChips(); markActiveSource(); loadTable(); });
       q("#search-input").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); commitSearch(); } });
       q("#refresh-btn").addEventListener("click", commitSearch);
+      q("#search-field").addEventListener("change",()=>{ q("#search-input").focus(); });
       q("#prev-btn").addEventListener("click", () => { state.offset = Math.max(0, state.offset - PAGE); loadTable(); });
       q("#next-btn").addEventListener("click", () => { state.offset += PAGE; loadTable(); });
       q("#drawer-close").addEventListener("click", closeDrawer);
@@ -1386,7 +1404,9 @@
     }
     function clearChips() { document.querySelectorAll(".chip").forEach(c => c.dataset.active = "false"); }
 
+    let tableLoadVersion=0;
     async function loadTable() {
+      const loadVersion=++tableLoadVersion;
       const cfg = TABLES[state.table];
       const thead = q("#data-table thead");
       const tbody = q("#data-table tbody");
@@ -1407,6 +1427,7 @@
           if (term) Object.assign(params, exactSearch(term, state.table).params);
           data = await rows(state.table, params);
         }
+        if(loadVersion!==tableLoadVersion)return;
         state.rows = data;
         if (!data.length) {
           tbody.innerHTML = `<tr class="empty-row"><td colspan="${cfg.cols.length}">No rows for this view.</td></tr>`;
@@ -1424,7 +1445,7 @@
             }).join("") + "</tr>";
           }).join("");
         }
-        q("#page-note").textContent = "rows " + (state.offset + 1) + "–" + (state.offset + data.length);
+        q("#page-note").textContent = data.length ? "rows " + (state.offset + 1) + "–" + (state.offset + data.length) : "0 rows shown";
         q("#prev-btn").disabled = state.offset === 0;
         q("#next-btn").disabled = cfg.privatePath ? !privateResult.has_more : data.length < PAGE;
         if (term) {
@@ -1445,7 +1466,7 @@
           q("#count-note").textContent = data.length + (privateResult.has_more ? "+" : "") + " " + rowLabel + (data.length === 1 ? "" : "s") + " shown";
         } else {
           const countCol = cfg.select.split(",")[0];
-          tableCount(state.table, countCol).then(c => { q("#count-note").textContent = rowsLabel(c); }).catch(() => { q("#count-note").textContent = "—"; });
+          tableCount(state.table, countCol).then(c => { if(loadVersion===tableLoadVersion)q("#count-note").textContent = rowsLabel(c); }).catch(() => { if(loadVersion===tableLoadVersion)q("#count-note").textContent = "Count unavailable"; });
         }
         tbody.querySelectorAll("tr[data-i]").forEach(tr => {
           const open = () => openDrawer(state.rows[Number(tr.dataset.i)], cfg, tr);
@@ -1455,6 +1476,7 @@
           });
         });
       } catch (e) {
+        if(loadVersion!==tableLoadVersion)return;
         tbody.innerHTML = `<tr class="empty-row"><td colspan="${cfg.cols.length}">Could not load: ${esc(e.message)}</td></tr>`;
       }
     }
