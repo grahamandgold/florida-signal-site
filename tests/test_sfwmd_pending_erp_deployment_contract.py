@@ -7,7 +7,7 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = ROOT / "supabase" / "migrations" / "20260831235900_sfwmd_pending_erp_private_mirror.sql"
+MIGRATION = ROOT / "supabase" / "migrations" / "20260907155115_sfwmd_pending_erp_private_mirror.sql"
 SERVICE = ROOT / "ops" / "droplet" / "florida-sfwmd-pending-erp.service"
 TIMER = ROOT / "ops" / "droplet" / "florida-sfwmd-pending-erp.timer"
 ENVIRONMENT = ROOT / "ops" / "droplet" / "florida-sfwmd-pending-erp.env.example"

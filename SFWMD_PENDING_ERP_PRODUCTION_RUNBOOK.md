@@ -73,7 +73,7 @@ separate.
   The manifest preserves raw `sqlite_master.sql` and inventories the namespace
   case-insensitively. Partial, extra, case-variant, or definition-drifted
   schemas are poisoned and refused.
-- `supabase/migrations/20260831235900_sfwmd_pending_erp_private_mirror.sql` is the
+- `supabase/migrations/20260907155115_sfwmd_pending_erp_private_mirror.sql` is the
   separately applied, one-time private mirror prerequisite. It refuses any
   preexisting/case-variant SFWMD relation, type, index, or routine namespace,
   clears every non-owner table/function ACL (including custom default-privilege
