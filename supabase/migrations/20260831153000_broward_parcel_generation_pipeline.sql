@@ -1781,7 +1781,9 @@ begin
     longitude,
     situs_address,
     municipality,
-    coalesce(use_type, parcel_type, use_code),
+    -- Preserve the live property_type contract: USE_CODE only.
+    -- PARCEL_TYP and USE_TYPE are separate source fields, not fallbacks.
+    use_code,
     source_object_id,
     source_attributes_json,
     observed_at,

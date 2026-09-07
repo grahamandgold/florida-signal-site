@@ -56,6 +56,21 @@ current-source stream:
 There is no date/range/backfill argument and the collector has no promotion
 method. Grok, Claude, service-role code and the Desk cannot promote it.
 
+
+**September 7 mapping correction:** full file-only evidence contains 532,470
+unique folios, matching the live identifier set exactly. Comparing mapped
+attributes exposed a staging regression: `coalesce(use_type, parcel_type,
+use_code)` would overwrite the live land-use code with a different parcel
+classification. The deployed sync source assigns `property_type` from
+`USE_CODE` only. The staged SQL now preserves that exact contract, including
+null when `USE_CODE` is absent; `USE_TYPE` and `PARCEL_TYP` remain separate raw
+source fields. The actual staging INSERT was executed against disposable
+PostgreSQL fixtures: code `82` remains `82` even when the other classifications
+are populated, and a missing use code remains null. All 43 parcel/foundation
+Python checks passed. This correction is not applied in production, and no
+parcel promotion has occurred. Other mapped attribute differences still need
+reconciliation, including the already documented historical-date correction.
+
 ## Baseline interpretation
 
 The last verified snapshot reconciles exactly:
@@ -155,8 +170,9 @@ structured error reporter from re-exposing the unredacted cause.
 
 Stop before any deployment unless all are satisfied:
 
-- Export and hash the exact deployed `broward-parcel-sync` v5 and
-  `broward-parcel-fill` v1 sources/configuration. Preserve the known exports;
+- Export and hash the exact deployed parcel function sources/configuration.
+  September 7 MCP metadata reports `broward-parcel-sync` version 6 and
+  `broward-parcel-fill` version 2; comments inside the source use older labels. Preserve the known exports;
   do not reconstruct them from notes.
 - Prove no `pg_cron`, systemd, external caller, or operator path will keep
   invoking either legacy direct-to-live writer.
