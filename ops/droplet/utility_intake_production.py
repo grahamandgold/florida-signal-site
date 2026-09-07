@@ -46,7 +46,7 @@ except Exception as caught_import_error:  # pragma: no cover - exercised by subp
 VERIFICATION_SCHEMA = "FloridaSignalUtilityIntakeProductionVerificationV1"
 RECEIPT_SCHEMA = "FloridaSignalUtilityIntakeProductionReceiptV3"
 LATEST_SCHEMA = "FloridaSignalUtilityIntakeProductionLatestV2"
-COLLECTOR_VERSION = "ftl-utility-intake-production/1.1.0"
+COLLECTOR_VERSION = "ftl-utility-intake-production/1.1.1"
 HEALTH_COMPONENT = "utility-intake"
 PARITY_PROJECTION_VERSION = "utility-intake-permits-mirror/1"
 READ_ONLY_TRANSPORT_SCHEMA = "FloridaSignalUtilityIntakeReadOnlyMirrorV1"
@@ -448,7 +448,9 @@ class ReadOnlySupabaseTransport:
         query_values = {
             "select": ",".join(PARITY_COLUMNS),
             "or": "(" + ",".join(
-                f"permit_number.like.{family}-*" for family in shadow.FAMILY_IDS
+                (f"and(permit_number.gte.{family},"
+                f"permit_number.lt.{family[:-1]}{chr(ord(family[-1]) + 1)},"
+                f"permit_number.like.{family}-*)") for family in shadow.FAMILY_IDS
             ) + ")",
             "order": "permit_number.asc",
             "limit": str(limit),
