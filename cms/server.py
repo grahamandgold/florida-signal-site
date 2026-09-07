@@ -245,6 +245,45 @@ def require_terminal_health(receipt: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def overlay_external_source_health(document: dict[str, Any]) -> dict[str, Any]:
+    """Read only the sanitized terminal summary; never request private receipts."""
+    code, rows = supabase_request(
+        "external_source_desk_health?select=source_id,status,completed_at,event_through,"
+        "rows_observed,rows_accepted,rows_rejected&limit=2"
+    )
+    if code >= 400 or not isinstance(rows, list):
+        return document
+    sources = {row.get("id"): dict(row) for row in document.get("sources", [])
+               if isinstance(row, dict) and row.get("id")}
+    for receipt in rows:
+        if not isinstance(receipt, dict):
+            continue
+        source_id = {"fdep_erp": "fdep", "faa_oeaaa": "faa"}.get(receipt.get("source_id"))
+        if not source_id:
+            continue
+        terminal = receipt.get("status")
+        clock = receipt.get("completed_at")
+        freshness = status_from_clock(clock, 26, 50)
+        status = "unavailable"
+        if terminal in {"ok", "empty"} and receipt.get("rows_rejected") == 0:
+            status = freshness
+        elif terminal == "failed":
+            status = "error"
+        elif terminal in {"partial", "source_wait"}:
+            status = "stale" if freshness == "stale" else "delayed"
+        source = sources.setdefault(source_id, {"id": source_id, "label": source_id.upper()})
+        source.update({
+            "status": status, "health_receipt_at": clock,
+            "health_receipt_status": terminal, "system_time": clock,
+            "status_basis": "sanitized_terminal_receipt",
+            "detail": f"Latest collector: {terminal}; {receipt.get('rows_accepted')} accepted, "
+                      f"{receipt.get('rows_rejected')} rejected. Completion time determines freshness.",
+        })
+        if receipt.get("event_through"):
+            source["event_through"] = receipt["event_through"]
+    return {**document, "sources": list(sources.values())}
+
+
 def review_queue_path(params: dict[str, list[str]]) -> tuple[str, int, int, str]:
     """Build the bounded, indexed review-queue query used by the local desk."""
     status = (params.get("status", ["NEW"])[0] or "NEW").upper()
@@ -322,7 +361,11 @@ def public_json(url: str) -> dict[str, Any]:
     try:
         with urllib.request.urlopen(request, timeout=8) as response:
             payload = json.loads(response.read().decode())
-            return payload if isinstance(payload, dict) else {}
+            if not isinstance(payload, dict):
+                return {}
+            if url == "https://api.thefloridasignal.com/api/data-health":
+                return overlay_external_source_health(payload)
+            return payload
     except (OSError, ValueError):
         return {}
 

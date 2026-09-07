@@ -18,6 +18,25 @@ SPEC.loader.exec_module(cms_server)
 
 
 class DataWireServerTests(unittest.TestCase):
+    def test_external_health_uses_terminal_status_and_age(self):
+        base = {"sources": [{"id": "fdep", "fetched_at": "2026-09-07T10:00:00Z"}]}
+        receipt = {"source_id": "fdep_erp", "status": "ok", "completed_at": "2026-09-07T09:20:00Z",
+                   "rows_accepted": 137, "rows_rejected": 0}
+        with mock.patch.object(cms_server, "now_iso", return_value="2026-09-07T12:00:00Z"), \
+                mock.patch.object(cms_server, "supabase_request", return_value=(200, [receipt])):
+            self.assertEqual(cms_server.overlay_external_source_health(base)["sources"][0]["status"], "current")
+            receipt["status"] = "failed"
+            self.assertEqual(cms_server.overlay_external_source_health(base)["sources"][0]["status"], "error")
+            receipt["status"] = "ok"
+            receipt["completed_at"] = "2026-09-01T09:20:00Z"
+            self.assertEqual(cms_server.overlay_external_source_health(base)["sources"][0]["status"], "stale")
+            receipt["completed_at"] = "2026-09-07T09:20:00Z"
+            receipt["rows_rejected"] = 1
+            self.assertEqual(cms_server.overlay_external_source_health(base)["sources"][0]["status"], "unavailable")
+        self.assertNotIn("health_receipt_at", base["sources"][0])
+        with mock.patch.object(cms_server, "supabase_request", return_value=(503, {})):
+            self.assertEqual(cms_server.overlay_external_source_health(base), base)
+
     def test_pdmr_summary_reads_overlap_and_fail_closed(self):
         import threading
         barrier = threading.Barrier(7)
