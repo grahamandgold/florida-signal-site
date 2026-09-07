@@ -154,8 +154,8 @@ systemctl is-active florida-utility-intake.timer
 systemctl is-enabled florida-utility-intake.timer
 ```
 
-The first state check may report `unknown/not-found` only when the timer unit is
-absent; otherwise require `inactive/disabled`. The installer rechecks before
+The first state check may report `inactive/not-found` (systemd 255) or
+`unknown/not-found` only when the timer unit is absent; otherwise require `inactive/disabled`. The installer rechecks before
 creating a stage and fails on any active service or enabled timer. It copies all
 six hash-reviewed files into an unreachable generation, validates the sibling
 imports and both units there, then runs an empty-environment/missing-credential

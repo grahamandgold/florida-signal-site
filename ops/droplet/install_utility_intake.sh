@@ -45,7 +45,7 @@ timer_is_preinstall_safe() {
   if [[ "$active" == "inactive" && "$enabled" == "disabled" ]]; then
     return 0
   fi
-  [[ "$active" == "unknown" && "$enabled" == "not-found" ]] && \
+  [[ ( "$active" == "unknown" || "$active" == "inactive" ) && "$enabled" == "not-found" ]] && \
     ! path_exists "$unit_root/$timer_name"
 }
 

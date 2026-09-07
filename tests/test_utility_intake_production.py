@@ -704,6 +704,30 @@ class UtilityIntakeProductionTests(unittest.TestCase):
             expected, relative = line.split("  ", 1)
             self.assertEqual(hashlib.sha256((ROOT / relative).read_bytes()).hexdigest(), expected)
 
+    def test_installer_accepts_absent_timer_but_rejects_active_or_existing_unit(self):
+        installer = ROOT / "ops/droplet/install_utility_intake.sh"
+        script = r'''
+source "$1"
+systemd_active_state() { printf '%s\n' "$test_active"; }
+systemd_enabled_state() { printf '%s\n' "$test_enabled"; }
+path_exists() { [[ "$test_exists" == yes ]]; }
+test_active=inactive; test_enabled=not-found; test_exists=no
+timer_is_preinstall_safe
+test_active=unknown
+timer_is_preinstall_safe
+test_active=active
+if timer_is_preinstall_safe; then exit 11; fi
+test_active=inactive; test_exists=yes
+if timer_is_preinstall_safe; then exit 12; fi
+test_exists=no; test_enabled=enabled
+if timer_is_preinstall_safe; then exit 13; fi
+test_enabled=disabled
+timer_is_preinstall_safe
+'''
+        result = subprocess.run(["bash", "-c", script, "timer-state-test", str(installer)],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_frozen_manifest_rejects_source_mutation_before_staging(self):
         installer = ROOT / "ops/droplet/install_utility_intake.sh"
         with tempfile.TemporaryDirectory() as tmp:
