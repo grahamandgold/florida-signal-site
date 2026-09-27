@@ -145,6 +145,22 @@ def public_json(url: str) -> dict[str, Any]:
         return {}
 
 
+def exact_resolver_status(row: dict[str, Any], *, now: datetime | None = None) -> str:
+    """A private row is evidence of existence, not current collection health."""
+    if row.get("match_type") != "EXACT":
+        return "unavailable"
+    try:
+        fetched = datetime.fromisoformat(str(row.get("fetched_at") or "").replace("Z", "+00:00"))
+        if fetched.tzinfo is None:
+            fetched = fetched.replace(tzinfo=timezone.utc)
+        age = ((now or datetime.now(timezone.utc)) - fetched).total_seconds() / 3600
+    except (ValueError, TypeError):
+        return "unavailable"
+    if age < -5 / 60:
+        return "unavailable"
+    return "current" if age <= 30 else "delayed" if age <= 36 else "stale"
+
+
 def early_intel_payload() -> dict[str, Any]:
     """Show the whole intelligence funnel; do not imply that every lane has a detector yet."""
     from concurrent.futures import ThreadPoolExecutor
@@ -168,12 +184,12 @@ def early_intel_payload() -> dict[str, Any]:
     sunbiz = sources.get("sunbiz", {})
     private_sunbiz_code, private_sunbiz_rows = supabase_request(
         "sunbiz_entities?select=fetched_at,date_filed,source,match_type"
-        "&source=eq.sunbiz-sftp-corpus&order=fetched_at.desc.nullslast&limit=1"
+        "&source=eq.sunbiz-sftp-corpus&match_type=eq.EXACT&order=fetched_at.desc.nullslast&limit=1"
     )
     if private_sunbiz_code < 400 and isinstance(private_sunbiz_rows, list) and private_sunbiz_rows:
         latest_sunbiz = private_sunbiz_rows[0]
         sunbiz = {
-            "status": "current", "system_time": latest_sunbiz.get("fetched_at"),
+            "status": exact_resolver_status(latest_sunbiz), "system_time": latest_sunbiz.get("fetched_at"),
             "event_through": latest_sunbiz.get("date_filed"), "private": True,
         }
     fdep = sources.get("fdep", {})
@@ -194,9 +210,9 @@ def early_intel_payload() -> dict[str, Any]:
             "phase": "02 · Formation", "label": "Companies + principals",
             "status": "available" if sunbiz.get("status") == "current" else "blocked",
             "event_through": sunbiz.get("event_through"), "system_time": sunbiz.get("system_time"),
-            "headline": ("Sunbiz exact-match resolver has private rows" if sunbiz.get("private")
+            "headline": ("Sunbiz exact-match resolver has current private rows" if sunbiz.get("private") and sunbiz.get("status") == "current"
                          else "Sunbiz exact-match lane is current" if sunbiz.get("status") == "current"
-                         else "Sunbiz has no usable public event clock"),
+                         else "Sunbiz exact-match freshness needs attention: " + str(sunbiz.get("status") or "unavailable")),
             "note": "Only exact entity matches may connect a company, officer or registered agent. Resolver rows remain private and source-linked.",
             "href": "/data.html",
         },
@@ -688,6 +704,8 @@ def story_blocks(item: dict[str, Any]) -> list[str]:
         blocks.append("Every claim slot requires claim text and a public source URL")
     if str(item.get("validator_status")) != "passed":
         blocks.append("Claim-slot validator must pass")
+    if str(item.get("unresolved_issues") or "").strip():
+        blocks.append("Unresolved issues must be cleared before approval")
     if str(item.get("tags_status")) != "passed":
         blocks.append("Taxonomy check must pass")
     if not str(item.get("editor_name") or "").strip():
