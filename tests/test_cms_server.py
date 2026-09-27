@@ -13,6 +13,16 @@ SPEC.loader.exec_module(cms_server)
 
 
 class DataWireServerTests(unittest.TestCase):
+    def test_private_sunbiz_row_must_be_exact_and_recent(self):
+        from datetime import datetime, timedelta, timezone
+        now = datetime(2026, 9, 27, 21, tzinfo=timezone.utc)
+        for hours, expected in ((1, "current"), (31, "delayed"), (37, "stale")):
+            row = {"match_type": "EXACT", "fetched_at": (now - timedelta(hours=hours)).isoformat()}
+            self.assertEqual(cms_server.exact_resolver_status(row, now=now), expected)
+        for kind in ("NONE", "ERROR", "FIRST_RESULT", "ACTIVE_PREFIX"):
+            self.assertEqual(cms_server.exact_resolver_status({"match_type": kind, "fetched_at": now.isoformat()}, now=now), "unavailable")
+        self.assertEqual(cms_server.exact_resolver_status({"match_type": "EXACT", "fetched_at": "bad"}, now=now), "unavailable")
+
     def test_review_queue_defaults_to_ready_and_bounds_paging(self):
         path, limit, offset, readiness = cms_server.review_queue_path({
             "status": ["not-a-status"], "limit": ["9999"], "offset": ["-4"]

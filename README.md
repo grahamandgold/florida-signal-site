@@ -1,5 +1,9 @@
 # Florida Signal
 
+For the latest scoped code/database repair, read
+[`RELIABILITY_REPAIR_2026-09-27.md`](RELIABILITY_REPAIR_2026-09-27.md).
+It distinguishes applied database fixes from application changes awaiting host installation.
+
 **New here, human or agent? Read [`NIGHT_HANDOFF_2026-08-11.md`](NIGHT_HANDOFF_2026-08-11.md),
 [`SYSTEM_STATE_2026-08-11.md`](SYSTEM_STATE_2026-08-11.md) and
 [`EDITORIAL_LOOP_RUNBOOK.md`](EDITORIAL_LOOP_RUNBOOK.md) first.**
