@@ -397,6 +397,34 @@ class PublicApiTests(unittest.TestCase):
         self.assertIsNone(server_module.normalize_wire_story(approved, "/api/tracker-feed.json"))
         self.assertIsNotNone(server_module.normalize_wire_story(dict(approved, tracker_eligible=True), "/api/tracker-feed.json"))
 
+    def test_conflicting_status_aliases_never_make_a_story_public(self):
+        approved = {"city": "fort-lauderdale", "headline": "Fixture only",
+                    "source_url": "https://example.test/official-record",
+                    "approved_at": "2026-09-27T12:00:00Z", "tracker_eligible": True}
+        for endpoint in ("/api/wire/packets", "/api/tracker-feed.json"):
+            for status in ("hold", "draft", "rejected", "unknown"):
+                for fields in ({"review_status": "approved", "status": status},
+                               {"status": "approved", "review_status": status}):
+                    with self.subTest(endpoint=endpoint, fields=fields):
+                        self.assertIsNone(server_module.normalize_wire_story(dict(approved, **fields), endpoint))
+            self.assertIsNotNone(server_module.normalize_wire_story(
+                dict(approved, status="published", review_status="approved"), endpoint))
+
+    def test_failed_clerk_reads_do_not_borrow_dashboard_terminal_clock(self):
+        stamp = datetime.now(timezone.utc).isoformat()
+        values = {"cache_row": [{"updated_at": stamp, "payload": {"stats": {
+            "broward_fresh": stamp, "permits_fresh": stamp}}}]}
+        failures = ["verified_clerk_run:DeadlineExceeded", "verified_clerk_record:DeadlineExceeded"]
+        with mock.patch.object(server_module, "collect_reads", return_value=(values, failures)):
+            payload = server_module.build_data_health_payload()
+        sources = {row["id"]: row for row in payload["sources"]}
+        self.assertEqual(sources["aggregate-snapshot"]["status"], "current")
+        self.assertEqual(sources["broward"]["status"], "unavailable")
+        self.assertIsNone(sources["broward"]["health_receipt_at"])
+        self.assertIsNone(sources["broward"]["event_through"])
+        self.assertEqual(sources["broward"]["status_basis"], "no_authoritative_terminal_receipt")
+        self.assertEqual(payload["errors"], failures)
+
     def test_signup_persists_and_repeats_idempotently(self):
         body = {
             "email": "launch-check@example.com",
