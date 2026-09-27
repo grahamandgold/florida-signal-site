@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 
+import contextlib
 import datetime as dt
 import importlib.util
+import io
 import json
 import pathlib
 import plistlib
+import subprocess
+import sys
 import tempfile
 import unittest
 import urllib.error
+from unittest import mock
 
 
 HERE = pathlib.Path(__file__).parent
@@ -23,6 +28,68 @@ def load_module(name):
 verified = load_module("acclaim_verified_max")
 targets = load_module("acclaim_targets")
 empty_policy = load_module("acclaim_empty_policy")
+
+
+def harvest_runner_source():
+    script = (HERE / "acclaim_pull.sh").read_text(encoding="utf-8")
+    marker = "<<'PY'\nimport subprocess, sys\n"
+    start = script.index(marker) + len("<<'PY'\n")
+    end = script.index("\nPY\n)", start)
+    return script[start:end]
+
+
+def run_harvest_runner(results):
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    argv = ["-", "1200", "harvest.applescript", "8/30/2026", "/tmp/out", "40"]
+    with (
+        mock.patch.object(sys, "argv", argv),
+        mock.patch("subprocess.run", side_effect=results) as runner,
+        contextlib.redirect_stdout(stdout),
+        contextlib.redirect_stderr(stderr),
+    ):
+        exec(compile(harvest_runner_source(), "acclaim_pull.sh:inline", "exec"), {})
+    return stdout.getvalue().strip(), stderr.getvalue(), runner.call_count
+
+
+class HarvestRetryTests(unittest.TestCase):
+    def result(self, stdout, *, returncode=0, stderr=""):
+        return subprocess.CompletedProcess(
+            ["/usr/bin/osascript"], returncode, stdout=stdout, stderr=stderr
+        )
+
+    def test_transient_missing_result_state_retries_once(self):
+        stdout, stderr, calls = run_harvest_runner(
+            [
+                self.result("INCOMPLETE|0|0|timeout_no_result_state\n"),
+                self.result("EMPTY|0|0\n"),
+            ]
+        )
+
+        self.assertEqual(stdout, "EMPTY|0|0")
+        self.assertIn("retrying once", stderr)
+        self.assertEqual(calls, 2)
+
+    def test_second_missing_result_state_remains_truthful_failure(self):
+        stdout, _stderr, calls = run_harvest_runner(
+            [
+                self.result("INCOMPLETE|0|0|timeout_no_result_state\n"),
+                self.result("INCOMPLETE|0|0|timeout_no_result_state\n"),
+            ]
+        )
+
+        self.assertEqual(
+            stdout, "INCOMPLETE|0|0|timeout_no_result_state_after_retry"
+        )
+        self.assertEqual(calls, 2)
+
+    def test_other_terminal_state_is_not_retried(self):
+        stdout, _stderr, calls = run_harvest_runner(
+            [self.result("SOURCE_WAIT|0|0|terms_acceptance_required\n")]
+        )
+
+        self.assertEqual(stdout, "SOURCE_WAIT|0|0|terms_acceptance_required")
+        self.assertEqual(calls, 1)
 
 
 class VerifiedMaxTests(unittest.TestCase):

@@ -46,7 +46,34 @@ class AcclaimStateTests(unittest.TestCase):
 
         self.assertEqual(state["backlog_remaining"], [])
         self.assertEqual(state["last_completed_date"], "2026-08-10")
+        self.assertEqual(state["last_event_date"], "2026-08-05")
         self.assertEqual(state["dates"]["2026-08-05"]["found"], 2446)
+
+    def test_completed_zero_date_does_not_advance_event_clock(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = Path(directory) / "state.json"
+            state_file.write_text(
+                json.dumps({
+                    "dates": {
+                        "2026-08-28": {"status": "done", "found": 2463},
+                    }
+                }),
+                encoding="utf-8",
+            )
+            state = state_module.update_state(
+                state_file,
+                "2026-08-29",
+                "done",
+                0,
+                0,
+                0,
+                "2026-08-25",
+                0,
+                now=dt.datetime(2026, 8, 30, 20, 9, tzinfo=dt.timezone.utc),
+            )
+
+        self.assertEqual(state["last_completed_date"], "2026-08-29")
+        self.assertEqual(state["last_event_date"], "2026-08-28")
 
 
 if __name__ == "__main__":
