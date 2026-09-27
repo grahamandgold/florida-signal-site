@@ -899,8 +899,8 @@ def build_data_health_payload() -> dict[str, Any]:
         {},
     )
     stats = cache_row.get("payload", {}).get("stats", {}) if isinstance(cache_row.get("payload"), dict) else {}
-    verified_event_time = verified_clerk_record.get("recording_date_iso") or stats.get("broward_fresh")
-    verified_system_time = verified_clerk_run.get("pulled_at_utc") or cache_row.get("updated_at")
+    verified_event_time = verified_clerk_record.get("recording_date_iso")
+    verified_system_time = verified_clerk_run.get("pulled_at_utc")
     verified_doc_count = verified_clerk_run.get("observed_doc_count")
     verified_detail = (
         f"{verified_doc_count} documents in latest authoritative SFTP load · "
@@ -980,7 +980,7 @@ def build_data_health_payload() -> dict[str, Any]:
         source_clock_row(source_id="supabase-sync", label="Public mirror", status=sync_status, health_receipt_at=sync.get("completed_at"), health_receipt_status=(("failed" if sync_errors else "ok") if sync else None), status_basis="terminal_sync_run", cadence="every 30 minutes", detail=f"{sync.get('rows_synced', 0)} rows in latest run · {sync.get('errors', 0)} errors" if sync else "No sync run visible"),
         source_clock_row(source_id="permits", label="Permit applications", status=health_status(latest_seen.get("last_seen_at"), 30, 54), event_through=latest_application.get("applied_date"), fetched_at=latest_seen.get("last_seen_at"), status_basis="row_observation_only", cadence="source intake nightly; mirror every 30 minutes", detail="Analysis uses applied_date; last_seen_at is row freshness metadata, not a terminal collector receipt"),
         source_clock_row(source_id="aggregate-snapshot", label="Aggregate dashboard", status=health_status(cache_row.get("updated_at"), 26, 54), event_through=stats.get("permits_fresh"), fetched_at=cache_row.get("updated_at"), status_basis="snapshot_updated_at", cadence="refresh after successful aggregate build", detail="Counts retain their visible update time when this snapshot is delayed"),
-        source_clock_row(source_id="broward", label="Broward verified instruments", status=verified_clerk_status(verified_event_time, verified_system_time), verification="verified", event_through=verified_event_time, fetched_at=verified_system_time, health_receipt_at=verified_system_time, health_receipt_status=verified_clerk_run.get("parse_status"), status_basis="event_and_authoritative_terminal_run", cadence="SFTP check daily at 9:30 AM plus weekday catch-up", detail=verified_detail),
+        source_clock_row(source_id="broward", label="Broward verified instruments", status=verified_clerk_status(verified_event_time, verified_system_time), verification="verified", event_through=verified_event_time, fetched_at=verified_system_time, health_receipt_at=verified_system_time, health_receipt_status=verified_clerk_run.get("parse_status"), status_basis="event_and_authoritative_terminal_run" if verified_system_time else "no_authoritative_terminal_receipt", cadence="SFTP check daily at 9:30 AM plus weekday catch-up", detail=verified_detail),
         source_clock_row(source_id="clerk-preliminary", label="Broward preliminary recordings", status=preliminary_clerk_status(preliminary_event_time, preliminary_clerk_run), verification="preliminary", event_through=preliminary_event_time, fetched_at=preliminary_fetched_at, health_receipt_at=preliminary_receipt_at, health_receipt_status=preliminary_clerk_run.get("status"), status_basis=preliminary_status_basis, cadence="AcclaimWeb hourly plus 12:30 AM, noon, 7 PM and 10:30 PM", detail=preliminary_detail),
         source_clock_row(source_id="permit-enrichment", label="Permit enrichment", status=health_status(latest_enriched.get("last_enriched_at"), 30, 54), fetched_at=latest_enriched.get("last_enriched_at"), status_basis="processing_clock_only", cadence="continuous queue after permit intake", detail="This is a processing clock, not an event-coverage or terminal-receipt claim; parcel and application clocks remain separate"),
         source_clock_row(source_id="property-transfer-snapshot", label="Deed / parcel snapshot", status=transfer_snapshot_status, event_through=transfer_freshness.get("snapshot_event_through"), health_receipt_at=transfer_receipt.get("system_time"), health_receipt_status=transfer_receipt.get("status"), status_basis="snapshot_freshness_and_terminal_health", cadence="weekdays after verified Clerk catch-up", detail=(f"snapshot lag {transfer_freshness.get('snapshot_lag_business_days')} business day(s) · verified source age {transfer_freshness.get('source_age_business_days')}" if transfer_freshness else "Freshness view unavailable; current deed modules stay suppressed")),
@@ -1101,12 +1101,13 @@ def normalize_wire_story(item: dict[str, Any], endpoint: str) -> dict[str, Any] 
     city = str(item.get("city") or "").strip().lower()
     if city != CMS_CITY:
         return None
-    review_status = str(item.get("review_status") or item.get("status") or "").lower()
+    statuses = [str(item.get(field)).strip().lower() for field in ("review_status", "status")
+                if item.get(field) is not None and str(item.get(field)).strip()]
     approved_at = item.get("wire_approved_at") or item.get("approved_at") or item.get("published_at")
     endpoint_path = endpoint.split("?", 1)[0]
     # An old approval timestamp must not override a later hold/draft status.
     # Both public adapters require affirmative human approval evidence.
-    if review_status not in {"approved", "published", "cleared"} or not parse_source_time(approved_at):
+    if not statuses or any(status not in {"approved", "published", "cleared"} for status in statuses) or not parse_source_time(approved_at):
         return None
     if endpoint_path == "/api/tracker-feed.json" and item.get("tracker_eligible") is not True:
         return None
