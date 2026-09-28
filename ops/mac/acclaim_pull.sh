@@ -153,7 +153,7 @@ while IFS= read -r LINE; do
   log "harvest $ISO ($TD)"
   # Bound Chrome/AppleScript hangs. The helper always converts a timeout or automation
   # exception into the same structured status contract used by the harvester.
-  RES=$(/usr/bin/python3 - "$HARVEST_TIMEOUT" "$DIR/acclaim_harvest.applescript" "$TD" "$OUT" "$MAXPAGES" 2>>"$LOG" <<'PY'
+  RES=$(/usr/bin/python3 - "$HARVEST_TIMEOUT" "$DIR/acclaim_harvest.applescript" "$TD" "$OUT" "$MAXPAGES" "$DIR" 2>>"$LOG" <<'PY'
 import subprocess, sys
 timeout = int(sys.argv[1])
 command = ["/usr/bin/osascript", *sys.argv[2:]]

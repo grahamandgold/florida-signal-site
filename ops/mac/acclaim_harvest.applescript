@@ -16,41 +16,55 @@ on run argv
 	else
 		set maxPages to 40
 	end if
-	set searchURL to "https://officialrecords.broward.org/AcclaimWeb/search/SearchTypeRecordDate"
-
+	-- Reuse the operator's one existing official search session. Never open or
+	-- close windows, navigate away, or silently accept renewed terms.
+	if (count of argv) < 4 then return "INCOMPLETE|0|0|browser_helpers_missing"
+	set helperDir to item 4 of argv
+	set browserJS to read (POSIX file (helperDir & "/acclaim_browser.js")) as «class utf8»
+	if not (application "Google Chrome" is running) then return "SOURCE_WAIT|0|0|accepted_search_session_missing"
+	set inventory to ""
 	tell application "Google Chrome"
-		set w to make new window
-		set t to active tab of w
-		set URL of t to searchURL
+		repeat with browserWindow in windows
+			repeat with browserTab in tabs of browserWindow
+				set tabURL to URL of browserTab
+				if tabURL starts with "https://officialrecords.broward.org/" then
+					set inventory to inventory & (id of browserWindow as text) & tab & (id of browserTab as text) & tab & tabURL & linefeed
+				end if
+			end repeat
+		end repeat
+	end tell
+	set selectionLine to do shell script "/usr/bin/python3 " & quoted form of (helperDir & "/acclaim_browser_session.py") & " " & quoted form of inventory
+	set AppleScript's text item delimiters to "|"
+	set chosen to text items of selectionLine
+	set AppleScript's text item delimiters to ""
+	set choice to item 1 of chosen
+	if choice is "MISSING" then return "SOURCE_WAIT|0|0|accepted_search_session_missing"
+	if choice is "AMBIGUOUS" then return "SOURCE_WAIT|0|0|ambiguous_search_sessions"
+	if choice is "TERMS" then return "SOURCE_WAIT|0|0|terms_acceptance_required"
+	set windowID to (item 2 of chosen) as integer
+	set tabID to (item 3 of chosen) as integer
+	tell application "Google Chrome"
+		set w to window id windowID
+		set t to tab id tabID of w
 	end tell
 
-	-- Wait for Cloudflare clearance + the real search form (up to ~40s).
-	set ready to false
+	set probe to "WAIT"
 	repeat 20 times
+		tell application "Google Chrome" to set probe to execute t javascript (browserJS & ";FSClerkBrowser.state();")
+		if probe is not "WAIT" then exit repeat
 		delay 2
-		tell application "Google Chrome"
-			set probe to execute t javascript "(function(){return document.getElementById('RecordDate')?'READY':(/\\/Disclaimer(?:\\?|$)/i.test(location.pathname)?'TERMS':(/Attention Required|Just a moment/i.test(document.title)?'CF':'WAIT'));})()"
-		end tell
-		if probe is "READY" or probe is "TERMS" then
-			set ready to true
-			exit repeat
-		end if
 	end repeat
-	if probe is "TERMS" then
-		-- Broward periodically expires the disclaimer acceptance cookie. This is an
-		-- operator gate, not a collector crash; never click an acceptance control.
-		tell application "Google Chrome" to close w
-		return "SOURCE_WAIT|0|0|terms_acceptance_required"
-	end if
-	if not ready then
-		tell application "Google Chrome" to close w
+	if probe is not "READY" then
+		my logDiagnostic(t, browserJS, "readiness")
+		if probe is "TERMS" then return "SOURCE_WAIT|0|0|terms_acceptance_required"
 		return "INCOMPLETE|0|0|not_ready_" & probe
 	end if
-
-	-- Search the target record date.
-	tell application "Google Chrome"
-		execute t javascript "(function(){var d=document.getElementById('RecordDate'); d.value='" & targetDate & "'; d.dispatchEvent(new Event('change',{bubbles:true})); document.getElementById('btnSearch').click(); return 'searched';})()"
-	end tell
+	tell application "Google Chrome" to set searched to execute t javascript (browserJS & ";FSClerkBrowser.begin('" & targetDate & "');")
+	if searched is not "SEARCHED" then
+		my logDiagnostic(t, browserJS, "submit")
+		if searched is "TERMS" then return "SOURCE_WAIT|0|0|terms_acceptance_required"
+		return "INCOMPLETE|0|0|search_not_submitted_" & searched
+	end if
 
 	-- Wait for results, a POSITIVELY-detected empty result, or a distinguishable failure.
 	-- States: GRID (rows present) · EMPTY (explicit no-results signature) · CF (Cloudflare)
@@ -58,33 +72,25 @@ on run argv
 	set gridState to "WAIT"
 	repeat 14 times
 		delay 2
-		tell application "Google Chrome"
-			set gridState to execute t javascript "(function(){
-if(/Attention Required|Just a moment|Access denied/i.test(document.title))return 'CF';
-var r=document.querySelectorAll('#SearchGridContainer tbody tr');
-for(var i=0;i<r.length;i++){if(/\\b\\d{7,}\\b/.test(r[i].innerText))return 'GRID';}
-var s=(document.querySelector('.t-status-text')||{}).innerText||'';
-if(/of\\s*0\\b/.test(s))return 'EMPTY';
-var all=document.querySelectorAll('body *');
-for(var j=0;j<all.length;j++){var e=all[j];if(e.children.length)continue;
- var txt=(e.innerText||'').trim();
- if(/^no results to display$/i.test(txt)&&e.offsetParent!==null)return 'EMPTY';}
-return 'WAIT';})()"
-		end tell
-		if gridState is "GRID" or gridState is "EMPTY" or gridState is "CF" then exit repeat
+		tell application "Google Chrome" to set gridState to execute t javascript (browserJS & ";FSClerkBrowser.result('" & targetDate & "');")
+		if gridState is not "WAIT" and gridState is not "READY" then exit repeat
 	end repeat
 	if gridState is "EMPTY" then
 		-- Verified zero-record date: Acclaim positively reported "No Results to Display".
-		tell application "Google Chrome" to close w
 		return "EMPTY|0|0"
 	end if
+	if gridState is "TERMS" then
+		my logDiagnostic(t, browserJS, "results")
+		return "SOURCE_WAIT|0|0|terms_acceptance_required"
+	end if
 	if gridState is "CF" then
-		tell application "Google Chrome" to close w
+		my logDiagnostic(t, browserJS, "results")
 		return "INCOMPLETE|0|0|cloudflare_block"
 	end if
 	if gridState is not "GRID" then
+		my logDiagnostic(t, browserJS, "results")
+		if gridState is not "WAIT" and gridState is not "READY" then return "INCOMPLETE|0|0|result_" & gridState
 		-- No grid AND no positive empty-state message: treat as timeout/failure, never as empty.
-		tell application "Google Chrome" to close w
 		return "INCOMPLETE|0|0|timeout_no_result_state"
 	end if
 	delay 2
@@ -119,12 +125,19 @@ return 'WAIT';})()"
 	set expectedPages to (totalRecords + pageSize - 1) div pageSize
 	if expectedPages < 1 then set expectedPages to 1
 
-	set harvestJS to "(function(){var ths=[].slice.call(document.querySelectorAll('.t-grid th')).map(function(x){return x.innerText.trim().toLowerCase();});function ci(n){return ths.indexOf(n);}var di=ci('record date'),ty=ci('doc type'),fn=ci('first direct name'),inm=ci('first indirect name'),bt=ci('book type'),bp=ci('book/page'),lg=ci('legal'),ins=ci('instrument #');var rows=[].slice.call(document.querySelectorAll('#SearchGridContainer tbody tr'));var out=[],firstInst='',malformed=0;rows.forEach(function(r){var c=r.querySelectorAll('td');if(c.length<6){return;}function g(i){return i>-1&&c[i]?c[i].innerText.trim():'';}var inst=g(ins).replace(/\\D/g,'');if(!inst){malformed++;return;}if(!firstInst)firstInst=inst;var rd=g(di).replace(/(\\d{2})\\/(\\d{2})\\/(\\d{4})/,'$3-$1-$2');out.push({record_date:rd,instrument_number:inst,doc_type:g(ty),first_direct_name:g(fn),first_indirect_name:g(inm),book_type:g(bt),book_page:g(bp),legal_snippet:g(lg).slice(0,500)});});return JSON.stringify({rows:out,firstInst:firstInst,malformed:malformed});})()"
 
 	set pagesDone to 0
 	set prevFirst to ""
 	set reason to ""
 	repeat with pageNum from 1 to maxPages
+		tell application "Google Chrome" to set pageState to execute t javascript (browserJS & ";FSClerkBrowser.result('" & targetDate & "');")
+		if pageState is not "GRID" then
+			my logDiagnostic(t, browserJS, "page")
+			set reason to "page_state_" & pageState
+			exit repeat
+		end if
+		set expectedFirst to pagesDone * pageSize + 1
+		set harvestJS to browserJS & ";FSClerkBrowser.page('" & targetDate & "'," & expectedFirst & "," & totalRecords & ");"
 		tell application "Google Chrome"
 			set pageJSON to execute t javascript harvestJS
 		end tell
@@ -132,11 +145,18 @@ return 'WAIT';})()"
 		set curFirst to do shell script "/usr/bin/python3 - " & quoted form of pageJSON & " " & quoted form of outFile & " <<'PY'
 import sys, json
 d = json.loads(sys.argv[1]); rows = d.get('rows', [])
+if d.get('error'):
+    print('ERROR:' + d['error'])
+    raise SystemExit(0)
 with open(sys.argv[2], 'a') as f:
     for r in rows:
         f.write(json.dumps(r) + '\\n')
 print(d.get('firstInst',''))
 PY"
+		if curFirst starts with "ERROR:" then
+			set reason to "page_validation_" & curFirst
+			exit repeat
+		end if
 		if curFirst is prevFirst and curFirst is not "" then
 			set reason to "repeated_page_" & pageNum
 			exit repeat
@@ -171,7 +191,6 @@ PY"
 		end if
 	end repeat
 
-	tell application "Google Chrome" to close w
 
 	if reason is not "" then
 		return "INCOMPLETE|" & pagesDone & "|" & totalRecords & "|" & reason
@@ -181,3 +200,13 @@ PY"
 	end if
 	return "OK|" & pagesDone & "|" & totalRecords
 end run
+
+-- Bounded, non-record diagnostic; no query strings, names, cookies or page body.
+on logDiagnostic(browserTab, browserJS, stageName)
+	try
+		tell application "Google Chrome" to set snapshot to execute browserTab javascript (browserJS & ";FSClerkBrowser.diagnostic();")
+		log ("ACCLAIM_BROWSER_DIAGNOSTIC " & stageName & " " & snapshot)
+	on error
+		log ("ACCLAIM_BROWSER_DIAGNOSTIC " & stageName & " unavailable")
+	end try
+end logDiagnostic
