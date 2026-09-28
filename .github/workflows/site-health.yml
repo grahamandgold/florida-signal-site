@@ -37,6 +37,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Verify Clerk session selection and fresh search results
+        run: |
+          python3 -m unittest discover -s tests -p test_acclaim_browser_session.py
+          node tests/test_acclaim_browser.js
       - run: npm run test:unit
       - run: npm run test:browser
       - name: Check the production API boundary
