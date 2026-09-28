@@ -79,6 +79,13 @@ var FSClerkBrowser = (function () {
     }
     return 'WAIT';
   }
+  // A partially constructed AJAX grid is not a terminal search response.
+  // Only the caller's existing bounded search poll may wait for its columns.
+  // result() and page() remain strict; the final poll preserves the real error.
+  function pollResult(date, finalAttempt) {
+    var valid=result(date);
+    return valid==='MISSING_COLUMNS' && finalAttempt===false ? 'WAIT' : valid;
+  }
   function page(date, expectedFirst, expectedTotal) {
     var valid=result(date);
     if(valid!=='GRID') return JSON.stringify({rows:[],firstInst:'',error:valid});
@@ -98,5 +105,5 @@ var FSClerkBrowser = (function () {
   function diagnostic() {
     return JSON.stringify({state:state(),route:location.origin!=='https://officialrecords.broward.org'?'other_origin':/^\/AcclaimWeb\/search\/SearchTypeRecordDate\/?$/i.test(location.pathname)?'record_date':/^\/AcclaimWeb\/Disclaimer\/?$/i.test(location.pathname)?'terms':'other_path',ready_state:document.readyState,has_date_form:!!document.getElementById('RecordDate'),grid_rows:document.querySelectorAll('#SearchGridContainer tbody tr').length});
   }
-  return {state:state,begin:begin,result:result,page:page,diagnostic:diagnostic};
+  return {state:state,begin:begin,result:result,pollResult:pollResult,page:page,diagnostic:diagnostic};
 }());
