@@ -26,6 +26,8 @@ on run argv
 		log "ACCLAIM_SESSION_DIAGNOSTIC {\"stage\":\"chrome_running_check\",\"chrome_running\":false,\"window_count\":0,\"tab_count\":0,\"official_prefix_count\":0,\"parser_valid_id_count\":0,\"candidate_count\":0,\"selection\":\"MISSING\"}"
 		return "SOURCE_WAIT|0|0|accepted_search_session_missing"
 	end if
+	-- Resolve the delimiter outside Chrome terminology: bare tab means its tab class.
+	set inventorySeparator to character id 9
 	set inventory to ""
 	set windowCount to 0
 	set tabCount to 0
@@ -38,7 +40,7 @@ on run argv
 				set tabURL to URL of browserTab
 				if tabURL starts with "https://officialrecords.broward.org/" then
 					set officialPrefixCount to officialPrefixCount + 1
-					set inventory to inventory & (id of browserWindow as text) & tab & (id of browserTab as text) & tab & tabURL & linefeed
+					set inventory to inventory & (id of browserWindow as text) & inventorySeparator & (id of browserTab as text) & inventorySeparator & tabURL & linefeed
 				end if
 			end repeat
 		end repeat
