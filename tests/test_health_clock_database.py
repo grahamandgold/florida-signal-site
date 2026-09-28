@@ -34,6 +34,10 @@ class HealthClockDatabaseTests(unittest.TestCase):
         cls.function = functions[functions.index("create or replace function public.fs_business_days_between"):functions.index("-- Public, aggregate-only")]
         patches = sorted(MIGRATIONS.glob("*_optimize_health_clock_reads.sql"))
         cls.patch = patches[-1].read_text() if patches else ""
+        cls.initial_patch = cls.patch
+        corrections = sorted(MIGRATIONS.glob("*_use_full_clerk_fetch_clock_index.sql"))
+        cls.correction = corrections[-1].read_text() if corrections else ""
+        cls.patch += cls.correction
 
     @classmethod
     def sql(cls, query):
@@ -47,7 +51,7 @@ class HealthClockDatabaseTests(unittest.TestCase):
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 CREATE TABLE public.broward_clerk_records_doc(recording_date_iso date, doc_type_code text, visible boolean DEFAULT true);
 CREATE TABLE public.broward_property_transfer_map(recording_date date);
-CREATE TABLE public.broward_clerk_preliminary(fetched_at timestamptz);
+CREATE TABLE public.broward_clerk_preliminary(fetched_at timestamptz NOT NULL);
 CREATE INDEX idx_brc_doc_recording_date ON public.broward_clerk_records_doc(recording_date_iso);
 CREATE INDEX idx_ptm_type_date ON public.broward_property_transfer_map((true), recording_date DESC);
 ALTER TABLE public.broward_clerk_records_doc ENABLE ROW LEVEL SECURITY;
@@ -141,6 +145,14 @@ ANALYZE;
         self.assertEqual(before, self.clocks())
         self.assertEqual(definition, self.sql("SELECT pg_get_viewdef('public.broward_property_transfer_freshness'::regclass,true);"))
         self.assertEqual('0', self.sql("SELECT count(*) FROM pg_indexes WHERE indexname IN ('idx_clerk_prelim_fetched_at','idx_brc_doc_transfer_recording_date','idx_ptm_recording_date');"))
+
+    def test_correction_refuses_to_replace_an_unexpected_index(self):
+        self.sql('BEGIN;' + self.initial_patch + 'COMMIT;')
+        self.sql('DROP INDEX public.idx_clerk_prelim_fetched_at; CREATE INDEX idx_clerk_prelim_fetched_at ON public.broward_clerk_preliminary(fetched_at ASC);')
+        before = self.sql("SELECT pg_get_indexdef('public.idx_clerk_prelim_fetched_at'::regclass);")
+        with self.assertRaises(AssertionError):
+            self.sql('BEGIN;' + self.correction + 'COMMIT;')
+        self.assertEqual(before, self.sql("SELECT pg_get_indexdef('public.idx_clerk_prelim_fetched_at'::regclass);"))
 
 
 if __name__ == '__main__':
