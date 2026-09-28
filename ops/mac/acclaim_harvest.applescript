@@ -86,9 +86,11 @@ on run argv
 	-- States: GRID (rows present) · EMPTY (explicit no-results signature) · CF (Cloudflare)
 	--         WAIT (still loading). Anything unresolved after the window is a timeout, never EMPTY.
 	set gridState to "WAIT"
-	repeat 14 times
+	repeat with resultAttempt from 1 to 14
 		delay 2
-		tell application "Google Chrome" to set gridState to execute t javascript (browserJS & ";FSClerkBrowser.result('" & targetDate & "');")
+		set finalAttemptJS to "false"
+		if resultAttempt is 14 then set finalAttemptJS to "true"
+		tell application "Google Chrome" to set gridState to execute t javascript (browserJS & ";FSClerkBrowser.pollResult('" & targetDate & "'," & finalAttemptJS & ");")
 		if gridState is not "WAIT" and gridState is not "READY" then exit repeat
 	end repeat
 	if gridState is "EMPTY" then

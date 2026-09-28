@@ -64,4 +64,39 @@ assert.equal(vm.runInContext("FSClerkBrowser.result('9/28/2026')",mc),'GRID','Pe
 assert.equal(disconnects,1);
 persistent.querySelectorAll=originalRows;
 assert.equal(vm.runInContext("FSClerkBrowser.result('9/28/2026')",mc),'WAIT','Status mutation alone cannot freshen stale rows');
-console.log('32 Acclaim browser freshness, source-gate, submission and atomic export assertions passed');
+// A search response can construct the grid before its required columns arrive.
+// Waiting is allowed only inside the existing bounded search poll; export stays strict.
+const loading=fixture(), lc={document:loading,location:loading.location};
+const loadedSelectors=loading.querySelectorAll;
+loading.querySelectorAll=s=>s==='.t-grid th'?[]:loadedSelectors(s);
+vm.createContext(lc);vm.runInContext(fs.readFileSync(modulePath,'utf8'),lc);
+const poll=(finalAttempt)=>vm.runInContext("(FSClerkBrowser.pollResult || FSClerkBrowser.result)('9/28/2026',"+finalAttempt+")",lc);
+assert.equal(vm.runInContext("FSClerkBrowser.result('9/28/2026')",lc),'MISSING_COLUMNS');
+assert.equal(poll(false),'WAIT','Incomplete columns must not end the first search poll');
+assert.equal(JSON.parse(vm.runInContext("FSClerkBrowser.page('9/28/2026',1,1)",lc)).error,'MISSING_COLUMNS','No incomplete rows may be exported');
+assert.equal(poll(true),'MISSING_COLUMNS','The final poll must preserve a permanent column failure');
+loading.querySelectorAll=loadedSelectors;
+assert.equal(poll(false),'GRID','Completed replacement grid may satisfy a later bounded poll');
+for(const [options,expected] of [[{terms:true},'TERMS'],[{challenge:true},'CF'],[{inputDate:'9/27/2026'},'INPUT_DATE_CHANGED'],[{rowDate:'09/27/2026'},'DATE_MISMATCH'],[{empty:true},'EMPTY'],[{mixed:true},'WAIT'],[{staleStatus:true},'WAIT'],[{fresh:false},'WAIT']]) {
+ const doc=fixture(options),ctx={document:doc,location:doc.location};vm.createContext(ctx);vm.runInContext(fs.readFileSync(modulePath,'utf8'),ctx);
+ assert.equal(vm.runInContext("FSClerkBrowser.pollResult('9/28/2026',false)",ctx),expected,'Polling must retain source/date/empty boundaries');
+}
+for (const [scenario,expected] of [['short_cells','MISSING_COLUMNS'],['malformed_instrument','MALFORMED_ROW'],['missing_total','MISSING_TOTAL'],['count_mismatch','COUNT_MISMATCH']]) {
+ const doc=fixture(), ctx={document:doc,location:doc.location};
+ const row=doc.querySelectorAll('#SearchGridContainer tbody tr')[0], cells=row.querySelectorAll('td');
+ if(scenario==='short_cells') row.querySelectorAll=()=>cells.slice(0,1);
+ if(scenario==='malformed_instrument') cells[1].innerText='not-an-instrument';
+ if(scenario==='missing_total') doc.querySelector('.t-status-text').innerText='Loading';
+ if(scenario==='count_mismatch') doc.querySelector('.t-status-text').innerText='Displaying items 1 - 2 of 2';
+ vm.createContext(ctx);vm.runInContext(fs.readFileSync(modulePath,'utf8'),ctx);
+ assert.equal(vm.runInContext("FSClerkBrowser.pollResult('9/28/2026',false)",ctx),scenario==='short_cells'?'WAIT':expected);
+ assert.equal(vm.runInContext("FSClerkBrowser.pollResult('9/28/2026',true)",ctx),expected);
+ assert.equal(JSON.parse(vm.runInContext("FSClerkBrowser.page('9/28/2026',1,1)",ctx)).error,expected);
+}
+assert.equal(vm.runInContext("FSClerkBrowser.pollResult('9/28/2026')",lc),'GRID');
+loading.querySelectorAll=s=>s==='.t-grid th'?[]:loadedSelectors(s);
+assert.equal(vm.runInContext("FSClerkBrowser.pollResult('9/28/2026')",lc),'MISSING_COLUMNS','Waiting requires explicit nonfinal false');
+const harvester=fs.readFileSync(path.join(__dirname,'../ops/mac/acclaim_harvest.applescript'),'utf8');
+assert.match(harvester,/repeat with resultAttempt from 1 to 14[\s\S]*?delay 2[\s\S]*?FSClerkBrowser\.pollResult/,'Actual collector must retain the 14 by 2 second bound');
+assert.match(harvester,/if resultAttempt is 14 then set finalAttemptJS to "true"/,'Actual collector must expose a permanent error on its final attempt');
+console.log('Acclaim freshness, bounded readiness, source gates and strict export assertions passed');
