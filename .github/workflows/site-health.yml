@@ -13,6 +13,19 @@ permissions:
   issues: write
 
 jobs:
+  database-clock-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install local PostgreSQL test binaries
+        run: sudo apt-get update && sudo apt-get install -y postgresql
+      - name: Verify indexed clocks and unchanged freshness semantics
+        env:
+          REQUIRE_POSTGRES_TESTS: "1"
+        run: python3 -m unittest discover -s tests -p test_health_clock_database.py -v
   verify:
     runs-on: ubuntu-latest
     env:
