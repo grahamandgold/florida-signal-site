@@ -21,19 +21,33 @@ on run argv
 	if (count of argv) < 4 then return "INCOMPLETE|0|0|browser_helpers_missing"
 	set helperDir to item 4 of argv
 	set browserJS to read (POSIX file (helperDir & "/acclaim_browser.js")) as «class utf8»
-	if not (application "Google Chrome" is running) then return "SOURCE_WAIT|0|0|accepted_search_session_missing"
+	if not (application "Google Chrome" is running) then
+		-- No application event or helper invocation when Chrome is not detected.
+		log "ACCLAIM_SESSION_DIAGNOSTIC {\"stage\":\"chrome_running_check\",\"chrome_running\":false,\"window_count\":0,\"tab_count\":0,\"official_prefix_count\":0,\"parser_valid_id_count\":0,\"candidate_count\":0,\"selection\":\"MISSING\"}"
+		return "SOURCE_WAIT|0|0|accepted_search_session_missing"
+	end if
 	set inventory to ""
+	set windowCount to 0
+	set tabCount to 0
+	set officialPrefixCount to 0
 	tell application "Google Chrome"
 		repeat with browserWindow in windows
+			set windowCount to windowCount + 1
 			repeat with browserTab in tabs of browserWindow
+				set tabCount to tabCount + 1
 				set tabURL to URL of browserTab
 				if tabURL starts with "https://officialrecords.broward.org/" then
+					set officialPrefixCount to officialPrefixCount + 1
 					set inventory to inventory & (id of browserWindow as text) & tab & (id of browserTab as text) & tab & tabURL & linefeed
 				end if
 			end repeat
 		end repeat
 	end tell
-	set selectionLine to do shell script "/usr/bin/python3 " & quoted form of (helperDir & "/acclaim_browser_session.py") & " " & quoted form of inventory
+	set selectionOutput to do shell script "/usr/bin/python3 " & quoted form of (helperDir & "/acclaim_browser_session.py") & " " & quoted form of inventory & " --diagnostic true " & windowCount & " " & tabCount & " " & officialPrefixCount
+	set selectionLine to paragraph 1 of selectionOutput
+	-- osascript log writes to stderr; the existing bounded caller appends stderr
+	-- to florida-acclaim.log. Keep diagnostic text out of the status stdout.
+	log ("ACCLAIM_SESSION_DIAGNOSTIC " & paragraph 2 of selectionOutput)
 	set AppleScript's text item delimiters to "|"
 	set chosen to text items of selectionLine
 	set AppleScript's text item delimiters to ""
