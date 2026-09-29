@@ -334,6 +334,7 @@ class PublicApiTests(unittest.TestCase):
         self.assertEqual(sources["broward"]["verification"], "verified")
         self.assertEqual(sources["clerk-preliminary"]["event_through"], "2026-08-28")
         self.assertEqual(sources["clerk-preliminary"]["verification"], "preliminary")
+        self.assertEqual(sources["clerk-preliminary"]["cadence"], "AcclaimWeb at noon, 7 PM and 10:30 PM America/Detroit; no hourly or launch-on-load collection")
         self.assertEqual(sources["clerk-preliminary"]["fetched_at"], "2026-08-31T21:52:58Z")
         self.assertEqual(sources["clerk-preliminary"]["health_receipt_at"], "2026-08-31T21:53:00Z")
         self.assertEqual(sources["clerk-preliminary"]["health_receipt_status"], "source_wait")
