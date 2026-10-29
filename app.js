@@ -943,6 +943,19 @@
     }
   }
 
+  function addBasemap(map) {
+    // CARTO's old keyless endpoint returns an "API KEY REQUIRED" image with
+    // HTTP 200. Use the standard OSM service, preserving browser caching and
+    // origin identification. Overzoom its last native level instead of
+    // requesting nonexistent zoom-20 or retina tiles.
+    return L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 20,
+      maxNativeZoom: 19,
+      referrerPolicy: "strict-origin-when-cross-origin",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+  }
+
   function renderSpyglass(name, items, options) {
     const settings = options || {};
     const node = el("#" + name + "-spotlight-map");
@@ -957,7 +970,7 @@
       return;
     }
     const map = L.map(node, { zoomControl: true, scrollWheelZoom: false, attributionControl: true, preferCanvas: true }).setView(settings.center || [26.129, -80.144], settings.zoom || 12);
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(map);
+    addBasemap(map);
     addMapBrand(map);
     adoptMapShareRail(map);
     addMapReset(map, { center: (typeof settings !== 'undefined' && settings.center) || [26.129, -80.144], zoom: (typeof settings !== 'undefined' && settings.zoom) || 12 });
@@ -1034,10 +1047,7 @@
 
   async function buildMap(node) {
     const map = L.map(node, { zoomControl: true, scrollWheelZoom: false, preferCanvas: true }).setView([26.129, -80.144], 12);
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      maxZoom: 20,
-      attribution: '&copy; OpenStreetMap &copy; CARTO'
-    }).addTo(map);
+    addBasemap(map);
     addMapBrand(map);
     addMapReset(map, { center: (typeof settings !== 'undefined' && settings.center) || [26.129, -80.144], zoom: (typeof settings !== 'undefined' && settings.zoom) || 12 });
     const geojson = await loadNeighborhoods();
@@ -1797,7 +1807,7 @@
       if (properties) properties.textContent = formatNumber(payload.properties_cleared);
       if (window.L) {
         const reconMap = L.map(mapNode, { zoomControl: true, scrollWheelZoom: false, attributionControl: true }).setView([26.129, -80.144], 12);
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(reconMap);
+        addBasemap(reconMap);
         addMapBrand(reconMap);
         const bounds = [];
         items.forEach(function (item) {
@@ -2296,7 +2306,7 @@
     function ensureMap() {
       if (fieldMap || !window.L || !mapNode) return fieldMap;
       fieldMap = L.map(mapNode, { zoomControl: true, scrollWheelZoom: false, attributionControl: true, preferCanvas: true }).setView([26.129, -80.144], 12);
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(fieldMap);
+      addBasemap(fieldMap);
       pointLayer = L.layerGroup().addTo(fieldMap);
       addMapBrand(fieldMap);
       return fieldMap;
