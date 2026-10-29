@@ -209,8 +209,18 @@
     return new URL(recordUrl(record), window.location.href).href;
   }
 
+  function hasMapCoordinates(point) {
+    if (!point) return false;
+    return ["lat", "lon"].every(function (key) {
+      const value = point[key];
+      if ((typeof value !== "number" && typeof value !== "string") || String(value).trim() === "") return false;
+      const number = Number(value);
+      return Number.isFinite(number) && Math.abs(number) <= (key === "lat" ? 90 : 180);
+    });
+  }
+
   function recordInvestigationUrls(record) {
-    const hasPoint = Number.isFinite(Number(record.lat)) && Number.isFinite(Number(record.lon));
+    const hasPoint = hasMapCoordinates(record);
     const point = hasPoint ? Number(record.lat) + "," + Number(record.lon) : encodeURIComponent(String(record.address || "Fort Lauderdale, FL"));
     return {
       street: hasPoint ? "https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=" + point : "https://www.google.com/maps/search/?api=1&query=" + point,
@@ -655,7 +665,7 @@
     if (state.markerLayer) state.markerLayer.remove();
     state.markerLayer = L.layerGroup().addTo(map);
     records.forEach(function (record) {
-      if (!Number.isFinite(Number(record.lat)) || !Number.isFinite(Number(record.lon))) return;
+      if (!hasMapCoordinates(record)) return;
       const marker = L.circleMarker([Number(record.lat), Number(record.lon)], {
         radius: Number(permitDeclaredValue(record) || 0) >= 500000 ? 7 : 5,
         color: "#ffffff",
@@ -688,7 +698,7 @@
   function rebuildHeatLayer() {
     if (state.overlayLayers.heat) state.overlayLayers.heat.remove();
     if (!window.L || typeof L.heatLayer !== "function") return null;
-    const points = activeMapRecords().filter(function (record) { return Number.isFinite(Number(record.lat)) && Number.isFinite(Number(record.lon)); }).map(function (record) { return [Number(record.lat), Number(record.lon), .62]; });
+    const points = activeMapRecords().filter(hasMapCoordinates).map(function (record) { return [Number(record.lat), Number(record.lon), .62]; });
     state.overlayLayers.heat = L.heatLayer(points, { radius: 28, blur: 24, minOpacity: .34, maxZoom: 17, gradient: { .2: "#7ce8d3", .46: "#ffcf4a", .72: "#ff6d3a", 1: "#a81920" } });
     return state.overlayLayers.heat;
   }
@@ -729,7 +739,7 @@
     if (kind === "corridor") {
       const stationLat = 26.1234754;
       const stationLon = -80.1461203;
-      const nearby = state.records.filter(function (record) { return Number.isFinite(Number(record.lat)) && Number.isFinite(Number(record.lon)) && haversineKm(stationLat, stationLon, Number(record.lat), Number(record.lon)) <= 1.207; });
+      const nearby = state.records.filter(function (record) { return hasMapCoordinates(record) && haversineKm(stationLat, stationLon, Number(record.lat), Number(record.lon)) <= 1.207; });
       const stationIcon = L.divIcon({ className: "", html: '<span class="corridor-pin" aria-hidden="true"></span>', iconSize: [17, 17], iconAnchor: [8, 8] });
       const station = L.marker([stationLat, stationLon], { icon: stationIcon }).bindPopup('<div class="popup-kicker">Broward corridor anchor</div><div class="popup-title">Brightline Fort Lauderdale</div><div class="popup-meta">101 NW 2 Avenue · ' + formatNumber(nearby.length) + ' applications in the current mapped sample within 0.75 mile.<br><strong>Station: Brightline · location: City GIS</strong></div>');
       const walkShed = L.circle([stationLat, stationLon], { radius: 1207, color: "#a81920", weight: 1.5, dashArray: "6 5", fillColor: "#ffcf4a", fillOpacity: .08 });
@@ -826,7 +836,7 @@
       const paths = rings.map(function (ring) {
         return ring.map(function (point, pointIndex) { const plotted = project(point); return (pointIndex ? "L" : "M") + plotted[0].toFixed(1) + " " + plotted[1].toFixed(1); }).join(" ") + " Z";
       }).join(" ");
-      const dots = item.records.filter(function (record) { return Number.isFinite(Number(record.lat)) && Number.isFinite(Number(record.lon)); }).slice(0, 80).map(function (record, dotIndex) {
+      const dots = item.records.filter(hasMapCoordinates).slice(0, 80).map(function (record, dotIndex) {
         const plotted = project([Number(record.lon), Number(record.lat)]);
         return '<circle class="neighborhood-profile__dot" cx="' + plotted[0].toFixed(1) + '" cy="' + plotted[1].toFixed(1) + '" r="' + (dotIndex < 8 ? "4.2" : "3.1") + '"></circle>';
       }).join("");
@@ -960,7 +970,7 @@
     const settings = options || {};
     const node = el("#" + name + "-spotlight-map");
     if (!node || !window.L) return;
-    const valid = items.filter(function (item) { return Number.isFinite(Number(item.lat)) && Number.isFinite(Number(item.lon)); });
+    const valid = items.filter(hasMapCoordinates);
     if (state.spotlightMaps[name]) {
       state.spotlightMaps[name].remove();
       delete state.spotlightMaps[name];
@@ -1018,7 +1028,8 @@
   }
 
   function initRecordSpotlights() {
-    const signalRecords = (state.featured.length ? state.featured : state.records).slice(0, 8);
+    const featuredMapped = state.featured.filter(hasMapCoordinates);
+    const signalRecords = (featuredMapped.length ? featuredMapped : state.records.filter(hasMapCoordinates)).slice(0, 8);
     const windowNode = el("#signals-window");
     if (windowNode) {
       const dates = signalRecords.map(function (record) { return record.applied_date; }).filter(Boolean).sort();
@@ -1031,7 +1042,7 @@
 
   function renderMeetingSpotlight(meetings) {
     const rooms = new Map();
-    meetings.filter(function (meeting) { return Number.isFinite(Number(meeting.lat)) && Number.isFinite(Number(meeting.lon)); }).forEach(function (meeting) {
+    meetings.filter(hasMapCoordinates).forEach(function (meeting) {
       const key = Number(meeting.lat).toFixed(6) + "," + Number(meeting.lon).toFixed(6);
       const existing = rooms.get(key);
       if (existing) {
@@ -1501,7 +1512,7 @@
     }
     renderNeighborhoodLists(neighborhoodCounts(state.neighborhoods.features || [], records), state.map);
     if (settings.fit) {
-      const points = records.filter(function (record) { return Number.isFinite(Number(record.lat)) && Number.isFinite(Number(record.lon)); }).map(function (record) { return [Number(record.lat), Number(record.lon)]; });
+      const points = records.filter(hasMapCoordinates).map(function (record) { return [Number(record.lat), Number(record.lon)]; });
       if (points.length === 1) state.map.setView(points[0], 15);
       else if (points.length > 1) state.map.fitBounds(points, { padding: [38, 38], maxZoom: 14 });
     }
@@ -1518,13 +1529,13 @@
   }
 
   function findNeighborhoodForRecord(record) {
-    if (!state.neighborhoods || !Number.isFinite(Number(record.lat)) || !Number.isFinite(Number(record.lon))) return "Location not mapped";
+    if (!state.neighborhoods || !hasMapCoordinates(record)) return "Location not mapped";
     const feature = (state.neighborhoods.features || []).find(function (candidate) { return pointInFeature([Number(record.lon), Number(record.lat)], candidate); });
     return feature ? neighborhoodName(feature) : "Outside matched City boundary";
   }
 
   function focusRecordOnMap(record) {
-    if (!record || !state.map || !Number.isFinite(Number(record.lat)) || !Number.isFinite(Number(record.lon))) return;
+    if (!state.map || !hasMapCoordinates(record)) return;
     if (state.searchMarker) state.searchMarker.remove();
     state.searchMarker = L.circleMarker([Number(record.lat), Number(record.lon)], { radius: 10, color: "#071b32", weight: 3, fillColor: "#ffcf4a", fillOpacity: .95 }).addTo(state.map).bindPopup(mapPopup(record)).openPopup();
     state.map.setView([Number(record.lat), Number(record.lon)], 17);
@@ -2299,7 +2310,7 @@
 
     function validRecords() {
       return state.records.filter(function (record) {
-        return Number.isFinite(Number(record.lat)) && Number.isFinite(Number(record.lon)) && (!document.body.classList.contains("storm-mode") || isStormRecord(record));
+        return hasMapCoordinates(record) && (!document.body.classList.contains("storm-mode") || isStormRecord(record));
       });
     }
 
