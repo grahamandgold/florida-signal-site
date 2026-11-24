@@ -19,7 +19,7 @@ test.describe("Florida Signal Brief front door", () => {
 
     await expect(page.getByRole("heading", { level: 1 })).toContainText("across Broward");
     await expect(page.getByRole("button", { name: "Get the Brief" }).first()).toBeVisible();
-    await expect(page.getByText("Delivered weekly.")).toBeVisible();
+    await expect(page.getByText("Sign up for the Florida Signal Brief.", { exact: true })).toBeVisible();
 
     const layout = await page.evaluate(() => ({
       width: document.documentElement.scrollWidth,
@@ -137,7 +137,7 @@ test.describe("Florida Signal Brief front door", () => {
     await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("href", "/site.webmanifest");
     await expect(page.locator(".launch-source-strip")).toContainText("130K+");
     await expect(page.locator(".launch-source-strip")).toContainText("2.4M+");
-    await expect(page.locator(".launch-source-note")).toContainText("records are leads");
+    await expect(page.locator(".launch-source-note").filter({ hasText: "Coverage, not content." })).toContainText("records are leads");
     await expect(page.locator(".launch-signal-sample")).toContainText("What changed");
     await expect(page.locator(".launch-signal-sample")).toContainText("Why it matters");
     await expect(page.locator(".launch-signal-sample")).toContainText("What happens next");
