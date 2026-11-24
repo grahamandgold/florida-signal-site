@@ -57,8 +57,10 @@
   const CURRENT_MONTH_START = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-01";
   const applicationWindowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13);
   const APPLICATION_WINDOW_START = applicationWindowDate.getFullYear() + "-" + String(applicationWindowDate.getMonth() + 1).padStart(2, "0") + "-" + String(applicationWindowDate.getDate()).padStart(2, "0");
-  const state = { dashboard: null, records: [], featured: [], applicationDates: [], cms: { configured: false, connected: false, stories: [] }, storms: [], stormPayload: null, siteMode: { storm_watch: "off" }, meetings: [], neighborhoods: null, zipBoundaries: null, map: null, markerLayer: null, polygonLayer: null, searchMarker: null, searchResults: [], leadResults: [], spotlightMaps: {}, overlayLayers: {}, overlayVisibility: { points: true, neighborhoods: true }, lens: "all", leadLens: "new" };
+  const state = { dashboard: null, records: [], featured: [], applicationDates: [], applicationDatesAvailable: false, cms: { configured: false, connected: false, stories: [] }, storms: [], stormPayload: null, siteMode: { storm_watch: "off" }, meetings: [], neighborhoods: null, zipBoundaries: null, map: null, markerLayer: null, polygonLayer: null, searchMarker: null, searchResults: [], leadResults: [], spotlightMaps: {}, overlayLayers: {}, overlayVisibility: { points: true, neighborhoods: true }, lens: "all", leadLens: "new" };
   let stormTickerTimer = null;
+  let recordSearchVersion = 0;
+  let recordSearchController = null;
 
   function el(selector, root) { return (root || document).querySelector(selector); }
   function els(selector, root) { return Array.from((root || document).querySelectorAll(selector)); }
@@ -289,6 +291,7 @@
     for (let offset = 0; offset < 6000; offset += 1000) {
       const response = await supabase("permits", { select: "applied_date", applied_date: "gte." + APPLICATION_WINDOW_START, limit: "1000", offset: String(offset) });
       const batch = await response.json();
+      if (!Array.isArray(batch)) throw new Error("Application dates unavailable");
       rows.push.apply(rows, batch);
       if (batch.length < 1000) break;
     }
@@ -309,7 +312,8 @@
     if (results[0].status === "fulfilled" && results[0].value[0]) state.dashboard = results[0].value[0];
     state.records = results[4].status === "fulfilled" ? results[4].value.sort(function (a, b) { return String(b.applied_date || "").localeCompare(String(a.applied_date || "")) || String(b.last_seen_at || "").localeCompare(String(a.last_seen_at || "")); }) : [];
     state.featured = results[5].status === "fulfilled" ? results[5].value.sort(function (a, b) { return String(b.applied_date || "").localeCompare(String(a.applied_date || "")) || Number(permitDeclaredValue(b) || 0) - Number(permitDeclaredValue(a) || 0); }) : [];
-    state.applicationDates = results[6].status === "fulfilled" ? results[6].value : [];
+    state.applicationDatesAvailable = results[6].status === "fulfilled";
+    state.applicationDates = state.applicationDatesAvailable ? results[6].value : [];
 
     const stats = state.dashboard && state.dashboard.payload ? state.dashboard.payload.stats || {} : {};
     const exactPermits = Number(stats.permits_total);
@@ -331,7 +335,7 @@
     setStat("effective-value", formatNumber(stats.eff_value));
 
     const permitTimestamp = state.records.map(function (record) { return record.last_seen_at; }).filter(Boolean).sort(function (a, b) { return new Date(b) - new Date(a); })[0];
-    const applicationThrough = state.records.map(function (record) { return record.applied_date; }).filter(Boolean).sort().slice(-1)[0];
+    const applicationThrough = state.records.map(function (record) { return record.applied_date; }).filter(Boolean).sort().slice(-1)[0] || stats.permits_fresh;
     const dashboardTimestamp = state.dashboard && state.dashboard.updated_at;
     const permitClock = permitTimestamp ? "Permit mirror synced " + formatDate(permitTimestamp, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "Permit mirror unavailable";
     const applicationClock = applicationThrough ? "applications through " + formatDate(applicationThrough, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "application date pending";
@@ -342,7 +346,9 @@
     else if (pageName === "graphics" || pageName === "method") freshness = permitClock + " · " + dashboardClock + " · cards name their event clocks";
     els("[data-updated]").forEach(function (node) { node.textContent = freshness; });
     const barTime = el("#live-bar-time");
-    if (barTime) barTime.textContent = permitTimestamp ? "Permits synced " + formatDate(permitTimestamp, { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "Source clock unavailable";
+    if (barTime) barTime.textContent = applicationThrough ? "Applications through " + formatDate(applicationThrough, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "Application clock unavailable";
+    const mobileApplicationClock = el("[data-mobile-application-clock]");
+    if (mobileApplicationClock) mobileApplicationClock.textContent = applicationThrough ? "Loaded applications through " + formatDate(applicationThrough, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "Application date unavailable";
 
     const railLine = el("#rail-signal-line");
     if (railLine && state.featured.length) {
@@ -355,7 +361,7 @@
         const money = railMoney(permitDeclaredValue(r));
         const place = r.address || r.permit_number || "Fort Lauderdale";
         const kind = r.work_type || r.permit_type || "application";
-        return (money ? money + " " : "") + String(kind).toLowerCase() + " filed · " + place;
+        return (money ? money + " " : "") + String(kind).toLowerCase() + " · applied " + formatDate(r.applied_date, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) + " · " + place;
       }).filter(Boolean);
       if (railItems.length) {
         let railIndex = 0;
@@ -380,7 +386,7 @@
     renderLeadDesk();
     initRecordSpotlights();
     const initialQuery = new URLSearchParams(window.location.search).get("q");
-    if (initialQuery && el("#record-search")) await runRecordSearch(initialQuery);
+    if (initialQuery && el("#record-search") && recordSearchVersion === 0) await runRecordSearch(initialQuery);
   }
 
   async function loadCmsContent() {
@@ -1591,36 +1597,55 @@
     });
   }
 
+  function recordSearchStatus(node, message) {
+    node.innerHTML = '<div class="record-search-results__head"><p class="record-search__status">' + escapeHtml(message) + '</p><button type="button" data-close-search aria-label="Close search results">×</button></div>';
+  }
+
   async function runRecordSearch(rawQuery) {
     const input = el("#record-search-input");
     const resultsNode = el("#record-search-results");
     if (!resultsNode) return;
+    const version = ++recordSearchVersion;
+    if (recordSearchController) recordSearchController.abort();
+    recordSearchController = null;
+    state.searchResults = [];
     const query = String(rawQuery || "").trim();
+    const safe = query.replace(/[,()*%]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
     if (input) input.value = query;
     resultsNode.hidden = false;
-    if (query.length < 2) {
-      resultsNode.innerHTML = '<p class="record-search__status">Enter at least two characters to search the record.</p>';
+    if (safe.length < 2) {
+      recordSearchStatus(resultsNode, "Enter at least two characters to search the record.");
       return;
     }
-    resultsNode.innerHTML = '<p class="record-search__status"><span class="pulse" aria-hidden="true"></span> Searching the live permit record…</p>';
-    const safe = query.replace(/[,()*%]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
-    let matches = [];
-    let fullSearch = true;
+    recordSearchStatus(resultsNode, "Searching the live permit record…");
+    const workType = /^(roof|roofs|seawall|seawalls|demolition|generator|generators)$/i.test(safe);
+    const fields = workType ? ["permit_type", "permit_category", "description", "work_type"] : ["address", "permit_number", "contractor_name", "permit_type", "description"];
+    const controller = new AbortController();
+    recordSearchController = controller;
+    let timer;
+    let matches;
     try {
-      const filter = "(address.ilike.*" + safe + "*,permit_number.ilike.*" + safe + "*,contractor_name.ilike.*" + safe + "*,permit_type.ilike.*" + safe + "*,description.ilike.*" + safe + "*)";
-      const response = await supabase("permits", { select: recordSelect, or: filter, limit: "24" });
-      matches = await response.json();
+      const timeout = new Promise(function (_, reject) {
+        timer = window.setTimeout(function () { controller.abort(); reject(new Error("Search timed out")); }, 8000);
+      });
+      matches = await Promise.race([
+        supabase("permits", { select: recordSelect, or: "(" + fields.map(function (field) { return field + ".ilike.*" + safe + "*"; }).join(",") + ")", limit: "24" }, { signal: controller.signal }).then(function (response) { return response.json(); }),
+        timeout
+      ]);
+      if (!Array.isArray(matches) || matches.some(function (record) { return !record || typeof record !== "object" || Array.isArray(record); })) throw new Error("Search returned an invalid record list");
     } catch (error) {
-      fullSearch = false;
-      const needle = safe.toLowerCase();
-      matches = state.records.filter(function (record) {
-        return [record.address, record.permit_number, record.contractor_name, record.permit_type, record.description].join(" ").toLowerCase().includes(needle);
-      }).slice(0, 24);
+      if (version !== recordSearchVersion) return;
+      recordSearchStatus(resultsNode, "Full record search is unavailable. Please retry. No map sample was substituted.");
+      return;
+    } finally {
+      window.clearTimeout(timer);
+      if (recordSearchController === controller) recordSearchController = null;
     }
+    if (version !== recordSearchVersion) return;
     matches.sort(function (a, b) { return String(b.applied_date || "").localeCompare(String(a.applied_date || "")) || String(b.last_seen_at || "").localeCompare(String(a.last_seen_at || "")); });
     state.searchResults = matches;
     const status = matches.length ? (matches.length === 24 ? "Showing the first 24 matching records" : formatNumber(matches.length) + " matching record" + (matches.length === 1 ? "" : "s")) : "No matching public records found";
-    const scope = fullSearch ? "live permit table" : "current map sample — full search temporarily unavailable";
+    const scope = "live permit table · limited to 24 results" + (workType ? " · work type only; contractor names excluded" : "");
     resultsNode.innerHTML = '<div class="record-search-results__head"><p><strong>' + escapeHtml(status) + '</strong><span>“' + escapeHtml(query) + '” · ' + escapeHtml(scope) + '</span></p><button type="button" data-close-search aria-label="Close search results">×</button></div>' +
       (matches.length ? '<div class="record-result-list">' + matches.map(function (record, index) {
         const value = Number(permitDeclaredValue(record) || 0);
@@ -1628,8 +1653,6 @@
         return '<div class="record-result-wrap" data-signal-tags="' + taxonomyAttribute(tags) + '"><button class="record-result" type="button" data-record-result="' + index + '"><span class="record-result__type">' + escapeHtml(record.permit_type || record.permit_category || "Permit") + '</span><strong>' + escapeHtml(titleCase(String(record.address || "Address pending").replace(/\s+/g, " "))) + '</strong>' + placeSignature(record) + taxonomyLine(tags, "Filed under") + '<span>' + escapeHtml(record.contractor_name ? titleCase(record.contractor_name) : "Contractor not listed") + '</span><em>' + (value > 0 ? escapeHtml(moneyFormat.format(value)) : "Value not listed") + ' · ' + escapeHtml(formatDate(recordDate(record), { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })) + '</em></button>' + recordShareMarkup(record) + '</div>';
       }).join("") + '</div>' : '<p class="record-search__empty">Try a street name, permit number, company, or work type such as roof, seawall or demolition.</p>');
     bindRecordSharing(resultsNode);
-    const close = el("[data-close-search]", resultsNode);
-    if (close) close.addEventListener("click", function () { resultsNode.hidden = true; });
     els("[data-record-result]", resultsNode).forEach(function (button) {
       button.addEventListener("click", function () {
         const record = state.searchResults[Number(button.dataset.recordResult)];
@@ -1650,6 +1673,14 @@
     });
     const form = el("#record-search");
     if (!form) return;
+    const resultsNode = el("#record-search-results");
+    if (resultsNode) resultsNode.addEventListener("click", function (event) {
+      if (!event.target.closest("[data-close-search]")) return;
+      ++recordSearchVersion;
+      if (recordSearchController) recordSearchController.abort();
+      state.searchResults = [];
+      resultsNode.hidden = true;
+    });
     form.addEventListener("submit", function (event) {
       event.preventDefault();
       const input = el('input[name="q"]', form);
@@ -2137,6 +2168,17 @@
     const weekTrend = el("[data-window-7-trend]");
     const weekDates = el("[data-window-7-dates]");
     if (!dayCount && !weekCount) return;
+    if (!dates.length && state.applicationDatesAvailable) {
+      const stats = state.dashboard && state.dashboard.payload ? state.dashboard.payload.stats || {} : {};
+      const latest = state.records.map(function (record) { return record.applied_date; }).filter(Boolean).sort().slice(-1)[0] || stats.permits_fresh;
+      const copy = "No applications returned in the queried window." + (latest ? " Latest loaded application: " + formatDate(latest, { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" }) + "." : " Latest source event unavailable.");
+      if (dayCount) dayCount.textContent = "0";
+      if (dayDate) dayDate.textContent = copy;
+      if (weekCount) weekCount.textContent = "0";
+      if (weekTrend) weekTrend.textContent = "No current-window comparison";
+      if (weekDates) weekDates.textContent = "Queried application window only; not proof of a current collector.";
+      return;
+    }
     if (!dates.length) {
       if (dayCount) dayCount.textContent = "—";
       if (dayDate) dayDate.textContent = "Application-date feed unavailable";
@@ -2612,6 +2654,19 @@
     }
   }
 
+  function sourceReaderState(source) {
+    const row = source || {};
+    const status = String(row.status || "unavailable");
+    const preliminary = String(row.verification || "").toLowerCase() === "preliminary" || row.health_receipt_status === "source_wait";
+    const refreshOnly = /^(snapshot_updated_at|terminal_sync_run|processing_clock_only|source_check_clock|row_observation_only)$/.test(row.status_basis || "");
+    if (/^(unavailable|error|unverified|suppressed)$/.test(status)) return { badge: "unavailable", note: "No current source coverage is established." };
+    if (preliminary) return { badge: "preliminary", note: "Preliminary, not verified." + (/^(stale|delayed)$/.test(status) ? " Upstream event state: " + status + "." : "") + (row.health_receipt_status === "source_wait" ? " Source is waiting; a receipt is not a new event." : "") };
+    if (/^(stale|delayed)$/.test(status)) return { badge: status, note: refreshOnly ? "This status follows a system clock; source-event coverage is shown separately." : "" };
+    if (status === "current" && (refreshOnly || !row.event_through)) return { badge: "refresh", note: "A recent system check or refresh does not establish current source events." };
+    if (status === "current" && row.event_through) return { badge: "available", note: "Source-event clock is available; see its date and upstream cadence." };
+    return { badge: "unavailable", note: "Unrecognized state; no current source coverage inferred." };
+  }
+
   async function initDataHealth() {
     const page = document.body.getAttribute("data-page") || "home";
     if (page !== "method" || el("#source-health")) return;
@@ -2630,15 +2685,16 @@
       if (!response.ok) throw new Error("Data health unavailable");
       const payload = await response.json();
       const sources = Array.isArray(payload.sources) ? payload.sources : [];
-      const counts = sources.reduce(function (result, source) { result[source.status] = (result[source.status] || 0) + 1; return result; }, {});
+      const counts = sources.reduce(function (result, source) { const badge = sourceReaderState(source).badge; result[badge] = (result[badge] || 0) + 1; return result; }, {});
       const summary = el("summary strong", details);
-      if (summary) summary.textContent = [counts.current ? counts.current + " current" : "", counts.delayed ? counts.delayed + " delayed" : "", counts.stale ? counts.stale + " stale" : "", counts.suppressed ? counts.suppressed + " suppressed" : "", counts.error ? counts.error + " error" : "", counts.unavailable ? counts.unavailable + " unavailable" : "", counts.unverified ? counts.unverified + " unverified" : ""].filter(Boolean).join(" · ") || "Source clocks unavailable";
+      if (summary) summary.textContent = ["available", "stale", "delayed", "preliminary", "refresh", "unavailable"].filter(function (key) { return counts[key]; }).map(function (key) { return counts[key] + " " + key; }).join(" · ") || "Source clocks unavailable";
       const grid = el(".source-health__grid", details);
       grid.innerHTML = sources.map(function (source) {
-        const eventClock = source.event_through ? "Event through " + formatDate(source.event_through, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "Event date varies by item";
-        const systemClock = source.system_time ? "System " + formatDate(source.system_time, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "System timestamp not exposed";
+        const reader = sourceReaderState(source);
+        const eventClock = source.event_through ? "Event through " + formatDate(source.event_through, { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "Source-event date unavailable";
+        const systemClock = source.system_time ? "Refresh / receipt " + formatDate(source.system_time, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "System timestamp not exposed";
         const verification = source.verification ? '<span class="source-health__evidence source-health__evidence--' + escapeHtml(source.verification) + '">' + escapeHtml(source.verification) + '</span>' : '';
-        return '<article><div><span class="source-health__status source-health__status--' + escapeHtml(source.status) + '">' + escapeHtml(source.status) + '</span><strong>' + escapeHtml(source.label) + '</strong>' + verification + '</div><p>' + escapeHtml(eventClock) + '</p><p>' + escapeHtml(systemClock) + '</p><small>' + escapeHtml(source.cadence || "") + ' · ' + escapeHtml(source.detail || "") + '</small></article>';
+        return '<article><div><span class="source-health__status source-health__status--' + escapeHtml(reader.badge) + '">' + escapeHtml(reader.badge) + '</span><strong>' + escapeHtml(source.label) + '</strong>' + verification + '</div><p>' + escapeHtml(eventClock) + '</p><p>' + escapeHtml(systemClock) + '</p><p>' + escapeHtml(reader.note) + '</p><small>' + escapeHtml(source.cadence || "") + ' · ' + escapeHtml(source.detail || "") + '</small></article>';
       }).join("") || '<p>Source health is unavailable. The site will not substitute an inferred green status.</p>';
     } catch (error) {
       const summary = el("summary strong", details);
@@ -2921,39 +2977,11 @@
   }
 
   function initDataCountdown() {
-    const time = el("#live-bar-time");
-    const lead = el(".live-bar__inner p:first-child");
-    const label = lead ? el("strong", lead) : null;
-    if (!time || !lead || !label) return;
-    const mobile = document.createElement("span");
-    mobile.className = "live-bar__countdown-mobile";
-    lead.appendChild(mobile);
-    if (!el(".live-bar__processing", lead)) lead.insertAdjacentHTML("beforeend", '<span class="live-bar__processing" aria-label="Feeds processing"><i></i><i></i><i></i></span>');
-    label.textContent = "Newest signals";
-    label.dataset.defaultLabel = "Newest signals";
-
-    function clock(ms) {
-      const total = Math.max(0, Math.floor(ms / 1000));
-      const hours = Math.floor(total / 3600);
-      const minutes = Math.floor((total % 3600) / 60);
-      const seconds = total % 60;
-      return [hours, minutes, seconds].map(function (value) { return String(value).padStart(2, "0"); }).join(":");
+    const label = el(".live-bar__inner p:first-child strong");
+    if (label) {
+      label.dataset.defaultLabel = "Public record · event dates";
+      if (!document.body.classList.contains("storm-mode")) label.textContent = label.dataset.defaultLabel;
     }
-    function render() {
-      if (document.body.classList.contains("storm-mode")) { mobile.textContent = ""; return; }
-      const now = new Date();
-      const jobs = [
-        { label: "Permits", target: nextEasternDaily(now, 22, 0) },
-        { label: "Sunbiz", target: nextEasternDaily(now, 23, 30) }
-      ].sort(function (a, b) { return a.target - b.target; });
-      const job = jobs[0];
-      const remaining = clock(job.target - now);
-      time.textContent = "NEXT PULL · " + job.label.toUpperCase() + " · " + remaining;
-      time.title = job.label + " scheduled for " + job.target.toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
-      mobile.textContent = "NEXT " + job.label.toUpperCase() + " · " + remaining;
-    }
-    render();
-    window.setInterval(render, 1000);
   }
 
   function initMapPublishing() {

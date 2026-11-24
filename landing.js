@@ -4,6 +4,24 @@
   var year = document.querySelector("[data-launch-year]");
   if (year) year.textContent = String(new Date().getFullYear());
   var apiBase = /(^|\.)thefloridasignal\.com$/i.test(window.location.hostname) ? "https://api.thefloridasignal.com" : "";
+  async function showSourceClock() {
+    var note = document.querySelector("[data-launch-source-clock]");
+    if (!note) return;
+    var controller = new AbortController();
+    var timer = window.setTimeout(function () { controller.abort(); }, 8000);
+    try {
+      var response = await fetch(apiBase + "/api/data-health", { signal: controller.signal, cache: "no-store" });
+      if (!response.ok) throw new Error("Source clocks unavailable");
+      var payload = await response.json();
+      var permits = Array.isArray(payload.sources) && payload.sources.find(function (source) { return source.id === "permits"; });
+      if (!permits || !/^\d{4}-\d{2}-\d{2}/.test(String(permits.event_through || ""))) throw new Error("Application clock unavailable");
+      var status = /^(stale|delayed|unavailable|error|unverified|suppressed)$/.test(permits.status) ? permits.status : "source-event date";
+      note.textContent = "Permit applications: " + status + ", through " + String(permits.event_through).slice(0, 10) + ". System refreshes are separate from filing dates.";
+    } catch (error) {
+      note.textContent = "Source-event clock unavailable. Check source dates before relying on current coverage.";
+    } finally { window.clearTimeout(timer); }
+  }
+  showSourceClock();
   var UTM_STORAGE_KEY = "florida-signal-utm";
   var UTM_TTL_MS = 30 * 24 * 60 * 60 * 1000;
   // Official first-touch scheme. Clickable links only — never About text or the homepage URL itself.
