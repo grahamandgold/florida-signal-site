@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "test": "npm run test:unit && npm run test:browser",
-    "test:unit": "node tests/signals.test.js && python3 -m unittest discover -s tests -v",
+    "test:unit": "node --test tests/source-availability.test.cjs && node tests/signals.test.js && python3 -m unittest discover -s tests -v",
     "test:browser": "playwright test"
   },
   "devDependencies": {

@@ -1229,7 +1229,15 @@
     const countEl = el("#signal-layer-count");
     if (countEl) countEl.textContent = formatNumber(items.length);
     const emptyEl = el("#signal-empty-state");
-    if (emptyEl) emptyEl.hidden = items.length > 0;
+    if (emptyEl) {
+      emptyEl.hidden = items.length > 0;
+      const failedActive = SIGNAL_SOURCE_KEYS.some(function (k) {
+        return signalState.filters.sources[k] !== false && signalState.counts[k] && signalState.counts[k].failed;
+      });
+      emptyEl.textContent = failedActive
+        ? "No Signals are shown. Some enabled sources are unavailable; see source errors."
+        : "No Signals match these filters. Widen the window or re-enable a source.";
+    }
     renderSignalCounts();
   }
 
@@ -1257,8 +1265,10 @@
       }
       const rows = (SOURCE_IN_FAMILY[fam.key] || []).map(function (pair) {
         const on = f.sources[pair[0]] !== false;
+        const sourceCount = signalState.counts && signalState.counts[pair[0]];
+        const countLabel = sourceCount && sourceCount.failed ? "unavailable" : formatNumber(counts[pair[0]] || 0);
         return '<label class="signal-toggle"><input type="checkbox" data-signal-source="' + pair[0] + '"' + (on ? " checked" : "") + '>' +
-          '<span>' + escapeHtml(pair[1]) + ' (' + formatNumber(counts[pair[0]] || 0) + ')</span></label>';
+          '<span>' + escapeHtml(pair[1]) + ' (' + countLabel + ')</span></label>';
       }).join("");
       return '<div class="signal-family"><p class="signal-family__label">' + escapeHtml(fam.label) + '</p>' + rows + '</div>';
     }).join("");
@@ -1443,14 +1453,20 @@
     // A source that returned a full page has more records behind it. Say so plainly rather than
     // presenting a capped page as if it were the complete set for this view.
     var capped = active.filter(function (k) { return c[k] && c[k].hasMore; });
+    var failed = active.filter(function (k) { return c[k] && c[k].failed; });
+    var allUnavailable = active.length > 0 && failed.length === active.length;
     host.innerHTML =
-      '<strong>' + formatNumber(visible) + '</strong> Signals shown · ' +
-      formatNumber(loaded) + ' loaded in this view' +
+      (allUnavailable
+        ? '<strong>Signals unavailable</strong>'
+        : '<strong>' + formatNumber(visible) + '</strong> Signals shown' +
+          (failed.length ? ' from available sources' : '') + ' · ' +
+          formatNumber(loaded) + ' loaded in this view') +
+      (failed.length ? '<small>Unavailable sources: ' + escapeHtml(failed.join(", ")) + '; their rows are not shown.</small>' : '') +
       (capped.length
-        ? '<small class="signal-readout__cap">More records exist here than one view can load (' +
+        ? '<small class="signal-readout__cap">Results may be limited (' +
           escapeHtml(capped.join(", ")) + ' reached the per-request cap of ' +
           formatNumber(signalState.service ? signalState.service.PAGE_CAP : 600) +
-          '). Zoom in or narrow the window for complete coverage of an area.</small>'
+          '). Zoom in or narrow the window to inspect a smaller sample; results can still be capped.</small>'
         : '') +
       (filteredTotal && !anyUnknown
         ? '<small>≈' + formatNumber(filteredTotal) + ' match these filters countywide (planner estimate)</small>'
