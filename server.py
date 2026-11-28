@@ -840,9 +840,12 @@ def editorial_receipt_status(row: dict[str, Any]) -> str:
 def external_source_row(source_id, label, receipt, cadence):
     terminal = str(receipt.get("status") or "").lower()
     clock = receipt.get("completed_at")
-    status = health_status(clock, 30, 54) if terminal in {"ok", "empty"} else (
-        "error" if terminal in {"failed", "error"} else "unavailable"
-    )
+    if terminal in {"ok", "empty", "partial"}:
+        status = health_status(clock, 30, 54)
+        if terminal == "partial" and status == "current":
+            status = "partial"
+    else:
+        status = "error" if terminal in {"failed", "error"} else "unavailable"
     return source_clock_row(
         source_id=source_id, label=label, status=status,
         event_through=receipt.get("event_through"),
@@ -850,7 +853,7 @@ def external_source_row(source_id, label, receipt, cadence):
         status_basis="sanitized_terminal_collector_receipt" if receipt else "no_terminal_receipt",
         cadence=cadence,
         detail=(f"Terminal run {terminal}: {receipt.get('rows_accepted', 0)} accepted / "
-                f"{receipt.get('rows_rejected', 0)} rejected; event date is separate from collector completion"
+                f"{receipt.get('rows_rejected', 0)} not accepted; event date is separate from collector completion"
                 if receipt else "No sanitized terminal collector receipt is available"),
     )
 

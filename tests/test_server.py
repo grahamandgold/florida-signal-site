@@ -375,6 +375,25 @@ class PublicApiTests(unittest.TestCase):
         old = (datetime.now(timezone.utc) - timedelta(hours=60)).isoformat()
         self.assertEqual(server_module.external_source_row("faa", "FAA", dict(receipt, completed_at=old), "daily")["status"], "stale")
 
+    def test_partial_external_health_is_explicit_without_promoting_coverage(self):
+        recent = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        receipt = {"status": "partial", "completed_at": recent,
+                   "event_through": "2026-01-01", "rows_accepted": 66, "rows_rejected": 69}
+        row = server_module.external_source_row("fdep", "FDEP", receipt, "daily")
+        self.assertEqual(row["status"], "partial")
+        self.assertEqual(row["health_receipt_status"], "partial")
+        self.assertEqual(row["event_through"], "2026-01-01")
+        self.assertIn("66 accepted / 69 not accepted", row["detail"])
+        self.assertNotIn("held", row["detail"])  # Rejection counts alone do not prove holds.
+        for hours, expected in ((40, "delayed"), (60, "stale")):
+            old = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+            aged = server_module.external_source_row("fdep", "FDEP", dict(receipt, completed_at=old), "daily")
+            self.assertEqual(aged["status"], expected)
+            self.assertEqual(aged["health_receipt_status"], "partial")
+        for clock in (None, "invalid"):
+            missing = server_module.external_source_row("fdep", "FDEP", dict(receipt, completed_at=clock), "daily")
+            self.assertEqual(missing["status"], "unavailable")
+
     def test_saved_sunbiz_success_expires_without_new_receipt(self):
         row = {"component": "sunbiz-exact-resolver", "status": "current",
                "system_time": (datetime.now(timezone.utc) - timedelta(hours=37)).isoformat()}

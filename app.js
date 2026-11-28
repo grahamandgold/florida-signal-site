@@ -2677,6 +2677,7 @@
     const refreshOnly = /^(snapshot_updated_at|terminal_sync_run|processing_clock_only|source_check_clock|row_observation_only)$/.test(row.status_basis || "");
     if (/^(unavailable|error|unverified|suppressed)$/.test(status)) return { badge: "unavailable", note: "No current source coverage is established." };
     if (preliminary) return { badge: "preliminary", note: "Preliminary, not verified." + (/^(stale|delayed)$/.test(status) ? " Upstream event state: " + status + "." : "") + (row.health_receipt_status === "source_wait" ? " Source is waiting; a receipt is not a new event." : "") };
+    if (status === "partial") return { badge: "partial", note: "The collector completed partially. Full source coverage is not established." };
     if (/^(stale|delayed)$/.test(status)) return { badge: status, note: refreshOnly ? "This status follows a system clock; source-event coverage is shown separately." : "" };
     if (status === "current" && (refreshOnly || !row.event_through)) return { badge: "refresh", note: "A recent system check or refresh does not establish current source events." };
     if (status === "current" && row.event_through) return { badge: "available", note: "Source-event clock is available; see its date and upstream cadence." };
@@ -2703,7 +2704,7 @@
       const sources = Array.isArray(payload.sources) ? payload.sources : [];
       const counts = sources.reduce(function (result, source) { const badge = sourceReaderState(source).badge; result[badge] = (result[badge] || 0) + 1; return result; }, {});
       const summary = el("summary strong", details);
-      if (summary) summary.textContent = ["available", "stale", "delayed", "preliminary", "refresh", "unavailable"].filter(function (key) { return counts[key]; }).map(function (key) { return counts[key] + " " + key; }).join(" · ") || "Source clocks unavailable";
+      if (summary) summary.textContent = ["available", "partial", "stale", "delayed", "preliminary", "refresh", "unavailable"].filter(function (key) { return counts[key]; }).map(function (key) { return counts[key] + " " + key; }).join(" · ") || "Source clocks unavailable";
       const grid = el(".source-health__grid", details);
       grid.innerHTML = sources.map(function (source) {
         const reader = sourceReaderState(source);
