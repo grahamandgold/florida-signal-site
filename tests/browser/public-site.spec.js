@@ -92,3 +92,23 @@ test("method desk visibly separates preliminary and verified Clerk clocks", asyn
   await expect(page.locator(".source-health__evidence--verified")).toHaveText("verified");
   await expect(page.locator(".source-health__evidence--preliminary")).toHaveText("preliminary");
 });
+
+test("method desk keeps partial collection distinct from available and unavailable", async ({ page }) => {
+  await page.route("**/api/data-health", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sources: [
+          { id: "fdep", label: "FDEP environmental permits", status: "partial", health_receipt_status: "partial", event_through: "2026-11-25", system_time: "2026-11-28T09:20:12Z", cadence: "daily", detail: "Terminal run partial: 66 accepted / 69 not accepted; event date is separate from collector completion" },
+          { id: "missing", label: "Missing receipt", status: "unavailable", health_receipt_status: "partial", cadence: "daily", detail: "No current timestamp" }
+        ]
+      })
+    });
+  });
+  await page.goto("/fort-lauderdale/method/", { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".source-health__status--partial")).toHaveText("partial");
+  await expect(page.locator("#source-health summary strong")).toContainText("1 partial");
+  await expect(page.getByText("The collector completed partially. Full source coverage is not established.")).toBeVisible();
+  await expect(page.locator(".source-health__status--available")).toHaveCount(0);
+  await expect(page.locator(".source-health__status--unavailable")).toHaveCount(1);
+});

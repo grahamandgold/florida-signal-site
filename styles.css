@@ -102,7 +102,7 @@ body.storm-mode .site-sponsor-rail { background: #3a0b13; }
 .source-health__grid small { display: block; margin-top: 14px; color: var(--muted); font-size: 10px; line-height: 1.45; }
 .source-health__status { padding: 5px 7px; border: 1px solid currentColor; color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
 .source-health__status--available, .source-health__status--current { color: var(--teal-dark); background: var(--mint); }
-.source-health__status--preliminary, .source-health__status--refresh, .source-health__status--delayed { color: #9a6500; background: #fff4c7; }
+.source-health__status--partial, .source-health__status--preliminary, .source-health__status--refresh, .source-health__status--delayed { color: #9a6500; background: #fff4c7; }
 .source-health__status--stale { color: #a81920; background: #fff0ed; }
 .source-health__status--suppressed, .source-health__status--error { color: #a81920; background: #fff0ed; }
 .source-health__status--unverified, .source-health__status--unavailable { color: #5d6170; background: #f0f2f4; }
